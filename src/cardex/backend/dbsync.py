@@ -63,11 +63,9 @@ POOL_SELECTOR = """
 
 
 class DBSyncPoolState(BaseModel):
+    address: str
     tx_hash: str
     tx_index: int
-    block_height: int
-    block_time: int
-    address: str
     datum_hash: str
     inline_datum_id: Optional[int]
     datum: Dict[str, Any]
@@ -77,36 +75,30 @@ class DBSyncPoolState(BaseModel):
     @classmethod
     def from_dbsync(cls, item: List[Any]):
         assets = Assets(
-            lovelace=item[8], **{asset[0] + asset[1]: asset[2] for asset in item[9]}
+            lovelace=item[7], **{asset[0] + asset[1]: asset[2] for asset in item[8]}
         )
 
-        if len(item) > 10:
-            datum_cbor = item[10]
-        else:
-            datum_cbor = None
-
         return cls(
-            tx_hash=item[0],
-            tx_index=item[1],
-            block_height=item[2],
-            block_time=item[3],
-            address=item[4],
-            datum_hash=item[5],
-            inline_datum_id=item[6],
-            datum=item[7],
-            datum_cbor=datum_cbor,
+            address=item[0],
+            tx_hash=item[1],
+            tx_index=item[2],
+            datum_hash=item[3],
+            inline_datum_id=item[4],
+            datum=item[5],
+            datum_cbor=item[6],
             assets=assets,
         )
 
 
-def get_transactions_by_policy(
+def get_transactions(
     policies: Optional[List[str]] = None,
+    names: Optional[List[str]] = None,
     addresses: Optional[List[str]] = None,
     limit: int = 1000,
     page: int = 0,
     policy_only=False,
-    historical=False,
 ):
+    """Get transactions by policy or address."""
     if policies is None and addresses is None:
         raise ValueError("Either policies or addresses must be defined.")
 
@@ -117,58 +109,45 @@ def get_transactions_by_policy(
         raise ValueError("addresses must be a list of strings.")
 
     # Use this for gathering all assets for multiple addresses
-    DATUM_SELECTOR = (
-        POOL_SELECTOR
-        + """
-        FROM (
-            SELECT txo.tx_id AS "tx_id",
-            txo.address AS "address",
-            txo.id AS "tx_out_id",
-            txo.value AS "coin",
-            txo.inline_datum_id,
-            datum.value,
-            datum.bytes,
-            ENCODE(txo.data_hash, 'hex') as "data_hash"
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            JOIN tx_out txo ON (mto.tx_out_id = txo.id)
-            JOIN datum ON (txo.data_hash = datum.hash)"""
-    )
-
-    if not historical:
-        DATUM_SELECTOR += """
-            JOIN tx_in ON ((txo.tx_id = tx_in.tx_out_id) AND ((txo.index)::smallint = (tx_in.tx_out_index)::smallint))
-            JOIN block ON (txo.tx_id = block.id)"""
+    DATUM_SELECTOR = """SELECT sl.address,
+    encode(tx.hash, 'hex') AS "tx_hash",
+    sl.index AS "tx_index",
+    sl.data_hash,
+    sl.inline_datum_id,
+    datum.value,
+    datum.bytes,
+    sl.value,
+    json_agg(json_build_array(ENCODE(sl.policy::bytea, 'hex'), encode((sl.name)::bytea, 'hex'::text), sl.quantity)) AS assets
+    FROM (
+        SELECT * FROM (
+            SELECT ma.policy, ma.name, ma.id 
+            FROM multi_asset ma"""
 
     if policies is not None:
-        if policy_only:
-            DATUM_SELECTOR += """
-                WHERE (encode(policy, 'hex')) = ANY(%(policy)s)"""
-        else:
-            DATUM_SELECTOR += """
-                WHERE (encode(policy, 'hex') || encode(name, 'hex')) = ANY(%(policy)s)"""
-    else:
         DATUM_SELECTOR += """
-            WHERE address = ANY(%(address)s)"""
+            WHERE policy = ANY(%(policies)b)"""
 
-    if not historical:
-        DATUM_SELECTOR += (
-            """ AND (tx_in.tx_in_id is NULL) AND (block.epoch_no is not NULL)"""
-        )
+        if names is not None:
+            DATUM_SELECTOR += """ AND name = ANY(%(names)b)"""
 
     DATUM_SELECTOR += """
-            GROUP BY txo.tx_id, txo.id, datum.value, datum.bytes
-            ORDER BY txo.tx_id ASC
-            LIMIT %(limit)s
-            OFFSET %(offset)s
-        ) AS "sorted_limited"
-        JOIN tx ON (sorted_limited.tx_id = tx.id)
-        JOIN block b ON (b.id = tx.block_id)
-        JOIN ma_tx_out mto ON (sorted_limited.tx_out_id = mto.tx_out_id)
-        JOIN multi_asset ma ON (mto.ident = ma.id)
-        GROUP BY tx.hash, tx.block_index, b.block_no, b.time, sorted_limited.value,
-            sorted_limited.coin, sorted_limited.inline_datum_id, sorted_limited.data_hash,
-            sorted_limited.address, sorted_limited.bytes
+        ) as ma
+        JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
+        JOIN tx_out txo ON mtxo.tx_out_id = txo.id"""
+
+    if addresses is not None:
+        DATUM_SELECTOR += """
+        WHERE tx_out.address = ANY(%(addresses)s)"""
+
+    DATUM_SELECTOR += """
+        LIMIT %(limit)s
+        OFFSET %(offset)s
+    ) as sl
+    JOIN datum ON sl.data_hash = datum.hash
+    JOIN tx ON sl.tx_id = tx.id
+    GROUP BY sl.address, tx.hash, sl.index, sl.data_hash, sl.inline_datum_id,
+        datum.value, datum.bytes, sl.value, sl.tx_id
+    ORDER BY sl.tx_id ASC
     """
     values = {"limit": limit, "offset": page * limit}
     if policies is not None:
@@ -237,3 +216,19 @@ class DecimalEncoder(json.JSONEncoder):
             return obj.hex()
 
         return json.JSONEncoder.default(self, obj)
+
+
+def test_query():
+    r = select_fetchall(
+        """SELECT * FROM (
+        SELECT ma.policy, ma.name, ma.id 
+        FROM multi_asset ma 
+        WHERE policy = DECODE('13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f', 'hex') AND name = DECODE('4d494e53574150', 'hex') 
+    ) as ma
+    JOIN ma_tx_out mtxo ON ma.id = mtxo.ident 
+    JOIN tx_out txo ON mtxo.tx_out_id = txo.id 
+    LIMIT 100
+    OFFSET 0"""
+    )
+
+    return r
