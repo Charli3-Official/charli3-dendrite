@@ -23,7 +23,7 @@ DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
 if DBSYNC_HOST is not None:
     conninfo = f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer user={DBSYNC_USER} password={DBSYNC_PASS}"
     pool = psycopg_pool.ConnectionPool(
-        conninfo=conninfo, open=False, min_size=4, max_size=50
+        conninfo=conninfo, open=False, min_size=1, max_size=10
     )
     pool.open()
     pool.wait()
@@ -46,115 +46,133 @@ def select_fetchall(query, args=None):
 
 
 POOL_SELECTOR = """
-        SELECT encode(tx.hash, 'hex') AS "tx_hash",
-        tx.block_index AS "tx_index",
-        b.block_no AS "block_height",
-        extract(
-            epoch
-            FROM b.time
-        )::INTEGER AS "block_time",
-        sorted_limited.address,
-        sorted_limited.data_hash,
-        sorted_limited.inline_datum_id,
-        sorted_limited.value,
-        sorted_limited.coin,
-        json_agg(json_build_array(ENCODE(ma.policy::bytea, 'hex'), encode((ma.name)::bytea, 'hex'::text), mto.quantity)) AS assets,
-        sorted_limited.bytes"""
+SELECT txo.address,
+ENCODE(tx.hash, 'hex') as "tx_hash",
+txo.index,
+EXTRACT(
+	epoch
+	FROM block.time
+)::INTEGER AS "block_time",
+ENCODE(block.hash,'hex') as "block_hash",
+ENCODE(datum.hash,'hex') as "datum_hash",
+ENCODE(datum.bytes,'hex') as "datum_cbor",
+txo.value::TEXT,
+(
+	SELECT json_agg(
+		json_build_object(
+				'unit',
+				CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+				'quantity',
+				mto.quantity::TEXT
+		)
+	)
+	FROM ma_tx_out mto
+	JOIN multi_asset ma ON (mto.ident = ma.id)
+	WHERE mto.tx_out_id = txo.id
+) AS "amount"
+"""
 
 
 class DBSyncPoolState(BaseModel):
     address: str
     tx_hash: str
     tx_index: int
+    block_time: int
+    block_hash: str
     datum_hash: str
-    inline_datum_id: Optional[int]
-    datum: Dict[str, Any]
     datum_cbor: Optional[str]
     assets: Assets
 
     @classmethod
     def from_dbsync(cls, item: List[Any]):
-        assets = Assets(
-            lovelace=item[7], **{asset[0] + asset[1]: asset[2] for asset in item[8]}
-        )
+        assets = Assets(lovelace=item[7], **{a["unit"]: a["quantity"] for a in item[8]})
 
         return cls(
             address=item[0],
             tx_hash=item[1],
             tx_index=item[2],
-            datum_hash=item[3],
-            inline_datum_id=item[4],
-            datum=item[5],
+            block_time=item[3],
+            block_hash=item[4],
+            datum_hash=item[5],
             datum_cbor=item[6],
             assets=assets,
         )
 
 
-def get_transactions(
-    policies: Optional[List[str]] = None,
-    names: Optional[List[str]] = None,
+class LastBlock(BaseModel):
+    epoch_slot_no: int
+    block_no: int
+    tx_index: int
+    block_time: int
+
+    @classmethod
+    def from_dbsync(cls, item: List[Any]):
+        return cls(
+            epoch_slot_no=item[0],
+            block_no=item[1],
+            tx_index=item[2],
+            block_time=item[3],
+        )
+
+
+def get_historical_utxos(
+    assets: Optional[List[str]] = None,
     addresses: Optional[List[str]] = None,
     limit: int = 1000,
     page: int = 0,
-    policy_only=False,
+    historical: bool = True,
 ):
     """Get transactions by policy or address."""
-    if policies is None and addresses is None:
+    if assets is None and addresses is None:
         raise ValueError("Either policies or addresses must be defined.")
+    elif assets is not None and addresses is not None:
+        raise ValueError("Either policies or addresses must be defined, not both.")
 
-    if policies is not None and not isinstance(policies, list):
-        raise ValueError("policies must be a list of strings.")
+    # Use the pool selector to format the output
+    DATUM_SELECTOR = POOL_SELECTOR
 
-    if addresses is not None and not isinstance(addresses, list):
-        raise ValueError("addresses must be a list of strings.")
+    # If assets are specified, select assets
+    if assets is not None:
+        DATUM_SELECTOR += """FROM (
+    SELECT ma.policy, ma.name, ma.id 
+    FROM multi_asset ma
+    WHERE policy = ANY(%(policies)b) AND name = ANY(%(names)b)
+) as ma
+JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
+LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
+"""
 
-    # Use this for gathering all assets for multiple addresses
-    DATUM_SELECTOR = """SELECT sl.address,
-    encode(tx.hash, 'hex') AS "tx_hash",
-    sl.index AS "tx_index",
-    sl.data_hash,
-    sl.inline_datum_id,
-    datum.value,
-    datum.bytes,
-    sl.value,
-    json_agg(json_build_array(ENCODE(sl.policy::bytea, 'hex'), encode((sl.name)::bytea, 'hex'::text), sl.quantity)) AS assets
-    FROM (
-        SELECT * FROM (
-            SELECT ma.policy, ma.name, ma.id 
-            FROM multi_asset ma"""
-
-    if policies is not None:
-        DATUM_SELECTOR += """
-            WHERE policy = ANY(%(policies)b)"""
-
-        if names is not None:
-            DATUM_SELECTOR += """ AND name = ANY(%(names)b)"""
+    # If address is specified, select addresses
+    else:
+        DATUM_SELECTOR += """FROM (
+    SELECT *
+    FROM tx_out
+    WHERE tx_out.address = ANY(%(addresses)s)
+) as txo"""
 
     DATUM_SELECTOR += """
-        ) as ma
-        JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
-        JOIN tx_out txo ON mtxo.tx_out_id = txo.id"""
+LEFT JOIN tx ON txo.tx_id = tx.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN block ON tx.block_id = block.id"""
 
-    if addresses is not None:
+    if not historical:
         DATUM_SELECTOR += """
-        WHERE tx_out.address = ANY(%(addresses)s)"""
+LEFT JOIN tx_in ON tx_in.tx_out_id = txo.tx_id AND tx_in.tx_out_index = txo.index
+WHERE tx_in.tx_in_id IS NULL
+"""
 
     DATUM_SELECTOR += """
-        LIMIT %(limit)s
-        OFFSET %(offset)s
-    ) as sl
-    JOIN datum ON sl.data_hash = datum.hash
-    JOIN tx ON sl.tx_id = tx.id
-    GROUP BY sl.address, tx.hash, sl.index, sl.data_hash, sl.inline_datum_id,
-        datum.value, datum.bytes, sl.value, sl.tx_id
-    ORDER BY sl.tx_id ASC
-    """
+LIMIT %(limit)s
+OFFSET %(offset)s
+"""
+
     values = {"limit": limit, "offset": page * limit}
-    if policies is not None:
-        values.update({"policy": policies})
+    if assets is not None:
+        values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
+        values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
-    if addresses is not None:
-        values.update({"address": addresses})
+    elif addresses is not None:
+        values.update({"addresses": addresses})
 
     r = select_fetchall(DATUM_SELECTOR, values)
 
@@ -163,43 +181,32 @@ def get_transactions(
 
 def last_block():
     r = select_fetchall(
-        """select epoch_slot_no, block_no, tx_count from block where block_no is not null
-           order by block_no desc limit 10 ;"""
+        """SELECT epoch_slot_no,
+block_no,
+tx_count,
+EXTRACT(
+	epoch
+	FROM block.time
+)::INTEGER AS "block_time"
+FROM block
+WHERE block_no IS NOT null
+ORDER BY block_no DESC
+LIMIT 2"""
     )
     return r
 
 
-def get_transactions_in_block(block_no: int):
+def get_datum_transactions_in_block(block_no: int):
     # Use this for gathering all assets for multiple addresses
     DATUM_SELECTOR = (
         POOL_SELECTOR
         + """
-        FROM (
-            SELECT txo.tx_id AS "tx_id",
-            txo.address AS "address",
-            txo.id AS "tx_out_id",
-            txo.value AS "coin",
-            txo.inline_datum_id,
-            datum.value,
-            ENCODE(txo.data_hash, 'hex') as "data_hash"
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            JOIN tx_out txo ON (mto.tx_out_id = txo.id)
-            JOIN datum ON (txo.data_hash = datum.hash)
-            JOIN tx ON (tx.id = txo.tx_id)
-            JOIN block ON (tx.block_id = block.id)
-            WHERE (block.block_no = %(block_no)s)
-            GROUP BY txo.tx_id, txo.id, datum.value
-            ORDER BY txo.tx_id DESC
-        ) AS "sorted_limited"
-        JOIN tx ON (sorted_limited.tx_id = tx.id)
-        JOIN block b ON (b.id = tx.block_id)
-        JOIN ma_tx_out mto ON (sorted_limited.tx_out_id = mto.tx_out_id)
-        JOIN multi_asset ma ON (mto.ident = ma.id)
-        GROUP BY tx.hash, tx.block_index, b.block_no, b.time, sorted_limited.value,
-            sorted_limited.coin, sorted_limited.inline_datum_id, sorted_limited.data_hash,
-            sorted_limited.address
-    """
+FROM tx_out txo
+LEFT JOIN tx ON txo.tx_id = tx.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN block ON tx.block_id = block.id
+WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
+"""
     )
     r = select_fetchall(
         DATUM_SELECTOR,
@@ -216,19 +223,3 @@ class DecimalEncoder(json.JSONEncoder):
             return obj.hex()
 
         return json.JSONEncoder.default(self, obj)
-
-
-def test_query():
-    r = select_fetchall(
-        """SELECT * FROM (
-        SELECT ma.policy, ma.name, ma.id 
-        FROM multi_asset ma 
-        WHERE policy = DECODE('13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f', 'hex') AND name = DECODE('4d494e53574150', 'hex') 
-    ) as ma
-    JOIN ma_tx_out mtxo ON ma.id = mtxo.ident 
-    JOIN tx_out txo ON mtxo.tx_out_id = txo.id 
-    LIMIT 100
-    OFFSET 0"""
-    )
-
-    return r

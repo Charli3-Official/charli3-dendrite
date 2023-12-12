@@ -14,6 +14,10 @@ ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 ASSET_PATH.mkdir(parents=True, exist_ok=True)
 
 
+class NotAPoolError(Exception):
+    pass
+
+
 class InvalidPoolError(Exception):
     pass
 
@@ -98,6 +102,8 @@ class Assets(BaseDict):
 class AssetClass(pycardano.PlutusData):
     """An asset class. Separates out token policy and asset name."""
 
+    CONSTR_ID = 0
+
     policy: bytes
     asset_name: bytes
 
@@ -139,7 +145,7 @@ def asset_info(unit: str, update=False):
     parsed = response.json()
     parsed["timestamp"] = datetime.now().timestamp()
     with open(path, "w") as fw:
-        json.dump(response)
+        json.dump(response.json(), fw)
 
     return response.json()
 

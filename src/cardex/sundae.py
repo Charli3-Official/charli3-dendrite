@@ -1,5 +1,32 @@
+from dataclasses import dataclass
+
+from pycardano import PlutusData
+
 from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError
+from cardex.utility import Assets, AssetClass, InvalidPoolError, NotAPoolError
+
+
+@dataclass
+class LPFee(PlutusData):
+    CONSTR_ID = 0
+    numerator: int
+    denominator: int
+
+
+@dataclass
+class LiquidityPoolAssets(PlutusData):
+    CONSTR_ID = 0
+    asset_a: AssetClass
+    asset_b: AssetClass
+
+
+@dataclass
+class LiquidityPoolDatum(PlutusData):
+    CONSTR_ID = 0
+    assets: LiquidityPoolAssets
+    ident: bytes
+    last_swap: int
+    fee: LPFee
 
 
 class SundaeswapCPPState(AbstractConstantProductPoolState):
@@ -22,6 +49,13 @@ class SundaeswapCPPState(AbstractConstantProductPoolState):
         else:
             return False
 
+    @classmethod
+    def extract_pool_nft(cls, values) -> Assets:
+        try:
+            super().extract_pool_nft(values)
+        except NotAPoolError:
+            raise InvalidPoolError("No pool NFT found.")
+
     def pool_policy() -> str:
         return "0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b91370"
 
@@ -30,11 +64,11 @@ class SundaeswapCPPState(AbstractConstantProductPoolState):
         super().post_init(values)
 
         assets = values["assets"]
-        datum = values["datum"]
+        datum = LiquidityPoolDatum.from_cbor(values["datum_cbor"])
 
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= 2000000
 
-        numerator = datum["fields"][-1]["fields"][0]["int"]
-        denominator = datum["fields"][-1]["fields"][1]["int"]
+        numerator = datum.fee.numerator
+        denominator = datum.fee.denominator
         values["fee"] = int(numerator * 10000 / denominator)

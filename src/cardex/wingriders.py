@@ -1,12 +1,33 @@
+from dataclasses import dataclass
+from typing import Optional
+
+from pycardano import PlutusData
+
 from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError
+from cardex.utility import Assets, AssetClass, InvalidPoolError
 
-try:
-    from minswap.utils import BlockfrostBackend
 
-    BLOCKFROST = True
-except ImportError:
-    BLOCKFROST = False
+@dataclass
+class LiquidityPoolAssets(PlutusData):
+    CONSTR_ID = 0
+    asset_a: AssetClass
+    asset_b: AssetClass
+
+
+@dataclass
+class LiquidityPool(PlutusData):
+    CONSTR_ID = 0
+    assets: LiquidityPoolAssets
+    last_swap: int
+    quantity_a: int
+    quantity_b: int
+
+
+@dataclass
+class LiquidityPoolDatum(PlutusData):
+    CONSTR_ID = 0
+    lp_hash: bytes
+    datum: LiquidityPool
 
 
 class WingridersCPPState(AbstractConstantProductPoolState):
@@ -58,10 +79,10 @@ class WingridersCPPState(AbstractConstantProductPoolState):
         super().post_init(values)
 
         assets = values["assets"]
-        datum = values["datum"]
+        datum = LiquidityPoolDatum.from_cbor(values["datum_cbor"])
 
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= 3000000
 
-        assets.root[assets.unit(0)] -= datum["fields"][1]["fields"][2]["int"]
-        assets.root[assets.unit(1)] -= datum["fields"][1]["fields"][3]["int"]
+        assets.root[assets.unit(0)] -= datum.datum.quantity_a
+        assets.root[assets.unit(1)] -= datum.datum.quantity_b

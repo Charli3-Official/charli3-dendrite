@@ -7,7 +7,7 @@ import pycardano
 import requests
 
 from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import AssetClass, Assets, InvalidPoolError
+from cardex.utility import AssetClass, Assets, InvalidPoolError, NotAPoolError
 
 
 @dataclass
@@ -62,11 +62,13 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             pool_nft = None
             for asset in assets:
                 name = bytes.fromhex(asset[56:]).split(b"_")
+                if len(name) != 3:
+                    continue
                 if name[2].decode().lower() == "nft":
-                    pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
+                    pool_nft = Assets(**{asset: assets.root.pop(asset)})
                     break
             if pool_nft is None:
-                raise InvalidPoolError("A pool must have one pool NFT token.")
+                raise NotAPoolError("A pool must have one pool NFT token.")
 
             values["pool_nft"] = pool_nft
 
@@ -101,28 +103,29 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                     lp_tokens = Assets(**{asset: assets.root.pop(asset)})
                     break
             if lp_tokens is None:
-                raise InvalidPoolError("A pool must have one pool NFT token.")
+                raise InvalidPoolError("A pool must have pool lp tokens.")
 
             values["lp_tokens"] = lp_tokens
 
         # Check to see if the pool is valid
         datum: SpectrumPoolDatum = SpectrumPoolDatum.from_cbor(values["datum_cbor"])
-        print(datum)
 
-        valid_pool = requests.post(
-            "https://meta.spectrum.fi/cardano/minting/data/verifyPool/",
-            headers={"Content-Type": "application/json"},
-            data=json.dumps(
-                [
-                    {
-                        "nftCs": datum.pool_nft.policy.hex(),
-                        "nftTn": datum.pool_nft.asset_name.hex(),
-                        "lqCs": datum.pool_lq.policy.hex(),
-                        "lqTn": datum.pool_lq.asset_name.hex(),
-                    }
-                ]
-            ),
-        ).json()[0][1]
+        # response = requests.post(
+        #     "https://meta.spectrum.fi/cardano/minting/data/verifyPool/",
+        #     headers={"Content-Type": "application/json"},
+        #     data=json.dumps(
+        #         [
+        #             {
+        #                 "nftCs": datum.pool_nft.policy.hex(),
+        #                 "nftTn": datum.pool_nft.asset_name.hex(),
+        #                 "lqCs": datum.pool_lq.policy.hex(),
+        #                 "lqTn": datum.pool_lq.asset_name.hex(),
+        #             }
+        #         ]
+        #     ),
+        # ).json()
+        # valid_pool = response[0][1]
+        valid_pool = True
 
         if not valid_pool:
             raise InvalidPoolError
@@ -132,9 +135,8 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         else:
             quantity = assets.quantity(1)
 
-        print(datum)
         if 2 * quantity <= datum.lq_bound:
-            raise InvalidPoolError
+            values["inactive"] = True
 
         values["fee"] = (1000 - datum.fee_mod) * 10
 

@@ -3,8 +3,9 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, RootModel, root_validator
+from pycardano import PlutusData
 
-from cardex.utility import Assets, InvalidPoolError, naturalize_assets
+from cardex.utility import Assets, InvalidPoolError, naturalize_assets, NotAPoolError
 
 
 class AbstractPoolState(BaseModel):
@@ -17,12 +18,13 @@ class AbstractPoolState(BaseModel):
     pool_nft: Optional[Assets] = None
     dex_nft: Optional[Assets] = None
     lp_tokens: Optional[Assets] = None
-    datum: Optional[Dict[str, Any]] = None
     datum_cbor: Optional[str] = None
+    _datum: Optional[PlutusData] = None
     _dex: str = ""
     fee: Optional[int] = None
     _deposit: Assets
     _batcher: Assets
+    inactive: bool = False
 
     def volume_fee(self) -> int:
         """Swap fee of swap in basis points."""
@@ -116,7 +118,9 @@ class AbstractPoolState(BaseModel):
         else:
             nfts = [asset for asset in assets if asset.startswith(cls.dex_policy())]
             if len(nfts) < 1:
-                raise ValueError(f"{cls.__name__}: Pool must have one DEX NFT token.")
+                raise InvalidPoolError(
+                    f"{cls.__name__}: Pool must have one DEX NFT token."
+                )
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["dex_nft"] = dex_nft
 
@@ -157,7 +161,9 @@ class AbstractPoolState(BaseModel):
         else:
             nfts = [asset for asset in assets if asset.startswith(cls.pool_policy())]
             if len(nfts) != 1:
-                raise ValueError("A pool must have one pool NFT token.")
+                raise NotAPoolError(
+                    f"{cls.__name__}: A pool must have one pool NFT token."
+                )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 
@@ -240,7 +246,7 @@ class AbstractPoolState(BaseModel):
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
         else:
-            raise InvalidPoolError(
+            raise NotAPoolError(
                 f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}"
             )
         return values

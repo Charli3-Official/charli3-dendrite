@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError
+from cardex.utility import Assets, InvalidPoolError, NotAPoolError
 
 test_pool = (
     "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",
@@ -94,7 +94,7 @@ class MuesliswapCPPState(AbstractConstantProductPoolState):
         else:
             nfts = [asset for asset, quantity in assets.items() if quantity == 1]
             if len(nfts) != 1:
-                raise InvalidPoolError("A pool must have one pool NFT token.")
+                raise NotAPoolError("A pool must have one pool NFT token.")
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 
