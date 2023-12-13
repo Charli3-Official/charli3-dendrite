@@ -12,6 +12,7 @@ from cardex.utility import AssetClass, Assets, InvalidPoolError, NotAPoolError
 
 @dataclass
 class SpectrumPoolDatum(pycardano.PlutusData):
+    CONSTR_ID = 0
     pool_nft: AssetClass
     asset_a: AssetClass
     asset_b: AssetClass
