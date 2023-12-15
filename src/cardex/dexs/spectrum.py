@@ -1,13 +1,12 @@
-import json
 from dataclasses import dataclass
-from typing import Dict, List
 
-import cbor2
 import pycardano
-import requests
 
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import AssetClass, Assets, InvalidPoolError, NotAPoolError
+from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.models import Assets
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import InvalidPoolError
+from cardex.utility import NotAPoolError
 
 
 @dataclass
@@ -18,7 +17,7 @@ class SpectrumPoolDatum(pycardano.PlutusData):
     asset_b: AssetClass
     pool_lq: AssetClass
     fee_mod: int
-    maybe_address: List[bytes]
+    maybe_address: list[bytes]
     lq_bound: int
 
 
@@ -55,7 +54,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         # If the pool nft is in the values, it's been parsed already
         if "pool_nft" in values:
             pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()}
+                **{key: value for key, value in values["pool_nft"].items()},
             )
 
         # Check for the pool nft

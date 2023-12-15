@@ -1,7 +1,10 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Optional
 
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError, NotAPoolError
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import Assets
+from cardex.utility import InvalidPoolError
+from cardex.utility import NotAPoolError
 
 test_pool = (
     "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",
@@ -18,16 +21,16 @@ class MuesliswapCPPState(AbstractConstantProductPoolState):
         """A unique identifier for the pool."""
         return self.pool_nft.unit()
 
-    def dex_policy() -> List[str]:
+    def dex_policy() -> list[str]:
         return [
             "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
             "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",
-            "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools
-            "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy
+            # "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools
+            # "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy
         ]
 
     @classmethod
-    def extract_dex_nft(cls, values: Dict[str, Any]) -> Optional[Assets]:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -55,7 +58,7 @@ class MuesliswapCPPState(AbstractConstantProductPoolState):
             nfts = [asset for asset in assets if asset in cls.dex_policy()]
             if len(nfts) != 1:
                 raise InvalidPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token."
+                    f"{cls.__name__}: Pool must have one DEX NFT token.",
                 )
             if test_pool in nfts:
                 raise InvalidPoolError("This is a test pool.")
@@ -87,7 +90,7 @@ class MuesliswapCPPState(AbstractConstantProductPoolState):
         # If the pool nft is in the values, it's been parsed already
         if "pool_nft" in values:
             pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()}
+                **{key: value for key, value in values["pool_nft"].items()},
             )
 
         # Check for the pool nft

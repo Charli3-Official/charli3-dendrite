@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from pycardano import PlutusData
 
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, AssetClass, InvalidPoolError
+from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.models import Assets
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import InvalidPoolError
 
 
 @dataclass
@@ -68,7 +69,7 @@ class WingridersCPPState(AbstractConstantProductPoolState):
         nfts = [asset for asset in assets if asset.startswith(cls.pool_policy())]
         if len(nfts) != 1:
             raise InvalidPoolError(
-                f"A pool must have one at least one LP token: {nfts}"
+                f"A pool must have one at least one LP token: {nfts}",
             )
         assets.root.pop(nfts[0])
 

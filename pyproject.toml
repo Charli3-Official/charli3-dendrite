@@ -19,7 +19,16 @@ pycardano = "0.10.0"
 black = "^23.11.0"
 ruff = "^0.1.6"
 pre-commit = "^3.5.0"
+bump2version = "^1.0.1"
+isort = "^5.13.2"
+flake8 = "^6.1.0"
+mypy = "^1.7.1"
+pytest = "^7.4.3"
+pytest-benchmark = "^4.0.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"

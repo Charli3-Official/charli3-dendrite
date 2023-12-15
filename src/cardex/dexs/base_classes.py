@@ -1,79 +1,85 @@
-from abc import abstractmethod
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
+from typing import Optional
+from typing import Union
 
-from pydantic import BaseModel, RootModel, root_validator
 from pycardano import PlutusData
+from pydantic import BaseModel
+from pydantic import model_validator
 
-from cardex.utility import Assets, InvalidPoolError, naturalize_assets, NotAPoolError
+from cardex.utility import Assets
+from cardex.utility import InvalidPoolError
+from cardex.utility import NotAPoolError
+from cardex.utility import naturalize_assets
 
 
-class AbstractPoolState(BaseModel):
-    """A particular pool state, either current or historical."""
-
+class BasePoolState(BaseModel):
+    assets: Assets
+    datum_cbor: Optional[str] = None
+    datum_hash: str
+    dex_nft: Optional[Assets] = None
+    inactive: bool = False
+    lp_tokens: Optional[Assets] = None
+    pool_nft: Optional[Assets] = None
     tx_index: int
     tx_hash: str
-    assets: Assets
-    datum_hash: str
-    pool_nft: Optional[Assets] = None
-    dex_nft: Optional[Assets] = None
-    lp_tokens: Optional[Assets] = None
-    datum_cbor: Optional[str] = None
-    _datum: Optional[PlutusData] = None
-    _dex: str = ""
-    fee: Optional[int] = None
-    _deposit: Assets
-    _batcher: Assets
-    inactive: bool = False
 
+    _batcher_fee: Assets
+    _deposit_fee: Assets
+    _volume_fee: Optional[int] = None
+
+    _datum: Optional[PlutusData] = None
+
+    @property
     def volume_fee(self) -> int:
         """Swap fee of swap in basis points."""
-        return self.fee
+        return self._fee
 
+    @property
     def batcher_fee(self) -> Assets:
         """Batcher fee."""
         return self._batcher
 
+    @property
     def deposit(self) -> Assets:
         """Batcher fee."""
         return self._deposit
 
-    @abstractmethod
-    def pool_id(self) -> str:
-        """A unique identifier for the pool."""
-        return self.lp_tokens.unit()
+    @property
+    def pool_policy() -> Union[list[str]]:
+        """The pool nft policies.
 
-    def dex(self) -> str:
-        return self._dex
+        This should be the policy or policy+name of any pool nft policy that might be
+        in the pool. Each pool must contain one of the NFTs in the list, and if this
+        is None then no pool NFT check is made.
 
-    @staticmethod
-    def pool_policy() -> Union[str, List[str], None]:
-        """The pool nft policy.
-
-        This should be the policy or policy+name of the pool nft.
-
-        If None, then the default pool nft check is skipped.
+        By default, no pool policy is defined.
 
         Returns:
-            Optional[str]: policy or policy+name of pool nft
+            Optional[List[str]]: list of policy or policy+name of pool nfts or None
         """
         return None
 
-    @staticmethod
-    def lp_policy() -> Union[str, List[str], None]:
-        """The lp token policy.
+    @property
+    def lp_policy() -> Optional[list[str]]:
+        """The lp token policies.
 
-        This should be the policy or policy+name of the lp tokens.
+        Some dexs store staked lp tokens in the pool, and this definition is needed to
+        filter out tokens from the assets.
 
-        If None, then the default lp token check is skipped.
+        This should be the policy or policy+name of lp pool lp policy that might be
+        in the pool. Each pool must contain one of the NFTs in the list, and if this
+        is None then no lp token check is made.
+
+        By default, no pool policy is defined.
 
         Returns:
             Optional[str]: policy or policy+name of lp tokens
         """
         return None
 
-    @staticmethod
-    def dex_policy() -> Union[str, List[str], None]:
+    @property
+    def dex_policy() -> Union[str, list[str], None]:
         """The dex nft policy.
 
         This should be the policy or policy+name of the dex nft.
@@ -86,7 +92,7 @@ class AbstractPoolState(BaseModel):
         return None
 
     @classmethod
-    def extract_dex_nft(cls, values: Dict[str, Any]) -> Optional[Assets]:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -119,7 +125,7 @@ class AbstractPoolState(BaseModel):
             nfts = [asset for asset in assets if asset.startswith(cls.dex_policy())]
             if len(nfts) < 1:
                 raise InvalidPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token."
+                    f"{cls.__name__}: Pool must have one DEX NFT token.",
                 )
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["dex_nft"] = dex_nft
@@ -154,7 +160,7 @@ class AbstractPoolState(BaseModel):
         elif "pool_nft" in values:
             assert any([p.startswith(cls.pool_policy()) for p in values["pool_nft"]])
             pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()}
+                **{key: value for key, value in values["pool_nft"].items()},
             )
 
         # Check for the pool nft
@@ -162,7 +168,7 @@ class AbstractPoolState(BaseModel):
             nfts = [asset for asset in assets if asset.startswith(cls.pool_policy())]
             if len(nfts) != 1:
                 raise NotAPoolError(
-                    f"{cls.__name__}: A pool must have one pool NFT token."
+                    f"{cls.__name__}: A pool must have one pool NFT token.",
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
@@ -211,7 +217,7 @@ class AbstractPoolState(BaseModel):
         return lp_tokens
 
     @classmethod
-    def skip_init(cls, values: Dict[str, Any]) -> bool:
+    def skip_init(cls, values: dict[str, Any]) -> bool:
         """An initial check to determine if parsing should be carried out.
 
         Args:
@@ -223,7 +229,7 @@ class AbstractPoolState(BaseModel):
         return False
 
     @classmethod
-    def post_init(cls, values: Dict[str, Any]):
+    def post_init(cls, values: dict[str, Any]):
         """Post initialization checks.
 
         Args:
@@ -247,12 +253,12 @@ class AbstractPoolState(BaseModel):
 
         else:
             raise NotAPoolError(
-                f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}"
+                f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}",
             )
         return values
 
-    @root_validator(pre=True)
-    def translate_address(cls, values):  # noqa: D102
+    @model_validator(mode="before")
+    def translate_address(cls, values):
         """The main validation function called when initialized.
 
         Args:
@@ -299,7 +305,7 @@ class AbstractPoolState(BaseModel):
         return self.assets.quantity(1)
 
     @property
-    def price(self) -> Tuple[Decimal, Decimal]:
+    def price(self) -> tuple[Decimal, Decimal]:
         """Price of assets.
 
         Returns:
@@ -327,65 +333,7 @@ class AbstractPoolState(BaseModel):
             raise NotImplementedError("tvl for non-ADA pools is not implemented.")
 
         tvl = 2 * (Decimal(self.reserve_a) / Decimal(10**6)).quantize(
-            1 / Decimal(10**6)
+            1 / Decimal(10**6),
         )
 
         return tvl
-
-    @property
-    def pool_datum(self) -> Dict[str, Any]:
-        """The pool state datum."""
-        if not self.raw_datum:
-            self.raw_datum = BlockfrostBackend.api().script_datum(
-                self.datum_hash, return_type="json"
-            )["json_value"]
-
-        return self.raw_datum
-
-    @abstractmethod
-    def get_amount_out(self, asset: Assets) -> Tuple[Assets, float]:
-        pass
-
-
-class AbstractConstantProductPoolState(AbstractPoolState):
-    def get_amount_out(self, asset: Assets) -> Tuple[Assets, float]:
-        """Get the output asset amount given an input asset amount.
-
-        Args:
-            asset: An asset with a defined quantity.
-
-        Returns:
-            A tuple where the first value is the estimated asset returned from the swap
-                and the second value is the price impact ratio.
-        """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
-
-        if asset.unit() == self.unit_a:
-            reserve_in, reserve_out = self.reserve_a, self.reserve_b
-            unit_out = self.unit_b
-        else:
-            reserve_in, reserve_out = self.reserve_b, self.reserve_a
-            unit_out = self.unit_a
-
-        # Calculate the amount out
-        fee_modifier = 10000 - self.volume_fee()
-        numerator: int = asset.quantity() * fee_modifier * reserve_out
-        denominator: int = asset.quantity() * fee_modifier + reserve_in * 10000
-        amount_out = Assets(**{unit_out: numerator // denominator})
-
-        if amount_out.quantity() == 0:
-            return amount_out, 0
-
-        # Calculate the price impact
-        price_numerator: int = (
-            reserve_out * asset.quantity() * denominator * fee_modifier
-            - numerator * reserve_in * 10000
-        )
-        price_denominator: int = reserve_out * asset.quantity() * denominator * 10000
-        price_impact: float = price_numerator / price_denominator
-
-        return amount_out, price_impact

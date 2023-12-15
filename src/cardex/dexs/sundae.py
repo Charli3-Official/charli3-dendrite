@@ -2,8 +2,11 @@ from dataclasses import dataclass
 
 from pycardano import PlutusData
 
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, AssetClass, InvalidPoolError, NotAPoolError
+from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.models import Assets
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import InvalidPoolError
+from cardex.utility import NotAPoolError
 
 
 @dataclass

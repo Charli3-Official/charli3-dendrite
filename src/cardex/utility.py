@@ -1,13 +1,12 @@
 import json
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
-import pycardano
 import requests
-from pydantic import BaseModel, RootModel, root_validator
+
+from cardex.dataclasses.models import Assets
 
 ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 
@@ -22,113 +21,11 @@ class InvalidPoolError(Exception):
     pass
 
 
-class BaseList(RootModel):
-    """Utility class for list models."""
-
-    def __iter__(self):  # noqa
-        return iter(self.root)
-
-    def __getitem__(self, item):  # noqa
-        return self.root[item]
-
-    def __len__(self):  # noqa
-        return len(self.root)
-
-
-class BaseDict(BaseList):
-    """Utility class for dict models."""
-
-    def items(self):
-        """Return iterable of key-value pairs."""
-        return self.root.items()
-
-    def keys(self):
-        """Return iterable of keys."""
-        return self.root.keys()
-
-    def values(self):
-        """Return iterable of values."""
-        return self.root.values()
-
-    def __getitem__(self, item):  # noqa
-        return self.root.get(item, 0)
-
-
-class Assets(BaseDict):
-    """Contains all tokens and quantities."""
-
-    root: Dict[str, int] = {}
-
-    def unit(self, index: int = 0) -> str:
-        """Units of asset at `index`."""
-        return list(self.keys())[index]
-
-    def quantity(self, index: int = 0) -> int:
-        """Quantity of the asset at `index`."""
-        return list(self.values())[index]
-
-    @root_validator(pre=True)
-    def _digest_assets(cls, values):
-        if hasattr(values, "root"):
-            root = values.root
-        elif "values" in values and isinstance(values["values"], list):
-            root = {v.unit: v.quantity for v in values["values"]}
-        else:
-            root = {k: v for k, v in values.items()}
-        root = dict(
-            sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0])
-        )
-
-        return {"root": root}
-
-    def __add__(a, b):
-        """Add two assets."""
-        intersection = set(a.keys()) | set(b.keys())
-
-        result = {key: a[key] + b[key] for key in intersection}
-
-        return Assets(**result)
-
-    def __sub__(a, b):
-        """Subtract two assets."""
-        intersection = set(a.keys()) | set(b.keys())
-
-        result = {key: a[key] - b[key] for key in intersection}
-
-        return Assets(**result)
-
-
-@dataclass
-class AssetClass(pycardano.PlutusData):
-    """An asset class. Separates out token policy and asset name."""
-
-    CONSTR_ID = 0
-
-    policy: bytes
-    asset_name: bytes
-
-    @classmethod
-    def from_assets(cls, asset: Assets):
-        """Parse an Assets object into an AssetClass object."""
-        assert len(asset) == 1
-
-        if asset.unit() == "lovelace":
-            return AssetClass(
-                policy=b"",
-                asset_name=b"",
-            )
-        else:
-            return AssetClass(
-                policy=bytes.fromhex(asset.unit()[:56]),
-                asset_name=bytes.fromhex(asset.unit()[56:]),
-            )
-
-
 def asset_info(unit: str, update=False):
     path = ASSET_PATH.joinpath(f"{unit}.json")
 
     if path.exists():
-        with open(path, "r") as fr:
+        with open(path) as fr:
             parsed = json.load(fr)
             if "timestamp" in parsed and (
                 datetime.now() - datetime.fromtimestamp(parsed["timestamp"])
@@ -136,7 +33,7 @@ def asset_info(unit: str, update=False):
                 return parsed
 
     response = requests.get(
-        f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{unit}.json"
+        f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{unit}.json",
     )
 
     if response.status_code != 200:
@@ -226,7 +123,7 @@ def asset_name(unit: str) -> str:
     return asset_name
 
 
-def naturalize_assets(assets: Assets) -> Dict[str, Decimal]:
+def naturalize_assets(assets: Assets) -> dict[str, Decimal]:
     """Get the number of decimals associated with an asset.
 
     This returns a `Decimal` with the proper precision context.

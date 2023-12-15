@@ -1,11 +1,14 @@
 import json
+from typing import Any
+from typing import Optional
+
 import requests
-from typing import Any, Dict, Optional
+from pydantic import BaseModel
+from pydantic import Field
 
-from pydantic import BaseModel, Field
-
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import Assets
+from cardex.utility import InvalidPoolError
 
 
 class VyFiTokenDefinition(BaseModel):
@@ -24,7 +27,7 @@ class VyFiPoolTokens(BaseModel):
     bAsset: VyFiTokenDefinition
     mainNFT: VyFiTokenDefinition
     operatorToken: VyFiTokenDefinition
-    lpTokenName: Dict[str, str]
+    lpTokenName: dict[str, str]
     feesSettings: VyFiFees
     stakeKey: Optional[str]
 
@@ -60,7 +63,7 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         return self.lp_fee + self.bar_fee
 
     @classmethod
-    def extract_pool_nft(cls, values: Dict[str, Any]) -> Optional[Assets]:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -89,7 +92,7 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             nfts = [asset for asset, quantity in assets.items() if asset in POOLS]
             if len(nfts) < 1:
                 raise InvalidPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token."
+                    f"{cls.__name__}: Pool must have one DEX NFT token.",
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft

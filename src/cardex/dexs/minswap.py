@@ -1,5 +1,5 @@
-from cardex.base import AbstractConstantProductPoolState
-from cardex.utility import Assets, InvalidPoolError
+from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import Assets
 
 
 class MinswapCPPState(AbstractConstantProductPoolState):
