@@ -42,6 +42,10 @@ class AbstractPoolState(ABC, BasePoolState):
     def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
         raise NotImplementedError("")
 
+    @abstractmethod
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+        raise NotImplementedError("")
+
     @property
     @abstractmethod
     def pool_datum_class(self) -> type[PlutusData]:
@@ -117,6 +121,43 @@ class AbstractConstantProductPoolState(AbstractPoolState):
 
         return amount_out, price_impact
 
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+        """Get the input asset amount given a desired output asset amount.
+
+        Args:
+            asset: An asset with a defined quantity.
+
+        Returns:
+            The estimated asset needed for input in the swap.
+        """
+        assert len(asset) == 1, "Asset should only have one token."
+        assert asset.unit() in [
+            self.unit_a,
+            self.unit_b,
+        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if asset.unit == self.unit_b:
+            reserve_in, reserve_out = self.reserve_a, self.reserve_b
+            unit_out = self.unit_a
+        else:
+            reserve_in, reserve_out = self.reserve_b, self.reserve_a
+            unit_out = self.unit_b
+
+        # Estimate the required input
+        fee_modifier = 10000 - self.volume_fee
+        numerator: int = asset.quantity() * 10000 * reserve_in
+        denominator: int = (reserve_out - asset.quantity()) * fee_modifier
+        amount_in = Assets(unit=unit_out, quantity=numerator // denominator)
+
+        # Estimate the price impact
+        price_numerator: int = (
+            reserve_out * numerator * fee_modifier
+            - asset.quantity() * denominator * reserve_in * 10000
+        )
+        price_denominator: int = reserve_out * numerator * 10000
+        price_impact: float = price_numerator / price_denominator
+
+        return amount_in, price_impact
+
 
 class AbstractStableSwapPoolState(AbstractPoolState):
     @property
@@ -186,8 +227,21 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out_asset.__root__[out_asset.unit()] = int(out_reserve - out_asset.quantity())
         return out_asset, 0
 
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+        in_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
+        asset[asset.unit] = -asset[asset.unit]
+        in_asset = self._get_y(asset, in_unit)
+        in_reserve = self.reserve_b if in_unit == self.unit_b else self.reserve_a
+        in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
+        asset[asset.unit] = -asset[asset.unit]
+        return in_asset, 0
+
 
 class AbstractConstantLiquidityPoolState(AbstractPoolState):
     def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+        raise NotImplementedError("CLPP amount out is not yet implemented.")
+        return out_asset, 0
+
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
         raise NotImplementedError("CLPP amount out is not yet implemented.")
         return out_asset, 0
