@@ -181,7 +181,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
-        return self.lp_tokens.unit()
+        return self.pool_nft.unit()
 
     @classmethod
     def skip_init(cls, values) -> bool:
