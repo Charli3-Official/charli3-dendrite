@@ -17,6 +17,7 @@ from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
 from cardex.utility import Assets
 from cardex.utility import NoAssetsError
+from cardex.utility import NotAPoolError
 
 
 @dataclass
@@ -171,7 +172,10 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         # If the dex nft is in the values, it's been parsed already
         if "pool_nft" in values:
             assert any([p in cls.pools for p in values["pool_nft"]])
-            pool_nft = values["pool_nft"]
+            if isinstance(values["pool_nft"], dict):
+                pool_nft = Assets(root=values["pool_nft"])
+            else:
+                pool_nft = values["pool_nft"]
 
         # Check for the dex nft
         else:

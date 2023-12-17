@@ -119,7 +119,9 @@ class BasePoolState(BaseModel):
 
         # If the dex nft is in the values, it's been parsed already
         elif "dex_nft" in values:
-            assert any([p.startswith(cls.dex_policy) for p in values["dex_nft"]])
+            assert any(
+                any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
+            )
             dex_nft = values["dex_nft"]
 
         # Check for the dex nft
@@ -164,7 +166,10 @@ class BasePoolState(BaseModel):
 
         # If the pool nft is in the values, it's been parsed already
         elif "pool_nft" in values:
-            assert any([p.startswith(cls.pool_policy) for p in values["pool_nft"]])
+            assert any(
+                any(p.startswith(d) for d in cls.pool_policy)
+                for p in values["pool_nft"]
+            )
             pool_nft = Assets(
                 **{key: value for key, value in values["pool_nft"].items()},
             )
@@ -211,7 +216,9 @@ class BasePoolState(BaseModel):
 
         # If the pool nft is in the values, it's been parsed already
         elif "lp_tokens" in values:
-            assert any([p.startswith(cls.lp_policy) for p in values["lp_tokens"]])
+            assert any(
+                any(p.startswith(d) for d in cls.lp_policy) for p in values["lp_tokens"]
+            )
             lp_tokens = values["lp_tokens"]
 
         # Check for the pool nft
