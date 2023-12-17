@@ -1,9 +1,59 @@
 # noqa
 from dataclasses import dataclass
+from typing import Union
 
+from pycardano import Address
 from pycardano import PlutusData
 
 from cardex.dataclasses.models import Assets
+
+
+@dataclass
+class PlutusPartAddress(PlutusData):
+    """Encode a plutus address part (i.e. payment, stake, etc)."""
+
+    CONSTR_ID = 0
+    address: bytes
+
+
+@dataclass
+class PlutusNone(PlutusData):
+    """Placeholder for a receiver datum."""
+
+    CONSTR_ID = 1
+
+
+@dataclass
+class _PlutusConstrWrapper(PlutusData):
+    """Hidden wrapper to match Minswap stake address constructs."""
+
+    CONSTR_ID = 0
+    wrapped: Union["_PlutusConstrWrapper", PlutusPartAddress]
+
+
+@dataclass
+class PlutusFullAddress(PlutusData):
+    """A full address, including payment and staking keys."""
+
+    CONSTR_ID = 0
+    payment: PlutusPartAddress
+    stake: _PlutusConstrWrapper
+
+    @classmethod
+    def from_address(cls, address: Address) -> "PlutusFullAddress":
+        """Parse an Address object to a PlutusFullAddress."""
+        error_msg = "Only addresses with staking and payment parts are accepted."
+        if None in [address.staking_part, address.payment_part]:
+            raise ValueError(error_msg)
+        stake = _PlutusConstrWrapper(
+            _PlutusConstrWrapper(
+                PlutusPartAddress(bytes.fromhex(str(address.staking_part))),
+            ),
+        )
+        return PlutusFullAddress(
+            PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
+            stake=stake,
+        )
 
 
 @dataclass

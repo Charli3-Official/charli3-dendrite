@@ -1,14 +1,66 @@
 import json
+import time
+from dataclasses import dataclass
 from typing import Any
+from typing import ClassVar
 from typing import Optional
+from typing import Union
 
 import requests
+from pycardano import Address
+from pycardano import PlutusData
+from pycardano import TransactionOutput
 from pydantic import BaseModel
 from pydantic import Field
 
+from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
 from cardex.utility import Assets
-from cardex.utility import InvalidPoolError
+from cardex.utility import NoAssetsError
+
+
+@dataclass
+class VyFiPoolDatum(PlutusData):
+    """TODO: Figure out what each of these numbers mean."""
+
+    CONSTR_ID = 0
+
+    a: int
+    b: int
+    c: int
+
+
+@dataclass
+class AtoB(PlutusData):
+    CONSTR_ID = 3
+    min_receive: int
+
+
+@dataclass
+class BtoA(PlutusData):
+    CONSTR_ID = 4
+    min_receive: int
+
+
+@dataclass
+class VyFiOrderDatum(PlutusData):
+    CONSTR_ID = 0
+    address: bytes
+    order: Union[AtoB, BtoA]
+
+    @classmethod
+    def create_datum(cls, address: Address, in_assets: Assets, out_assets: Assets):
+        address_hash = (
+            address.payment_part.to_primitive() + address.staking_part.to_primitive()
+        )
+
+        merged = in_assets + out_assets
+        if in_assets.unit() == merged.unit():
+            order = AtoB(min_receive=out_assets.quantity())
+        else:
+            order = BtoA(min_receive=out_assets.quantity())
+
+        return cls(address=address_hash, order=order)
 
 
 class VyFiTokenDefinition(BaseModel):
@@ -42,23 +94,57 @@ class VyFiPoolDefinition(BaseModel):
     orderValidatorUtxoAddress: str
 
 
-POOLS = {}
-for p in requests.get("https://api.vyfi.io/lp?networkId=1&v2=true").json():
-    p["json"] = json.loads(p["json"])
-    POOLS[p["json"]["mainNFT"]["currencySymbol"]] = VyFiPoolDefinition.model_validate(p)
-
-
 class VyFiCPPState(AbstractConstantProductPoolState):
-    _dex = "vyfi"
     _batcher = Assets(lovelace=1900000)
     _deposit = Assets(lovelace=2000000)
+    _pools: ClassVar[dict[str, VyFiPoolDefinition] | None] = None
+    _pools_refresh: ClassVar[float] = time.time()
     lp_fee: int
     bar_fee: int
 
+    @classmethod
+    @property
+    def dex(cls) -> str:
+        return "VyFi"
+
+    @classmethod
+    @property
+    def pools(cls) -> dict[str, VyFiPoolDefinition]:
+        if cls._pools is None or (time.time() - cls._pools_refresh) > 3600:
+            cls._pools = {}
+            for p in requests.get("https://api.vyfi.io/lp?networkId=1&v2=true").json():
+                p["json"] = json.loads(p["json"])
+                cls._pools[
+                    p["json"]["mainNFT"]["currencySymbol"]
+                ] = VyFiPoolDefinition.model_validate(p)
+            cls._pools_refresh = time.time()
+
+        return cls._pools
+
+    @classmethod
+    @property
+    def pool_selector(cls) -> PoolSelector:
+        return PoolSelector(
+            selector_type="addresses",
+            selector=[pool.poolValidatorUtxoAddress for pool in cls.pools.values()],
+        )
+
+    @classmethod
+    @property
+    def order_datum_class(self) -> type[VyFiOrderDatum]:
+        return VyFiOrderDatum
+
+    @classmethod
+    @property
+    def pool_datum_class(self) -> type[VyFiPoolDatum]:
+        return VyFiPoolDatum
+
+    @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
         return self.pool_nft.unit()
 
+    @property
     def volume_fee(self) -> int:
         return self.lp_fee + self.bar_fee
 
@@ -84,20 +170,69 @@ class VyFiCPPState(AbstractConstantProductPoolState):
 
         # If the dex nft is in the values, it's been parsed already
         if "pool_nft" in values:
-            assert any([p in POOLS for p in values["pool_nft"]])
+            assert any([p in cls.pools for p in values["pool_nft"]])
             pool_nft = values["pool_nft"]
 
         # Check for the dex nft
         else:
-            nfts = [asset for asset, quantity in assets.items() if asset in POOLS]
+            nfts = [asset for asset, quantity in assets.items() if asset in cls.pools]
             if len(nfts) < 1:
-                raise InvalidPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token.",
-                )
+                if len(assets) == 0:
+                    raise NoAssetsError(
+                        f"{cls.__name__}: No assets supplied.",
+                    )
+                else:
+                    raise NotAPoolError(
+                        f"{cls.__name__}: Pool must have one DEX NFT token.",
+                    )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 
-        values["lp_fee"] = POOLS[pool_nft.unit()].json_.feesSettings.liqFee
-        values["bar_fee"] = POOLS[pool_nft.unit()].json_.feesSettings.barFee
+        values["lp_fee"] = cls.pools[pool_nft.unit()].json_.feesSettings.liqFee
+        values["bar_fee"] = cls.pools[pool_nft.unit()].json_.feesSettings.barFee
 
         return pool_nft
+
+    def swap_tx_output(
+        self,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        slippage: float = 0.005,
+    ) -> tuple[TransactionOutput, VyFiOrderDatum]:
+        raise NotImplementedError("Need to implement per pool stake address.")
+        # Basic checks
+        assert len(in_assets) == 1
+        assert len(out_assets) == 1
+
+        out_assets, _, _ = self.amount_out(in_assets, out_assets)
+        out_assets.__root__[out_assets.unit()] = int(
+            out_assets.__root__[out_assets.unit()] * (1 - slippage),
+        )
+
+        merged_assets = in_assets + out_assets
+        stake_order = Address(
+            bech32=self._order_addresses[
+                merged_assets.unit(0) + "/" + merged_assets.unit(1)
+            ],
+        )
+
+        order_datum = VyFiOrder.create_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+        )
+
+        in_assets.__root__["lovelace"] = (
+            in_assets["lovelace"]
+            + self.batcher_fee["lovelace"]
+            + self.deposit["lovelace"]
+        )
+
+        output = TransactionOutput(
+            address=stake_order.address,
+            amount=asset_to_value(in_assets),
+            datum_hash=order_datum.hash(),
+        )
+
+        return output, order_datum

@@ -17,7 +17,7 @@ DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
 if DBSYNC_HOST is not None:
     conninfo = (
         f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer "
-        + "user={DBSYNC_USER} password={DBSYNC_PASS}"
+        + f"user={DBSYNC_USER} password={DBSYNC_PASS}"
     )
     pool = psycopg_pool.ConnectionPool(
         conninfo=conninfo,
@@ -110,7 +110,11 @@ LEFT JOIN block ON tx.block_id = block.id"""
     if not historical:
         datum_selector += """
 LEFT JOIN tx_in ON tx_in.tx_out_id = txo.tx_id AND tx_in.tx_out_index = txo.index
-WHERE tx_in.tx_in_id IS NULL
+WHERE tx_in.tx_in_id IS NULL AND datum.hash IS NOT NULL
+"""
+    else:
+        datum_selector += """
+WHERE datum.hash IS NOT NULL
 """
 
     datum_selector += """

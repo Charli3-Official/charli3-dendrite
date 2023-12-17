@@ -6,13 +6,14 @@ from pycardano import Address
 from pycardano import PlutusData
 
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.base_classes import BasePoolState
 
 
 class AbstractPoolState(ABC, BasePoolState):
     """A particular pool state, either current or historical."""
 
-    datum_parsed: PlutusData
+    datum_parsed: PlutusData | None = None
 
     @property
     @abstractmethod
@@ -25,9 +26,16 @@ class AbstractPoolState(ABC, BasePoolState):
         """
         raise NotImplementedError("Unique pool id is not specified.")
 
-    @property
+    @classmethod
     @abstractmethod
     def dex(self) -> str:
+        """Official dex name."""
+        raise NotImplementedError("DEX name is undefined.")
+
+    @classmethod
+    @abstractmethod
+    def pool_selector(self) -> PoolSelector:
+        """Pool selection information."""
         raise NotImplementedError("DEX name is undefined.")
 
     @abstractmethod
@@ -45,7 +53,6 @@ class AbstractPoolState(ABC, BasePoolState):
         raise NotImplementedError
 
     @property
-    @abstractmethod
     def pool_datum(self) -> PlutusData:
         """The pool state datum."""
         if not self.datum_parsed:
@@ -177,4 +184,10 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out_asset = self._get_y(asset, out_unit)
         out_reserve = self.reserve_b if out_unit == self.unit_b else self.reserve_a
         out_asset.__root__[out_asset.unit()] = int(out_reserve - out_asset.quantity())
+        return out_asset, 0
+
+
+class AbstractConstantLiquidityPoolState(AbstractPoolState):
+    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+        raise NotImplementedError("CLPP amount out is not yet implemented.")
         return out_asset, 0

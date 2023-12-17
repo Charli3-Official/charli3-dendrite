@@ -1,7 +1,4 @@
 from decimal import Decimal
-from typing import Any
-from typing import Optional
-from typing import Union
 
 from pycardano import PlutusData
 from pydantic import BaseModel
@@ -9,31 +6,33 @@ from pydantic import model_validator
 
 from cardex.utility import Assets
 from cardex.utility import InvalidPoolError
+from cardex.utility import NoAssetsError
 from cardex.utility import NotAPoolError
 from cardex.utility import naturalize_assets
 
 
 class BasePoolState(BaseModel):
     assets: Assets
-    datum_cbor: Optional[str] = None
+    block_time: int | None = None
+    datum_cbor: str | None = None
     datum_hash: str
-    dex_nft: Optional[Assets] = None
+    dex_nft: Assets | None = None
     inactive: bool = False
-    lp_tokens: Optional[Assets] = None
-    pool_nft: Optional[Assets] = None
+    lp_tokens: Assets | None = None
+    pool_nft: Assets | None = None
     tx_index: int
     tx_hash: str
 
     _batcher_fee: Assets
     _deposit_fee: Assets
-    _volume_fee: Optional[int] = None
+    _volume_fee: int | None = None
 
-    _datum: Optional[PlutusData] = None
+    _datum: PlutusData | None = None
 
     @property
     def volume_fee(self) -> int:
         """Swap fee of swap in basis points."""
-        return self._fee
+        return self.fee
 
     @property
     def batcher_fee(self) -> Assets:
@@ -45,8 +44,9 @@ class BasePoolState(BaseModel):
         """Batcher fee."""
         return self._deposit
 
+    @classmethod
     @property
-    def pool_policy() -> Union[list[str]]:
+    def pool_policy(cls) -> list[str] | None:
         """The pool nft policies.
 
         This should be the policy or policy+name of any pool nft policy that might be
@@ -60,8 +60,9 @@ class BasePoolState(BaseModel):
         """
         return None
 
+    @classmethod
     @property
-    def lp_policy() -> Optional[list[str]]:
+    def lp_policy(cls) -> list[str] | None:
         """The lp token policies.
 
         Some dexs store staked lp tokens in the pool, and this definition is needed to
@@ -78,8 +79,9 @@ class BasePoolState(BaseModel):
         """
         return None
 
+    @classmethod
     @property
-    def dex_policy() -> Union[str, list[str], None]:
+    def dex_policy(cls) -> list[str] | None:
         """The dex nft policy.
 
         This should be the policy or policy+name of the dex nft.
@@ -92,7 +94,7 @@ class BasePoolState(BaseModel):
         return None
 
     @classmethod
-    def extract_dex_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
+    def extract_dex_nft(cls, values: dict[str, ...]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -112,19 +114,23 @@ class BasePoolState(BaseModel):
         assets = values["assets"]
 
         # If no dex policy id defined, return nothing
-        if cls.dex_policy() is None:
+        if cls.dex_policy is None:
             dex_nft = None
 
         # If the dex nft is in the values, it's been parsed already
         elif "dex_nft" in values:
-            assert any([p.startswith(cls.dex_policy()) for p in values["dex_nft"]])
+            assert any([p.startswith(cls.dex_policy) for p in values["dex_nft"]])
             dex_nft = values["dex_nft"]
 
         # Check for the dex nft
         else:
-            nfts = [asset for asset in assets if asset.startswith(cls.dex_policy())]
+            nfts = [
+                asset
+                for asset in assets
+                if any(asset.startswith(policy) for policy in cls.dex_policy)
+            ]
             if len(nfts) < 1:
-                raise InvalidPoolError(
+                raise NotAPoolError(
                     f"{cls.__name__}: Pool must have one DEX NFT token.",
                 )
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
@@ -153,28 +159,32 @@ class BasePoolState(BaseModel):
         assets = values["assets"]
 
         # If no pool policy id defined, return nothing
-        if cls.pool_policy() is None:
+        if cls.pool_policy is None:
             return None
 
         # If the pool nft is in the values, it's been parsed already
         elif "pool_nft" in values:
-            assert any([p.startswith(cls.pool_policy()) for p in values["pool_nft"]])
+            assert any([p.startswith(cls.pool_policy) for p in values["pool_nft"]])
             pool_nft = Assets(
                 **{key: value for key, value in values["pool_nft"].items()},
             )
 
         # Check for the pool nft
         else:
-            nfts = [asset for asset in assets if asset.startswith(cls.pool_policy())]
+            nfts = [
+                asset
+                for asset in assets
+                if any(asset.startswith(policy) for policy in cls.pool_policy)
+            ]
             if len(nfts) != 1:
-                raise NotAPoolError(
+                raise InvalidPoolError(
                     f"{cls.__name__}: A pool must have one pool NFT token.",
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 
         assets = values["assets"]
-        pool_id = pool_nft.unit()[len(cls.pool_policy()) :]
+        pool_id = pool_nft.unit()[len(cls.pool_policy) :]
         lps = [asset for asset in assets if asset.endswith(pool_id)]
         for lp in lps:
             assets.root.pop(lp)
@@ -196,17 +206,21 @@ class BasePoolState(BaseModel):
         assets = values["assets"]
 
         # If no pool policy id defined, return nothing
-        if cls.lp_policy() is None:
+        if cls.lp_policy is None:
             return None
 
         # If the pool nft is in the values, it's been parsed already
         elif "lp_tokens" in values:
-            assert any([p.startswith(cls.lp_policy()) for p in values["lp_tokens"]])
+            assert any([p.startswith(cls.lp_policy) for p in values["lp_tokens"]])
             lp_tokens = values["lp_tokens"]
 
         # Check for the pool nft
         else:
-            nfts = [asset for asset in assets if asset.startswith(cls.lp_policy())]
+            nfts = [
+                asset
+                for asset in assets
+                if any(asset.startswith(policy) for policy in cls.lp_policy)
+            ]
             if len(nfts) > 0:
                 lp_tokens = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
                 values["lp_tokens"] = lp_tokens
@@ -217,7 +231,7 @@ class BasePoolState(BaseModel):
         return lp_tokens
 
     @classmethod
-    def skip_init(cls, values: dict[str, Any]) -> bool:
+    def skip_init(cls, values: dict[str, ...]) -> bool:
         """An initial check to determine if parsing should be carried out.
 
         Args:
@@ -229,7 +243,7 @@ class BasePoolState(BaseModel):
         return False
 
     @classmethod
-    def post_init(cls, values: dict[str, Any]):
+    def post_init(cls, values: dict[str, ...]):
         """Post initialization checks.
 
         Args:
@@ -252,9 +266,12 @@ class BasePoolState(BaseModel):
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
         else:
-            raise NotAPoolError(
-                f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}",
-            )
+            if len(assets) == 1 and "lovelace" in assets:
+                raise NoAssetsError("Invalid pool, only contains lovelace.")
+            else:
+                raise InvalidPoolError(
+                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}",
+                )
         return values
 
     @model_validator(mode="before")

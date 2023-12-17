@@ -5,6 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import requests
+from pycardano import Value
 
 from cardex.dataclasses.models import Assets
 
@@ -14,10 +15,26 @@ ASSET_PATH.mkdir(parents=True, exist_ok=True)
 
 
 class NotAPoolError(Exception):
+    """Error raised when a utxo is supplied and it does not contain pool data."""
+
     pass
 
 
 class InvalidPoolError(Exception):
+    """Error raised when a utxo has pool data, but it is formatted incorrectly."""
+
+    pass
+
+
+class InvalidLPError(Exception):
+    """Error raised when no LP is found in a pool utxo, and LP is expected."""
+
+    pass
+
+
+class NoAssetsError(Exception):
+    """Error raised when no assets are in the pool, or it only contains lovelace."""
+
     pass
 
 
@@ -121,6 +138,26 @@ def asset_name(unit: str) -> str:
             asset_name = bytes.fromhex(unit[56:]).decode()
 
     return asset_name
+
+
+def asset_to_value(assets: Assets) -> Value:
+    """Convert an Assets object to a pycardano.Value."""
+    coin = assets["lovelace"]
+    cnts = {}
+    for unit, quantity in assets.items():
+        if unit == "lovelace":
+            continue
+        policy = bytes.fromhex(unit[:56])
+        asset_name = bytes.fromhex(unit[56:])
+        if policy not in cnts:
+            cnts[policy] = {asset_name: quantity}
+        else:
+            cnts[policy][asset_name] = quantity
+
+    if len(cnts) == 0:
+        return Value.from_primitive([coin])
+    else:
+        return Value.from_primitive([coin, cnts])
 
 
 def naturalize_assets(assets: Assets) -> dict[str, Decimal]:

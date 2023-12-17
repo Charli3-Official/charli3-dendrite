@@ -1,32 +1,118 @@
 from dataclasses import dataclass
+from typing import List
 
-import pycardano
+from pycardano import Address
+from pycardano import PlutusData
+from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.utility import InvalidLPError
 from cardex.utility import InvalidPoolError
 from cardex.utility import NotAPoolError
 
 
 @dataclass
-class SpectrumPoolDatum(pycardano.PlutusData):
+class SpectrumOrderDatum(PlutusData):
     CONSTR_ID = 0
+
+    in_asset: AssetClass
+    out_asset: AssetClass
+    pool_token: AssetClass
+    fee: int
+    numerator: int
+    denominator: int
+    address_payment: bytes
+    address_stake: PlutusPartAddress
+    amount: int
+    min_receive: int
+
+    @classmethod
+    def create_datum(
+        cls,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        pool_token: Assets,
+        batcher_fee: int,
+        volume_fee: int,
+    ) -> "SpectrumOrder":
+        payment_part = bytes.fromhex(str(address.payment_part))
+        stake_part = PlutusPartAddress(bytes.fromhex(str(address.staking_part)))
+        in_asset = AssetClass.from_assets(in_assets)
+        out_asset = AssetClass.from_assets(out_assets)
+        pool = AssetClass.from_assets(pool_token)
+        fee_mod = (10000 - volume_fee) // 10
+
+        numerator, denominator = float.as_integer_ratio(
+            batcher_fee / out_assets.quantity(),
+        )
+
+        return cls(
+            in_asset=in_asset,
+            out_asset=out_asset,
+            pool_token=pool,
+            fee=fee_mod,
+            numerator=numerator,
+            denominator=denominator,
+            address_payment=payment_part,
+            address_stake=stake_part,
+            amount=in_assets.quantity(),
+            min_receive=out_assets.quantity(),
+        )
+
+
+@dataclass
+class SpectrumPoolDatum(PlutusData):
+    CONSTR_ID = 0
+
     pool_nft: AssetClass
     asset_a: AssetClass
     asset_b: AssetClass
     pool_lq: AssetClass
     fee_mod: int
-    maybe_address: list[bytes]
+    maybe_address: List[bytes]
     lq_bound: int
 
 
 class SpectrumCPPState(AbstractConstantProductPoolState):
-    _dex = "spectrum"
-    fee: int = 30
-    _batcher = Assets(lovelace=2000000)
+    fee: int
+    _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)
+    _stake_address = Address.from_primitive(
+        "addr1wynp362vmvr8jtc946d3a3utqgclfdl5y9d3kn849e359hsskr20n",
+    )
 
+    @classmethod
+    @property
+    def dex(cls) -> str:
+        return "Spectrum"
+
+    @classmethod
+    @property
+    def pool_selector(cls) -> PoolSelector:
+        return PoolSelector(
+            selector_type="addresses",
+            selector=[
+                "addr1x8nz307k3sr60gu0e47cmajssy4fmld7u493a4xztjrll0aj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrswgxsta",
+                "addr1x94ec3t25egvhqy2n265xfhq882jxhkknurfe9ny4rl9k6dj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrst84slu",
+            ],
+        )
+
+    @classmethod
+    @property
+    def order_datum_class(self) -> type[SpectrumOrderDatum]:
+        return SpectrumOrderDatum
+
+    @classmethod
+    @property
+    def pool_datum_class(self) -> type[SpectrumPoolDatum]:
+        return SpectrumPoolDatum
+
+    @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
         return self.pool_nft.unit()
@@ -103,7 +189,9 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                     lp_tokens = Assets(**{asset: assets.root.pop(asset)})
                     break
             if lp_tokens is None:
-                raise InvalidPoolError("A pool must have pool lp tokens.")
+                raise InvalidLPError(
+                    f"A pool must have pool lp tokens. Token names: {[bytes.fromhex(a[56:]) for a in assets]}",
+                )
 
             values["lp_tokens"] = lp_tokens
 
@@ -141,3 +229,47 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         values["fee"] = (1000 - datum.fee_mod) * 10
 
         return lp_tokens
+
+    def swap_tx_output(
+        self,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        slippage: float = 0.005,
+    ) -> tuple[TransactionOutput, SpectrumOrderDatum]:
+        # Basic checks
+        assert len(in_assets) == 1
+        assert len(out_assets) == 1
+
+        out_assets, _, _ = self.amount_out(in_assets, out_assets)
+        out_assets.__root__[out_assets.unit()] = int(
+            out_assets.__root__[out_assets.unit()] * (1 - slippage),
+        )
+
+        pool = self.get_pool_from_assets(in_assets + out_assets)
+
+        order_datum = SpectrumOrder.create_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            batcher_fee=pool.batcher_fee["lovelace"],
+            volume_fee=pool.volume_fee,
+            pool_token=pool.pool_nft,
+        )
+
+        deposit = (
+            pool.batcher_fee["lovelace"]
+            if in_assets.unit() == "lovelace"
+            else pool.deposit_ada["lovelace"]
+        )
+        in_assets.__root__["lovelace"] = (
+            in_assets["lovelace"] + pool.batcher_fee["lovelace"] + deposit
+        )
+
+        output = pycardano.TransactionOutput(
+            address=STAKE_ORDER.address,
+            amount=asset_to_value(in_assets),
+            datum=order_datum,
+        )
+
+        return output, order_datum
