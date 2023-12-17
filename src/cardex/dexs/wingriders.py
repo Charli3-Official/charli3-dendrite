@@ -194,26 +194,26 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         else:
             return False
 
-    @classmethod
-    def extract_pool_nft(cls, values) -> Assets:
-        if "pool_nft" in values:
-            return Assets({})
+    # @classmethod
+    # def extract_pool_nft(cls, values) -> Assets:
+    #     if "pool_nft" in values:
+    #         return Assets()
 
-        assets = values["assets"]
+    #     assets = values["assets"]
 
-        # Find the NFT that assigns the pool a unique id
-        nfts = [
-            asset
-            for asset in assets
-            if any(asset.startswith(policy) for policy in cls.pool_policy)
-        ]
-        if len(nfts) != 1:
-            raise InvalidLPError(
-                f"A pool must have one at least one LP token: {nfts}",
-            )
-        assets.root.pop(nfts[0])
+    #     # Find the NFT that assigns the pool a unique id
+    #     nfts = [
+    #         asset
+    #         for asset in assets
+    #         if any(asset.startswith(policy) for policy in cls.pool_policy)
+    #     ]
+    #     if len(nfts) != 1:
+    #         raise InvalidLPError(
+    #             f"A pool must have one at least one LP token: {nfts}",
+    #         )
+    #     assets.root.pop(nfts[0])
 
-        return Assets({})
+    #     return Assets({})
 
     @classmethod
     def post_init(cls, values):

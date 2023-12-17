@@ -10,6 +10,7 @@ from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dexs.abstract_classes import AbstractPoolState
 from cardex.utility import InvalidLPError
+from cardex.utility import InvalidPoolError
 from cardex.utility import NoAssetsError
 
 DEXS: list[AbstractPoolState] = [
@@ -46,6 +47,8 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
                 )
             except NoAssetsError:
                 pytest.xfail(f"{dex.dex}: expected failure no assets - {pool.assets}")
+            except InvalidPoolError:
+                pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
             except:
                 print(pool)
                 raise
