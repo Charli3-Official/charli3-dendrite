@@ -79,7 +79,11 @@ class AbstractPoolState(ABC, BasePoolState):
 
 
 class AbstractConstantProductPoolState(AbstractPoolState):
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         """Get the output asset amount given an input asset amount.
 
         Args:
@@ -103,10 +107,12 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             unit_out = self.unit_a
 
         # Calculate the amount out
-        fee_modifier = 10000 - self.volume_fee()
+        fee_modifier = 10000 - self.volume_fee
         numerator: int = asset.quantity() * fee_modifier * reserve_out
         denominator: int = asset.quantity() * fee_modifier + reserve_in * 10000
         amount_out = Assets(**{unit_out: numerator // denominator})
+        if not precise:
+            amount_out.root[unit_out] = numerator / denominator
 
         if amount_out.quantity() == 0:
             return amount_out, 0
@@ -121,7 +127,11 @@ class AbstractConstantProductPoolState(AbstractPoolState):
 
         return amount_out, price_impact
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         """Get the input asset amount given a desired output asset amount.
 
         Args:
@@ -146,7 +156,9 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         fee_modifier = 10000 - self.volume_fee
         numerator: int = asset.quantity() * 10000 * reserve_in
         denominator: int = (reserve_out - asset.quantity()) * fee_modifier
-        amount_in = Assets(unit=unit_out, quantity=numerator // denominator)
+        amount_in = Assets(**{unit_out: numerator // denominator})
+        if not precise:
+            amount_in.root[unit_out] = numerator / denominator
 
         # Estimate the price impact
         price_numerator: int = (

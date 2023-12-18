@@ -155,6 +155,10 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     @classmethod
     def skip_init(cls, values) -> bool:
         if "pool_nft" in values and "dex_nft" in values and "fee" in values:
+            try:
+                super().extract_pool_nft(values)
+            except InvalidPoolError:
+                raise NotAPoolError("No pool NFT found.")
             if len(values["assets"]) == 3:
                 # Send the ADA token to the end
                 values["assets"]["lovelace"] = values["assets"].pop("lovelace")

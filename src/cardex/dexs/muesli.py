@@ -14,7 +14,6 @@ from cardex.dexs.abstract_classes import AbstractConstantLiquidityPoolState
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
 from cardex.utility import Assets
 from cardex.utility import InvalidPoolError
-from cardex.utility import NotAPoolError
 
 
 @dataclass
@@ -166,61 +165,12 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         Returns:
             Assets: None or the dex nft.
         """
-        assets = values["assets"]
+        dex_nft = super().extract_dex_nft(values)
 
-        # If no dex policy id defined, return nothing
-        if "dex_nft" in values:
-            dex_nft = values["dex_nft"]
-
-        # Check for the dex nft
-        else:
-            nfts = [asset for asset in assets if asset in cls.dex_policy]
-            if len(nfts) != 1:
-                raise NotAPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token.",
-                )
-            if cls._test_pool in nfts:
-                raise InvalidPoolError("This is a test pool.")
-            dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
-            values["dex_nft"] = dex_nft
+        if cls._test_pool in dex_nft:
+            raise InvalidPoolError("This is a test pool.")
 
         return dex_nft
-
-    @classmethod
-    def extract_pool_nft(cls, values) -> Assets:
-        """Extract the pool nft from the UTXO.
-
-        Some DEXs put a pool nft into the pool UTXO.
-
-        This function checks to see if the pool nft is in the UTXO if the DEX policy is
-        defined.
-
-        If the pool nft is in the values, this value is skipped because it is assumed
-        that this utxo has already been parsed.
-
-        Args:
-            values: The pool UTXO inputs.
-
-        Returns:
-            Assets: None or the pool nft.
-        """
-        assets = values["assets"]
-
-        # If the pool nft is in the values, it's been parsed already
-        if "pool_nft" in values:
-            pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()},
-            )
-
-        # Check for the pool nft
-        else:
-            nfts = [asset for asset, quantity in assets.items() if quantity == 1]
-            if len(nfts) != 1:
-                raise InvalidPoolError("A pool must have one pool NFT token.")
-            pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
-            values["pool_nft"] = pool_nft
-
-        return pool_nft
 
     def swap_tx_output(
         self,
