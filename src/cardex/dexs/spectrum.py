@@ -142,7 +142,8 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             pool_nft = Assets(
                 **{key: value for key, value in values["pool_nft"].items()},
             )
-            if not pool_nft.unit().endswith("nft"):
+            name = bytes.fromhex(pool_nft.unit()[56:]).split(b"_")
+            if len(name) != 3 and name[2].decode().lower() != "nft":
                 raise NotAPoolError("A pool must have one pool NFT token.")
 
         # Check for the pool nft
