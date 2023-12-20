@@ -3,7 +3,6 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -34,6 +33,8 @@ class AmountOut(PlutusData):
 
 @dataclass
 class SwapConfig(PlutusData):
+    CONSTR_ID = 0
+
     direction: Union[AtoB, BtoA]
     amount_in: int
     amount_out: AmountOut
@@ -41,6 +42,8 @@ class SwapConfig(PlutusData):
 
 @dataclass
 class SundaeAddressWithNone(PlutusData):
+    CONSTR_ID = 0
+
     address: PlutusFullAddress
     null: PlutusNone
 
@@ -53,6 +56,8 @@ class SundaeAddressWithNone(PlutusData):
 class SundaeAddressWithDestination(PlutusData):
     """For now, destination is set to none, should be updated."""
 
+    CONSTR_ID = 0
+
     address: SundaeAddressWithNone
     destination: PlutusNone
 
@@ -64,6 +69,8 @@ class SundaeAddressWithDestination(PlutusData):
 
 @dataclass
 class SundaeOrderDatum(PlutusData):
+    CONSTR_ID = 0
+
     ident: bytes
     address: SundaeAddressWithDestination
     fee: int
@@ -137,6 +144,18 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
             selector=["addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"],
         )
 
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        return self._stake_address
+
     @classmethod
     @property
     def order_datum_class(self) -> type[SundaeOrderDatum]:
@@ -196,43 +215,22 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         denominator = datum.fee.denominator
         values["fee"] = int(numerator * 10000 / denominator)
 
-    def swap_tx_output(
+    def swap_datum(
         self,
         address: Address,
         in_assets: Assets,
         out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, SundaeOrderDatum]:
-        # Basic checks
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
+        forward_address: Address | None = None,
+    ) -> PlutusData:
+        if self.swap_forward and forward_address is not None:
+            print(f"{self.__class__.__name__} does not support swap forwarding.")
 
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
+        ident = bytes.fromhex(self.pool_nft.unit()[60:])
 
-        pool = self.get_pool_from_assets(in_assets + out_assets)
-        ident = bytes.fromhex(pool.pool_nft.unit()[60:])
-
-        order_datum = SundaeOrderDatum.create_datum(
+        return SundaeOrderDatum.create_datum(
             ident=ident,
             address=address,
             in_assets=in_assets,
             out_assets=out_assets,
-            fee=pool.batcher_fee.quantity(),
+            fee=self.batcher_fee.quantity(),
         )
-
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee["lovelace"]
-            + self.deposit["lovelace"]
-        )
-
-        output = pycardano.TransactionOutput(
-            address=STAKE_ORDER.address,
-            amount=asset_to_value(in_assets),
-            datum_hash=order_datum.hash(),
-        )
-
-        return output, order_datum

@@ -30,6 +30,7 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
     selector = dex.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
+    counts = 0
     for pool in result:
         with subtests.test(f"Testing: {dex.dex}", i=pool):
             try:
@@ -41,6 +42,7 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
                     datum_hash=pool.datum_hash,
                     datum_cbor=pool.datum_cbor,
                 )
+                counts += 1
             except InvalidLPError:
                 pytest.xfail(
                     f"{dex.dex}: expected failure lp tokens were not found or invalid - {pool.assets}",
@@ -50,5 +52,12 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
             except InvalidPoolError:
                 pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
             except:
-                print(pool)
                 raise
+
+    assert counts < 10000
+    if dex == WingRidersSSPState:
+        assert counts == 2
+    elif dex == MuesliSwapCLPState:
+        assert counts == 16
+    else:
+        assert counts > 50

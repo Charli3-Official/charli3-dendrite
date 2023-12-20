@@ -4,7 +4,6 @@ from typing import Optional
 
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -42,7 +41,9 @@ class MuesliOrderDatum(PlutusData):
         address: Address,
         in_assets: Assets,
         out_assets: Assets,
-        fee=Assets,
+        batcher_fee: Assets,
+        deposit: Assets,
+        forward_address: Address | None = None,
     ):
         full_address = PlutusFullAddress.from_address(address)
 
@@ -68,7 +69,7 @@ class MuesliOrderDatum(PlutusData):
             token_out_name=token_out_name,
             min_receive=out_assets.quantity(),
             unknown=PlutusNone(),
-            in_amount=fee,
+            in_amount=batcher_fee.quantity() + deposit.quantity(),
         )
 
         return cls(value=config)
@@ -122,6 +123,18 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
             selector=cls.dex_policy,
         )
 
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        return self._stake_address
+
     @classmethod
     @property
     def order_datum_class(cls) -> type[MuesliOrderDatum]:
@@ -172,42 +185,33 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
         return dex_nft
 
-    def swap_tx_output(
-        self,
-        address: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, MuesliOrderDatum]:
-        # Basic checks
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
+    @classmethod
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
+        """Extract the dex nft from the UTXO.
 
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
+        Some DEXs put a DEX nft into the pool UTXO.
 
-        order_datum = MuesliOrder.create_datum(
-            address=address,
-            in_assets=in_assets,
-            out_assets=out_assets,
-            fee=self.batcher_fee["lovelace"] + self.deposit["lovelace"],
-        )
+        This function checks to see if the DEX nft is in the UTXO if the DEX policy is
+        defined.
 
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee["lovelace"]
-            + self.deposit["lovelace"]
-        )
+        If the dex nft is in the values, this value is skipped because it is assumed
+        that this utxo has already been parsed.
 
-        output = pycardano.TransactionOutput(
-            address=self._stake_address,
-            amount=asset_to_value(in_assets),
-            datum_hash=order_datum.hash(),
-        )
+        Args:
+            values: The pool UTXO inputs.
 
-        return output, order_datum
+        Returns:
+            Assets: None or the dex nft.
+        """
+        assets = values["assets"]
+
+        nfts = [asset for asset, quantity in assets.items() if quantity == 1]
+        if len(nfts) != 1:
+            raise NotAPoolError("MuesliSwap pools must have exactly one pool nft.")
+        pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
+        values["pool_nft"] = pool_nft
+
+        return pool_nft
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):

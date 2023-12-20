@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from datetime import datetime
+from datetime import timedelta
 from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -11,11 +12,12 @@ from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
 from cardex.dexs.abstract_classes import AbstractStableSwapPoolState
-from cardex.utility import InvalidLPError
 
 
 @dataclass
 class WingriderAssetClass(PlutusData):
+    CONSTR_ID = 0
+
     asset_a: AssetClass
     asset_b: AssetClass
 
@@ -36,6 +38,8 @@ class WingriderAssetClass(PlutusData):
 
 @dataclass
 class WingRiderOrderConfig(PlutusData):
+    CONSTR_ID = 0
+
     full_address: PlutusFullAddress
     address: bytes
     expiration: int
@@ -57,7 +61,7 @@ class WingRiderOrderConfig(PlutusData):
 
         return cls(
             full_address=plutus_address,
-            address=bytes.fromhex(str(address.payment.payment_part)),
+            address=bytes.fromhex(str(address.payment_part)),
             expiration=expiration,
             assets=assets,
         )
@@ -75,6 +79,8 @@ class BtoA(PlutusData):
 
 @dataclass
 class WingRiderOrderDetail(PlutusData):
+    CONSTR_ID = 0
+
     direction: Union[AtoB, BtoA]
     min_receive: int
 
@@ -89,6 +95,8 @@ class WingRiderOrderDetail(PlutusData):
 
 @dataclass
 class WingRidersOrderDatum(PlutusData):
+    CONSTR_ID = 0
+
     config: WingRiderOrderConfig
     detail: WingRiderOrderDetail
 
@@ -96,13 +104,17 @@ class WingRidersOrderDatum(PlutusData):
     def create_datum(
         cls,
         address: Address,
-        expiration: int,
         in_assets: Assets,
         out_assets: Assets,
+        batcher_fee: Assets | None = None,
+        deposit: Assets | None = None,
+        forward_address: Address | None = None,
     ):
+        timeout = int(((datetime.utcnow() + timedelta(days=360)).timestamp()) * 1000)
+
         config = WingRiderOrderConfig.create_config(
             address=address,
-            expiration=expiration,
+            expiration=timeout,
             in_assets=in_assets,
             out_assets=out_assets,
         )
@@ -158,6 +170,18 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
             selector=cls.dex_policy,
         )
 
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        return self._stake_address
+
     @classmethod
     @property
     def order_datum_class(self) -> type[WingRidersOrderDatum]:
@@ -194,27 +218,6 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         else:
             return False
 
-    # @classmethod
-    # def extract_pool_nft(cls, values) -> Assets:
-    #     if "pool_nft" in values:
-    #         return Assets()
-
-    #     assets = values["assets"]
-
-    #     # Find the NFT that assigns the pool a unique id
-    #     nfts = [
-    #         asset
-    #         for asset in assets
-    #         if any(asset.startswith(policy) for policy in cls.pool_policy)
-    #     ]
-    #     if len(nfts) != 1:
-    #         raise InvalidLPError(
-    #             f"A pool must have one at least one LP token: {nfts}",
-    #         )
-    #     assets.root.pop(nfts[0])
-
-    #     return Assets({})
-
     @classmethod
     def post_init(cls, values):
         super().post_init(values)
@@ -227,45 +230,6 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
 
         assets.root[assets.unit(0)] -= datum.datum.quantity_a
         assets.root[assets.unit(1)] -= datum.datum.quantity_b
-
-    def swap_tx_output(
-        self,
-        address: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, WingRidersOrderDatum]:
-        # Basic checks
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
-
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
-
-        timeout = int((datetime.utcnow().timestamp() + 3600) * 1000)
-
-        order_datum = WingRiderOrderDatum.create_datum(
-            address=address,
-            expiration=timeout,
-            in_assets=in_assets,
-            out_assets=out_assets,
-        )
-
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee["lovelace"]
-            + self.deposit["lovelace"]
-        )
-
-        output = TransactionOutput(
-            address=self._stake_address,
-            amount=asset_to_value(in_assets),
-            datum_hash=order_datum.hash(),
-        )
-
-        return output, order_datum
 
 
 class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):

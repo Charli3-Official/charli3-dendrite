@@ -3,7 +3,6 @@ from typing import List
 
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusPartAddress
@@ -101,6 +100,18 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                 "addr1x94ec3t25egvhqy2n265xfhq882jxhkknurfe9ny4rl9k6dj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrst84slu",
             ],
         )
+
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return True
+
+    @property
+    def stake_address(self) -> Address:
+        return self._stake_address
 
     @classmethod
     @property
@@ -233,46 +244,21 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
         return lp_tokens
 
-    def swap_tx_output(
+    def swap_datum(
         self,
         address: Address,
         in_assets: Assets,
         out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, SpectrumOrderDatum]:
-        # Basic checks
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
+        forward_address: Address | None = None,
+    ) -> PlutusData:
+        if self.swap_forward and forward_address is not None:
+            print(f"{self.__class__.__name__} does not support swap forwarding.")
 
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
-
-        pool = self.get_pool_from_assets(in_assets + out_assets)
-
-        order_datum = SpectrumOrder.create_datum(
+        return SpectrumOrderDatum.create_datum(
             address=address,
             in_assets=in_assets,
             out_assets=out_assets,
-            batcher_fee=pool.batcher_fee["lovelace"],
-            volume_fee=pool.volume_fee,
-            pool_token=pool.pool_nft,
+            batcher_fee=self.batcher_fee["lovelace"],
+            volume_fee=self.volume_fee,
+            pool_token=self.pool_nft,
         )
-
-        deposit = (
-            pool.batcher_fee["lovelace"]
-            if in_assets.unit() == "lovelace"
-            else pool.deposit_ada["lovelace"]
-        )
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"] + pool.batcher_fee["lovelace"] + deposit
-        )
-
-        output = pycardano.TransactionOutput(
-            address=STAKE_ORDER.address,
-            amount=asset_to_value(in_assets),
-            datum=order_datum,
-        )
-
-        return output, order_datum

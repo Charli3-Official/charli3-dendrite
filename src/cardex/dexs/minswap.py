@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from pycardano import Address
 from pycardano import DatumHash
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -72,6 +71,33 @@ class MinswapOrderDatum(PlutusData):
     batcher_fee: int
     deposit: int
 
+    @classmethod
+    def create_datum(
+        cls,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        batcher_fee: Assets,
+        deposit: Assets,
+        forward_address: Address | None = None,
+    ):
+        full_address = PlutusFullAddress.from_address(address)
+        step = SwapExactIn.from_assets(out_assets)
+
+        if forward_address is None:
+            forward_address = address
+
+        full_forward_address = PlutusFullAddress.from_address(forward_address)
+
+        return cls(
+            full_address,
+            full_forward_address,
+            PlutusNone(),
+            step,
+            batcher_fee.quantity(),
+            deposit.quantity(),
+        )
+
 
 @dataclass
 class FeeDatumHash(PlutusData):
@@ -139,6 +165,18 @@ class MinswapCPPState(AbstractConstantProductPoolState):
             ],
         )
 
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        return self._stake_address
+
     @classmethod
     @property
     def order_datum_class(self) -> type[MinswapOrderDatum]:
@@ -168,40 +206,3 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     @property
     def dex_policy(cls) -> list[str]:
         return ["13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f"]
-
-    def swap_tx_output(
-        self,
-        address: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, MinswapOrderDatum]:
-        # Basic checks
-        if 1 in [len(in_assets), len(out_assets)]:
-            raise ValueError(
-                "Only one asset can be supplied as input, "
-                + "and one asset supplied as output.",
-            )
-
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
-        step = SwapExactIn.from_assets(out_assets)
-
-        address = PlutusFullAddress.from_address(address)
-        order_datum = OrderDatum(address, address, PlutusNone(), step)
-
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee.quantity()
-            + self.deposit.quantity()
-        )
-
-        output = pycardano.TransactionOutput(
-            address=self._stake_address,
-            amount=asset_to_value(in_assets),
-            datum_hash=order_datum.hash(),
-        )
-
-        return output, order_datum

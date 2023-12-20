@@ -1,13 +1,14 @@
 from abc import ABC
 from abc import abstractmethod
-from typing import Optional
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import TransactionOutput
 
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.base_classes import BasePoolState
+from cardex.utility import asset_to_value
 
 
 class AbstractPoolState(ABC, BasePoolState):
@@ -48,6 +49,21 @@ class AbstractPoolState(ABC, BasePoolState):
 
     @property
     @abstractmethod
+    def swap_forward(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def inline_datum(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def stake_address(self) -> Address:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def pool_datum_class(self) -> type[PlutusData]:
         raise NotImplementedError
 
@@ -66,16 +82,66 @@ class AbstractPoolState(ABC, BasePoolState):
 
         return self.datum_parsed
 
-    @abstractmethod
-    def swap_tx_output(
+    def swap_datum(
         self,
         address: Address,
         in_assets: Assets,
         out_assets: Assets,
-        slippage: float = 0.005,
-        forward_address: Optional[Address] = None,
+        forward_address: Address | None = None,
+    ) -> PlutusData:
+        if self.swap_forward and forward_address is not None:
+            print(f"{self.__class__.__name__} does not support swap forwarding.")
+
+        return self.order_datum_class.create_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            batcher_fee=self.batcher_fee,
+            deposit=self.deposit,
+            forward_address=forward_address,
+        )
+
+    def swap_utxo(
+        self,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        forward_address: Address | None = None,
     ):
-        raise NotImplementedError("Swap transaction output not specified.")
+        # Basic checks
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            raise ValueError(
+                "Only one asset can be supplied as input, "
+                + "and one asset supplied as output.",
+            )
+
+        in_assets.root["lovelace"] = (
+            in_assets["lovelace"]
+            + self.batcher_fee.quantity()
+            + self.deposit.quantity()
+        )
+
+        order_datum = self.swap_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            forward_address=forward_address,
+        )
+
+        if self.inline_datum:
+            output = TransactionOutput(
+                address=self.stake_address,
+                amount=asset_to_value(in_assets),
+                datum=order_datum,
+            )
+        else:
+            output = TransactionOutput(
+                address=self.stake_address,
+                amount=asset_to_value(in_assets),
+                datum_hash=order_datum.hash(),
+            )
+
+        return output, order_datum
 
 
 class AbstractConstantProductPoolState(AbstractPoolState):

@@ -9,7 +9,6 @@ from typing import Union
 import requests
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -50,7 +49,15 @@ class VyFiOrderDatum(PlutusData):
     order: Union[AtoB, BtoA]
 
     @classmethod
-    def create_datum(cls, address: Address, in_assets: Assets, out_assets: Assets):
+    def create_datum(
+        cls,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        batcher_fee: Assets | None = None,
+        deposit: Assets | None = None,
+        forward_address: Address | None = None,
+    ):
         address_hash = (
             address.payment_part.to_primitive() + address.staking_part.to_primitive()
         )
@@ -130,6 +137,20 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             selector=[pool.poolValidatorUtxoAddress for pool in cls.pools.values()],
         )
 
+    @property
+    def swap_forward(self) -> bool:
+        return False
+
+    @property
+    def inline_datum(self) -> bool:
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        return Address.from_primitive(
+            VyFiCPPState.pools[self.pool_id].orderValidatorUtxoAddress,
+        )
+
     @classmethod
     @property
     def order_datum_class(self) -> type[VyFiOrderDatum]:
@@ -196,47 +217,3 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         values["bar_fee"] = cls.pools[pool_nft.unit()].json_.feesSettings.barFee
 
         return pool_nft
-
-    def swap_tx_output(
-        self,
-        address: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        slippage: float = 0.005,
-    ) -> tuple[TransactionOutput, VyFiOrderDatum]:
-        raise NotImplementedError("Need to implement per pool stake address.")
-        # Basic checks
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
-
-        out_assets, _, _ = self.amount_out(in_assets, out_assets)
-        out_assets.__root__[out_assets.unit()] = int(
-            out_assets.__root__[out_assets.unit()] * (1 - slippage),
-        )
-
-        merged_assets = in_assets + out_assets
-        stake_order = Address(
-            bech32=self._order_addresses[
-                merged_assets.unit(0) + "/" + merged_assets.unit(1)
-            ],
-        )
-
-        order_datum = VyFiOrder.create_datum(
-            address=address,
-            in_assets=in_assets,
-            out_assets=out_assets,
-        )
-
-        in_assets.__root__["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee["lovelace"]
-            + self.deposit["lovelace"]
-        )
-
-        output = TransactionOutput(
-            address=stake_order.address,
-            amount=asset_to_value(in_assets),
-            datum_hash=order_datum.hash(),
-        )
-
-        return output, order_datum

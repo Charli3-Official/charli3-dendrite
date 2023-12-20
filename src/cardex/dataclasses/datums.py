@@ -69,7 +69,7 @@ class AssetClass(PlutusData):
     def from_assets(cls, asset: Assets) -> "AssetClass":
         """Parse an Assets object into an AssetClass object."""
         error_msg = "Only one asset may be supplied."
-        if len(asset) == 1:
+        if len(asset) != 1:
             raise ValueError(error_msg)
 
         if asset.unit() == "lovelace":
