@@ -135,6 +135,61 @@ OFFSET %(offset)s
     return PoolStateList.from_dbsync(r)
 
 
+def get_pool_in_tx(
+    tx_hash: str,
+    assets: list[str] | None = None,
+    addresses: list[str] | None = None,
+) -> PoolStateList:
+    """Get transactions by policy or address."""
+    error_msg = "Either policies or addresses must be defined, not both."
+    if assets is None and addresses is None:
+        raise ValueError(error_msg)
+
+    if assets is not None and addresses is not None:
+        raise ValueError(error_msg)
+
+    # Use the pool selector to format the output
+    datum_selector = POOL_SELECTOR
+
+    # If assets are specified, select assets
+    if assets is not None:
+        datum_selector += """FROM (
+    SELECT ma.policy, ma.name, ma.id
+    FROM multi_asset ma
+    WHERE policy = ANY(%(policies)b) AND name = ANY(%(names)b)
+) as ma
+JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
+LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
+"""
+
+    # If address is specified, select addresses
+    else:
+        datum_selector += """FROM (
+    SELECT *
+    FROM tx_out
+    WHERE tx_out.address = ANY(%(addresses)s)
+) as txo"""
+
+    datum_selector += """
+LEFT JOIN tx ON txo.tx_id = tx.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN block ON tx.block_id = block.id
+WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
+"""
+
+    values = {"tx_hash": tx_hash}
+    if assets is not None:
+        values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
+        values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
+
+    elif addresses is not None:
+        values.update({"addresses": addresses})
+
+    r = db_query(datum_selector, values)
+
+    return PoolStateList.from_dbsync(r)
+
+
 def last_block(last_n_blocks: int = 2) -> BlockList:
     """Get the last n blocks."""
     r = db_query(

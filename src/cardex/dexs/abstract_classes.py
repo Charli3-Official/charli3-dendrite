@@ -115,17 +115,17 @@ class AbstractPoolState(ABC, BasePoolState):
                 + "and one asset supplied as output.",
             )
 
-        in_assets.root["lovelace"] = (
-            in_assets["lovelace"]
-            + self.batcher_fee.quantity()
-            + self.deposit.quantity()
-        )
-
         order_datum = self.swap_datum(
             address=address,
             in_assets=in_assets,
             out_assets=out_assets,
             forward_address=forward_address,
+        )
+
+        in_assets.root["lovelace"] = (
+            in_assets["lovelace"]
+            + self.batcher_fee.quantity()
+            + self.deposit.quantity()
         )
 
         if self.inline_datum:

@@ -7,6 +7,7 @@ from cardex import SundaeSwapCPPState
 from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
+from cardex.backend.dbsync import get_pool_in_tx
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import last_block
 from cardex.dexs.abstract_classes import AbstractPoolState
@@ -56,3 +57,14 @@ def test_get_pool_utxos(dex: AbstractPoolState, benchmark):
         assert len(result) == 16
     else:
         assert len(result) > 50
+
+
+@pytest.mark.parametrize(
+    "tx_hash",
+    ["ec77a0fcbbe03e3ab04f609dc95eb731334c8508a2c03b00c31c8de89688e04b"],
+)
+def test_get_pool_in_tx(tx_hash):
+    selector = MinswapCPPState.pool_selector
+    tx = get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
+
+    assert len(tx) > 0
