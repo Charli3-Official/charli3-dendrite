@@ -216,9 +216,11 @@ class BasePoolState(BaseModel):
 
         # If the pool nft is in the values, it's been parsed already
         elif "lp_tokens" in values:
-            assert any(
-                any(p.startswith(d) for d in cls.lp_policy) for p in values["lp_tokens"]
-            )
+            if values["lp_tokens"] is not None:
+                assert any(
+                    any(p.startswith(d) for d in cls.lp_policy)
+                    for p in values["lp_tokens"]
+                )
             lp_tokens = values["lp_tokens"]
 
         # Check for the pool nft
