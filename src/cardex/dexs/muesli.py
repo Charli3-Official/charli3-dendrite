@@ -13,6 +13,7 @@ from cardex.dexs.abstract_classes import AbstractConstantLiquidityPoolState
 from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
 from cardex.utility import Assets
 from cardex.utility import InvalidPoolError
+from cardex.utility import NotAPoolError
 
 
 @dataclass
