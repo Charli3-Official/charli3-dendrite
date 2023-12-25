@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from pycardano import Address
 from pycardano import DatumHash
 from pycardano import PlutusData
+from pycardano import PlutusV1Script
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -146,7 +148,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
-    _stake_address = Address.from_primitive(
+    _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1zxn9efv2f6w82hagxqtn62ju4m293tqvw0uhmdl64ch8uw6j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq6s3z70",
     )
 
@@ -181,6 +183,11 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     @property
     def order_datum_class(self) -> type[MinswapOrderDatum]:
         return MinswapOrderDatum
+
+    @classmethod
+    @property
+    def script_class(self) -> type[MinswapOrderDatum]:
+        return PlutusV1Script
 
     @classmethod
     @property

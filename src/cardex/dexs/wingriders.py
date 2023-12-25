@@ -212,7 +212,12 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         if "pool_nft" in values and "dex_nft" in values:
             if len(values["assets"]) == 3:
                 # Send the ADA token to the end
-                values["assets"]["lovelace"] = values["assets"].pop("lovelace")
+                if isinstance(values["assets"], Assets):
+                    values["assets"].root["lovelace"] = values["assets"].root.pop(
+                        "lovelace",
+                    )
+                else:
+                    values["assets"]["lovelace"] = values["assets"].pop("lovelace")
             values["assets"] = Assets.model_validate(values["assets"])
             return True
         else:

@@ -72,6 +72,11 @@ class AbstractPoolState(ABC, BasePoolState):
     def order_datum_class(self) -> type[PlutusData]:
         raise NotImplementedError
 
+    # @property
+    # @abstractmethod
+    # def script_class(self) -> type[PlutusData]:
+    #     raise NotImplementedError
+
     @property
     def pool_datum(self) -> PlutusData:
         """The pool state datum."""

@@ -216,6 +216,8 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):
+    inactive: bool = True
+
     @classmethod
     @property
     def dex_policy(cls) -> list[str]:

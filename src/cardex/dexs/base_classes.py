@@ -119,9 +119,10 @@ class BasePoolState(BaseModel):
 
         # If the dex nft is in the values, it's been parsed already
         elif "dex_nft" in values:
-            assert any(
+            if not any(
                 any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
-            )
+            ):
+                raise NotAPoolError("Invalid DEX NFT")
             dex_nft = values["dex_nft"]
 
         # Check for the dex nft

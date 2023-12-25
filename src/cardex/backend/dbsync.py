@@ -3,6 +3,7 @@ import os
 
 import psycopg_pool
 from dotenv import load_dotenv
+from pycardano import Address
 
 from cardex.dataclasses.models import BlockList
 from cardex.dataclasses.models import PoolStateList
@@ -226,3 +227,14 @@ WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
     r = db_query(datum_selector, {"block_no": block_no})
 
     return PoolStateList.from_dbsync(r)
+
+
+def get_script_from_address(address: Address):
+    SCRIPT_SELECTOR = """
+SELECT ENCODE(bytes, 'hex') as "script"
+FROM script s
+WHERE s.hash = %(address)b
+"""
+    r = db_query(SCRIPT_SELECTOR, {"address": bytes.fromhex(str(address.payment_part))})
+
+    return r

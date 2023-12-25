@@ -147,7 +147,7 @@ class PoolStateInfo(BaseModel):
                 **{a["unit"]: a["quantity"] for a in item[8]},
             )
         else:
-            assets = Assets({})
+            assets = Assets(lovelace=item[7])
 
         return cls(
             address=item[0],
