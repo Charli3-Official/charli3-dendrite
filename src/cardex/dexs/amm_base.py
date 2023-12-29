@@ -23,8 +23,9 @@ from cardex.utility import naturalize_assets
 
 class AbstractPoolState(BaseModel, ABC):
     assets: Assets
-    block_time: int | None = None
-    datum_cbor: str | None = None
+    block_time: int
+    block_index: int
+    datum_cbor: str
     datum_hash: str
     dex_nft: Assets | None = None
     inactive: bool = False
@@ -453,7 +454,7 @@ class AbstractPoolState(BaseModel, ABC):
             datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
         except DeserializeException:
             raise NotAPoolError(
-                f"Pool datum could not be deserialized: {value['datum_cbor']}",
+                f"Pool datum could not be deserialized: {values['datum_cbor']}",
             )
 
         # To help prevent edge cases, remove pool tokens while running other checks
