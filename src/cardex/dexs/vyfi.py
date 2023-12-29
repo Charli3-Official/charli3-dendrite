@@ -13,10 +13,10 @@ from pydantic import BaseModel
 from pydantic import Field
 
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.errors import NoAssetsError
+from cardex.dexs.errors import NotAPoolError
 from cardex.utility import Assets
-from cardex.utility import NoAssetsError
-from cardex.utility import NotAPoolError
 
 
 @dataclass
@@ -28,6 +28,9 @@ class VyFiPoolDatum(PlutusData):
     a: int
     b: int
     c: int
+
+    def pool_pair(self) -> Assets | None:
+        return None
 
 
 @dataclass
@@ -139,10 +142,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
-
-    @property
-    def inline_datum(self) -> bool:
         return False
 
     @property

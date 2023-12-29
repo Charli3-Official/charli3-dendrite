@@ -10,7 +10,7 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.utility import Assets
 
 
@@ -106,22 +106,20 @@ class FeeDatumHash(PlutusData):
     """Fee datum hash."""
 
     CONSTR_ID = 0
-    fee_hash: str
+    fee_hash: bytes
 
 
 @dataclass
 class FeeSwitchOn(PlutusData):
-    """Pool Fee Sharing On."""
-
     CONSTR_ID = 0
-    fee_to: PlutusFullAddress
-    fee_to_datum_hash: PlutusNone | FeeDatumHash
+    address: PlutusFullAddress
+    fee_to_datum_hash: PlutusNone
 
 
 @dataclass
-class _EmptyFeeSwitchWrapper(PlutusData):
+class _FeeSwitchWrapper(PlutusData):
     CONSTR_ID = 0
-    fee_sharing: FeeSwitchOn | PlutusNone
+    fee_sharing: FeeSwitchOn
 
 
 @dataclass
@@ -134,7 +132,10 @@ class MinswapPoolDatum(PlutusData):
     asset_b: AssetClass
     total_liquidity: int
     root_k_last: int
-    fee_sharing: _EmptyFeeSwitchWrapper
+    fee_sharing: _FeeSwitchWrapper
+
+    def pool_pair(self) -> Assets | None:
+        return self.asset_a.assets + self.asset_b.assets
 
 
 @dataclass
@@ -169,10 +170,6 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
-
-    @property
-    def inline_datum(self) -> bool:
         return False
 
     @property

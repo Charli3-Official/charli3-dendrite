@@ -3,6 +3,7 @@ import os
 
 import psycopg_pool
 from dotenv import load_dotenv
+from psycopg.rows import dict_row
 from pycardano import Address
 
 from cardex.dataclasses.models import BlockList
@@ -33,7 +34,7 @@ if DBSYNC_HOST is not None:
 def db_query(query: str, args: tuple | None = None) -> list[tuple]:
     """Fetch results from a query."""
     with pool.connection() as conn:  # noqa: SIM117
-        with conn.cursor() as cursor:
+        with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(query, args)
             return cursor.fetchall()
 
@@ -41,28 +42,27 @@ def db_query(query: str, args: tuple | None = None) -> list[tuple]:
 POOL_SELECTOR = """
 SELECT txo.address,
 ENCODE(tx.hash, 'hex') as "tx_hash",
-txo.index,
+txo.index as "tx_index",
 EXTRACT(
 	epoch
 	FROM block.time
 )::INTEGER AS "block_time",
+tx.block_index as "block_index",
 ENCODE(block.hash,'hex') as "block_hash",
 ENCODE(datum.hash,'hex') as "datum_hash",
 ENCODE(datum.bytes,'hex') as "datum_cbor",
-txo.value::TEXT,
-(
+json_build_object('lovelace',txo.value::TEXT)::jsonb || (
 	SELECT json_agg(
 		json_build_object(
-				'unit',
 				CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-				'quantity',
 				mto.quantity::TEXT
 		)
 	)
 	FROM ma_tx_out mto
 	JOIN multi_asset ma ON (mto.ident = ma.id)
 	WHERE mto.tx_out_id = txo.id
-) AS "amount"
+)::jsonb AS "assets",
+(txo.inline_datum_id IS NOT NULL OR txo.reference_script_id IS NOT NULL) as "plutus_v2"
 """
 
 
@@ -133,7 +133,7 @@ OFFSET %(offset)s
 
     r = db_query(datum_selector, values)
 
-    return PoolStateList.from_dbsync(r)
+    return PoolStateList.model_validate(r)
 
 
 def get_pool_in_tx(
@@ -188,7 +188,7 @@ WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
 
     r = db_query(datum_selector, values)
 
-    return PoolStateList.from_dbsync(r)
+    return PoolStateList.model_validate(r)
 
 
 def last_block(last_n_blocks: int = 2) -> BlockList:
@@ -208,7 +208,7 @@ ORDER BY block_no DESC
 LIMIT %(last_n_blocks)s""",
         {"last_n_blocks": last_n_blocks},
     )
-    return BlockList.from_dbsync(r)
+    return BlockList.model_validate(r)
 
 
 def get_pool_utxos_in_block(block_no: int) -> PoolStateList:
@@ -226,7 +226,7 @@ WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
     )
     r = db_query(datum_selector, {"block_no": block_no})
 
-    return PoolStateList.from_dbsync(r)
+    return PoolStateList.model_validate(r)
 
 
 def get_script_from_address(address: Address):

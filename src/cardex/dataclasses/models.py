@@ -81,6 +81,12 @@ class Assets(BaseDict):
             root = values.root
         elif "values" in values and isinstance(values["values"], list):
             root = {v.unit: v.quantity for v in values["values"]}
+        elif isinstance(values, list) and isinstance(values[0], dict):
+            if not all(len(v) == 1 for v in values):
+                raise ValueError(
+                    "For a list of dictionaries, each dictionary must be of length 1.",
+                )
+            root = dict(map(dict.popitem, values))
         else:
             root = dict(values.items())
 
@@ -108,25 +114,12 @@ class Assets(BaseDict):
 class BlockInfo(BaseModel):
     epoch_slot_no: int
     block_no: int
-    tx_index: int
+    tx_count: int
     block_time: int
-
-    @classmethod
-    def from_dbsync(cls, item: tuple):
-        return cls(
-            epoch_slot_no=item[0],
-            block_no=item[1],
-            tx_index=item[2],
-            block_time=item[3],
-        )
 
 
 class BlockList(BaseList):
     root: list[BlockInfo]
-
-    @classmethod
-    def from_dbsync(cls, items: list[tuple]):
-        return cls(root=[BlockInfo.from_dbsync(item) for item in items])
 
 
 class PoolStateInfo(BaseModel):
@@ -134,36 +127,13 @@ class PoolStateInfo(BaseModel):
     tx_hash: str
     tx_index: int
     block_time: int
+    block_index: int
     block_hash: str
     datum_hash: str
     datum_cbor: str | None
     assets: Assets | None
-
-    @classmethod
-    def from_dbsync(cls, item: tuple):
-        if item[8] is not None:
-            assets = Assets(
-                lovelace=item[7],
-                **{a["unit"]: a["quantity"] for a in item[8]},
-            )
-        else:
-            assets = Assets(lovelace=item[7])
-
-        return cls(
-            address=item[0],
-            tx_hash=item[1],
-            tx_index=item[2],
-            block_time=item[3],
-            block_hash=item[4],
-            datum_hash=item[5],
-            datum_cbor=item[6],
-            assets=assets,
-        )
+    plutus_v2: bool
 
 
 class PoolStateList(BaseList):
     root: list[PoolStateInfo]
-
-    @classmethod
-    def from_dbsync(cls, items: list[tuple]):
-        return cls(root=[PoolStateInfo.from_dbsync(item) for item in items])

@@ -33,7 +33,7 @@ select = [
 ignore = ["ANN101", "ANN102", "UP006"]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 target-version = "py39" # Assume Python 3.9.
-exclude = ["tests", "examples"]
+extend-exclude = ["tests", "examples"]
 
 [mccabe]
 # Unlike Flake8, default to a complexity level of 10.

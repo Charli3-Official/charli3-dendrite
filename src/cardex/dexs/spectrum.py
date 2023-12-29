@@ -8,10 +8,9 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
-from cardex.utility import InvalidLPError
-from cardex.utility import InvalidPoolError
-from cardex.utility import NotAPoolError
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.errors import InvalidLPError
+from cardex.dexs.errors import NotAPoolError
 
 
 @dataclass
@@ -76,6 +75,9 @@ class SpectrumPoolDatum(PlutusData):
     maybe_address: List[bytes]
     lq_bound: int
 
+    def pool_pair(self) -> Assets | None:
+        return self.asset_a.assets + self.asset_b.assets
+
 
 class SpectrumCPPState(AbstractConstantProductPoolState):
     fee: int
@@ -104,10 +106,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     @property
     def swap_forward(self) -> bool:
         return False
-
-    @property
-    def inline_datum(self) -> bool:
-        return True
 
     @property
     def stake_address(self) -> Address:
@@ -209,9 +207,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
             values["lp_tokens"] = lp_tokens
 
-        # Check to see if the pool is valid
-        datum: SpectrumPoolDatum = SpectrumPoolDatum.from_cbor(values["datum_cbor"])
-
         # response = requests.post(
         #     "https://meta.spectrum.fi/cardano/minting/data/verifyPool/",
         #     headers={"Content-Type": "application/json"},
@@ -227,10 +222,20 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         #     ),
         # ).json()
         # valid_pool = response[0][1]
-        valid_pool = True
 
-        if not valid_pool:
-            raise InvalidPoolError
+        # if not valid_pool:
+        #     raise InvalidPoolError
+
+        return lp_tokens
+
+    @classmethod
+    def post_init(cls, values: dict[str, ...]):
+        super().post_init(values)
+
+        # Check to see if the pool is active
+        datum: SpectrumPoolDatum = SpectrumPoolDatum.from_cbor(values["datum_cbor"])
+
+        assets = values["assets"]
 
         if len(assets) == 2:
             quantity = assets.quantity()
@@ -241,8 +246,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             values["inactive"] = True
 
         values["fee"] = (1000 - datum.fee_mod) * 10
-
-        return lp_tokens
 
     def swap_datum(
         self,

@@ -10,8 +10,8 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
-from cardex.dexs.abstract_classes import AbstractStableSwapPoolState
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.amm_types import AbstractStableSwapPoolState
 
 
 @dataclass
@@ -148,6 +148,9 @@ class WingRidersPoolDatum(PlutusData):
     lp_hash: bytes
     datum: LiquidityPool
 
+    def pool_pair(self) -> Assets | None:
+        return self.datum.assets.asset_a.assets + self.datum.assets.asset_b.assets
+
 
 class WingRidersCPPState(AbstractConstantProductPoolState):
     fee: int = 35
@@ -172,10 +175,6 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
-
-    @property
-    def inline_datum(self) -> bool:
         return False
 
     @property

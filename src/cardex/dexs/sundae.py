@@ -9,10 +9,10 @@ from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
-from cardex.utility import InvalidPoolError
-from cardex.utility import NoAssetsError
-from cardex.utility import NotAPoolError
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.errors import InvalidPoolError
+from cardex.dexs.errors import NoAssetsError
+from cardex.dexs.errors import NotAPoolError
 
 
 @dataclass
@@ -122,6 +122,9 @@ class SundaePoolDatum(PlutusData):
     last_swap: int
     fee: LPFee
 
+    def pool_pair(self) -> Assets | None:
+        return self.assets.asset_a.assets + self.assets.asset_b.assets
+
 
 class SundaeSwapCPPState(AbstractConstantProductPoolState):
     fee: int
@@ -146,10 +149,6 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
-
-    @property
-    def inline_datum(self) -> bool:
         return False
 
     @property

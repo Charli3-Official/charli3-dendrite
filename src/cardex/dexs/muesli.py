@@ -9,11 +9,11 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.abstract_classes import AbstractConstantLiquidityPoolState
-from cardex.dexs.abstract_classes import AbstractConstantProductPoolState
+from cardex.dexs.amm_types import AbstractConstantLiquidityPoolState
+from cardex.dexs.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.errors import InvalidPoolError
+from cardex.dexs.errors import NotAPoolError
 from cardex.utility import Assets
-from cardex.utility import InvalidPoolError
-from cardex.utility import NotAPoolError
 
 
 @dataclass
@@ -85,6 +85,9 @@ class MuesliPoolDatum(PlutusData):
     lp: int
     fee: int
 
+    def pool_pair(self) -> Assets | None:
+        return self.asset_a.assets + self.asset_b.assets
+
 
 @dataclass
 class PreciseFloat(PlutusData):
@@ -126,10 +129,6 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
-
-    @property
-    def inline_datum(self) -> bool:
         return False
 
     @property
@@ -208,7 +207,9 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
         nfts = [asset for asset, quantity in assets.items() if quantity == 1]
         if len(nfts) != 1:
-            raise NotAPoolError("MuesliSwap pools must have exactly one pool nft.")
+            raise NotAPoolError(
+                f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
+            )
         pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
         values["pool_nft"] = pool_nft
 

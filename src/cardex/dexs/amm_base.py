@@ -1,17 +1,27 @@
+from abc import ABC
+from abc import abstractmethod
 from decimal import Decimal
 
+from pycardano import Address
+from pycardano import DeserializeException
 from pycardano import PlutusData
+from pycardano import PlutusV1Script
+from pycardano import PlutusV2Script
+from pycardano import TransactionOutput
 from pydantic import BaseModel
 from pydantic import model_validator
 
+from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import PoolSelector
+from cardex.dexs.errors import InvalidPoolError
+from cardex.dexs.errors import NoAssetsError
+from cardex.dexs.errors import NotAPoolError
 from cardex.utility import Assets
-from cardex.utility import InvalidPoolError
-from cardex.utility import NoAssetsError
-from cardex.utility import NotAPoolError
+from cardex.utility import asset_to_value
 from cardex.utility import naturalize_assets
 
 
-class BasePoolState(BaseModel):
+class AbstractPoolState(BaseModel, ABC):
     assets: Assets
     block_time: int | None = None
     datum_cbor: str | None = None
@@ -19,15 +29,148 @@ class BasePoolState(BaseModel):
     dex_nft: Assets | None = None
     inactive: bool = False
     lp_tokens: Assets | None = None
+    plutus_v2: bool
     pool_nft: Assets | None = None
     tx_index: int
     tx_hash: str
 
     _batcher_fee: Assets
+    _datum_parsed: PlutusData
     _deposit_fee: Assets
     _volume_fee: int | None = None
 
-    _datum: PlutusData | None = None
+    @property
+    @abstractmethod
+    def pool_id(self) -> str:
+        """A unique identifier for the pool.
+
+        This is a unique string differentiating this pool from every other pool on the
+        dex, and is necessary for dexs that have more than one pool for a pair but with
+        different fee structures.
+        """
+        raise NotImplementedError("Unique pool id is not specified.")
+
+    @classmethod
+    @abstractmethod
+    def dex(self) -> str:
+        """Official dex name."""
+        raise NotImplementedError("DEX name is undefined.")
+
+    @classmethod
+    @abstractmethod
+    def pool_selector(self) -> PoolSelector:
+        """Pool selection information."""
+        raise NotImplementedError("DEX name is undefined.")
+
+    @abstractmethod
+    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+        raise NotImplementedError("")
+
+    @abstractmethod
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+        raise NotImplementedError("")
+
+    @property
+    @abstractmethod
+    def swap_forward(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    def inline_datum(self) -> bool:
+        return self.plutus_v2
+
+    @property
+    @abstractmethod
+    def stake_address(self) -> Address:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def pool_datum_class(self) -> type[PlutusData]:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def order_datum_class(self) -> type[PlutusData]:
+        raise NotImplementedError
+
+    @property
+    def script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        if self.plutus_v2:
+            return PlutusV2Script
+        else:
+            return PlutusV1Script
+
+    @property
+    def pool_datum(self) -> PlutusData:
+        """The pool state datum."""
+        if not self._datum_parsed:
+            if not self.datum_cbor:
+                raise ValueError("No datum specified.")
+            self._datum_parsed = self.pool_datum_class.from_cbor(self.datum_cbor)
+
+        return self._datum_parsed
+
+    def swap_datum(
+        self,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        forward_address: Address | None = None,
+    ) -> PlutusData:
+        if self.swap_forward and forward_address is not None:
+            print(f"{self.__class__.__name__} does not support swap forwarding.")
+
+        return self.order_datum_class.create_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            batcher_fee=self.batcher_fee,
+            deposit=self.deposit,
+            forward_address=forward_address,
+        )
+
+    def swap_utxo(
+        self,
+        address: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        forward_address: Address | None = None,
+    ):
+        # Basic checks
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            raise ValueError(
+                "Only one asset can be supplied as input, "
+                + "and one asset supplied as output.",
+            )
+
+        order_datum = self.swap_datum(
+            address=address,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            forward_address=forward_address,
+        )
+
+        in_assets.root["lovelace"] = (
+            in_assets["lovelace"]
+            + self.batcher_fee.quantity()
+            + self.deposit.quantity()
+        )
+
+        if self.inline_datum:
+            output = TransactionOutput(
+                address=self.stake_address,
+                amount=asset_to_value(in_assets),
+                datum=order_datum,
+            )
+        else:
+            output = TransactionOutput(
+                address=self.stake_address,
+                amount=asset_to_value(in_assets),
+                datum_hash=order_datum.hash(),
+            )
+
+        return output, order_datum
 
     @property
     def volume_fee(self) -> int:
@@ -277,10 +420,12 @@ class BasePoolState(BaseModel):
 
         else:
             if len(assets) == 1 and "lovelace" in assets:
-                raise NoAssetsError("Invalid pool, only contains lovelace.")
+                raise NoAssetsError(
+                    f"Invalid pool, only contains lovelace: assets={assets}",
+                )
             else:
                 raise InvalidPoolError(
-                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: {assets}",
+                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}",
                 )
         return values
 
@@ -295,17 +440,43 @@ class BasePoolState(BaseModel):
             The parsed/modified pool initialization values.
         """
         if "assets" in values:
-            if not isinstance(values["assets"], Assets):
+            if values["assets"] is None:
+                raise NoAssetsError("No assets in the pool.")
+            elif not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
         if cls.skip_init(values):
             return values
+
+        # Parse the pool datum
+        try:
+            datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
+        except DeserializeException:
+            raise NotAPoolError(
+                f"Pool datum could not be deserialized: {value['datum_cbor']}",
+            )
+
+        # To help prevent edge cases, remove pool tokens while running other checks
+        pair = Assets({})
+        if datum.pool_pair() is not None:
+            for token in datum.pool_pair():
+                try:
+                    pair.root.update({token: values["assets"].root.pop(token)})
+                except KeyError:
+                    raise InvalidPoolError(
+                        "Pool does not contain expected asset.\n"
+                        + f"    Expected: {token}\n"
+                        + f"    Actual: {values['assets']}",
+                    )
 
         dex_nft = cls.extract_dex_nft(values)
 
         lp_tokens = cls.extract_lp_tokens(values)
 
         pool_nft = cls.extract_pool_nft(values)
+
+        # Add the pool tokens back in
+        values["assets"].root.update(pair.root)
 
         cls.post_init(values)
 

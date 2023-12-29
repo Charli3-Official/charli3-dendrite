@@ -80,3 +80,13 @@ class AssetClass(PlutusData):
             asset_name = bytes.fromhex(asset.unit()[56:])
 
         return AssetClass(policy=policy, asset_name=asset_name)
+
+    @property
+    def assets(self):
+        """Convert back to assets."""
+        if self.policy.hex() == "":
+            asset = "lovelace"
+        else:
+            asset = self.policy.hex() + self.asset_name.hex()
+
+        return Assets(root={asset: 0})

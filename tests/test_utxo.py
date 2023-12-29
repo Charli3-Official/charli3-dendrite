@@ -11,10 +11,10 @@ from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.models import Assets
-from cardex.dexs.abstract_classes import AbstractPoolState
-from cardex.utility import InvalidLPError
-from cardex.utility import InvalidPoolError
-from cardex.utility import NoAssetsError
+from cardex.dexs.amm_base import AbstractPoolState
+from cardex.dexs.errors import InvalidLPError
+from cardex.dexs.errors import InvalidPoolError
+from cardex.dexs.errors import NoAssetsError
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import BlockFrostChainContext
@@ -54,7 +54,8 @@ STAKE_KEY = ExtendedSigningKey.from_hdwallet(
     wallet.derive_from_path("m/1852'/1815'/0'/2/0"),
 )
 ADDRESS = Address(
-    SPEND_KEY.to_verification_key().hash(), STAKE_KEY.to_verification_key().hash(),
+    SPEND_KEY.to_verification_key().hash(),
+    STAKE_KEY.to_verification_key().hash(),
 )
 
 
@@ -65,14 +66,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
 
     for record in result:
         try:
-            pool = dex(
-                tx_hash=record.tx_hash,
-                tx_index=record.tx_index,
-                block_time=record.block_time,
-                assets=record.assets,
-                datum_hash=record.datum_hash,
-                datum_cbor=record.datum_cbor,
-            )
+            pool = dex.model_validate(record.model_dump())
 
             if pool.unit_a == "lovelace" and pool.unit_b in [
                 IUSD_ASSETS.unit(),
@@ -97,20 +91,17 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
 
 # @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 # def test_submit_transaction(dex: AbstractPoolState, subtests):
+#     if dex in [WingRidersSSPState, MuesliSwapCLPState]:
+#         pytest.skip("Currently not supported.")
+#         return
+
 #     selector = dex.pool_selector
 #     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
 #     tx_hash = None
 #     for record in result:
 #         try:
-#             pool = dex(
-#                 tx_hash=record.tx_hash,
-#                 tx_index=record.tx_index,
-#                 block_time=record.block_time,
-#                 assets=record.assets,
-#                 datum_hash=record.datum_hash,
-#                 datum_cbor=record.datum_cbor,
-#             )
+#             pool = dex.model_validate(record.model_dump())
 
 #             if pool.inactive:
 #                 continue
