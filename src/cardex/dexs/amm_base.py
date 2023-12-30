@@ -311,10 +311,11 @@ class AbstractPoolState(BaseModel, ABC):
 
         # If the pool nft is in the values, it's been parsed already
         elif "pool_nft" in values:
-            assert any(
+            if not any(
                 any(p.startswith(d) for d in cls.pool_policy)
                 for p in values["pool_nft"]
-            )
+            ):
+                raise InvalidPoolError(f"{cls.__name__}: Invalid pool NFT: {values}")
             pool_nft = Assets(
                 **{key: value for key, value in values["pool_nft"].items()},
             )
@@ -362,10 +363,13 @@ class AbstractPoolState(BaseModel, ABC):
         # If the pool nft is in the values, it's been parsed already
         elif "lp_tokens" in values:
             if values["lp_tokens"] is not None:
-                assert any(
+                if not any(
                     any(p.startswith(d) for d in cls.lp_policy)
                     for p in values["lp_tokens"]
-                )
+                ):
+                    raise InvalidPoolError(
+                        f"{cls.__name__}: Pool has invalid LP tokens.",
+                    )
             lp_tokens = values["lp_tokens"]
 
         # Check for the pool nft
@@ -452,7 +456,7 @@ class AbstractPoolState(BaseModel, ABC):
         # Parse the pool datum
         try:
             datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
-        except DeserializeException:
+        except (DeserializeException, TypeError):
             raise NotAPoolError(
                 f"Pool datum could not be deserialized: {values['datum_cbor']}",
             )

@@ -13,7 +13,6 @@ from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantLiquidityPoolState
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.errors import InvalidPoolError
-from cardex.dexs.errors import NotAPoolError
 from cardex.utility import Assets
 
 
@@ -213,7 +212,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         else:
             nfts = [asset for asset, quantity in assets.items() if quantity == 1]
             if len(nfts) != 1:
-                raise NotAPoolError(
+                raise InvalidPool(
                     f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
