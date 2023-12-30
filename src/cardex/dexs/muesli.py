@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+from typing import ClassVar
 from typing import Optional
 
 from pycardano import Address
@@ -109,7 +110,9 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=950000)
     _deposit = Assets(lovelace=1700000)
-    _test_pool = "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"
+    _test_pool: ClassVar[
+        str
+    ] = "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"
     _stake_address = Address.from_primitive(
         "addr1zyq0kyrml023kwjk8zr86d5gaxrt5w8lxnah8r6m6s4jp4g3r6dxnzml343sx8jweqn4vn3fz2kj8kgu9czghx0jrsyqqktyhv",
     )
@@ -205,13 +208,16 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         """
         assets = values["assets"]
 
-        nfts = [asset for asset, quantity in assets.items() if quantity == 1]
-        if len(nfts) != 1:
-            raise NotAPoolError(
-                f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
-            )
-        pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
-        values["pool_nft"] = pool_nft
+        if "pool_nft" in values:
+            pool_nft = Assets(root=values["pool_nft"])
+        else:
+            nfts = [asset for asset, quantity in assets.items() if quantity == 1]
+            if len(nfts) != 1:
+                raise NotAPoolError(
+                    f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
+                )
+            pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
+            values["pool_nft"] = pool_nft
 
         return pool_nft
 
