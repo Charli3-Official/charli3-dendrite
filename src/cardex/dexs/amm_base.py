@@ -59,6 +59,12 @@ class AbstractPoolState(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
+    def order_selector(self) -> list[str]:
+        """Order selection information."""
+        raise NotImplementedError("DEX name is undefined.")
+
+    @classmethod
+    @abstractmethod
     def pool_selector(self) -> PoolSelector:
         """Pool selection information."""
         raise NotImplementedError("DEX name is undefined.")

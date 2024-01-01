@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import ClassVar
 from typing import List
 
 from pycardano import Address
@@ -83,7 +84,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     fee: int
     _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)
-    _stake_address = Address.from_primitive(
+    _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1wynp362vmvr8jtc946d3a3utqgclfdl5y9d3kn849e359hsskr20n",
     )
 
@@ -91,6 +92,11 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     @property
     def dex(cls) -> str:
         return "Spectrum"
+
+    @classmethod
+    @property
+    def order_selector(self) -> list[str]:
+        return [self._stake_address.encode()]
 
     @classmethod
     @property

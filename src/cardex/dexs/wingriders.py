@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
+from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
@@ -156,7 +157,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     fee: int = 35
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
-    _stake_address = Address.from_primitive(
+    _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1wxr2a8htmzuhj39y2gq7ftkpxv98y2g67tg8zezthgq4jkg0a4ul4",
     )
 
@@ -164,6 +165,11 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     @property
     def dex(cls) -> str:
         return "WingRiders"
+
+    @classmethod
+    @property
+    def order_selector(self) -> list[str]:
+        return [self._stake_address.encode()]
 
     @classmethod
     @property

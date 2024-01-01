@@ -134,6 +134,11 @@ class VyFiCPPState(AbstractConstantProductPoolState):
 
     @classmethod
     @property
+    def order_selector(cls) -> list[str]:
+        return [p.orderValidatorUtxoAddress for p in cls.pools.values()]
+
+    @classmethod
+    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
             selector_type="addresses",

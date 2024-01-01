@@ -2,7 +2,9 @@
 from enum import Enum
 
 from pydantic import BaseModel
+from pydantic import Field
 from pydantic import RootModel
+from pydantic import model_serializer
 from pydantic import model_validator
 
 
@@ -86,10 +88,9 @@ class Assets(BaseDict):
                 raise ValueError(
                     "For a list of dictionaries, each dictionary must be of length 1.",
                 )
-            root = dict(map(dict.popitem, values))
+            root = {k: v for d in values for k, v in d.items()}
         else:
             root = dict(values.items())
-
         return dict(
             sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0]),
         )
@@ -130,10 +131,100 @@ class PoolStateInfo(BaseModel):
     block_index: int
     block_hash: str
     datum_hash: str
-    datum_cbor: str | None
-    assets: Assets | None
+    datum_cbor: str
+    assets: Assets
     plutus_v2: bool
 
 
 class PoolStateList(BaseList):
     root: list[PoolStateInfo]
+
+
+class SwapSubmitInfo(BaseModel):
+    address_inputs: list[str] = Field(..., alias="submit_address_inputs")
+    assets: Assets = Field(..., alias="submit_assets")
+    block_hash: str = Field(..., alias="submit_block_hash")
+    block_time: int = Field(..., alias="submit_block_time")
+    block_index: int = Field(..., alias="submit_block_index")
+    datum_hash: str = Field(..., alias="submit_datum_hash")
+    datum_cbor: str = Field(..., alias="submit_datum_cbor")
+    metadata: list[dict | str | int] | None = Field(..., alias="submit_metadata")
+    tx_hash: str = Field(..., alias="submit_tx_hash")
+    tx_index: int = Field(..., alias="submit_tx_index")
+
+
+class SwapExecuteInfo(BaseModel):
+    address: str
+    tx_hash: str
+    tx_index: int
+    block_time: int
+    block_index: int
+    block_hash: str
+    assets: Assets
+
+
+class SwapStatusInfo(BaseModel):
+    swap_input: SwapSubmitInfo
+    swap_output: SwapExecuteInfo | PoolStateInfo | None = None
+
+    @model_validator(mode="before")
+    def from_dbsync(cls, values: dict) -> dict:
+        swap_input = SwapSubmitInfo.model_validate(values)
+
+        if "datum_cbor" in values and values["datum_cbor"] is not None:
+            swap_output = PoolStateInfo.model_validate(values)
+        elif "address" in values and values["address"] is not None:
+            swap_output = SwapExecuteInfo.model_validate(values)
+        else:
+            swap_output = None
+
+        return {
+            "swap_input": swap_input,
+            "swap_output": swap_output,
+        }
+
+    @model_serializer(mode="plain", when_used="always")
+    def to_dbsync(self) -> dict:
+        output = {key: None for key in self.model_fields_set}
+        if self.swap_output is not None:
+            output.update(self.swap_output.model_dump())
+
+        return self.swap_input.model_dump(by_alias=True) | output
+
+
+class SwapTransactionInfo(BaseList):
+    root: list[SwapStatusInfo]
+
+    @model_validator(mode="before")
+    def from_dbsync(cls, values: list):
+        if not all(
+            item["submit_tx_hash"] == values[0]["submit_tx_hash"] for item in values
+        ):
+            raise ValueError(
+                "All transaction info must have the same submission transaction.",
+            )
+        return values
+
+
+class SwapTransactionList(BaseList):
+    root: list[SwapTransactionInfo]
+
+    @model_validator(mode="before")
+    def from_dbsync(cls, values: list):
+        output = []
+
+        tx_hash = values[0]["submit_tx_hash"]
+        start = 0
+        for end, record in enumerate(values):
+            if record["submit_tx_hash"] == tx_hash:
+                continue
+
+            output.append(values[start:end])
+
+            start = end
+            tx_hash = ["submit_tx_hash"]
+
+        if start < len(values):
+            output.append(values[start : end + 1])
+
+        return output

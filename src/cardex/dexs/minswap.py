@@ -160,6 +160,11 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
     @classmethod
     @property
+    def order_selector(self) -> list[str]:
+        return [self._stake_address.encode()]
+
+    @classmethod
+    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
             selector_type="assets",

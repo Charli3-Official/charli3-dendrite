@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
@@ -130,7 +131,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     fee: int
     _batcher = Assets(lovelace=2500000)
     _deposit = Assets(lovelace=2000000)
-    _stake_address = Address.from_primitive(
+    _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1wxaptpmxcxawvr3pzlhgnpmzz3ql43n2tc8mn3av5kx0yzs09tqh8",
     )
 
@@ -138,6 +139,11 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     @property
     def dex(cls) -> str:
         return "SundaeSwap"
+
+    @classmethod
+    @property
+    def order_selector(self) -> list[str]:
+        return [self._stake_address.encode()]
 
     @classmethod
     @property
