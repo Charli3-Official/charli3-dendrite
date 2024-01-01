@@ -4,6 +4,7 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.models import Assets
 
@@ -54,6 +55,11 @@ class PlutusFullAddress(PlutusData):
             PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
             stake=stake,
         )
+
+    def to_address(self) -> Address:
+        payment_part = VerificationKeyHash(self.payment.address)
+        stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address)
+        return Address(payment_part=payment_part, staking_part=stake_part)
 
 
 @dataclass

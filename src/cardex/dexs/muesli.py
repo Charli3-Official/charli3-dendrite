@@ -75,6 +75,9 @@ class MuesliOrderDatum(PlutusData):
 
         return cls(value=config)
 
+    def source_address(self) -> str:
+        return self.value.full_address.to_address()
+
 
 @dataclass
 class MuesliPoolDatum(PlutusData):

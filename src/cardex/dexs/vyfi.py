@@ -9,6 +9,7 @@ from typing import Union
 import requests
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
@@ -72,6 +73,11 @@ class VyFiOrderDatum(PlutusData):
             order = BtoA(min_receive=out_assets.quantity())
 
         return cls(address=address_hash, order=order)
+
+    def source_address(self) -> Address:
+        payment_part = VerificationKeyHash.from_primitive(self.address[:28])
+        staking_part = VerificationKeyHash.from_primitive(self.address[28:])
+        return Address(payment_part=payment_part, staking_part=staking_part)
 
 
 class VyFiTokenDefinition(BaseModel):

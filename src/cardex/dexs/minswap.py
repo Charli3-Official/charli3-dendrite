@@ -100,6 +100,9 @@ class MinswapOrderDatum(PlutusData):
             deposit.quantity(),
         )
 
+    def source_address(self) -> str:
+        return self.sender.to_address()
+
 
 @dataclass
 class FeeDatumHash(PlutusData):

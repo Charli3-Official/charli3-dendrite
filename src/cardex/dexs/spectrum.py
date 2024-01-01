@@ -4,6 +4,7 @@ from typing import List
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusPartAddress
@@ -62,6 +63,11 @@ class SpectrumOrderDatum(PlutusData):
             amount=in_assets.quantity(),
             min_receive=out_assets.quantity(),
         )
+
+    def source_address(self) -> Address:
+        payment_part = VerificationKeyHash(self.address_payment)
+        stake_part = VerificationKeyHash(self.address_stake.address)
+        return Address(payment_part=payment_part, staking_part=stake_part)
 
 
 @dataclass

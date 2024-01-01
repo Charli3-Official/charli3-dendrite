@@ -89,6 +89,38 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
             pass
 
 
+@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
+def test_address_from_datum(dex: AbstractPoolState):
+    # Create the datum
+    if dex.dex == "Spectrum":
+        datum = dex.order_datum_class.create_datum(
+            address=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            batcher_fee=1000000,
+            volume_fee=30,
+            pool_token=Assets({"lovelace": 1}),
+        )
+    elif dex.dex == "SundaeSwap":
+        datum = dex.order_datum_class.create_datum(
+            ident=b"01",
+            address=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            fee=30,
+        )
+    else:
+        datum = dex.order_datum_class.create_datum(
+            address=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            batcher_fee=Assets(root={"lovelace": 1000000}),
+            deposit=Assets(root={"lovelace": 1000000}),
+        )
+
+    assert ADDRESS.encode() == datum.source_address().encode()
+
+
 # @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 # def test_submit_transaction(dex: AbstractPoolState, subtests):
 #     if dex in [WingRidersSSPState, MuesliSwapCLPState]:

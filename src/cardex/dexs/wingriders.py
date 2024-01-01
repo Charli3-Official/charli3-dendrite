@@ -126,6 +126,9 @@ class WingRidersOrderDatum(PlutusData):
 
         return cls(config=config, detail=detail)
 
+    def source_address(self) -> Address:
+        return self.config.full_address.to_address()
+
 
 @dataclass
 class LiquidityPoolAssets(PlutusData):

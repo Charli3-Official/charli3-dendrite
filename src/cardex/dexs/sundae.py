@@ -100,6 +100,9 @@ class SundaeOrderDatum(PlutusData):
 
         return cls(ident=ident, address=full_address, fee=fee, swap=swap)
 
+    def source_address(self) -> Address:
+        return self.address.address.address.to_address()
+
 
 @dataclass
 class LPFee(PlutusData):
