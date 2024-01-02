@@ -314,7 +314,7 @@ def get_order_utxos(
     block_no: int | None = None,
     after_block: int | None = None,
     limit: int = 1000,
-    offset: int = 0,
+    page: int = 0,
 ):
     utxo_selector = ORDER_SELECTOR
     utxo_selector += """FROM (
@@ -367,7 +367,7 @@ OFFSET %(offset)s"""
         {
             "addresses": stake_addresses,
             "limit": limit,
-            "offset": offset,
+            "offset": page * limit,
             "block_no": block_no,
             "block_no_rep": block_no,
             "after_block": after_block,
