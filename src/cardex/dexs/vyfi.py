@@ -55,15 +55,17 @@ class VyFiOrderDatum(PlutusData):
     @classmethod
     def create_datum(
         cls,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        batcher_fee: Assets | None = None,
-        deposit: Assets | None = None,
-        forward_address: Address | None = None,
+        batcher_fee: Assets,
+        deposit: Assets,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
         address_hash = (
-            address.payment_part.to_primitive() + address.staking_part.to_primitive()
+            address_source.payment_part.to_primitive()
+            + address_source.staking_part.to_primitive()
         )
 
         merged = in_assets + out_assets
@@ -74,7 +76,7 @@ class VyFiOrderDatum(PlutusData):
 
         return cls(address=address_hash, order=order)
 
-    def source_address(self) -> Address:
+    def address_source(self) -> Address:
         payment_part = VerificationKeyHash.from_primitive(self.address[:28])
         staking_part = VerificationKeyHash.from_primitive(self.address[28:])
         return Address(payment_part=payment_part, staking_part=staking_part)

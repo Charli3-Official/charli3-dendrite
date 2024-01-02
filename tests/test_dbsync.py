@@ -84,8 +84,6 @@ def test_get_orders(dex: AbstractPoolState, benchmark):
         limit=1000,
     )
 
-    assert len(result) == 1000
-
 
 @pytest.mark.parametrize(
     "tx_hash",

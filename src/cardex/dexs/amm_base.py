@@ -120,29 +120,32 @@ class AbstractPoolState(BaseModel, ABC):
 
     def swap_datum(
         self,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ) -> PlutusData:
-        if self.swap_forward and forward_address is not None:
+        if self.swap_forward and address_target is not None:
             print(f"{self.__class__.__name__} does not support swap forwarding.")
 
         return self.order_datum_class.create_datum(
-            address=address,
+            address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
             batcher_fee=self.batcher_fee,
             deposit=self.deposit,
-            forward_address=forward_address,
+            address_target=address_target,
+            datum_target=datum_target,
         )
 
     def swap_utxo(
         self,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
         # Basic checks
         if len(in_assets) != 1 or len(out_assets) != 1:
@@ -152,10 +155,11 @@ class AbstractPoolState(BaseModel, ABC):
             )
 
         order_datum = self.swap_datum(
-            address=address,
+            address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
-            forward_address=forward_address,
+            address_target=address_target,
+            datum_target=datum_target,
         )
 
         in_assets.root["lovelace"] = (
@@ -462,9 +466,12 @@ class AbstractPoolState(BaseModel, ABC):
         # Parse the pool datum
         try:
             datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
-        except (DeserializeException, TypeError):
+        except (DeserializeException, TypeError) as e:
             raise NotAPoolError(
-                f"Pool datum could not be deserialized: {values['datum_cbor']}",
+                "Pool datum could not be deserialized: \n "
+                + f"    error={e}\n"
+                + f"    tx_hash={values['tx_hash']}\n"
+                + f"    datum={values['datum_cbor']}\n",
             )
 
         # To help prevent edge cases, remove pool tokens while running other checks

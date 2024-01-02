@@ -33,15 +33,15 @@ class SpectrumOrderDatum(PlutusData):
     @classmethod
     def create_datum(
         cls,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         pool_token: Assets,
         batcher_fee: int,
         volume_fee: int,
     ) -> "SpectrumOrder":
-        payment_part = bytes.fromhex(str(address.payment_part))
-        stake_part = PlutusPartAddress(bytes.fromhex(str(address.staking_part)))
+        payment_part = bytes.fromhex(str(address_source.payment_part))
+        stake_part = PlutusPartAddress(bytes.fromhex(str(address_source.staking_part)))
         in_asset = AssetClass.from_assets(in_assets)
         out_asset = AssetClass.from_assets(out_assets)
         pool = AssetClass.from_assets(pool_token)
@@ -64,7 +64,7 @@ class SpectrumOrderDatum(PlutusData):
             min_receive=out_assets.quantity(),
         )
 
-    def source_address(self) -> Address:
+    def address_source(self) -> Address:
         payment_part = VerificationKeyHash(self.address_payment)
         stake_part = VerificationKeyHash(self.address_stake.address)
         return Address(payment_part=payment_part, staking_part=stake_part)
@@ -261,16 +261,17 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
     def swap_datum(
         self,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ) -> PlutusData:
-        if self.swap_forward and forward_address is not None:
+        if self.swap_forward and address_source is not None:
             print(f"{self.__class__.__name__} does not support swap forwarding.")
 
         return SpectrumOrderDatum.create_datum(
-            address=address,
+            address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
             batcher_fee=self.batcher_fee["lovelace"],

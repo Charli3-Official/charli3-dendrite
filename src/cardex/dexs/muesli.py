@@ -39,14 +39,15 @@ class MuesliOrderDatum(PlutusData):
     @classmethod
     def create_datum(
         cls,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         batcher_fee: Assets,
         deposit: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
-        full_address = PlutusFullAddress.from_address(address)
+        full_address = PlutusFullAddress.from_address(address_source)
 
         if in_assets.unit() == "lovelace":
             token_in_policy = b""
@@ -75,7 +76,7 @@ class MuesliOrderDatum(PlutusData):
 
         return cls(value=config)
 
-    def source_address(self) -> str:
+    def address_source(self) -> str:
         return self.value.full_address.to_address()
 
 

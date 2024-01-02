@@ -76,31 +76,35 @@ class MinswapOrderDatum(PlutusData):
     @classmethod
     def create_datum(
         cls,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         batcher_fee: Assets,
         deposit: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
-        full_address = PlutusFullAddress.from_address(address)
+        full_address_source = PlutusFullAddress.from_address(address_source)
         step = SwapExactIn.from_assets(out_assets)
 
-        if forward_address is None:
-            forward_address = address
+        if address_target is None:
+            address_target = address_source
+            datum_target = PlutusNone()
+        elif datum_target is None:
+            datum_target = PlutusNone()
 
-        full_forward_address = PlutusFullAddress.from_address(forward_address)
+        full_address_target = PlutusFullAddress.from_address(address_target)
 
         return cls(
-            full_address,
-            full_forward_address,
-            PlutusNone(),
+            full_address_source,
+            full_address_target,
+            datum_target,
             step,
             batcher_fee.quantity(),
             deposit.quantity(),
         )
 
-    def source_address(self) -> str:
+    def address_source(self) -> str:
         return self.sender.to_address()
 
 
@@ -178,7 +182,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
+        return True
 
     @property
     def stake_address(self) -> Address:

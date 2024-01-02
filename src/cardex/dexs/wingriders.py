@@ -104,17 +104,18 @@ class WingRidersOrderDatum(PlutusData):
     @classmethod
     def create_datum(
         cls,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        batcher_fee: Assets | None = None,
-        deposit: Assets | None = None,
-        forward_address: Address | None = None,
+        batcher_fee: Assets,
+        deposit: Assets,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
         timeout = int(((datetime.utcnow() + timedelta(days=360)).timestamp()) * 1000)
 
         config = WingRiderOrderConfig.create_config(
-            address=address,
+            address=address_source,
             expiration=timeout,
             in_assets=in_assets,
             out_assets=out_assets,
@@ -126,7 +127,7 @@ class WingRidersOrderDatum(PlutusData):
 
         return cls(config=config, detail=detail)
 
-    def source_address(self) -> Address:
+    def address_source(self) -> Address:
         return self.config.full_address.to_address()
 
 

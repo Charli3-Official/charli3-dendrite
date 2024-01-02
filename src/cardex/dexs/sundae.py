@@ -81,12 +81,12 @@ class SundaeOrderDatum(PlutusData):
     def create_datum(
         cls,
         ident: bytes,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         fee: int,
     ):
-        full_address = SundaeAddressWithDestination.from_address(address)
+        full_address = SundaeAddressWithDestination.from_address(address_source)
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             direction = AtoB()
@@ -100,7 +100,7 @@ class SundaeOrderDatum(PlutusData):
 
         return cls(ident=ident, address=full_address, fee=fee, swap=swap)
 
-    def source_address(self) -> Address:
+    def address_source(self) -> Address:
         return self.address.address.address.to_address()
 
 
@@ -230,19 +230,20 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
     def swap_datum(
         self,
-        address: Address,
+        address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        forward_address: Address | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ) -> PlutusData:
-        if self.swap_forward and forward_address is not None:
+        if self.swap_forward and address_target is not None:
             print(f"{self.__class__.__name__} does not support swap forwarding.")
 
         ident = bytes.fromhex(self.pool_nft.unit()[60:])
 
         return SundaeOrderDatum.create_datum(
             ident=ident,
-            address=address,
+            address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
             fee=self.batcher_fee.quantity(),

@@ -53,17 +53,20 @@ tx.block_index as "block_index",
 ENCODE(block.hash,'hex') as "block_hash",
 ENCODE(datum.hash,'hex') as "datum_hash",
 ENCODE(datum.bytes,'hex') as "datum_cbor",
-json_build_object('lovelace',txo.value::TEXT)::jsonb || (
-	SELECT json_agg(
-		json_build_object(
-            CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-            mto.quantity::TEXT
-		)
-	)
-	FROM ma_tx_out mto
-	JOIN multi_asset ma ON (mto.ident = ma.id)
-	WHERE mto.tx_out_id = txo.id
-)::jsonb AS "assets",
+COALESCE (
+    json_build_object('lovelace',txo.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
+            )
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = txo.id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',txo.value::TEXT)::jsonb)
+) AS "assets",
 (txo.inline_datum_id IS NOT NULL OR txo.reference_script_id IS NOT NULL) as "plutus_v2"
 """
 
