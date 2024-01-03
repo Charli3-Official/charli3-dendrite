@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
 from typing import Optional
+from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
@@ -17,6 +18,11 @@ from cardex.utility import Assets
 
 
 @dataclass
+class MuesliSometimesNone(PlutusData):
+    CONSTR_ID = 0
+
+
+@dataclass
 class MuesliOrderConfig(PlutusData):
     CONSTR_ID = 0
 
@@ -26,7 +32,7 @@ class MuesliOrderConfig(PlutusData):
     token_in_policy: bytes
     token_in_name: bytes
     min_receive: int
-    unknown: PlutusNone
+    unknown: Union[MuesliSometimesNone, PlutusNone]
     in_amount: int
 
 

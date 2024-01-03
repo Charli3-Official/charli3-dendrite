@@ -148,7 +148,7 @@ class SwapSubmitInfo(BaseModel):
     block_index: int = Field(..., alias="submit_block_index")
     datum_hash: str = Field(..., alias="submit_datum_hash")
     datum_cbor: str = Field(..., alias="submit_datum_cbor")
-    metadata: list[dict | str | int] | None = Field(..., alias="submit_metadata")
+    metadata: list[dict | str | int | None] | None = Field(..., alias="submit_metadata")
     tx_hash: str = Field(..., alias="submit_tx_hash")
     tx_index: int = Field(..., alias="submit_tx_index")
 
@@ -211,6 +211,9 @@ class SwapTransactionList(BaseList):
 
     @model_validator(mode="before")
     def from_dbsync(cls, values: list):
+        if len(values) == 0:
+            return []
+
         output = []
 
         tx_hash = values[0]["submit_tx_hash"]
@@ -222,7 +225,7 @@ class SwapTransactionList(BaseList):
             output.append(values[start:end])
 
             start = end
-            tx_hash = ["submit_tx_hash"]
+            tx_hash = record["submit_tx_hash"]
 
         if start < len(values):
             output.append(values[start : end + 1])

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import ClassVar
+from typing import Union
 
 from pycardano import Address
 from pycardano import DatumHash
@@ -53,11 +54,37 @@ class SwapExactOut(PlutusData):
 
 
 @dataclass
+class Deposit(PlutusData):
+    """Swap exact in order datum."""
+
+    CONSTR_ID = 2
+    minimum_lp: int
+
+
+@dataclass
+class Withdraw(PlutusData):
+    """Swap exact in order datum."""
+
+    CONSTR_ID = 3
+    min_asset_a: int
+    min_asset_b: int
+
+
+@dataclass
+class ZapIn(PlutusData):
+    """Swap exact in order datum."""
+
+    CONSTR_ID = 4
+    desired_coin: AssetClass
+    minimum_lp: int
+
+
+@dataclass
 class ReceiverDatum(PlutusData):
     """The receiver address."""
 
     CONSTR_ID = 1
-    datum_hash: DatumHash | None
+    datum_hash: Union[DatumHash, None] = None
 
 
 @dataclass
@@ -68,8 +95,8 @@ class MinswapOrderDatum(PlutusData):
 
     sender: PlutusFullAddress
     receiver: PlutusFullAddress
-    receiver_datum_hash: DatumHash | PlutusNone
-    step: SwapExactIn | SwapExactOut
+    receiver_datum_hash: ReceiverDatum
+    step: Union[SwapExactIn, SwapExactOut, Deposit, Withdraw, ZapIn]
     batcher_fee: int
     deposit: int
 

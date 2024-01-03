@@ -359,6 +359,7 @@ WHERE datum.hash IS NOT NULL"""
     AND block.block_no >= %(after_block)s OR txo_output.block_no >= %(after_block_rep)s"""
 
     utxo_selector += """
+ORDER BY tx.id ASC
 LIMIT %(limit)s
 OFFSET %(offset)s"""
 

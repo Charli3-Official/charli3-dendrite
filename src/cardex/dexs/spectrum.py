@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from typing import ClassVar
 from typing import List
+from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
@@ -26,7 +28,7 @@ class SpectrumOrderDatum(PlutusData):
     numerator: int
     denominator: int
     address_payment: bytes
-    address_stake: PlutusPartAddress
+    address_stake: Union[PlutusPartAddress, PlutusNone]
     amount: int
     min_receive: int
 
@@ -66,7 +68,10 @@ class SpectrumOrderDatum(PlutusData):
 
     def address_source(self) -> Address:
         payment_part = VerificationKeyHash(self.address_payment)
-        stake_part = VerificationKeyHash(self.address_stake.address)
+        if isinstance(self.address_stake, PlutusNone):
+            stake_part = None
+        else:
+            stake_part = VerificationKeyHash(self.address_stake.address)
         return Address(payment_part=payment_part, staking_part=stake_part)
 
 

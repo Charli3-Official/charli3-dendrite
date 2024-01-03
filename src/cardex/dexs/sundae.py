@@ -42,6 +42,33 @@ class SwapConfig(PlutusData):
 
 
 @dataclass
+class DepositPairQuantity(PlutusData):
+    CONSTR_ID = 0
+    amount_a: int
+    amount_b: int
+
+
+@dataclass
+class DepositPair(PlutusData):
+    CONSTR_ID = 1
+    assets: DepositPairQuantity
+
+
+@dataclass
+class DepositConfig(PlutusData):
+    CONSTR_ID = 2
+
+    deposit_pair: DepositPair
+
+
+@dataclass
+class WithdrawConfig(PlutusData):
+    CONSTR_ID = 1
+
+    amount_lp: int
+
+
+@dataclass
 class SundaeAddressWithNone(PlutusData):
     CONSTR_ID = 0
 
@@ -75,7 +102,7 @@ class SundaeOrderDatum(PlutusData):
     ident: bytes
     address: SundaeAddressWithDestination
     fee: int
-    swap: SwapConfig
+    swap: Union[DepositConfig, SwapConfig, WithdrawConfig]
 
     @classmethod
     def create_datum(

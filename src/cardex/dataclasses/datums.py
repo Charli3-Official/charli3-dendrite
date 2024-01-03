@@ -38,7 +38,7 @@ class PlutusFullAddress(PlutusData):
 
     CONSTR_ID = 0
     payment: PlutusPartAddress
-    stake: _PlutusConstrWrapper
+    stake: Union[_PlutusConstrWrapper, PlutusNone]
 
     @classmethod
     def from_address(cls, address: Address) -> "PlutusFullAddress":
@@ -46,11 +46,14 @@ class PlutusFullAddress(PlutusData):
         error_msg = "Only addresses with staking and payment parts are accepted."
         if None in [address.staking_part, address.payment_part]:
             raise ValueError(error_msg)
-        stake = _PlutusConstrWrapper(
-            _PlutusConstrWrapper(
-                PlutusPartAddress(bytes.fromhex(str(address.staking_part))),
-            ),
-        )
+        if address.staking_part is not None:
+            stake = _PlutusConstrWrapper(
+                _PlutusConstrWrapper(
+                    PlutusPartAddress(bytes.fromhex(str(address.staking_part))),
+                ),
+            )
+        else:
+            stake = PlutusNone
         return PlutusFullAddress(
             PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
             stake=stake,
@@ -58,7 +61,10 @@ class PlutusFullAddress(PlutusData):
 
     def to_address(self) -> Address:
         payment_part = VerificationKeyHash(self.payment.address)
-        stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address)
+        if isinstance(self.stake, PlutusNone):
+            stake_part = None
+        else:
+            stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address)
         return Address(payment_part=payment_part, staking_part=stake_part)
 
 

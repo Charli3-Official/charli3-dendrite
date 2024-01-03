@@ -38,10 +38,27 @@ class WingriderAssetClass(PlutusData):
 
 
 @dataclass
+class RewardPlutusPartAddress(PlutusData):
+    """Encode a plutus address part (i.e. payment, stake, etc)."""
+
+    CONSTR_ID = 1
+    address: bytes
+
+
+@dataclass
+class RewardPlutusFullAddress(PlutusFullAddress):
+    """A full address, including payment and staking keys."""
+
+    CONSTR_ID = 0
+
+    payment: RewardPlutusPartAddress
+
+
+@dataclass
 class WingRiderOrderConfig(PlutusData):
     CONSTR_ID = 0
 
-    full_address: PlutusFullAddress
+    full_address: Union[PlutusFullAddress, RewardPlutusFullAddress]
     address: bytes
     expiration: int
     assets: WingriderAssetClass
@@ -79,7 +96,7 @@ class BtoA(PlutusData):
 
 
 @dataclass
-class WingRiderOrderDetail(PlutusData):
+class WingRidersOrderDetail(PlutusData):
     CONSTR_ID = 0
 
     direction: Union[AtoB, BtoA]
@@ -95,11 +112,42 @@ class WingRiderOrderDetail(PlutusData):
 
 
 @dataclass
+class WingRidersDepositDetail(PlutusData):
+    CONSTR_ID = 1
+
+    min_lp_receive: int
+
+
+@dataclass
+class WingRidersWithdrawDetail(PlutusData):
+    CONSTR_ID = 2
+
+    min_amount_a: int
+    min_amount_b: int
+
+
+@dataclass
+class WingRidersMaybeFeeClaimDetail(PlutusData):
+    CONSTR_ID = 3
+
+
+@dataclass
+class WingRidersStakeRewardDetail(PlutusData):
+    CONSTR_ID = 4
+
+
+@dataclass
 class WingRidersOrderDatum(PlutusData):
     CONSTR_ID = 0
 
     config: WingRiderOrderConfig
-    detail: WingRiderOrderDetail
+    detail: Union[
+        WingRidersDepositDetail,
+        WingRidersMaybeFeeClaimDetail,
+        WingRidersStakeRewardDetail,
+        WingRidersOrderDetail,
+        WingRidersWithdrawDetail,
+    ]
 
     @classmethod
     def create_datum(

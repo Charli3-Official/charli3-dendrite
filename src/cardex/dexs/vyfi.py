@@ -34,6 +34,42 @@ class VyFiPoolDatum(PlutusData):
         return None
 
 
+# @dataclass
+# class DepositPair(PlutusData):
+#     CONSTR_ID = 0
+#     min_amount_a: int
+#     min_amount_b: int
+
+# @dataclass
+# class Deposit(PlutusData):
+#     CONSTR_ID = 1
+#     assets: DepositPair
+
+
+@dataclass
+class Deposit(PlutusData):
+    CONSTR_ID = 0
+    min_lp_receive: int
+
+
+@dataclass
+class WithdrawPair(PlutusData):
+    CONSTR_ID = 0
+    min_amount_a: int
+    min_amount_b: int
+
+
+@dataclass
+class Withdraw(PlutusData):
+    CONSTR_ID = 1
+    min_lp_receive: WithdrawPair
+
+
+@dataclass
+class LPFlushA(PlutusData):
+    CONSTR_ID = 2
+
+
 @dataclass
 class AtoB(PlutusData):
     CONSTR_ID = 3
@@ -47,10 +83,22 @@ class BtoA(PlutusData):
 
 
 @dataclass
+class ZapInA(PlutusData):
+    CONSTR_ID = 5
+    min_lp_receive: int
+
+
+@dataclass
+class ZapInB(PlutusData):
+    CONSTR_ID = 6
+    min_lp_receive: int
+
+
+@dataclass
 class VyFiOrderDatum(PlutusData):
     CONSTR_ID = 0
     address: bytes
-    order: Union[AtoB, BtoA]
+    order: Union[AtoB, BtoA, Deposit, LPFlushA, Withdraw, ZapInA, ZapInB]
 
     @classmethod
     def create_datum(
@@ -78,7 +126,10 @@ class VyFiOrderDatum(PlutusData):
 
     def address_source(self) -> Address:
         payment_part = VerificationKeyHash.from_primitive(self.address[:28])
-        staking_part = VerificationKeyHash.from_primitive(self.address[28:])
+        if len(self.address) == 28:
+            staking_part = None
+        else:
+            staking_part = VerificationKeyHash.from_primitive(self.address[28:56])
         return Address(payment_part=payment_part, staking_part=staking_part)
 
 
