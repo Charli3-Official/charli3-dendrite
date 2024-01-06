@@ -60,11 +60,11 @@ class PlutusFullAddress(PlutusData):
         )
 
     def to_address(self) -> Address:
-        payment_part = VerificationKeyHash(self.payment.address)
+        payment_part = VerificationKeyHash(self.payment.address[:28])
         if isinstance(self.stake, PlutusNone):
             stake_part = None
         else:
-            stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address)
+            stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address[:28])
         return Address(payment_part=payment_part, staking_part=stake_part)
 
 

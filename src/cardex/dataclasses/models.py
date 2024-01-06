@@ -148,7 +148,10 @@ class SwapSubmitInfo(BaseModel):
     block_index: int = Field(..., alias="submit_block_index")
     datum_hash: str = Field(..., alias="submit_datum_hash")
     datum_cbor: str = Field(..., alias="submit_datum_cbor")
-    metadata: list[dict | str | int | None] | None = Field(..., alias="submit_metadata")
+    metadata: list[list | dict | str | int | None] | None = Field(
+        ...,
+        alias="submit_metadata",
+    )
     tx_hash: str = Field(..., alias="submit_tx_hash")
     tx_index: int = Field(..., alias="submit_tx_index")
 

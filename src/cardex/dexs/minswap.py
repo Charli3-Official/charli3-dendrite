@@ -183,9 +183,14 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
-    _stake_address: ClassVar[Address] = Address.from_primitive(
-        "addr1zxn9efv2f6w82hagxqtn62ju4m293tqvw0uhmdl64ch8uw6j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq6s3z70",
-    )
+    _stake_address: ClassVar[Address] = [
+        Address.from_primitive(
+            "addr1zxn9efv2f6w82hagxqtn62ju4m293tqvw0uhmdl64ch8uw6j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq6s3z70",
+        ),
+        Address.from_primitive(
+            "addr1wxn9efv2f6w82hagxqtn62ju4m293tqvw0uhmdl64ch8uwc0h43gt",
+        ),
+    ]
 
     @classmethod
     @property
@@ -195,7 +200,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def order_selector(self) -> list[str]:
-        return [self._stake_address.encode()]
+        return [s.encode() for s in self._stake_address]
 
     @classmethod
     @property
@@ -213,7 +218,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
     @property
     def stake_address(self) -> Address:
-        return self._stake_address
+        return self._stake_address[0]
 
     @classmethod
     @property
