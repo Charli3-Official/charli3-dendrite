@@ -11,6 +11,7 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.errors import InvalidLPError
@@ -73,6 +74,12 @@ class SpectrumOrderDatum(PlutusData):
         else:
             stake_part = VerificationKeyHash(self.address_stake.address)
         return Address(payment_part=payment_part, staking_part=stake_part)
+
+    def requested_amount(self) -> Assets:
+        return Assets({self.out_asset.assets.unit(): self.min_receive})
+
+    def order_type(self) -> OrderType:
+        return OrderType.swap
 
 
 @dataclass

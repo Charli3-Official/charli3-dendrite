@@ -10,6 +10,7 @@ from pycardano import PlutusData
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.amm_types import AbstractStableSwapPoolState
@@ -177,6 +178,30 @@ class WingRidersOrderDatum(PlutusData):
 
     def address_source(self) -> Address:
         return self.config.full_address.to_address()
+
+    def requested_amount(self) -> Assets:
+        if isinstance(self.detail, WingRidersDepositDetail):
+            return Assets({"lp": self.detail.min_lp_receive})
+        elif isinstance(self.detail, WingRidersOrderDetail):
+            if isinstance(self.detail.direction, BtoA):
+                return Assets({"asset_a": self.detail.min_receive})
+            else:
+                return Assets({"asset_b": self.detail.min_receive})
+        elif isinstance(self.detail, WingRidersWithdrawDetail):
+            return Assets(
+                {
+                    "asset_a": self.detail.min_amount_a,
+                    "asset_b": self.detail.min_amount_b,
+                },
+            )
+
+    def order_type(self) -> OrderType:
+        if isinstance(self.detail, WingRidersOrderDetail):
+            return OrderType.swap
+        elif isinstance(self.detail, WingRidersDepositDetail):
+            return OrderType.deposit
+        elif isinstance(self.detail, WingRidersWithdrawDetail):
+            return OrderType.withdraw
 
 
 @dataclass

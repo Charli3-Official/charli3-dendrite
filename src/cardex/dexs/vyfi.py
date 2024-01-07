@@ -13,6 +13,7 @@ from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.errors import NoAssetsError
@@ -131,6 +132,31 @@ class VyFiOrderDatum(PlutusData):
         else:
             staking_part = VerificationKeyHash.from_primitive(self.address[28:56])
         return Address(payment_part=payment_part, staking_part=staking_part)
+
+    def requested_amount(self) -> Assets:
+        if isinstance(self.order, BtoA):
+            return Assets({"asset_a": self.order.min_receive})
+        elif isinstance(self.order, AtoB):
+            return Assets({"asset_b": self.order.min_receive})
+        elif isinstance(self.order, (ZapInA, ZapInB, Deposit)):
+            return Assets({"lp": self.order.min_lp_receive})
+        elif isinstance(self.order, Withdraw):
+            return Assets(
+                {
+                    "asset_a": self.order.min_lp_receive.min_amount_a,
+                    "asset_b": self.order.min_lp_receive.min_amount_b,
+                },
+            )
+
+    def order_type(self) -> OrderType:
+        if isinstance(self.order, (BtoA, AtoB)):
+            return OrderType.swap
+        elif isinstance(self.order, Deposit):
+            return OrderType.deposit
+        elif isinstance(self.order, Withdraw):
+            return OrderType.withdraw
+        elif isinstance(self.order, (ZapInA, ZapInB)):
+            return OrderType.zap_in
 
 
 class VyFiTokenDefinition(BaseModel):

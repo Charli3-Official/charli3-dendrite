@@ -10,6 +10,7 @@ from pycardano import PlutusData
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantLiquidityPoolState
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
@@ -84,6 +85,13 @@ class MuesliOrderDatum(PlutusData):
 
     def address_source(self) -> str:
         return self.value.full_address.to_address()
+
+    def requested_amount(self) -> Assets:
+        token_out = self.value.token_out_policy.hex() + self.value.token_out_name.hex()
+        return Assets({token_out: self.value.min_receive})
+
+    def order_type(self) -> OrderType:
+        return OrderType.swap
 
 
 @dataclass

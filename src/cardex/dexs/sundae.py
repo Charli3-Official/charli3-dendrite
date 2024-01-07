@@ -9,6 +9,7 @@ from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.errors import InvalidPoolError
@@ -129,6 +130,20 @@ class SundaeOrderDatum(PlutusData):
 
     def address_source(self) -> Address:
         return self.address.address.address.to_address()
+
+    def requested_amount(self) -> Assets:
+        if isinstance(self.swap, SwapConfig):
+            return Assets({"asset_a": self.swap.amount_out.min_receive})
+        else:
+            return Assets({})
+
+    def order_type(self) -> OrderType:
+        if isinstance(self.swap, SwapConfig):
+            return OrderType.swap
+        elif isinstance(self.swap, DepositConfig):
+            return OrderType.deposit
+        elif isinstance(self.swap, WithdrawConfig):
+            return OrderType.withdraw
 
 
 @dataclass

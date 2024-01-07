@@ -188,7 +188,7 @@ class SwapStatusInfo(BaseModel):
 
     @model_serializer(mode="plain", when_used="always")
     def to_dbsync(self) -> dict:
-        output = {key: None for key in self.model_fields_set}
+        output = {key: None for key in PoolStateInfo.model_fields}
         if self.swap_output is not None:
             output.update(self.swap_output.model_dump())
 
@@ -234,3 +234,10 @@ class SwapTransactionList(BaseList):
             output.append(values[start : end + 1])
 
         return output
+
+
+class OrderType(Enum):
+    zap_in = "ZapIn"
+    deposit = "Deposit"
+    withdraw = "Withdraw"
+    swap = "Swap"

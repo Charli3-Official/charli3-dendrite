@@ -10,6 +10,7 @@ from pycardano import PlutusV1Script
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.utility import Assets
@@ -133,6 +134,34 @@ class MinswapOrderDatum(PlutusData):
 
     def address_source(self) -> str:
         return self.sender.to_address()
+
+    def requested_amount(self) -> Assets:
+        if isinstance(self.step, SwapExactIn):
+            return Assets(
+                {self.step.desired_coin.assets.unit(): self.step.minimum_receive},
+            )
+        elif isinstance(self.step, SwapExactOut):
+            return Assets(
+                {self.step.desired_coin.assets.unit(): self.step.expected_receive},
+            )
+        elif isinstance(self.step, Deposit):
+            return Assets({"lp": self.step.minimum_lp})
+        elif isinstance(self.step, Withdraw):
+            return Assets(
+                {"asset_a": self.step.min_asset_a, "asset_b": self.step.min_asset_a},
+            )
+        elif isinstance(self.step, ZapIn):
+            return Assets({self.step.desired_coin.assets.unit(): self.step.minimum_lp})
+
+    def order_type(self) -> OrderType:
+        if isinstance(self.step, (SwapExactIn, SwapExactOut)):
+            return OrderType.swap
+        elif isinstance(self.step, Deposit):
+            return OrderType.deposit
+        elif isinstance(self.step, Withdraw):
+            return OrderType.withdraw
+        elif isinstance(self.step, ZapIn):
+            return OrderType.zap_in
 
 
 @dataclass
