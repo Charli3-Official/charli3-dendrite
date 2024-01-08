@@ -169,7 +169,7 @@ class WingRidersOrderDatum(PlutusData):
             in_assets=in_assets,
             out_assets=out_assets,
         )
-        detail = WingRiderOrderDetail.from_assets(
+        detail = WingRidersOrderDetail.from_assets(
             in_assets=in_assets,
             out_assets=out_assets,
         )

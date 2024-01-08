@@ -96,7 +96,7 @@ class MinswapOrderDatum(PlutusData):
 
     sender: PlutusFullAddress
     receiver: PlutusFullAddress
-    receiver_datum_hash: ReceiverDatum
+    receiver_datum_hash: Union[ReceiverDatum | PlutusNone]
     step: Union[SwapExactIn, SwapExactOut, Deposit, Withdraw, ZapIn]
     batcher_fee: int
     deposit: int

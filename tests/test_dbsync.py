@@ -7,7 +7,7 @@ from cardex import SundaeSwapCPPState
 from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_order_utxos
+from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_pool_in_tx
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import last_block
@@ -79,7 +79,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
 def test_get_orders(dex: AbstractPoolState, benchmark):
     order_selector = dex.order_selector
     result = benchmark(
-        get_order_utxos,
+        get_historical_order_utxos,
         stake_addresses=order_selector,
         limit=1000,
     )
