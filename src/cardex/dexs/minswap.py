@@ -201,13 +201,6 @@ class MinswapPoolDatum(PlutusData):
         return self.asset_a.assets + self.asset_b.assets
 
 
-@dataclass
-class CancelRedeemer(PlutusData):
-    """Cancel datum."""
-
-    CONSTR_ID = 1
-
-
 class MinswapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=2000000)

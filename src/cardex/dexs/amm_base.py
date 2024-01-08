@@ -11,6 +11,7 @@ from pycardano import TransactionOutput
 from pydantic import BaseModel
 from pydantic import model_validator
 
+from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.errors import InvalidPoolError
@@ -146,7 +147,7 @@ class AbstractPoolState(BaseModel, ABC):
         out_assets: Assets,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ):
+    ) -> TransactionOutput:
         # Basic checks
         if len(in_assets) != 1 or len(out_assets) != 1:
             raise ValueError(
@@ -182,6 +183,10 @@ class AbstractPoolState(BaseModel, ABC):
             )
 
         return output, order_datum
+
+    @classmethod
+    def cancel_redeemer(cls) -> PlutusData:
+        return CancelRedeemer()
 
     @property
     def volume_fee(self) -> int:

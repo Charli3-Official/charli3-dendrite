@@ -123,6 +123,11 @@ class MuesliCLPoolDatum(MuesliPoolDatum):
     unknown: int
 
 
+@dataclass
+class MuesliCancelRedeemer(PlutusData):
+    CONSTR_ID = 0
+
+
 class MuesliSwapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=950000)
@@ -242,6 +247,10 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
             values["pool_nft"] = pool_nft
 
         return pool_nft
+
+    @classmethod
+    def cancel_redeemer(cls) -> PlutusData:
+        return MuesliCancelRedeemer()
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):

@@ -98,6 +98,15 @@ class SpectrumPoolDatum(PlutusData):
         return self.asset_a.assets + self.asset_b.assets
 
 
+@dataclass
+class SpectrumCancelRedeemer(PlutusData):
+    CONSTR_ID = 0
+    a: int
+    b: int
+    c: int
+    d: int
+
+
 class SpectrumCPPState(AbstractConstantProductPoolState):
     fee: int
     _batcher = Assets(lovelace=1500000)
@@ -290,3 +299,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             volume_fee=self.volume_fee,
             pool_token=self.pool_nft,
         )
+
+    @classmethod
+    def cancel_redeemer(cls) -> PlutusData:
+        return SpectrumCancelRedeemer(0, 0, 0, 1)

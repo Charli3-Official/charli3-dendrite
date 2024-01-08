@@ -102,3 +102,10 @@ class AssetClass(PlutusData):
             asset = self.policy.hex() + self.asset_name.hex()
 
         return Assets(root={asset: 0})
+
+
+@dataclass
+class CancelRedeemer(PlutusData):
+    """Cancel datum."""
+
+    CONSTR_ID = 1
