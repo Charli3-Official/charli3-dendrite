@@ -262,6 +262,7 @@ SELECT (
 	LEFT JOIN tx_in txi ON txo.tx_id = txi.tx_out_id AND txo.index = txi.tx_out_index
 	WHERE txi.tx_in_id = txo_stake.tx_id
 ) AS "submit_address_inputs",
+txo_stake.address as "submit_address_stake",
 ENCODE(tx.hash, 'hex') as "submit_tx_hash",
 txo_stake.index as "submit_tx_index",
 ENCODE(block.hash,'hex') as "submit_block_hash",
@@ -390,6 +391,7 @@ SELECT (
 	LEFT JOIN tx_in txi ON txo.tx_id = txi.tx_out_id AND txo.index = txi.tx_out_index
 	WHERE txi.tx_in_id = txo_stake.tx_id
 ) AS "submit_address_inputs",
+txo_stake.address as "submit_address_stake",
 ENCODE(txo_stake.tx_hash, 'hex') as "submit_tx_hash",
 txo_stake.index as "submit_tx_index",
 ENCODE(txo_stake.block_hash,'hex') as "submit_block_hash",

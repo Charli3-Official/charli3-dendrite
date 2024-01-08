@@ -142,6 +142,7 @@ class PoolStateList(BaseList):
 
 class SwapSubmitInfo(BaseModel):
     address_inputs: list[str] = Field(..., alias="submit_address_inputs")
+    address_stake: str = Field(..., alias="submit_address_stake")
     assets: Assets = Field(..., alias="submit_assets")
     block_hash: str = Field(..., alias="submit_block_hash")
     block_time: int = Field(..., alias="submit_block_time")
