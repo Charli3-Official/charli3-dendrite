@@ -7,6 +7,7 @@ from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import Redeemer
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.datums import AssetClass
@@ -308,4 +309,4 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
-        return SpectrumCancelRedeemer(0, 0, 0, 1)
+        return Redeemer(SpectrumCancelRedeemer(0, 0, 0, 1))

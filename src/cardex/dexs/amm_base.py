@@ -7,6 +7,7 @@ from pycardano import DeserializeException
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import Redeemer
 from pycardano import TransactionOutput
 from pydantic import BaseModel
 from pydantic import model_validator
@@ -190,7 +191,7 @@ class AbstractPoolState(BaseModel, ABC):
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
-        return CancelRedeemer()
+        return Redeemer(CancelRedeemer())
 
     @property
     def volume_fee(self) -> int:

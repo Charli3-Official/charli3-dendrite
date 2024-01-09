@@ -6,6 +6,7 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import Redeemer
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -250,7 +251,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
-        return MuesliCancelRedeemer()
+        return Redeemer(MuesliCancelRedeemer())
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):
