@@ -103,7 +103,7 @@ class AbstractPoolState(BaseModel, ABC):
         raise NotImplementedError
 
     @classmethod
-    def default_class_method(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
         return PlutusV1Script
 
     @property
