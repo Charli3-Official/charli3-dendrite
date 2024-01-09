@@ -102,6 +102,10 @@ class AbstractPoolState(BaseModel, ABC):
     def order_datum_class(self) -> type[PlutusData]:
         raise NotImplementedError
 
+    @classmethod
+    def default_class_method(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        return PlutusV1Script
+
     @property
     def script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
         if self.plutus_v2:

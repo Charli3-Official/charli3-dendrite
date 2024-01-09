@@ -5,6 +5,7 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import PlutusV2Script
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.datums import AssetClass
@@ -148,6 +149,10 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     @property
     def order_datum_class(self) -> type[SpectrumOrderDatum]:
         return SpectrumOrderDatum
+
+    @classmethod
+    def default_class_method(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        return PlutusV2Script
 
     @classmethod
     @property
