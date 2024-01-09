@@ -3,10 +3,19 @@ from dataclasses import dataclass
 from typing import Union
 
 from pycardano import Address
+from pycardano import DatumHash
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.models import Assets
+
+
+@dataclass
+class ReceiverDatum(PlutusData):
+    """The receiver address."""
+
+    CONSTR_ID = 0
+    datum_hash: Union[DatumHash, None] = None
 
 
 @dataclass
@@ -15,6 +24,13 @@ class PlutusPartAddress(PlutusData):
 
     CONSTR_ID = 0
     address: bytes
+
+
+@dataclass
+class PlutusScriptPartAddress(PlutusPartAddress):
+    """Encode a plutus address part (i.e. payment, stake, etc)."""
+
+    CONSTR_ID = 1
 
 
 @dataclass
@@ -66,6 +82,13 @@ class PlutusFullAddress(PlutusData):
         else:
             stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address[:28])
         return Address(payment_part=payment_part, staking_part=stake_part)
+
+
+@dataclass
+class PlutusScriptAddress(PlutusFullAddress):
+    """A full address, including payment and staking keys."""
+
+    payment: PlutusScriptPartAddress
 
 
 @dataclass

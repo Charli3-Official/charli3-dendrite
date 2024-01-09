@@ -3,13 +3,13 @@ from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
-from pycardano import DatumHash
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
+from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
@@ -78,14 +78,6 @@ class ZapIn(PlutusData):
     CONSTR_ID = 4
     desired_coin: AssetClass
     minimum_lp: int
-
-
-@dataclass
-class ReceiverDatum(PlutusData):
-    """The receiver address."""
-
-    CONSTR_ID = 1
-    datum_hash: Union[DatumHash, None] = None
 
 
 @dataclass

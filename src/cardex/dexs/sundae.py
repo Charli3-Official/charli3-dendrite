@@ -8,6 +8,9 @@ from pycardano import PlutusData
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
+from cardex.dataclasses.datums import PlutusPartAddress
+from cardex.dataclasses.datums import PlutusScriptAddress
+from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
@@ -70,15 +73,15 @@ class WithdrawConfig(PlutusData):
 
 
 @dataclass
-class SundaeAddressWithNone(PlutusData):
+class SundaeAddressWithDatum(PlutusData):
     CONSTR_ID = 0
 
-    address: PlutusFullAddress
-    null: PlutusNone
+    address: Union[PlutusFullAddress, PlutusScriptAddress]
+    datum: Union[ReceiverDatum, PlutusNone]
 
     @classmethod
     def from_address(cls, address: Address):
-        return cls(address=PlutusFullAddress.from_address(address), null=PlutusNone())
+        return cls(address=PlutusFullAddress.from_address(address), datum=PlutusNone())
 
 
 @dataclass
@@ -87,12 +90,12 @@ class SundaeAddressWithDestination(PlutusData):
 
     CONSTR_ID = 0
 
-    address: SundaeAddressWithNone
-    destination: PlutusNone
+    address: SundaeAddressWithDatum
+    destination: Union[PlutusPartAddress, PlutusNone]
 
     @classmethod
     def from_address(cls, address: Address):
-        null = SundaeAddressWithNone.from_address(address)
+        null = SundaeAddressWithDatum.from_address(address)
         return cls(address=null, destination=PlutusNone())
 
 
