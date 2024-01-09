@@ -5,6 +5,7 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import VerificationKeyHash
 
