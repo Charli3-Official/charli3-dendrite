@@ -455,6 +455,7 @@ COALESCE(
 	txo.index,
 	txo.value,
 	txo.data_hash,
+    txo.address,
 	tx.hash as "tx_hash",
 	tx.block_index,
 	block.hash as "block_hash",
