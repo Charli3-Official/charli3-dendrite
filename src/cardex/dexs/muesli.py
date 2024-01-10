@@ -6,6 +6,8 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import PlutusV1Script
+from pycardano import PlutusV2Script
 from pycardano import Redeemer
 
 from cardex.dataclasses.datums import AssetClass
@@ -248,6 +250,10 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
             values["pool_nft"] = pool_nft
 
         return pool_nft
+
+    @classmethod
+    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        return PlutusV2Script
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
