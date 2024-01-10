@@ -145,7 +145,7 @@ class SundaeOrderDatum(PlutusData):
             page=0,
             historical=True,
         )
-        pool = SundaeSwapCPPState.model_validate(pool.model_dump())
+        pool = SundaeSwapCPPState.model_validate(pool_query.model_dump())
         if isinstance(self.swap, SwapConfig):
             if isinstance(self.swap.direction.direction, AtoB):
                 return Assets({pool.unit_b: self.swap.amount_out.min_receive})
