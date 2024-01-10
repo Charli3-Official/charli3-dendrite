@@ -5,6 +5,7 @@ from typing import Union
 from pycardano import Address
 from pycardano import PlutusData
 
+from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
