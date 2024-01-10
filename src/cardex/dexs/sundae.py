@@ -136,21 +136,11 @@ class SundaeOrderDatum(PlutusData):
         return self.address.address.address.to_address()
 
     def requested_amount(self) -> Assets:
-        pool_query = get_pool_utxos(
-            assets=[
-                "0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b913707020"
-                + self.ident.hex(),
-            ],
-            limit=1,
-            page=0,
-            historical=True,
-        )
-        pool = SundaeSwapCPPState.model_validate(pool_query.model_dump()[0])
         if isinstance(self.swap, SwapConfig):
-            if isinstance(self.swap.direction.direction, AtoB):
-                return Assets({pool.unit_b: self.swap.amount_out.min_receive})
+            if isinstance(self.swap.direction, AtoB):
+                return Assets({"asset_b": self.swap.amount_out.min_receive})
             else:
-                return Assets({pool.unit_a: self.swap.amount_out.min_receive})
+                return Assets({"asset_a": self.swap.amount_out.min_receive})
         else:
             return Assets({})
 
