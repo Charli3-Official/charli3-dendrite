@@ -140,7 +140,6 @@ class SundaeOrderDatum(PlutusData):
                 "0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b913707020"
                 + self.ident.hex(),
             ],
-            addresses=["addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"],
             limit=1,
             page=0,
             historical=True,
