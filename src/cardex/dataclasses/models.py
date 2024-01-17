@@ -181,10 +181,10 @@ class SwapStatusInfo(CardexBaseModel):
     def from_dbsync(cls, values: dict) -> dict:
         swap_input = SwapSubmitInfo.model_validate(values)
 
-        if "datum_cbor" in values and values["datum_cbor"] is not None:
-            swap_output = PoolStateInfo.model_validate(values)
-        elif "address" in values and values["address"] is not None:
+        if "address" in values and values["address"] is not None:
             swap_output = SwapExecuteInfo.model_validate(values)
+        elif "datum_cbor" in values and values["datum_cbor"] is not None:
+            swap_output = PoolStateInfo.model_validate(values)
         else:
             swap_output = None
 
