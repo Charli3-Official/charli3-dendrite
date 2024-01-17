@@ -2,10 +2,16 @@
 from enum import Enum
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import RootModel
 from pydantic import model_serializer
 from pydantic import model_validator
+from pydantic.alias_generators import to_camel
+
+
+class CardexBaseModel(BaseModel):
+    model_config = ConfigDict(alias_generators=to_camel, populate_by_name=True)
 
 
 class PoolSelectorType(Enum):
@@ -20,7 +26,7 @@ class PoolSelectorType(Enum):
     asset = "assets"
 
 
-class PoolSelector(BaseModel):
+class PoolSelector(CardexBaseModel):
     """Pool selection information for dbsync."""
 
     selector_type: PoolSelectorType
@@ -112,7 +118,7 @@ class Assets(BaseDict):
         return Assets(**result)
 
 
-class BlockInfo(BaseModel):
+class BlockInfo(CardexBaseModel):
     epoch_slot_no: int
     block_no: int
     tx_count: int
@@ -123,7 +129,7 @@ class BlockList(BaseList):
     root: list[BlockInfo]
 
 
-class PoolStateInfo(BaseModel):
+class PoolStateInfo(CardexBaseModel):
     address: str
     tx_hash: str
     tx_index: int
@@ -140,7 +146,7 @@ class PoolStateList(BaseList):
     root: list[PoolStateInfo]
 
 
-class SwapSubmitInfo(BaseModel):
+class SwapSubmitInfo(CardexBaseModel):
     address_inputs: list[str] = Field(..., alias="submit_address_inputs")
     address_stake: str = Field(..., alias="submit_address_stake")
     assets: Assets = Field(..., alias="submit_assets")
@@ -157,7 +163,7 @@ class SwapSubmitInfo(BaseModel):
     tx_index: int = Field(..., alias="submit_tx_index")
 
 
-class SwapExecuteInfo(BaseModel):
+class SwapExecuteInfo(CardexBaseModel):
     address: str
     tx_hash: str
     tx_index: int
@@ -167,7 +173,7 @@ class SwapExecuteInfo(BaseModel):
     assets: Assets
 
 
-class SwapStatusInfo(BaseModel):
+class SwapStatusInfo(CardexBaseModel):
     swap_input: SwapSubmitInfo
     swap_output: SwapExecuteInfo | PoolStateInfo | None = None
 

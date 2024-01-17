@@ -9,11 +9,11 @@ from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
 from pycardano import TransactionOutput
-from pydantic import BaseModel
 from pydantic import model_validator
 
 from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import CardexBaseModel
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.errors import InvalidPoolError
 from cardex.dexs.errors import NoAssetsError
@@ -23,7 +23,7 @@ from cardex.utility import asset_to_value
 from cardex.utility import naturalize_assets
 
 
-class AbstractPoolState(BaseModel, ABC):
+class AbstractPoolState(CardexBaseModel, ABC):
     assets: Assets
     block_time: int
     block_index: int
