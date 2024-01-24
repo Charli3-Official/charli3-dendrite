@@ -444,7 +444,7 @@ COALESCE(
 		JOIN multi_asset ma ON (mto.ident = ma.id)
 		WHERE mto.tx_out_id = txo_output.tx_id
 	)::jsonb,
-	jsonb_build_array(json_build_object('lovelace',txo_stake.value::TEXT)::jsonb)
+	jsonb_build_array(json_build_object('lovelace',txo_output.value::TEXT)::jsonb)
 ) AS "assets",
 (txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL) as "plutus_v2"
 """
