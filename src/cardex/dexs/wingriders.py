@@ -14,6 +14,7 @@ from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.amm_types import AbstractStableSwapPoolState
+from cardex.dexs.errors import NotAPoolError
 
 
 @dataclass
@@ -184,14 +185,18 @@ class WingRidersOrderDatum(PlutusData):
             return Assets({"lp": self.detail.min_lp_receive})
         elif isinstance(self.detail, WingRidersOrderDetail):
             if isinstance(self.detail.direction, BtoA):
-                return Assets({"asset_a": self.detail.min_receive})
+                return Assets(
+                    {self.config.assets.asset_a.assets.unit(): self.detail.min_receive},
+                )
             else:
-                return Assets({"asset_b": self.detail.min_receive})
+                return Assets(
+                    {self.config.assets.asset_b.assets.unit(): self.detail.min_receive},
+                )
         elif isinstance(self.detail, WingRidersWithdrawDetail):
             return Assets(
                 {
-                    "asset_a": self.detail.min_amount_a,
-                    "asset_b": self.detail.min_amount_b,
+                    self.config.assets.asset_a.assets.unit(): self.detail.min_amount_a,
+                    self.config.assets.asset_b.assets.unit(): self.detail.min_amount_b,
                 },
             )
 
@@ -292,6 +297,8 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     @classmethod
     def skip_init(cls, values) -> bool:
         if "pool_nft" in values and "dex_nft" in values:
+            if cls.dex_policy[0] not in values["dex_nft"]:
+                raise NotAPoolError("Invalid DEX NFT")
             if len(values["assets"]) == 3:
                 # Send the ADA token to the end
                 if isinstance(values["assets"], Assets):
