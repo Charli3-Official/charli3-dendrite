@@ -121,7 +121,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
 
         return D
 
-    def _get_y(self, in_assets: Assets, out_unit: str):
+    def _get_y(self, in_assets: Assets, out_unit: str, precise: bool = True):
         """Calculate the output amount using a regression."""
         N_COINS = 2
         Ann = self.amp * N_COINS**N_COINS
@@ -154,22 +154,38 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             if abs(out - out_prev) < 1:
                 break
 
-        return Assets(**{out_unit: int(out)})
+        out_assets = Assets(**{out_unit: int(out)})
+        if not precise:
+            out_assets.root[out_unit] = out
 
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+        return out_assets
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         out_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
-        out_asset = self._get_y(asset, out_unit)
+        out_asset = self._get_y(asset, out_unit, precise=precise)
         out_reserve = self.reserve_b if out_unit == self.unit_b else self.reserve_a
-        out_asset.root[out_asset.unit()] = int(out_reserve - out_asset.quantity())
+        if precise:
+            out_asset.root[out_asset.unit()] = int(out_reserve - out_asset.quantity())
+        else:
+            out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
         return out_asset, 0
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         in_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
-        asset[asset.unit] = -asset[asset.unit]
-        in_asset = self._get_y(asset, in_unit)
+        in_asset = self._get_y(asset, in_unit, precise=precise)
         in_reserve = self.reserve_b if in_unit == self.unit_b else self.reserve_a
-        in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
-        asset[asset.unit] = -asset[asset.unit]
+        if precise:
+            in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
+        else:
+            in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
         return in_asset, 0
 
 
