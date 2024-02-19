@@ -69,7 +69,7 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             self.unit_a,
             self.unit_b,
         ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
-        if asset.unit == self.unit_b:
+        if asset.unit() == self.unit_b:
             reserve_in, reserve_out = self.reserve_a, self.reserve_b
             unit_out = self.unit_a
         else:
