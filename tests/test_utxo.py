@@ -108,6 +108,46 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 raise
 
 
+def test_wingriders_batcher_fee(subtests):
+    selector = WingRidersCPPState.pool_selector
+    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+
+    for record in result:
+        try:
+            pool = WingRidersCPPState.model_validate(record.model_dump())
+
+            if pool.unit_a == "lovelace" and pool.unit_b == IUSD_ASSETS.unit():
+                out_assets = (
+                    LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
+                )
+
+                for amount, fee in zip(
+                    [1000000, 500000000, 1000000000], [850000, 1500000, 2000000]
+                ):
+                    with subtests.test(f"input, fee: {amount}, {fee}"):
+                        output, utxo = pool.swap_utxo(
+                            address_source=ADDRESS,
+                            in_assets=Assets(root={"lovelace": amount}),
+                            out_assets=out_assets,
+                        )
+                        assert (
+                            output.amount.coin == amount + fee + pool.deposit.quantity()
+                        )
+
+        except InvalidLPError:
+            pass
+        except NoAssetsError:
+            pass
+        except InvalidPoolError:
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if record.tx_hash in MALFORMED_CBOR:
+                pytest.xfail("Malformed CBOR tx.")
+            else:
+                raise
+
+
 @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
