@@ -139,7 +139,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
-            batcher_fee=self.batcher_fee,
+            batcher_fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets),
             deposit=self.deposit,
             address_target=address_target,
             datum_target=datum_target,
@@ -170,7 +170,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
 
         in_assets.root["lovelace"] = (
             in_assets["lovelace"]
-            + self.batcher_fee.quantity()
+            + self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity()
             + self.deposit.quantity()
         )
 
@@ -198,8 +198,11 @@ class AbstractPoolState(CardexBaseModel, ABC):
         """Swap fee of swap in basis points."""
         return self.fee
 
-    @property
-    def batcher_fee(self) -> Assets:
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ) -> Assets:
         """Batcher fee."""
         return self._batcher
 

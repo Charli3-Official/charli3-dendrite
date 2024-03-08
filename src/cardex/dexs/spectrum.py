@@ -302,7 +302,9 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
-            batcher_fee=self.batcher_fee["lovelace"],
+            batcher_fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets)[
+                "lovelace"
+            ],
             volume_fee=self.volume_fee,
             pool_token=self.pool_nft,
         )

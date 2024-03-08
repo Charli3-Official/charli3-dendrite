@@ -5,7 +5,6 @@ from typing import Union
 from pycardano import Address
 from pycardano import PlutusData
 
-from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
@@ -295,5 +294,5 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
-            fee=self.batcher_fee.quantity(),
+            fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
         )

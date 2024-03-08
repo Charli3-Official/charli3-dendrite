@@ -6,7 +6,6 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
-from pycardano import TransactionOutput
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -326,35 +325,18 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         assets.root[assets.unit(0)] -= datum.datum.quantity_a
         assets.root[assets.unit(1)] -= datum.datum.quantity_b
 
-    def swap_utxo(
+    def batcher_fee(
         self,
-        address_source: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-    ) -> TransactionOutput:
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ):
         merged_assets = in_assets + out_assets
-        _batcher = self.batcher_fee
-        print(merged_assets)
         if "lovelace" in merged_assets:
             if merged_assets["lovelace"] <= 250000000:
-                self._batcher = Assets(lovelace=850000)
+                return Assets(lovelace=850000)
             elif merged_assets["lovelace"] <= 500000000:
-                self._batcher = Assets(lovelace=1500000)
-        print(self.batcher_fee)
-
-        output, order_datum = super().swap_utxo(
-            address_source=address_source,
-            in_assets=in_assets,
-            out_assets=out_assets,
-            address_target=address_target,
-            datum_target=datum_target,
-        )
-
-        self._batcher = _batcher
-
-        return output, order_datum
+                return Assets(lovelace=1500000)
+        return self._batcher
 
 
 class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):
