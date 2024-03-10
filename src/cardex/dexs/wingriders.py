@@ -199,6 +199,8 @@ class WingRidersOrderDatum(PlutusData):
                     self.config.assets.asset_b.assets.unit(): self.detail.min_amount_b,
                 },
             )
+        elif isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
+            return Assets({})
 
     def order_type(self) -> OrderType:
         if isinstance(self.detail, WingRidersOrderDetail):
@@ -206,6 +208,8 @@ class WingRidersOrderDatum(PlutusData):
         elif isinstance(self.detail, WingRidersDepositDetail):
             return OrderType.deposit
         elif isinstance(self.detail, WingRidersWithdrawDetail):
+            return OrderType.withdraw
+        if isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
             return OrderType.withdraw
 
 
