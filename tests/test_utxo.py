@@ -131,7 +131,13 @@ def test_wingriders_batcher_fee(subtests):
                             out_assets=out_assets,
                         )
                         assert (
-                            output.amount.coin == amount + fee + pool.deposit.quantity()
+                            output.amount.coin
+                            == amount
+                            + fee
+                            + pool.deposit(
+                                in_assets=Assets(root={"lovelace": amount}),
+                                out_assets=out_assets,
+                            ).quantity()
                         )
 
         except InvalidLPError:

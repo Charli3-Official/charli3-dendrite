@@ -329,6 +329,16 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         assets.root[assets.unit(0)] -= datum.datum.quantity_a
         assets.root[assets.unit(1)] -= datum.datum.quantity_b
 
+    def deposit(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ):
+        return Assets(lovelace=4000000) - self.batcher_fee(
+            in_assets=in_assets,
+            out_assets=out_assets,
+        )
+
     def batcher_fee(
         self,
         in_assets: Assets | None = None,

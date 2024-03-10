@@ -140,7 +140,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
             in_assets=in_assets,
             out_assets=out_assets,
             batcher_fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets),
-            deposit=self.deposit,
+            deposit=self.deposit(in_assets=in_assets, out_assets=out_assets),
             address_target=address_target,
             datum_target=datum_target,
         )
@@ -171,7 +171,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
         in_assets.root["lovelace"] = (
             in_assets["lovelace"]
             + self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity()
-            + self.deposit.quantity()
+            + self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
         )
 
         if self.inline_datum:
@@ -206,8 +206,11 @@ class AbstractPoolState(CardexBaseModel, ABC):
         """Batcher fee."""
         return self._batcher
 
-    @property
-    def deposit(self) -> Assets:
+    def deposit(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ) -> Assets:
         """Batcher fee."""
         return self._deposit
 
