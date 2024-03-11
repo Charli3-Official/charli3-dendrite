@@ -187,7 +187,7 @@ class MinswapPoolDatum(PlutusData):
     asset_b: AssetClass
     total_liquidity: int
     root_k_last: int
-    fee_sharing: _FeeSwitchWrapper
+    fee_sharing: Union[_FeeSwitchWrapper, PlutusNone]
 
     def pool_pair(self) -> Assets | None:
         return self.asset_a.assets + self.asset_b.assets
