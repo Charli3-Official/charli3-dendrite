@@ -1,6 +1,7 @@
 # noqa
 import os
 from datetime import datetime
+from threading import Lock
 
 import psycopg_pool
 from dotenv import load_dotenv
@@ -13,33 +14,43 @@ from cardex.dataclasses.models import SwapTransactionList
 
 load_dotenv()
 
+lock = Lock()
+
+POOL = None
+
 DBSYNC_USER = os.environ.get("DBSYNC_USER", None)
 DBSYNC_PASS = os.environ.get("DBSYNC_PASS", None)
 DBSYNC_HOST = os.environ.get("DBSYNC_HOST", None)
 DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
 
-if DBSYNC_HOST is not None:
-    conninfo = (
-        f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer "
-        + f"user={DBSYNC_USER} password={DBSYNC_PASS}"
-    )
-    pool = psycopg_pool.ConnectionPool(
-        conninfo=conninfo,
-        open=False,
-        min_size=1,
-        max_size=10,
-        max_idle=10,
-        reconnect_timeout=10,
-        max_lifetime=60,
-        check=psycopg_pool.ConnectionPool.check_connection,
-    )
-    pool.open()
-    pool.wait()
+
+def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
+    """Get a postgres connection."""
+    global POOL  # noqa
+    with lock:
+        if POOL is None:
+            conninfo = (
+                f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer "
+                + f"user={DBSYNC_USER} password={DBSYNC_PASS}"
+            )
+            POOL = psycopg_pool.ConnectionPool(
+                conninfo=conninfo,
+                open=False,
+                min_size=1,
+                max_size=10,
+                max_idle=10,
+                reconnect_timeout=10,
+                max_lifetime=60,
+                check=psycopg_pool.ConnectionPool.check_connection,
+            )
+            POOL.open()
+            POOL.wait()
+    return POOL
 
 
 def db_query(query: str, args: tuple | None = None) -> list[tuple]:
     """Fetch results from a query."""
-    with pool.connection() as conn:  # noqa: SIM117
+    with get_dbsync_pool().connection() as conn:  # noqa: SIM117
         with conn.cursor(row_factory=dict_row) as cursor:
             # with conn.cursor() as cursor:
             cursor.execute(query, args)
