@@ -91,6 +91,8 @@ class MuesliOrderDatum(PlutusData):
 
     def requested_amount(self) -> Assets:
         token_out = self.value.token_out_policy.hex() + self.value.token_out_name.hex()
+        if token_out == "":
+            token_out = lovelace
         return Assets({token_out: self.value.min_receive})
 
     def order_type(self) -> OrderType:
