@@ -62,7 +62,4 @@ def test_get_orders_in_block(block: int):
                 else:
                     continue
 
-            print(datum.requested_amount())
             assert "" not in datum.requested_amount()
-
-    raise Exception
