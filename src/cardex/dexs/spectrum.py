@@ -8,6 +8,7 @@ from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
+from pycardano import UTxO
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.datums import AssetClass
@@ -142,6 +143,38 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     @property
     def swap_forward(self) -> bool:
         return False
+
+    @classmethod
+    @property
+    def reference_utxo(cls) -> UTxO | None:
+        if self._reference_utxo is None:
+            script_bytes = bytes.fromhex(
+                get_script_from_address(Address.decode(cls._stake_address))[0][
+                    "script"
+                ],
+            )
+
+            script = cls.default_script_class()(script_bytes)
+
+            self._reference_utxo = UTxO(
+                input=TransactionInput(
+                    transaction_id=TransactionId(
+                        bytes.fromhex(
+                            "fc9e99fd12a13a137725da61e57a410e36747d513b965993d92c32c67df9259a",
+                        ),
+                    ),
+                    index=2,
+                ),
+                output=TransactionOutput(
+                    address=Address.decode(
+                        "addr1qxnwr9e72whcp3rnetaj3q34se8kvfqdxpwee6wlnysjt63lwrhst9wmcagdv46as9903ksvmdf7w7x6ujy4ap00yw0q85x25x",
+                    ),
+                    amount=Value(coin=12266340),
+                    script=script,
+                ),
+            )
+
+        return self._reference_utxo
 
     @property
     def stake_address(self) -> Address:

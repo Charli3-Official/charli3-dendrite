@@ -9,6 +9,7 @@ from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
+from pycardano import UTxO
 
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -143,6 +144,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1zyq0kyrml023kwjk8zr86d5gaxrt5w8lxnah8r6m6s4jp4g3r6dxnzml343sx8jweqn4vn3fz2kj8kgu9czghx0jrsyqqktyhv",
     )
+    _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
     @property
@@ -165,6 +167,38 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     @property
     def swap_forward(self) -> bool:
         return False
+
+    @classmethod
+    @property
+    def reference_utxo(cls) -> UTxO | None:
+        if self._reference_utxo is None:
+            script_bytes = bytes.fromhex(
+                get_script_from_address(Address.decode(cls._stake_address))[0][
+                    "script"
+                ],
+            )
+
+            script = cls.default_script_class()(script_bytes)
+
+            self._reference_utxo = UTxO(
+                input=TransactionInput(
+                    transaction_id=TransactionId(
+                        bytes.fromhex(
+                            "7e4142b7a040eae45d14513000adf91ab42da33a1bd5ccffcfe851b3d93e1e5e",
+                        ),
+                    ),
+                    index=1,
+                ),
+                output=TransactionOutput(
+                    address=Address.decode(
+                        "addr1v9p0rc57dzkz7gg97dmsns8hngsuxl956xe6myjldaug7hse4elc6",
+                    ),
+                    amount=Value(coin=24269610),
+                    script=script,
+                ),
+            )
+
+        return self._reference_utxo
 
     @property
     def stake_address(self) -> Address:

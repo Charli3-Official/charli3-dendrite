@@ -9,6 +9,7 @@ from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
 from pycardano import TransactionOutput
+from pycardano import UTxO
 from pydantic import model_validator
 
 from cardex.dataclasses.datums import CancelRedeemer
@@ -87,6 +88,11 @@ class AbstractPoolState(CardexBaseModel, ABC):
     @property
     def inline_datum(self) -> bool:
         return self.plutus_v2
+
+    @classmethod
+    @property
+    def reference_utxo(self) -> UTxO | None:
+        return None
 
     @property
     @abstractmethod
