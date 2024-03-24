@@ -8,9 +8,14 @@ from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
+from pycardano import TransactionId
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import Value
 from pycardano import VerificationKeyHash
 
+from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
@@ -118,6 +123,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1wynp362vmvr8jtc946d3a3utqgclfdl5y9d3kn849e359hsskr20n",
     )
+    _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
     @property
@@ -147,16 +153,14 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def reference_utxo(cls) -> UTxO | None:
-        if self._reference_utxo is None:
+        if cls._reference_utxo is None:
             script_bytes = bytes.fromhex(
-                get_script_from_address(Address.decode(cls._stake_address))[0][
-                    "script"
-                ],
+                get_script_from_address(cls._stake_address)[0]["script"],
             )
 
             script = cls.default_script_class()(script_bytes)
 
-            self._reference_utxo = UTxO(
+            cls._reference_utxo = UTxO(
                 input=TransactionInput(
                     transaction_id=TransactionId(
                         bytes.fromhex(
@@ -174,7 +178,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                 ),
             )
 
-        return self._reference_utxo
+        return cls._reference_utxo
 
     @property
     def stake_address(self) -> Address:
