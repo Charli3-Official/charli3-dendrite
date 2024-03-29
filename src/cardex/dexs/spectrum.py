@@ -329,6 +329,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> PlutusData:

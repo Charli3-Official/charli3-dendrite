@@ -72,118 +72,161 @@ ADDRESS = Address(
 )
 
 
-# @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-# def test_build_utxo(dex: AbstractPoolState, subtests):
-#     selector = dex.pool_selector
-#     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
+def test_build_utxo(dex: AbstractPoolState, subtests):
+    selector = dex.pool_selector
+    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
-#     for record in result:
-#         try:
-#             pool = dex.model_validate(record.model_dump())
+    for record in result:
+        try:
+            pool = dex.model_validate(record.model_dump())
 
-#             if pool.unit_a == "lovelace" and pool.unit_b in [
-#                 IUSD_ASSETS.unit(),
-#                 LQ_ASSETS.unit(),
-#             ]:
-#                 out_assets = (
-#                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
-#                 )
-#                 pool.swap_utxo(
-#                     address_source=ADDRESS,
-#                     in_assets=Assets(root={"lovelace": 1000000}),
-#                     out_assets=out_assets,
-#                 )
+            if pool.unit_a == "lovelace" and pool.unit_b in [
+                IUSD_ASSETS.unit(),
+                LQ_ASSETS.unit(),
+            ]:
+                out_assets = (
+                    LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
+                )
+                pool.swap_utxo(
+                    address_source=ADDRESS,
+                    in_assets=Assets(root={"lovelace": 1000000}),
+                    out_assets=out_assets,
+                )
 
-#         except InvalidLPError:
-#             pass
-#         except NoAssetsError:
-#             pass
-#         except InvalidPoolError:
-#             pass
-#         except NotAPoolError as e:
-#             # Known failures due to malformed data
-#             if record.tx_hash in MALFORMED_CBOR:
-#                 pytest.xfail("Malformed CBOR tx.")
-#             else:
-#                 raise
-
-
-# def test_wingriders_batcher_fee(subtests):
-#     selector = WingRidersCPPState.pool_selector
-#     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
-
-#     for record in result:
-#         try:
-#             pool = WingRidersCPPState.model_validate(record.model_dump())
-
-#             if pool.unit_a == "lovelace" and pool.unit_b == IUSD_ASSETS.unit():
-#                 out_assets = (
-#                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
-#                 )
-
-#                 for amount, fee in zip(
-#                     [1000000, 500000000, 1000000000], [850000, 1500000, 2000000]
-#                 ):
-#                     with subtests.test(f"input, fee: {amount}, {fee}"):
-#                         output, utxo = pool.swap_utxo(
-#                             address_source=ADDRESS,
-#                             in_assets=Assets(root={"lovelace": amount}),
-#                             out_assets=out_assets,
-#                         )
-#                         assert (
-#                             output.amount.coin
-#                             == amount
-#                             + fee
-#                             + pool.deposit(
-#                                 in_assets=Assets(root={"lovelace": amount}),
-#                                 out_assets=out_assets,
-#                             ).quantity()
-#                         )
-
-#         except InvalidLPError:
-#             pass
-#         except NoAssetsError:
-#             pass
-#         except InvalidPoolError:
-#             pass
-#         except NotAPoolError as e:
-#             # Known failures due to malformed data
-#             if record.tx_hash in MALFORMED_CBOR:
-#                 pytest.xfail("Malformed CBOR tx.")
-#             else:
-#                 raise
+        except InvalidLPError:
+            pass
+        except NoAssetsError:
+            pass
+        except InvalidPoolError:
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if record.tx_hash in MALFORMED_CBOR:
+                pytest.xfail("Malformed CBOR tx.")
+            else:
+                raise
 
 
-# @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-# def test_address_from_datum(dex: AbstractPoolState):
-#     # Create the datum
-#     if dex.dex == "Spectrum":
-#         datum = dex.order_datum_class.create_datum(
-#             address_source=ADDRESS,
-#             in_assets=Assets(root={"lovelace": 1000000}),
-#             out_assets=Assets(root={"lovelace": 1000000}),
-#             batcher_fee=1000000,
-#             volume_fee=30,
-#             pool_token=Assets({"lovelace": 1}),
-#         )
-#     elif dex.dex == "SundaeSwap":
-#         datum = dex.order_datum_class.create_datum(
-#             ident=b"01",
-#             address_source=ADDRESS,
-#             in_assets=Assets(root={"lovelace": 1000000}),
-#             out_assets=Assets(root={"lovelace": 1000000}),
-#             fee=30,
-#         )
-#     else:
-#         datum = dex.order_datum_class.create_datum(
-#             address_source=ADDRESS,
-#             in_assets=Assets(root={"lovelace": 1000000}),
-#             out_assets=Assets(root={"lovelace": 1000000}),
-#             batcher_fee=Assets(root={"lovelace": 1000000}),
-#             deposit=Assets(root={"lovelace": 1000000}),
-#         )
+def test_wingriders_batcher_fee(subtests):
+    selector = WingRidersCPPState.pool_selector
+    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
-#     assert ADDRESS.encode() == datum.address_source().encode()
+    for record in result:
+        try:
+            pool = WingRidersCPPState.model_validate(record.model_dump())
+
+            if pool.unit_a == "lovelace" and pool.unit_b == IUSD_ASSETS.unit():
+                out_assets = (
+                    LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
+                )
+
+                for amount, fee in zip(
+                    [1000000, 500000000, 1000000000], [850000, 1500000, 2000000]
+                ):
+                    with subtests.test(f"input, fee: {amount}, {fee}"):
+                        output, utxo = pool.swap_utxo(
+                            address_source=ADDRESS,
+                            in_assets=Assets(root={"lovelace": amount}),
+                            out_assets=out_assets,
+                        )
+                        assert (
+                            output.amount.coin
+                            == amount
+                            + fee
+                            + pool.deposit(
+                                in_assets=Assets(root={"lovelace": amount}),
+                                out_assets=out_assets,
+                            ).quantity()
+                        )
+
+        except InvalidLPError:
+            pass
+        except NoAssetsError:
+            pass
+        except InvalidPoolError:
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if record.tx_hash in MALFORMED_CBOR:
+                pytest.xfail("Malformed CBOR tx.")
+            else:
+                raise
+
+
+def test_minswap_batcher_fee(subtests):
+    selector = MinswapCPPState.pool_selector
+    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+
+    for record in result:
+        try:
+            pool = MinswapCPPState.model_validate(record.model_dump())
+
+            if pool.unit_a == "lovelace" and pool.unit_b == IUSD_ASSETS.unit():
+                out_assets = (
+                    LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
+                )
+
+                for amount, min_catalyst in zip(
+                    [1000000, 500000000, 1000000000], [0, 25000000000, 50000000000]
+                ):
+                    with subtests.test(f"input, fee: {amount}, {min_catalyst}"):
+                        output, datum = pool.swap_utxo(
+                            address_source=ADDRESS,
+                            in_assets=Assets(root={"lovelace": amount}),
+                            out_assets=out_assets,
+                            extra_assets=Assets(
+                                {
+                                    "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e": min_catalyst
+                                }
+                            ),
+                        )
+                        assert datum.batcher_fee == 2000000 - min_catalyst // 100000
+
+        except InvalidLPError:
+            pass
+        except NoAssetsError:
+            pass
+        except InvalidPoolError:
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if record.tx_hash in MALFORMED_CBOR:
+                pytest.xfail("Malformed CBOR tx.")
+            else:
+                raise
+
+
+@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
+def test_address_from_datum(dex: AbstractPoolState):
+    # Create the datum
+    if dex.dex == "Spectrum":
+        datum = dex.order_datum_class.create_datum(
+            address_source=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            batcher_fee=1000000,
+            volume_fee=30,
+            pool_token=Assets({"lovelace": 1}),
+        )
+    elif dex.dex == "SundaeSwap":
+        datum = dex.order_datum_class.create_datum(
+            ident=b"01",
+            address_source=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            fee=30,
+        )
+    else:
+        datum = dex.order_datum_class.create_datum(
+            address_source=ADDRESS,
+            in_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={"lovelace": 1000000}),
+            batcher_fee=Assets(root={"lovelace": 1000000}),
+            deposit=Assets(root={"lovelace": 1000000}),
+        )
+
+    assert ADDRESS.encode() == datum.address_source().encode()
 
 
 @pytest.mark.parametrize("dex", [SpectrumCPPState, MuesliSwapCPPState])

@@ -135,6 +135,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> PlutusData:
@@ -145,7 +146,11 @@ class AbstractPoolState(CardexBaseModel, ABC):
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
-            batcher_fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets),
+            batcher_fee=self.batcher_fee(
+                in_assets=in_assets,
+                out_assets=out_assets,
+                extra_assets=extra_assets,
+            ),
             deposit=self.deposit(in_assets=in_assets, out_assets=out_assets),
             address_target=address_target,
             datum_target=datum_target,
@@ -156,6 +161,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> TransactionOutput:
@@ -170,6 +176,7 @@ class AbstractPoolState(CardexBaseModel, ABC):
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
+            extra_assets=extra_assets,
             address_target=address_target,
             datum_target=datum_target,
         )
@@ -208,8 +215,15 @@ class AbstractPoolState(CardexBaseModel, ABC):
         self,
         in_assets: Assets | None = None,
         out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
     ) -> Assets:
-        """Batcher fee."""
+        """Batcher fee.
+
+        Args:
+            in_assets: The input assets for the swap
+            out_assets: The output assets for the swap
+            extra_assets: Extra assets included in the transaction
+        """
         return self._batcher
 
     def deposit(

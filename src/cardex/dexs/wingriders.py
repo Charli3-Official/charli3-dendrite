@@ -343,6 +343,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         self,
         in_assets: Assets | None = None,
         out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
     ):
         merged_assets = in_assets + out_assets
         if "lovelace" in merged_assets:
