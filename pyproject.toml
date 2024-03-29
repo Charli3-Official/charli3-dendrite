@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cardex"
-version = "0.2.0-dev51"
+version = "0.2.0-dev52"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
