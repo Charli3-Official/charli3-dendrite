@@ -183,7 +183,11 @@ class AbstractPoolState(CardexBaseModel, ABC):
 
         in_assets.root["lovelace"] = (
             in_assets["lovelace"]
-            + self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity()
+            + self.batcher_fee(
+                in_assets=in_assets,
+                out_assets=out_assets,
+                extra_assets=extra_assets,
+            ).quantity()
             + self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
         )
 
