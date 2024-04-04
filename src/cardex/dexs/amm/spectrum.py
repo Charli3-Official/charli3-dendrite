@@ -154,7 +154,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
             script_bytes = bytes.fromhex(
-                get_script_from_address(cls._stake_address)[0]["script"],
+                get_script_from_address(cls._stake_address).script,
             )
 
             script = cls.default_script_class()(script_bytes)

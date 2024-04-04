@@ -10,6 +10,7 @@ from pycardano import Address
 
 from cardex.dataclasses.models import BlockList
 from cardex.dataclasses.models import PoolStateList
+from cardex.dataclasses.models import ScriptReference
 from cardex.dataclasses.models import SwapTransactionList
 
 load_dotenv()
@@ -250,15 +251,34 @@ WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
     return PoolStateList.model_validate(r)
 
 
-def get_script_from_address(address: Address):
+def get_script_from_address(address: Address) -> ScriptReference:
     SCRIPT_SELECTOR = """
-SELECT ENCODE(bytes, 'hex') as "script"
+SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
+tx_out.index as "tx_index",
+COALESCE (
+    json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
+            )
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = tx_out.id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
+) AS "assets",
+ENCODE(s.bytes, 'hex') as "script"
 FROM script s
+LEFT JOIN tx_out ON s.id = tx_out.reference_script_id
+LEFT JOIN tx ON tx.id = tx_out.tx_id
 WHERE s.hash = %(address)b
+LIMIT 1
 """
     r = db_query(SCRIPT_SELECTOR, {"address": bytes.fromhex(str(address.payment_part))})
 
-    return r
+    return ScriptReference.model_validate(r[0])
 
 
 def get_historical_order_utxos(

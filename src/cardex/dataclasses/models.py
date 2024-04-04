@@ -118,6 +118,13 @@ class Assets(BaseDict):
         return Assets(**result)
 
 
+class ScriptReference(CardexBaseModel):
+    tx_hash: str | None
+    tx_index: int | None
+    assets: Assets | None
+    script: str
+
+
 class BlockInfo(CardexBaseModel):
     epoch_slot_no: int
     block_no: int
