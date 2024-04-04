@@ -4,17 +4,16 @@ from datetime import timedelta
 from typing import ClassVar
 from typing import Union
 
-from pycardano import Address
-from pycardano import PlutusData
-
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.amm_types import AbstractStableSwapPoolState
-from cardex.dexs.errors import NotAPoolError
+from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.amm.amm_types import AbstractStableSwapPoolState
+from cardex.dexs.core.errors import NotAPoolError
+from pycardano import Address
+from pycardano import PlutusData
 
 
 @dataclass

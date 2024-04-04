@@ -1,39 +1,27 @@
-from abc import ABC
 from abc import abstractmethod
 from decimal import Decimal
 
-from pycardano import Address
-from pycardano import DeserializeException
-from pycardano import PlutusData
-from pycardano import PlutusV1Script
-from pycardano import PlutusV2Script
-from pycardano import Redeemer
-from pycardano import TransactionOutput
-from pycardano import UTxO
-from pydantic import model_validator
-
-from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.errors import InvalidPoolError
-from cardex.dexs.errors import NoAssetsError
-from cardex.dexs.errors import NotAPoolError
+from cardex.dexs.core.base import AbstractPairState
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NoAssetsError
+from cardex.dexs.core.errors import NotAPoolError
 from cardex.utility import Assets
 from cardex.utility import asset_to_value
 from cardex.utility import naturalize_assets
+from pycardano import Address
+from pycardano import DeserializeException
+from pycardano import PlutusData
+from pycardano import TransactionOutput
+from pydantic import model_validator
 
 
-class AbstractPoolState(CardexBaseModel, ABC):
-    assets: Assets
-    block_time: int
-    block_index: int
+class AbstractPoolState(AbstractPairState):
     datum_cbor: str
     datum_hash: str
     dex_nft: Assets | None = None
     inactive: bool = False
     lp_tokens: Assets | None = None
-    plutus_v2: bool
     pool_nft: Assets | None = None
     tx_index: int
     tx_hash: str
@@ -54,71 +42,10 @@ class AbstractPoolState(CardexBaseModel, ABC):
         """
         raise NotImplementedError("Unique pool id is not specified.")
 
-    @classmethod
-    @abstractmethod
-    def dex(self) -> str:
-        """Official dex name."""
-        raise NotImplementedError("DEX name is undefined.")
-
-    @classmethod
-    @abstractmethod
-    def order_selector(self) -> list[str]:
-        """Order selection information."""
-        raise NotImplementedError("DEX name is undefined.")
-
-    @classmethod
-    @abstractmethod
-    def pool_selector(self) -> PoolSelector:
-        """Pool selection information."""
-        raise NotImplementedError("DEX name is undefined.")
-
-    @abstractmethod
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
-        raise NotImplementedError("")
-
-    @abstractmethod
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
-        raise NotImplementedError("")
-
-    @property
-    @abstractmethod
-    def swap_forward(self) -> bool:
-        raise NotImplementedError
-
-    @property
-    def inline_datum(self) -> bool:
-        return self.plutus_v2
-
-    @classmethod
-    @property
-    def reference_utxo(self) -> UTxO | None:
-        return None
-
-    @property
-    @abstractmethod
-    def stake_address(self) -> Address:
-        raise NotImplementedError
-
     @property
     @abstractmethod
     def pool_datum_class(self) -> type[PlutusData]:
         raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def order_datum_class(self) -> type[PlutusData]:
-        raise NotImplementedError
-
-    @classmethod
-    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
-        return PlutusV1Script
-
-    @property
-    def script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
-        if self.plutus_v2:
-            return PlutusV2Script
-        else:
-            return PlutusV1Script
 
     @property
     def pool_datum(self) -> PlutusData:
@@ -207,38 +134,6 @@ class AbstractPoolState(CardexBaseModel, ABC):
         return output, order_datum
 
     @classmethod
-    def cancel_redeemer(cls) -> PlutusData:
-        return Redeemer(CancelRedeemer())
-
-    @property
-    def volume_fee(self) -> int:
-        """Swap fee of swap in basis points."""
-        return self.fee
-
-    def batcher_fee(
-        self,
-        in_assets: Assets | None = None,
-        out_assets: Assets | None = None,
-        extra_assets: Assets | None = None,
-    ) -> Assets:
-        """Batcher fee.
-
-        Args:
-            in_assets: The input assets for the swap
-            out_assets: The output assets for the swap
-            extra_assets: Extra assets included in the transaction
-        """
-        return self._batcher
-
-    def deposit(
-        self,
-        in_assets: Assets | None = None,
-        out_assets: Assets | None = None,
-    ) -> Assets:
-        """Batcher fee."""
-        return self._deposit
-
-    @classmethod
     @property
     def pool_policy(cls) -> list[str] | None:
         """The pool nft policies.
@@ -270,20 +165,6 @@ class AbstractPoolState(CardexBaseModel, ABC):
 
         Returns:
             Optional[str]: policy or policy+name of lp tokens
-        """
-        return None
-
-    @classmethod
-    @property
-    def dex_policy(cls) -> list[str] | None:
-        """The dex nft policy.
-
-        This should be the policy or policy+name of the dex nft.
-
-        If None, then the default dex nft check is skipped.
-
-        Returns:
-            Optional[str]: policy or policy+name of dex nft
         """
         return None
 
@@ -539,26 +420,6 @@ class AbstractPoolState(CardexBaseModel, ABC):
         cls.post_init(values)
 
         return values
-
-    @property
-    def unit_a(self) -> str:
-        """Token name of asset A."""
-        return self.assets.unit(0)
-
-    @property
-    def unit_b(self) -> str:
-        """Token name of asset b."""
-        return self.assets.unit(1)
-
-    @property
-    def reserve_a(self) -> int:
-        """Reserve amount of asset A."""
-        return self.assets.quantity(0)
-
-    @property
-    def reserve_b(self) -> int:
-        """Reserve amount of asset B."""
-        return self.assets.quantity(1)
 
     @property
     def price(self) -> tuple[Decimal, Decimal]:

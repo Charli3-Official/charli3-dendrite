@@ -1,5 +1,5 @@
 from cardex.dataclasses.models import Assets
-from cardex.dexs.amm_base import AbstractPoolState
+from cardex.dexs.amm.amm_base import AbstractPoolState
 
 
 class AbstractConstantProductPoolState(AbstractPoolState):

@@ -10,7 +10,7 @@ from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
 from cardex.dataclasses.models import SwapTransactionInfo
-from cardex.dexs.amm_base import AbstractPoolState
+from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,

@@ -12,7 +12,7 @@ from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_pool_in_tx
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import last_block
-from cardex.dexs.amm_base import AbstractPoolState
+from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,

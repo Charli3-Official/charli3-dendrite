@@ -8,11 +8,11 @@ from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
-from cardex.dexs.amm_base import AbstractPoolState
-from cardex.dexs.errors import InvalidLPError
-from cardex.dexs.errors import InvalidPoolError
-from cardex.dexs.errors import NoAssetsError
-from cardex.dexs.errors import NotAPoolError
+from cardex.dexs.amm.amm_base import AbstractPoolState
+from cardex.dexs.core.errors import InvalidLPError
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NoAssetsError
+from cardex.dexs.core.errors import NotAPoolError
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
