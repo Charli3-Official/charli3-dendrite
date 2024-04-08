@@ -121,6 +121,7 @@ class Assets(BaseDict):
 class ScriptReference(CardexBaseModel):
     tx_hash: str | None
     tx_index: int | None
+    address: str | None
     assets: Assets | None
     script: str
 

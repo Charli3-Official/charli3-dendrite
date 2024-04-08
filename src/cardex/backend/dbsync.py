@@ -255,6 +255,7 @@ def get_script_from_address(address: Address) -> ScriptReference:
     SCRIPT_SELECTOR = """
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
+tx_out.address,
 COALESCE (
     json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
         SELECT json_agg(
