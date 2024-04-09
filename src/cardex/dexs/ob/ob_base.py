@@ -1,5 +1,4 @@
 from abc import ABC
-from abc import abstractmethod
 from decimal import Decimal
 
 from cardex.dataclasses.models import Assets
@@ -128,7 +127,6 @@ class AbstractOrderBookState(AbstractPairState, ABC):
         return out_assets, 0
 
     @property
-    @abstractmethod
     def price(self) -> tuple[Decimal, Decimal]:
         """Mid price of assets.
 
@@ -145,7 +143,6 @@ class AbstractOrderBookState(AbstractPairState, ABC):
         return prices
 
     @property
-    @abstractmethod
     def tvl(self) -> Decimal:
         """Return the total value locked for the pool.
 
