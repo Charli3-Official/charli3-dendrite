@@ -1,4 +1,3 @@
-from abc import ABC
 from decimal import Decimal
 
 from cardex.dataclasses.models import Assets
@@ -6,6 +5,7 @@ from cardex.dataclasses.models import BaseList
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dexs.core.base import AbstractPairState
 from cardex.utility import Assets
+from pycardano import UTxO
 from pydantic import model_validator
 
 
@@ -30,7 +30,7 @@ class SellOrderBook(BaseList):
         return sorted(v, key=lambda x: x.price)
 
 
-class AbstractOrderBookState(AbstractPairState, ABC):
+class AbstractOrderBookState(AbstractPairState):
     sell_book: SellOrderBook
     buy_book: BuyOrderBook
 
@@ -55,15 +55,15 @@ class AbstractOrderBookState(AbstractPairState, ABC):
         ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
 
         if asset.unit() == self.unit_a:
-            book = self.buy_book
+            book = self.sell_book
             unit_out = self.unit_b
         else:
-            book = self.sell_book
+            book = self.buy_book
             unit_out = self.unit_a
 
         # Calculate adjustment based on fees
-        assets.root[asset.unit()] = (
-            (10000 - self.volume_fee) * assets[asset.unit()] // 10000
+        asset.root[asset.unit()] = (
+            (10000 - self.volume_fee) * asset[asset.unit()] // 10000
         )
 
         index = 0
@@ -125,6 +125,11 @@ class AbstractOrderBookState(AbstractPairState, ABC):
         fee = (10000 * assets[asset.unit()]) // (10000 - self.volume_fee)
 
         return out_assets, 0
+
+    @classmethod
+    @property
+    def reference_utxo(self) -> UTxO | None:
+        return None
 
     @property
     def price(self) -> tuple[Decimal, Decimal]:
