@@ -198,3 +198,13 @@ class AbstractPairState(CardexBaseModel, ABC):
             NotImplementedError: Only ADA pool TVL is implemented.
         """
         raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def pool_id(self) -> str:
+        """A unique identifier for the pool or ob.
+
+        Raises:
+            NotImplementedError: Only ADA pool TVL is implemented.
+        """
+        raise NotImplementedError

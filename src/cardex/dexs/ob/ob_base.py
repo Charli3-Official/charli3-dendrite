@@ -83,7 +83,11 @@ class AbstractOrderBookState(AbstractPairState):
 
         return out_assets, 0
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         """Get the amount of token input for the given output.
 
         Args:
@@ -100,31 +104,28 @@ class AbstractOrderBookState(AbstractPairState):
         ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
 
         if asset.unit() == self.unit_b:
-            book = self.buy_book
+            book = self.sell_book
             unit_in = self.unit_a
         else:
-            book = self.sell_book
+            book = self.buy_book
             unit_in = self.unit_b
 
         index = 0
-        in_quantity = asset.quantity()
-        out_assets = Assets({unit_out: 0})
-        while in_quantity > 0 and index < len(book):
-            available = book[index].quantity * book[index].price
-            if available > in_quantity:
-                out_assets.root[unit_out] += in_quantity / book[index].price
-                in_quantity = 0
+        out_quantity = asset.quantity()
+        in_assets = Assets({unit_in: 0})
+        while out_quantity > 0 and index < len(book):
+            available = book[index].quantity
+            if available > out_quantity:
+                in_assets.root[unit_in] += out_quantity * book[index].price
+                out_quantity = 0
             else:
-                out_assets.root[unit_out] += book[index].quantity
-                in_quantity -= book[index].price * book[index].quantity
+                in_assets.root[unit_in] += book[index].quantity / book[index].price
+                out_quantity -= book[index].quantity
             index += 1
 
-        out_assets.root[unit_out] = int(out_assets[unit_out])
+        in_assets.root[unit_in] = int(in_assets[unit_in])
 
-        # adjust input for fees
-        fee = (10000 * assets[asset.unit()]) // (10000 - self.volume_fee)
-
-        return out_assets, 0
+        return in_assets, 0
 
     @classmethod
     @property
