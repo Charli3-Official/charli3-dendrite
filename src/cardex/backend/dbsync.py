@@ -279,6 +279,9 @@ LIMIT 1
 """
     r = db_query(SCRIPT_SELECTOR, {"address": bytes.fromhex(str(address.payment_part))})
 
+    if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
+        r[0]["assets"] = None
+
     return ScriptReference.model_validate(r[0])
 
 

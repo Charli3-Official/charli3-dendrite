@@ -12,6 +12,10 @@ from pydantic import model_validator
 class OrderBookOrder(CardexBaseModel):
     price: float
     quantity: int
+    address: str | None = None
+    tx_hash: str | None = None
+    tx_index: int | None = None
+    datum: str | None = None
 
 
 class BuyOrderBook(BaseList):
@@ -33,6 +37,8 @@ class SellOrderBook(BaseList):
 class AbstractOrderBookState(AbstractPairState):
     sell_book: SellOrderBook
     buy_book: BuyOrderBook
+    sell_book_full: SellOrderBook
+    buy_book_full: BuyOrderBook
 
     def get_amount_out(
         self,
