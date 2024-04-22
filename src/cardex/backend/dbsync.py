@@ -122,7 +122,7 @@ LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
         datum_selector += """FROM (
     SELECT *
     FROM tx_out
-    WHERE tx_out.address = ANY(%(addresses)s)
+    WHERE tx_out.payment_cred = ANY(%(addresses)b)
 ) as txo"""
 
     datum_selector += """
@@ -151,7 +151,9 @@ OFFSET %(offset)s
         values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
     elif addresses is not None:
-        values.update({"addresses": addresses})
+        values.update(
+            {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
+        )
 
     r = db_query(datum_selector, values)
 
@@ -190,7 +192,7 @@ LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
         datum_selector += """FROM (
     SELECT *
     FROM tx_out
-    WHERE tx_out.address = ANY(%(addresses)s)
+    WHERE tx_out.payment_cred = ANY(%(addresses)b)
 ) as txo"""
 
     datum_selector += """
@@ -206,7 +208,9 @@ WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
         values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
     elif addresses is not None:
-        values.update({"addresses": addresses})
+        values.update(
+            {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
+        )
 
     r = db_query(datum_selector, values)
 
@@ -277,7 +281,7 @@ LEFT JOIN tx ON tx.id = tx_out.tx_id
 WHERE s.hash = %(address)b
 LIMIT 1
 """
-    r = db_query(SCRIPT_SELECTOR, {"address": bytes.fromhex(str(address.payment_part))})
+    r = db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
 
     if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
         r[0]["assets"] = None
@@ -362,7 +366,7 @@ COALESCE(
     utxo_selector += """FROM (
 	SELECT *
 	FROM tx_out txo
-	WHERE txo.address = ANY(%(addresses)s) AND txo.data_hash IS NOT NULL
+	WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL
 ) txo_stake
 LEFT JOIN tx ON tx.id = txo_stake.tx_id
 LEFT JOIN block ON tx.block_id = block.id
@@ -403,7 +407,9 @@ OFFSET %(offset)s"""
     r = db_query(
         utxo_selector,
         {
-            "addresses": stake_addresses,
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
             "limit": limit,
             "offset": page * limit,
             "after_time": None
@@ -507,7 +513,7 @@ COALESCE(
 	LEFT JOIN datum ON txo.data_hash = datum.hash
 	LEFT JOIN tx_in ON tx_in.tx_out_id = tx.id AND tx_in.tx_out_index = txo.index
 	LEFT JOIN tx tx_in_ref ON tx_in.tx_in_id = tx_in_ref.id
-	WHERE txo.address = ANY(%(addresses)s) AND txo.data_hash IS NOT NULL"""
+	WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL"""
 
     if out_tx_hash is not None:
         utxo_selector += """
@@ -552,7 +558,9 @@ OFFSET %(offset)s"""
     r = db_query(
         utxo_selector,
         {
-            "addresses": stake_addresses,
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
             "limit": limit,
             "offset": page * limit,
             "block_no": block_no,
@@ -680,7 +688,7 @@ COALESCE(
 ) txo_output
 LEFT JOIN tx_out txo ON txo.tx_id = txo_output.tx_out_id
     AND txo_output.tx_out_index = txo.index
-	AND txo.address = ANY(%(addresses)s)
+	AND txo.payment_cred = ANY(%(addresses)b)
     AND txo.data_hash IS NOT NULL
 LEFT JOIN tx ON tx.id = txo.tx_id
 LEFT JOIN block ON tx.block_id = block.id
@@ -695,7 +703,9 @@ OFFSET %(offset)s"""
     r = db_query(
         utxo_selector,
         {
-            "addresses": stake_addresses,
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
             "limit": limit,
             "offset": page * limit,
             "after_time": None
