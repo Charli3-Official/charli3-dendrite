@@ -23,7 +23,7 @@ class BuyOrderBook(BaseList):
 
     @model_validator(mode="after")
     def sort_descend(v: list[OrderBookOrder]):
-        return sorted(v, key=lambda x: x.price, reverse=True)
+        return sorted(v, key=lambda x: x.price)
 
 
 class SellOrderBook(BaseList):
