@@ -67,6 +67,24 @@ class StableSwapExactIn(PlutusData):
 
 
 @dataclass
+class StableSwapDeposit(PlutusData):
+    """Swap exact out order datum."""
+
+    CONSTR_ID = 1
+    expected_receive: int
+
+    @classmethod
+    def from_assets(cls, asset: Assets):
+        """Parse an Assets object into a SwapExactOut datum."""
+        assert len(asset) == 1
+
+        return SwapExactOut(
+            desired_coin=AssetClass.from_assets(asset),
+            expected_receive=asset.quantity(),
+        )
+
+
+@dataclass
 class SwapExactOut(PlutusData):
     """Swap exact out order datum."""
 
