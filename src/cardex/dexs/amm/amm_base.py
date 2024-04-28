@@ -50,12 +50,7 @@ class AbstractPoolState(AbstractPairState):
     @property
     def pool_datum(self) -> PlutusData:
         """The pool state datum."""
-        if not self._datum_parsed:
-            if not self.datum_cbor:
-                raise ValueError("No datum specified.")
-            self._datum_parsed = self.pool_datum_class.from_cbor(self.datum_cbor)
-
-        return self._datum_parsed
+        return self.pool_datum_class.from_cbor(self.datum_cbor)
 
     def swap_datum(
         self,
