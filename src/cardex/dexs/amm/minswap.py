@@ -417,7 +417,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
 
 class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPState):
-    fee: float = 0.5
+    fee: float = 1
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
@@ -436,13 +436,11 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        out_asset, slippage = super().get_amount_out(asset=asset, precise=precise)
-        out_asset.root[out_asset.unit()] = (
-            out_asset.quantity() * (10000 - self.fee)
-        ) / 10000
-
-        if precise:
-            out_asset.root[out_asset.unit()] = int(out_asset.quantity())
+        out_asset, slippage = super().get_amount_out(
+            asset=asset,
+            precise=precise,
+            fee_on_input=False,
+        )
 
         return out_asset, slippage
 
@@ -451,16 +449,11 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        asset = Assets(
-            **{asset.unit(): (asset.quantity() * (10000 - self.fee)) / 10000},
+        in_asset, slippage = super().get_amount_in(
+            asset=asset,
+            precise=precise,
+            fee_on_input=False,
         )
-        in_asset, slippage = super().get_amount_in(asset=asset, precise=precise)
-        in_asset.root[in_asset.unit()] = (
-            in_asset.quantity() * (10000 - self.fee)
-        ) / 10000
-
-        if precise:
-            in_asset.root[in_asset.unit()] = int(in_asset.quantity())
 
         return in_asset, slippage
 
@@ -497,7 +490,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
 
     @classmethod
     @property
-    def pool_datum_class(self) -> type[MinswapPoolDatum]:
+    def pool_datum_class(self) -> type[MinswapDJEDiUSDStablePoolDatum]:
         return MinswapDJEDiUSDStablePoolDatum
 
     @property
@@ -524,6 +517,8 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
 
 
 class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
+    asset_mulitipliers: list[int] = [1, 100]
+
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
             "addr1w93d8cuht3hvqt2qqfjqgyek3gk5d6ss2j93e5sh505m0ng8cmze2",
@@ -542,7 +537,7 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
 
     @classmethod
     @property
-    def pool_datum_class(self) -> type[MinswapPoolDatum]:
+    def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
         return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod

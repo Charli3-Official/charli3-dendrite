@@ -96,6 +96,18 @@ class AbstractConstantProductPoolState(AbstractPoolState):
 
 
 class AbstractStableSwapPoolState(AbstractPoolState):
+    asset_mulitipliers: list[int] = [1, 1]
+
+    @property
+    def reserve_a(self) -> int:
+        """Reserve amount of asset A."""
+        return self.assets.quantity(0) * self.asset_mulitipliers[0]
+
+    @property
+    def reserve_b(self) -> int:
+        """Reserve amount of asset B."""
+        return self.assets.quantity(1) * self.asset_mulitipliers[1]
+
     @property
     def amp(self) -> Assets:
         return 75
@@ -132,11 +144,22 @@ class AbstractStableSwapPoolState(AbstractPoolState):
 
         return D
 
-    def _get_y(self, in_assets: Assets, out_unit: str, precise: bool = True):
+    def _get_y(
+        self,
+        in_assets: Assets,
+        out_unit: str,
+        precise: bool = True,
+        get_input=False,
+    ):
         """Calculate the output amount using a regression."""
         N_COINS = 2
         Ann = self._get_ann()
         D = self._get_D()
+
+        if get_input:
+            subtract = -1
+        else:
+            subtract = 1
 
         # Make sure only one input supplied
         if len(in_assets) > 1:
@@ -146,11 +169,17 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         elif out_unit not in [self.unit_a, self.unit_b]:
             raise ValueError("Invalid output token.")
 
-        in_quantity = in_assets.quantity() * (10000 - self.volume_fee) / 10000
+        in_quantity = in_assets.quantity()
         if in_assets.unit() == self.unit_a:
-            in_reserve = self.reserve_a + in_quantity
+            in_reserve = (
+                self.reserve_a + in_quantity * self.asset_mulitipliers[0] * subtract
+            )
+            out_multiplier = self.asset_mulitipliers[1]
         else:
-            in_reserve = self.reserve_b + in_quantity
+            in_reserve = (
+                self.reserve_b + in_quantity * self.asset_mulitipliers[1] * subtract
+            )
+            out_multiplier = self.asset_mulitipliers[0]
 
         S = in_reserve
         c = D**3 / (N_COINS**2 * Ann * in_reserve)
@@ -165,6 +194,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             if abs(out - out_prev) < 1:
                 break
 
+        out /= out_multiplier
         out_assets = Assets(**{out_unit: int(out)})
         if not precise:
             out_assets.root[out_unit] = out
@@ -175,28 +205,54 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         self,
         asset: Assets,
         precise: bool = True,
+        fee_on_input=True,
     ) -> tuple[Assets, float]:
-        out_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
-        out_asset = self._get_y(asset, out_unit, precise=precise)
-        out_reserve = self.reserve_b if out_unit == self.unit_b else self.reserve_a
-        if precise:
-            out_asset.root[out_asset.unit()] = int(out_reserve - out_asset.quantity())
+        if fee_on_input:
+            in_asset = Assets(
+                **{asset.unit(): asset.quantity() * (10000 - self.volume_fee) / 10000},
+            )
         else:
-            out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
+            in_asset = asset
+        out_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
+        out_asset = self._get_y(in_asset, out_unit, precise=precise)
+        out_reserve = self.reserve_b if out_unit == self.unit_b else self.reserve_a
+
+        out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
+        if not fee_on_input:
+            out_asset.root[out_asset.unit()] = int(
+                out_asset.quantity() * (10000 - self.volume_fee) / 10000,
+            )
+        if precise:
+            out_asset.root[out_asset.unit()] = int(out_asset.quantity())
+
         return out_asset, 0
 
     def get_amount_in(
         self,
         asset: Assets,
         precise: bool = True,
+        fee_on_input=True,
     ) -> tuple[Assets, float]:
-        in_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
-        in_asset = self._get_y(asset, in_unit, precise=precise)
-        in_reserve = self.reserve_b if in_unit == self.unit_b else self.reserve_a
-        if precise:
-            in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
+        if not fee_on_input:
+            out_asset = Assets(
+                **{
+                    asset.unit(): int(
+                        asset.quantity() * 10000 / (10000 - self.volume_fee),
+                    ),
+                },
+            )
         else:
-            in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
+            out_asset = asset
+        in_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
+        in_asset = self._get_y(out_asset, in_unit, precise=precise, get_input=True)
+        in_reserve = self.reserve_b if in_unit == self.unit_b else self.reserve_a
+        in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
+        if fee_on_input:
+            in_asset.root[in_asset.unit()] = int(
+                in_asset.quantity() * 10000 / (10000 - self.volume_fee),
+            )
+        if precise:
+            in_asset.root[in_asset.unit()] = int(in_asset.quantity())
         return in_asset, 0
 
 
