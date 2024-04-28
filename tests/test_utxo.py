@@ -3,6 +3,8 @@ import time
 
 import pytest
 from cardex import MinswapCPPState
+from cardex import MinswapDJEDiUSDStableState
+from cardex import MinswapDJEDUSDCStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -34,7 +36,8 @@ context = BlockFrostChainContext(
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
-    MuesliSwapCLPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
@@ -229,7 +232,13 @@ def test_address_from_datum(dex: AbstractPoolState):
     assert ADDRESS.encode() == datum.address_source().encode()
 
 
-@pytest.mark.parametrize("dex", [SpectrumCPPState, MuesliSwapCPPState])
+@pytest.mark.parametrize(
+    "dex",
+    [
+        SpectrumCPPState,
+        MuesliSwapCPPState,
+    ],
+)
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo is not None
 

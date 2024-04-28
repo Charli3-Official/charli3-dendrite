@@ -27,7 +27,7 @@ class AbstractPoolState(AbstractPairState):
     tx_hash: str
 
     _batcher_fee: Assets
-    _datum_parsed: PlutusData
+    _datum_parsed: PlutusData | None = None
     _deposit_fee: Assets
     _volume_fee: int | None = None
 

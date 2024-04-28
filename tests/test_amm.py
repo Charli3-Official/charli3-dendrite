@@ -1,5 +1,7 @@
 import pytest
 from cardex import MinswapCPPState
+from cardex import MinswapDJEDiUSDStableState
+from cardex import MinswapDJEDUSDCStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -16,7 +18,8 @@ from cardex.dexs.core.errors import NotAPoolError
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
-    MuesliSwapCLPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
@@ -88,7 +91,9 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
                 raise
 
     assert counts < 10000
-    if dex == WingRidersSSPState:
+    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+        assert counts == 1
+    elif dex == WingRidersSSPState:
         assert counts == 2
     elif dex == MuesliSwapCLPState:
         assert counts <= 16

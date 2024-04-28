@@ -61,10 +61,10 @@ class AbstractOrderBookState(AbstractPairState):
         ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
 
         if asset.unit() == self.unit_a:
-            book = self.sell_book
+            book = self.sell_book_full
             unit_out = self.unit_b
         else:
-            book = self.buy_book
+            book = self.buy_book_full
             unit_out = self.unit_a
 
         # Calculate adjustment based on fees
@@ -110,10 +110,10 @@ class AbstractOrderBookState(AbstractPairState):
         ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
 
         if asset.unit() == self.unit_b:
-            book = self.sell_book
+            book = self.sell_book_full
             unit_in = self.unit_a
         else:
-            book = self.buy_book
+            book = self.buy_book_full
             unit_in = self.unit_b
 
         index = 0

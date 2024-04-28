@@ -97,14 +97,25 @@ class AbstractConstantProductPoolState(AbstractPoolState):
 
 class AbstractStableSwapPoolState(AbstractPoolState):
     @property
-    def amp(cls) -> Assets:
+    def amp(self) -> Assets:
         return 75
+
+    def _get_ann(self):
+        """The modified amp value.
+
+        This is the derived amp value (ann) from the original stableswap paper. This is
+        implemented here as the default, but a common variant of this does not use the
+        exponent. The alternative version is provided in the
+        AbstractCommonStableSwapPoolState class. WingRiders uses this version.
+        """
+        N_COINS = 2
+        return self.amp * N_COINS**N_COINS
 
     def _get_D(self) -> float:
         """Regression to learn the stability constant."""
         # TODO: Expand this to operate on pools with more than one stable
         N_COINS = 2
-        Ann = self.amp * N_COINS**N_COINS
+        Ann = self._get_ann()
         S = self.reserve_a + self.reserve_b
         if S == 0:
             return 0
@@ -124,7 +135,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
     def _get_y(self, in_assets: Assets, out_unit: str, precise: bool = True):
         """Calculate the output amount using a regression."""
         N_COINS = 2
-        Ann = self.amp * N_COINS**N_COINS
+        Ann = self._get_ann()
         D = self._get_D()
 
         # Make sure only one input supplied
@@ -187,6 +198,22 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         else:
             in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
         return in_asset, 0
+
+
+class AbstractCommonStableSwapPoolState(AbstractStableSwapPoolState):
+    """The common variant of StableSwap.
+
+    This class implements the common variant of the stableswap algorithm. The main
+    difference is the
+    """
+
+    def _get_ann(self):
+        """The modified amp value.
+
+        This is the ann value in the common stableswap variant.
+        """
+        N_COINS = 2
+        return self.amp * N_COINS
 
 
 class AbstractConstantLiquidityPoolState(AbstractPoolState):

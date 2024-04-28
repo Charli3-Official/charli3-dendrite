@@ -1,5 +1,7 @@
 import pytest
 from cardex import MinswapCPPState
+from cardex import MinswapDJEDiUSDStableState
+from cardex import MinswapDJEDUSDCStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -14,7 +16,8 @@ from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
-    MuesliSwapCLPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
