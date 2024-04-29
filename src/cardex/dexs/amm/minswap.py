@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 from typing import ClassVar
 from typing import List
 from typing import Union
@@ -78,9 +79,42 @@ class StableSwapDeposit(PlutusData):
         """Parse an Assets object into a SwapExactOut datum."""
         assert len(asset) == 1
 
-        return SwapExactOut(
-            desired_coin=AssetClass.from_assets(asset),
+        return StableSwapDeposit(
             expected_receive=asset.quantity(),
+        )
+
+
+@dataclass
+class StableSwapWithdraw(PlutusData):
+    """Swap exact out order datum."""
+
+    CONSTR_ID = 2
+    expected_receive: List[int]
+
+    @classmethod
+    def from_assets(cls, asset: Assets):
+        """Parse an Assets object into a SwapExactOut datum."""
+        assert len(asset) == 2
+
+        return StableSwapWithdraw(
+            expected_receive=[asset.quantity(), asset.quantity(1)],
+        )
+
+
+@dataclass
+class StableSwapWithdrawOneCoin(PlutusData):
+    """Swap exact out order datum."""
+
+    CONSTR_ID = 4
+    expected_receive: Any
+
+    @classmethod
+    def from_assets(cls, coin_index: int, asset: Assets):
+        """Parse an Assets object into a SwapExactOut datum."""
+        assert len(asset) == 1
+
+        return StableSwapWithdrawOneCoin(
+            expected_receive=[coin_index, asset.quantity()],
         )
 
 
@@ -138,7 +172,17 @@ class MinswapOrderDatum(PlutusData):
     sender: PlutusFullAddress
     receiver: PlutusFullAddress
     receiver_datum_hash: Union[ReceiverDatum | PlutusNone]
-    step: Union[SwapExactIn, StableSwapExactIn, SwapExactOut, Deposit, Withdraw, ZapIn]
+    step: Union[
+        SwapExactIn,
+        SwapExactOut,
+        Deposit,
+        Withdraw,
+        ZapIn,
+        StableSwapExactIn,
+        StableSwapDeposit,
+        StableSwapWithdraw,
+        StableSwapWithdrawOneCoin,
+    ]
     batcher_fee: int
     deposit: int
 
