@@ -209,7 +209,11 @@ class AbstractStableSwapPoolState(AbstractPoolState):
     ) -> tuple[Assets, float]:
         if fee_on_input:
             in_asset = Assets(
-                **{asset.unit(): asset.quantity() * (10000 - self.volume_fee) / 10000},
+                **{
+                    asset.unit(): int(
+                        asset.quantity() * (10000 - self.volume_fee) / 10000,
+                    ),
+                },
             )
         else:
             in_asset = asset
