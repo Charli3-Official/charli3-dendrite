@@ -219,7 +219,11 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             in_asset = asset
         out_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
         out_asset = self._get_y(in_asset, out_unit, precise=precise)
-        out_reserve = self.reserve_b if out_unit == self.unit_b else self.reserve_a
+        out_reserve = (
+            self.reserve_b / self.asset_mulitipliers[1]
+            if out_unit == self.unit_b
+            else self.reserve_a / self.asset_mulitipliers[0]
+        )
 
         out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
         if not fee_on_input:
@@ -249,7 +253,11 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             out_asset = asset
         in_unit = self.unit_a if asset.unit() == self.unit_b else self.unit_b
         in_asset = self._get_y(out_asset, in_unit, precise=precise, get_input=True)
-        in_reserve = self.reserve_b if in_unit == self.unit_b else self.reserve_a
+        in_reserve = (
+            (self.reserve_b / self.asset_mulitipliers[1])
+            if in_unit == self.unit_b
+            else (self.reserve_a / self.asset_mulitipliers[0])
+        )
         in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
         if fee_on_input:
             in_asset.root[in_asset.unit()] = int(
