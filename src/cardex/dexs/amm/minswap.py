@@ -63,7 +63,7 @@ class StableSwapExactIn(PlutusData):
         return StableSwapExactIn(
             input_coin=input_coin,
             output_coin=output_coin,
-            minimum_receive=in_assets.quantity(),
+            minimum_receive=out_assets.quantity(),
         )
 
 
@@ -241,9 +241,12 @@ class MinswapOrderDatum(PlutusData):
     def order_type(self) -> OrderType:
         if isinstance(self.step, (SwapExactIn, SwapExactOut, StableSwapExactIn)):
             return OrderType.swap
-        elif isinstance(self.step, Deposit):
+        elif isinstance(self.step, (Deposit, StableSwapDeposit)):
             return OrderType.deposit
-        elif isinstance(self.step, Withdraw):
+        elif isinstance(
+            self.step,
+            (Withdraw, StableSwapWithdraw, StableSwapWithdrawOneCoin),
+        ):
             return OrderType.withdraw
         elif isinstance(self.step, ZapIn):
             return OrderType.zap_in
