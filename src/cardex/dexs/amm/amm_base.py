@@ -28,7 +28,7 @@ class AbstractPoolState(AbstractPairState):
 
     _batcher_fee: Assets
     _datum_parsed: PlutusData | None = None
-    _deposit_fee: Assets
+    _deposit: Assets
     _volume_fee: int | None = None
 
     @property

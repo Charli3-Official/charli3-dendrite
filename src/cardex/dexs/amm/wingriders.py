@@ -333,10 +333,14 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         in_assets: Assets | None = None,
         out_assets: Assets | None = None,
     ):
-        return Assets(lovelace=4000000) - self.batcher_fee(
-            in_assets=in_assets,
-            out_assets=out_assets,
-        )
+        merged_assets = in_assets + out_assets
+        if "lovelace" in merged_assets:
+            return Assets(lovelace=4000000) - self.batcher_fee(
+                in_assets=in_assets,
+                out_assets=out_assets,
+            )
+        else:
+            return self._deposit
 
     def batcher_fee(
         self,
