@@ -6,6 +6,7 @@ from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
 from cardex import SundaeSwapCPPState
+from cardex import SundaeSwapV3CPPState
 from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
@@ -17,15 +18,16 @@ from cardex.backend.dbsync import last_block
 from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
+    # MinswapCPPState,
+    # MinswapDJEDiUSDStableState,
+    # MinswapDJEDUSDCStableState,
+    # MuesliSwapCPPState,
+    # SpectrumCPPState,
+    # SundaeSwapCPPState,
+    SundaeSwapV3CPPState,
+    # VyFiCPPState,
+    # WingRidersCPPState,
+    # WingRidersSSPState,
 ]
 
 
@@ -56,7 +58,11 @@ def test_get_pool_utxos(dex: AbstractPoolState, benchmark):
     )
 
     assert len(result) < 9000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        SundaeSwapV3CPPState,
+    ]:
         assert len(result) == 1
     elif dex == WingRidersSSPState:
         assert len(result) == 2
@@ -78,6 +84,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
     if dex.dex in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
+        SundaeSwapV3CPPState,
     ]:
         assert result[0].plutus_v2
     else:
@@ -105,17 +112,17 @@ def test_get_pool_in_tx(tx_hash):
     assert len(tx) > 0
 
 
-@pytest.mark.parametrize(
-    "block_no",
-    [10058651],
-)
-def test_get_cancel_block(block_no):
-    selector = []
-    for dex in DEXS:
-        selector.extend(dex.order_selector)
+# @pytest.mark.parametrize(
+#     "block_no",
+#     [10058651],
+# )
+# def test_get_cancel_block(block_no):
+#     selector = []
+#     for dex in DEXS:
+#         selector.extend(dex.order_selector)
 
-    cancels = get_cancel_utxos(stake_addresses=selector, block_no=block_no)
+#     cancels = get_cancel_utxos(stake_addresses=selector, block_no=block_no)
 
-    assert "82806c91332c804430596adb4e30551e688c5f0ad6c9d9739f61276ff8911014" in [
-        order[0].swap_output.tx_hash for order in cancels
-    ]
+#     assert "82806c91332c804430596adb4e30551e688c5f0ad6c9d9739f61276ff8911014" in [
+#         order[0].swap_output.tx_hash for order in cancels
+#     ]

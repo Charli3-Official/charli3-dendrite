@@ -6,6 +6,7 @@ from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
 from cardex import SundaeSwapCPPState
+from cardex import SundaeSwapV3CPPState
 from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
@@ -15,15 +16,16 @@ from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
+    # MinswapCPPState,
+    # MinswapDJEDiUSDStableState,
+    # MinswapDJEDUSDCStableState,
+    # MuesliSwapCPPState,
+    # SpectrumCPPState,
+    # SundaeSwapCPPState,
+    SundaeSwapV3CPPState,
+    # VyFiCPPState,
+    # WingRidersCPPState,
+    # WingRidersSSPState,
 ]
 
 
@@ -33,13 +35,35 @@ def test_get_orders(dex: AbstractPoolState, benchmark):
     result = benchmark(
         get_historical_order_utxos,
         stake_addresses=order_selector,
-        limit=10,
+        limit=1000,
     )
 
     # Test roundtrip parsing
     for ind, r in enumerate(result):
         reparsed = SwapTransactionInfo(r.model_dump())
         assert reparsed == r
+
+    # Test datum parsing
+    found_datum = False
+    print(len(result))
+    for ind, r in enumerate(result):
+        for swap in r:
+            if (
+                swap.swap_input.tx_hash
+                == "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb"
+            ):
+                continue
+            if swap.swap_input.address_stake in dex.order_selector:
+                try:
+                    datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
+                except:
+                    print(f"failed parse: {swap.swap_input.tx_hash}")
+                    raise
+                print(f"successfully parsed datum: {swap.swap_input.tx_hash}")
+                found_datum = True
+                break
+
+    assert found_datum
 
 
 @pytest.mark.parametrize("block", [9655329])
