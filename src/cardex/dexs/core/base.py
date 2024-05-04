@@ -22,6 +22,11 @@ class AbstractPairState(CardexBaseModel, ABC):
     block_index: int
     fee: int | None = None
     plutus_v2: bool
+    tx_index: int | None = None
+    tx_hash: str | None = None
+    datum_cbor: str | None = None
+    datum_hash: str | None = None
+    dex_nft: Assets | None = None
 
     _batcher_fee: Assets
     _datum_parsed: PlutusData
