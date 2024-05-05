@@ -6,6 +6,7 @@ from cardex.dataclasses.models import BaseList
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dexs.core.base import AbstractPairState
 from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NotAPoolError
 from cardex.utility import Assets
 from pycardano import DeserializeException
 from pycardano import PlutusData
@@ -65,30 +66,36 @@ class AbstractOrderState(AbstractPairState):
         """Max amount of output asset that can be used to fill the order."""
         raise NotImplementedError
 
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_out(self, asset: Assets, precise=True) -> tuple[Assets, float]:
         assert asset.unit() == self.in_unit and len(asset) == 1
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
-        in_quantity = asset.quantity()
+        in_quantity = (asset.quantity() * (10000 - self.fee)) // 10000
         out_assets.root[self.out_unit] = min(
-            in_quantity * num // demom,
-            self.available.quantity(),
+            (in_quantity * denom) // num,
+            self.available,
         )
 
-        return out_assets
+        if precise:
+            out_assets.root[self.out_unit] = int(out_assets.quantity())
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+        return out_assets, 0
+
+    def get_amount_in(self, asset: Assets, precise=True) -> tuple[Assets, float]:
         assert asset.unit() == self.in_unit and len(asset) == 1
 
         denom, num = self.price
         out_assets = Assets(**{self.out_unit: 0})
         out_quantity = asset.quantity()
         out_assets.root[self.out_unit] = min(
-            min(out_quantity, self.available) * num // demom,
+            (min(out_quantity, self.available) * denom) // num,
         )
 
-        return in_assets
+        if precise:
+            in_assets.root[self.out_unit] = int(in_assets.quantity())
+
+        return in_assets, 0
 
     @classmethod
     def skip_init(cls, values: dict[str, ...]) -> bool:
