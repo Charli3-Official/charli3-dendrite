@@ -19,7 +19,6 @@ from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
 from pycardano import Address
-from pycardano import NativeScript
 from pycardano import PlutusData
 
 
@@ -298,7 +297,7 @@ class SundaeV3PoolDatum(PlutusData):
     circulation_lp: int
     bid_fees_per_10_thousand: List[int]
     ask_fees_per_10_thousand: List[int]
-    fee_manager: Union[PlutusNone, NativeScript]
+    fee_manager: Union[PlutusNone, Any]
     market_open: int  # time in milliseconds
     fee_finalized: int  # time in milliseconds
     protocol_fees: int
@@ -540,6 +539,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
                 "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
             ),
         )
+        from pycardano import RawPlutusData
+
+        print(RawPlutusData.from_cbor(settings.datum_cbor))
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
         return Assets(lovelace=datum.simple_fee + datum.base_fee)
 

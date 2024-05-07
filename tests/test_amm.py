@@ -23,6 +23,7 @@ DEXS: list[AbstractPoolState] = [
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
+    SundaeSwapV3CPPState,
     VyFiCPPState,
     WingRidersCPPState,
     WingRidersSSPState,

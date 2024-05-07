@@ -61,9 +61,10 @@ def test_get_pool_utxos(dex: AbstractPoolState, benchmark):
     if dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
-        SundaeSwapV3CPPState,
     ]:
         assert len(result) == 1
+    elif dex in [SundaeSwapV3CPPState]:
+        assert len(result) == 2
     elif dex == WingRidersSSPState:
         assert len(result) == 2
     elif dex == MuesliSwapCLPState:
