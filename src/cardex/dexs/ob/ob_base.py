@@ -68,12 +68,9 @@ class AbstractOrderBookState(AbstractPairState):
             unit_out = self.unit_a
 
         # Calculate adjustment based on fees
-        asset.root[asset.unit()] = (
-            (10000 - self.volume_fee) * asset[asset.unit()] // 10000
-        )
+        in_quantity = (10000 - self.volume_fee) * asset[asset.unit()] // 10000
 
         index = 0
-        in_quantity = asset.quantity()
         out_assets = Assets({unit_out: 0})
         while in_quantity > 0 and index < len(book):
             available = book[index].quantity * book[index].price
