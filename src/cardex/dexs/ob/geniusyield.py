@@ -166,6 +166,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         ]
 
     @classmethod
+    @property
     def dex(cls) -> str:
         """Official dex name."""
         return "GeniusYield"
@@ -594,6 +595,7 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         return GeniusYieldOrderState.order_selector
 
     @classmethod
+    @property
     def pool_selector(self) -> PoolSelector:
         """Pool selection information."""
         return GeniusYieldOrderState.pool_selector
