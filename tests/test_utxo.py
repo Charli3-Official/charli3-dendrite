@@ -2,6 +2,7 @@ import os
 import time
 
 import pytest
+from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
@@ -35,6 +36,7 @@ context = BlockFrostChainContext(
 )
 
 DEXS: list[AbstractPoolState] = [
+    GeniusYieldOrderState,
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
@@ -91,11 +93,16 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 out_assets = (
                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
                 )
-                pool.swap_utxo(
-                    address_source=ADDRESS,
-                    in_assets=Assets(root={"lovelace": 1000000}),
-                    out_assets=out_assets,
-                )
+
+                if dex.dex() not in ["GeniusYield"]:
+                    pool.swap_utxo(
+                        address_source=ADDRESS,
+                        in_assets=Assets(root={"lovelace": 1000000}),
+                        out_assets=out_assets,
+                    )
+                else:
+                    # Currently GY requires tx_builder to build transactions
+                    pass
 
         except InvalidLPError:
             pass

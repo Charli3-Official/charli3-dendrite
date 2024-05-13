@@ -9,4 +9,6 @@ from cardex.dexs.amm.sundae import SundaeSwapCPPState
 from cardex.dexs.amm.vyfi import VyFiCPPState
 from cardex.dexs.amm.wingriders import WingRidersCPPState
 from cardex.dexs.amm.wingriders import WingRidersSSPState
+from cardex.dexs.ob.geniusyield import GeniusYieldOrderBook
+from cardex.dexs.ob.geniusyield import GeniusYieldOrderState
 from cardex.utility import Assets

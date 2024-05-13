@@ -19,7 +19,6 @@ from pydantic import model_validator
 class AbstractPoolState(AbstractPairState):
     datum_cbor: str
     datum_hash: str
-    dex_nft: Assets | None = None
     inactive: bool = False
     lp_tokens: Assets | None = None
     pool_nft: Assets | None = None

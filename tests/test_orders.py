@@ -1,4 +1,5 @@
 import pytest
+from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
@@ -15,6 +16,7 @@ from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
+    GeniusYieldOrderState,
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
