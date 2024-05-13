@@ -14,27 +14,6 @@ from pycardano import UTxO
 from pydantic import model_validator
 
 
-class OrderBookOrder(CardexBaseModel):
-    price: float
-    quantity: int
-
-
-class BuyOrderBook(BaseList):
-    root: list[OrderBookOrder]
-
-    @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
-        return sorted(v, key=lambda x: x.price)
-
-
-class SellOrderBook(BaseList):
-    root: list[OrderBookOrder]
-
-    @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
-        return sorted(v, key=lambda x: x.price)
-
-
 class AbstractOrderState(AbstractPairState):
     """This class is largely used for OB dexes that allow direct script inputs."""
 
@@ -71,10 +50,10 @@ class AbstractOrderState(AbstractPairState):
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
-        in_quantity = (asset.quantity() * (10000 - self.fee)) // 10000
+        in_quantity = asset.quantity() * (10000 - self.fee) // 10000
         out_assets.root[self.out_unit] = min(
             (in_quantity * denom) // num,
-            self.available,
+            self.available.quantity(),
         )
 
         if precise:
@@ -83,17 +62,19 @@ class AbstractOrderState(AbstractPairState):
         return out_assets, 0
 
     def get_amount_in(self, asset: Assets, precise=True) -> tuple[Assets, float]:
-        assert asset.unit() == self.in_unit and len(asset) == 1
+        assert asset.unit() == self.out_unit and len(asset) == 1
 
         denom, num = self.price
-        out_assets = Assets(**{self.out_unit: 0})
+        in_assets = Assets(**{self.in_unit: 0})
         out_quantity = asset.quantity()
-        out_assets.root[self.out_unit] = min(
-            (min(out_quantity, self.available) * denom) // num,
-        )
+        in_assets.root[self.in_unit] = (
+            min(out_quantity, self.available.quantity()) * denom
+        ) / num
+        fees = in_assets[self.in_unit] * self.fee / 10000
+        in_assets.root[self.in_unit] += fees
 
         if precise:
-            in_assets.root[self.out_unit] = int(in_assets.quantity())
+            in_assets.root[self.in_unit] = int(in_assets.quantity())
 
         return in_assets, 0
 
@@ -251,11 +232,33 @@ class AbstractOrderState(AbstractPairState):
         return values
 
 
+class OrderBookOrder(CardexBaseModel):
+    price: float
+    quantity: int
+    state: AbstractOrderState | None = None
+
+
+class BuyOrderBook(BaseList):
+    root: list[OrderBookOrder]
+
+    @model_validator(mode="after")
+    def sort_descend(v: list[OrderBookOrder]):
+        return sorted(v, key=lambda x: x.price)
+
+
+class SellOrderBook(BaseList):
+    root: list[OrderBookOrder]
+
+    @model_validator(mode="after")
+    def sort_descend(v: list[OrderBookOrder]):
+        return sorted(v, key=lambda x: x.price)
+
+
 class AbstractOrderBookState(AbstractPairState):
     """This class is largely used for OB dexes that have a batcher."""
 
-    sell_book: SellOrderBook
-    buy_book: BuyOrderBook
+    sell_book: SellOrderBook | None = None
+    buy_book: BuyOrderBook | None = None
     sell_book_full: SellOrderBook
     buy_book_full: BuyOrderBook
 
@@ -263,6 +266,7 @@ class AbstractOrderBookState(AbstractPairState):
         self,
         asset: Assets,
         precise: bool = True,
+        apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token output for the given input.
 
@@ -286,8 +290,9 @@ class AbstractOrderBookState(AbstractPairState):
             book = self.buy_book_full
             unit_out = self.unit_a
 
-        # Calculate adjustment based on fees
         in_quantity = asset.quantity()
+        if apply_fee:
+            in_quantity = in_quantity * (10000 - self.fee) // 10000
 
         index = 0
         out_assets = Assets({unit_out: 0})
@@ -309,6 +314,7 @@ class AbstractOrderBookState(AbstractPairState):
         self,
         asset: Assets,
         precise: bool = True,
+        apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token input for the given output.
 
@@ -344,6 +350,10 @@ class AbstractOrderBookState(AbstractPairState):
                 in_assets.root[unit_in] += book[index].quantity / book[index].price
                 out_quantity -= book[index].quantity
             index += 1
+
+        if apply_fee:
+            fees = in_assets[unit_in] * self.fee / 10000
+            in_assets.root[unit_in] += fees
 
         in_assets.root[unit_in] = int(in_assets[unit_in])
 
@@ -385,3 +395,12 @@ class AbstractOrderBookState(AbstractPairState):
         )
 
         return Decimal(int(tvl) / 10**6)
+
+    @classmethod
+    @abstractmethod
+    def get_book(
+        cls,
+        assets: Assets | None = None,
+        orders: list[AbstractOrderState] | None = None,
+    ) -> "AbstractOrderBookState":
+        raise NotImplementedError
