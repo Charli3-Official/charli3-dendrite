@@ -14,6 +14,7 @@ from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.ob.ob_base import AbstractOrderBookState
@@ -112,6 +113,16 @@ class GeniusYieldOrder(PlutusData):
 
     def pool_pair(self) -> Assets | None:
         return self.offered_asset.assets + self.asked_asset.assets
+
+    def address_source(self) -> str | None:
+        return None
+
+    def requested_amount(self) -> Assets:
+        asset = self.offered_asset.assets
+        return asset
+
+    def order_type(self) -> OrderType:
+        return OrderType.swap
 
 
 @dataclass
