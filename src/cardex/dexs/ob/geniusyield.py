@@ -534,7 +534,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         Raises:
             NotImplementedError: Only ADA pool TVL is implemented.
         """
-        return self.dex_nft
+        return self.dex_nft.unit()
 
 
 class GeniusYieldOrderBook(AbstractOrderBookState):
