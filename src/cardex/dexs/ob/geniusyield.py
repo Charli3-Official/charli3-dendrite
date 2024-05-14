@@ -156,7 +156,7 @@ class GeniusYieldOrderState(AbstractOrderState):
     inactive: bool = False
     fee: int = 30 / 1.003
 
-    _batcher_fee: Assets = Assets(lovelace=1000000)
+    _batcher: Assets = Assets(lovelace=1000000)
     _datum_parsed: PlutusData | None = None
     _deposit: Assets = Assets(lovelace=0)
 
@@ -328,7 +328,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         ) + 1
         assets.root[in_assets.unit()] += in_assets.quantity()
         assets.root[out_assets.unit()] -= out_assets.quantity() + 1
-        assets += self._batcher_fee
+        assets += self._batcher
 
         if out_assets.quantity() < self.available.quantity():
             txo = TransactionOutput(
