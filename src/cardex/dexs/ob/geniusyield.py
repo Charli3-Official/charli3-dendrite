@@ -158,6 +158,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     _batcher_fee: Assets = Assets(lovelace=1000000)
     _datum_parsed: PlutusData | None = None
+    _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
     @property
@@ -550,6 +551,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
 class GeniusYieldOrderBook(AbstractOrderBookState):
     fee: int = 30 / 1.003
+    _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
     def get_book(cls, assets: Assets, orders: list[GeniusYieldOrderState] | None):

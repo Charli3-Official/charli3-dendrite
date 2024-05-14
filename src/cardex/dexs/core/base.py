@@ -30,7 +30,7 @@ class AbstractPairState(CardexBaseModel, ABC):
 
     _batcher_fee: Assets
     _datum_parsed: PlutusData
-    # _deposit: Assets
+    _deposit: Assets
 
     @classmethod
     @abstractmethod
