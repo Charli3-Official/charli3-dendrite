@@ -491,6 +491,7 @@ OFFSET %(offset)s"""
 def get_order_utxos_by_block_or_tx(
     stake_addresses: list[str],
     out_tx_hash: list[str] | None = None,
+    in_tx_hash: list[str] | None = None,
     block_no: int | None = None,
     after_block: int | None = None,
     limit: int = 1000,
@@ -585,6 +586,9 @@ COALESCE(
     if out_tx_hash is not None:
         utxo_selector += """
 	AND tx_in_ref.hash = ANY(%(out_tx_hash)b)"""
+    elif in_tx_hash is not None:
+        utxo_selector += """
+	AND tx_out_ref.hash = ANY(%(in_tx_hash)b)"""
 
     if block_no is not None:
         utxo_selector += """
@@ -635,6 +639,9 @@ OFFSET %(offset)s"""
             "out_tx_hash": None
             if out_tx_hash is None
             else [bytes.fromhex(h) for h in out_tx_hash],
+            "in_tx_hash": None
+            if in_tx_hash is None
+            else [bytes.fromhex(h) for h in in_tx_hash],
         },
     )
 
