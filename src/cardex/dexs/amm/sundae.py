@@ -295,17 +295,19 @@ class SundaeV3PoolDatum(PlutusData):
     ident: bytes
     assets: List[List[bytes]]
     circulation_lp: int
-    bid_fees_per_10_thousand: List[int]
-    ask_fees_per_10_thousand: List[int]
+    bid_fees_per_10_thousand: int
+    ask_fees_per_10_thousand: int
     fee_manager: Union[PlutusNone, Any]
     market_open: int  # time in milliseconds
-    fee_finalized: int  # time in milliseconds
     protocol_fees: int
 
     def pool_pair(self) -> Assets | None:
         assets = {}
         for asset in self.assets:
             assets[asset[0].hex() + asset[1].hex()] = 0
+        if "" in assets:
+            assets.pop("")
+            assets["lovelace"] = 0
         return Assets(**assets)
 
 
@@ -471,9 +473,14 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return PoolSelector(
             selector_type="addresses",
             selector=[
-                "addr1xyzpy0vxwfqwh0m8qvchgj06qcreee687ztsvaeks08srk6cg0uvjyu9nr727qnsc2ljadfkldrtqdp3ehnyyavpz9uq58yqg9",
+                "addr1x8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz26rnxqnmtv3hdu2t6chcfhl2zzjh36a87nmd6dwsu3jenqsslnz7e",
             ],
         )
+
+    @classmethod
+    @property
+    def pool_policy(cls) -> list[str]:
+        return ["e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b"]
 
     @property
     def swap_forward(self) -> bool:
@@ -539,16 +546,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
                 "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
             ),
         )
-        from pycardano import RawPlutusData
 
-        print(RawPlutusData.from_cbor(settings.datum_cbor))
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
         return Assets(lovelace=datum.simple_fee + datum.base_fee)
-
-    @classmethod
-    @property
-    def pool_policy(cls) -> list[str]:
-        return ["04123d867240ebbf6703317449fa06079ce747f09706773683cf01db"]
 
     @classmethod
     def post_init(cls, values):
@@ -560,7 +560,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= datum.protocol_fees
 
-        values["fee"] = datum.bid_fees_per_10_thousand[0]
+        values["fee"] = datum.bid_fees_per_10_thousand
 
     def swap_datum(
         self,
