@@ -588,7 +588,7 @@ COALESCE(
 	AND tx_in_ref.hash = ANY(%(out_tx_hash)b)"""
     elif in_tx_hash is not None:
         utxo_selector += """
-	AND tx_out_ref.hash = ANY(%(in_tx_hash)b)"""
+	AND tx.hash = ANY(%(in_tx_hash)b)"""
 
     if block_no is not None:
         utxo_selector += """
