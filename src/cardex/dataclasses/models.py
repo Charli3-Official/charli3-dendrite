@@ -125,7 +125,7 @@ class ScriptReference(CardexBaseModel):
     assets: Assets | None
     datum_hash: str | None
     datum_cbor: str | None
-    script: str
+    script: str | None
 
 
 class BlockInfo(CardexBaseModel):
