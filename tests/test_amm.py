@@ -3,6 +3,7 @@ from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
+from cardex import MinswapDJEDUSDMStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -22,6 +23,7 @@ DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
@@ -93,7 +95,11 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
                 raise
 
     assert counts < 10000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+    ]:
         assert counts == 1
     elif dex == WingRidersSSPState:
         assert counts == 2

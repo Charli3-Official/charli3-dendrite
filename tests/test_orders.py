@@ -3,6 +3,7 @@ from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
+from cardex import MinswapDJEDUSDMStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -20,6 +21,7 @@ DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,

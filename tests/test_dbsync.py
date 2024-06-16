@@ -3,6 +3,7 @@ from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
+from cardex import MinswapDJEDUSDMStableState
 from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -22,6 +23,7 @@ DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
     MuesliSwapCPPState,
     SpectrumCPPState,
     SundaeSwapCPPState,
@@ -58,7 +60,11 @@ def test_get_pool_utxos(dex: AbstractPoolState, benchmark):
     )
 
     assert len(result) < 9000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+    ]:
         assert len(result) == 1
     elif dex == WingRidersSSPState:
         assert len(result) == 2
@@ -80,6 +86,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
     if dex.dex in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
     ]:
         assert result[0].plutus_v2
     else:
