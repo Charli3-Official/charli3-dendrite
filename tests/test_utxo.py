@@ -2,6 +2,7 @@ import os
 import time
 
 import pytest
+from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
@@ -35,6 +36,7 @@ context = BlockFrostChainContext(
 )
 
 DEXS: list[AbstractPoolState] = [
+    GeniusYieldOrderState,
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
@@ -91,11 +93,16 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 out_assets = (
                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
                 )
-                pool.swap_utxo(
-                    address_source=ADDRESS,
-                    in_assets=Assets(root={"lovelace": 1000000}),
-                    out_assets=out_assets,
-                )
+
+                if dex.dex not in ["GeniusYield"]:
+                    pool.swap_utxo(
+                        address_source=ADDRESS,
+                        in_assets=Assets(root={"lovelace": 1000000}),
+                        out_assets=out_assets,
+                    )
+                else:
+                    # Currently GY requires tx_builder to build transactions
+                    pass
 
         except InvalidLPError:
             pass
@@ -203,6 +210,7 @@ def test_minswap_batcher_fee(subtests):
 @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
+    datum = None
     if dex.dex == "Spectrum":
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,
@@ -220,7 +228,7 @@ def test_address_from_datum(dex: AbstractPoolState):
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
-    else:
+    elif dex.dex not in ["GeniusYield"]:
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
@@ -229,7 +237,8 @@ def test_address_from_datum(dex: AbstractPoolState):
             deposit=Assets(root={"lovelace": 1000000}),
         )
 
-    assert ADDRESS.encode() == datum.address_source().encode()
+    if datum is not None:
+        assert ADDRESS.encode() == datum.address_source().encode()
 
 
 @pytest.mark.parametrize(

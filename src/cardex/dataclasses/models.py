@@ -123,7 +123,9 @@ class ScriptReference(CardexBaseModel):
     tx_index: int | None
     address: str | None
     assets: Assets | None
-    script: str
+    datum_hash: str | None
+    datum_cbor: str | None
+    script: str | None
 
 
 class BlockInfo(CardexBaseModel):
