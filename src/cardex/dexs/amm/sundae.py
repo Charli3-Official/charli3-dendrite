@@ -99,7 +99,7 @@ class SundaeV3AddressWithDatum(PlutusData):
     CONSTR_ID = 0
 
     address: Union[PlutusFullAddress, PlutusScriptAddress]
-    datum: Union[ReceiverDatum, SundaeV3PlutusNone]
+    datum: Union[SundaeV3PlutusNone, ReceiverDatum]
 
     @classmethod
     def from_address(cls, address: Address):
@@ -211,6 +211,7 @@ class SundaeV3OrderDatum(PlutusData):
         fee: int,
     ):
         full_address = SundaeV3AddressWithDatum.from_address(address_source)
+        print(full_address)
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             direction = AtoB()
@@ -222,14 +223,26 @@ class SundaeV3OrderDatum(PlutusData):
             amount_out=AmountOut(min_receive=out_assets.quantity()),
         )
 
+        if in_assets.unit() == "lovelace":
+            in_policy = in_name = ""
+        else:
+            in_policy = in_assets.unit()[:56]
+            in_name = in_assets.unit()[56:]
+
+        if out_assets.unit() == "lovelace":
+            out_policy = out_name = ""
+        else:
+            out_policy = out_assets.unit()[:56]
+            out_name = out_assets.unit()[56:]
+
         in_value = [
-            bytes.fromhex(in_assets.unit()[:56]),
-            bytes.fromhex(in_assets.unit()[56:]),
+            bytes.fromhex(in_policy),
+            bytes.fromhex(in_name),
             in_assets.quantity(),
         ]
         out_value = [
-            bytes.fromhex(out_assets.unit()[:56]),
-            bytes.fromhex(out_assets.unit()[56:]),
+            bytes.fromhex(out_policy),
+            bytes.fromhex(out_name),
             out_assets.quantity(),
         ]
 
@@ -454,7 +467,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     _batcher = Assets(lovelace=1000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
-        "addr1zyr32h227pudmkg42dq9cx6k4scrqpqj0v786rrux3emyccp8plfds3j3vct3gwp287u4wk4jtr4632d2gmdm96gp4jqt39l6k",
+        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqamryf9mtf9layje8u7u7wmap6alr28l90ry5t9nlyldjjss7ur6y8",
     )
 
     @classmethod
@@ -576,10 +589,12 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
-        return SundaeV3OrderDatum.create_datum(
+        datum = SundaeV3OrderDatum.create_datum(
             ident=ident,
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
         )
+
+        return datum
