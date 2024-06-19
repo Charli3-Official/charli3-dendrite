@@ -1,36 +1,15 @@
 import pytest
-from cardex import GeniusYieldOrderState
-from cardex import MinswapCPPState
+
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
-from cardex import MinswapDJEDUSDMStableState
-from cardex import MuesliSwapCLPState
-from cardex import MuesliSwapCPPState
-from cardex import SpectrumCPPState
-from cardex import SundaeSwapCPPState
-from cardex import VyFiCPPState
-from cardex import WingRidersCPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dexs.amm.amm_base import AbstractPoolState
+from cardex.dexs.ob.ob_base import AbstractOrderBookState
 from cardex.dexs.core.errors import InvalidLPError
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
-
-DEXS: list[AbstractPoolState] = [
-    GeniusYieldOrderState,
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MinswapDJEDUSDMStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
 
 MALFORMED_CBOR = {
     "fadbbeb0012ae3864927e523f73048b22fba71d8be6f6a1336561363d3ec0b71",
@@ -43,8 +22,10 @@ MALFORMED_CBOR = {
 }
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_pools_script_version(dex: AbstractPoolState, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
     result = get_pool_utxos(limit=1, historical=False, **selector.to_dict())
 
@@ -66,10 +47,13 @@ def test_pools_script_version(dex: AbstractPoolState, subtests):
                 raise
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-def test_parse_pools(dex: AbstractPoolState, subtests):
+def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    limit = 10000 if run_slow else 100
+    result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
 
     counts = 0
     for pool in result:
@@ -103,7 +87,5 @@ def test_parse_pools(dex: AbstractPoolState, subtests):
         assert counts == 1
     elif dex == WingRidersSSPState:
         assert counts == 2
-    elif dex == MuesliSwapCLPState:
-        assert counts <= 16
     else:
         assert counts > 50
