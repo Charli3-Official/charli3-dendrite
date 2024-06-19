@@ -354,7 +354,7 @@ class MinswapDJEDiUSDStablePoolDatum(MinswapStablePoolDatum):
 
 
 @dataclass
-class MinswapDJEDUSDMStablePoolDatum(MinswapStablePoolDatum):
+class MinswapDJEDUSDCStablePoolDatum(MinswapStablePoolDatum):
     """Pool Datum."""
 
     CONSTR_ID = 0
@@ -364,6 +364,21 @@ class MinswapDJEDUSDMStablePoolDatum(MinswapStablePoolDatum):
             **{
                 "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": 0,
                 "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93555534443": 0,
+            },
+        )
+
+
+@dataclass
+class MinswapDJEDUSDMStablePoolDatum(MinswapStablePoolDatum):
+    """Pool Datum."""
+
+    CONSTR_ID = 0
+
+    def pool_pair(self) -> Assets | None:
+        return Assets(
+            **{
+                "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": 0,
+                "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": 0,
             },
         )
 
@@ -584,6 +599,36 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
 
     @classmethod
     @property
+    def pool_datum_class(self) -> type[MinswapDJEDUSDCStablePoolDatum]:
+        return MinswapDJEDUSDCStablePoolDatum
+
+    @classmethod
+    @property
+    def pool_policy(cls) -> list[str]:
+        return [
+            "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
+        ]
+
+
+class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
+    _stake_address: ClassVar[Address] = [
+        Address.from_primitive(
+            "addr1wxr9ppdymqgw6g0hvaaa7wc6j0smwh730ujx6lczgdynehsguav8d",
+        ),
+    ]
+
+    @classmethod
+    @property
+    def pool_selector(cls) -> PoolSelector:
+        return PoolSelector(
+            selector_type="assets",
+            selector=[
+                "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
+            ],
+        )
+
+    @classmethod
+    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
         return MinswapDJEDUSDMStablePoolDatum
 
@@ -591,5 +636,5 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     @property
     def pool_policy(cls) -> list[str]:
         return [
-            "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
+            "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
         ]
