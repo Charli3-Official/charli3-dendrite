@@ -1,4 +1,7 @@
 import pytest
+
+from pycardano import Address
+
 from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
 from cardex.dataclasses.models import SwapTransactionInfo
@@ -20,19 +23,26 @@ def test_get_orders(dex: AbstractPairState, benchmark):
 
     # Test datum parsing
     found_datum = False
-    print(len(result))
+    stake_addresses = []
+    for address in dex.order_selector:
+        stake_addresses.append(
+            Address(payment_part=Address.decode(address).payment_part).encode()
+        )
+
     for ind, r in enumerate(result):
         for swap in r:
-            if (
-                swap.swap_input.tx_hash
-                == "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb"
-            ):
+            if swap.swap_input.tx_hash in [
+                "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb",
+                # "f7bb5384489fa960dedea468322cd7855a1dad1787548ac6aeef76ccf261afe3",
+                # "de6822c4092f53c00725553373c53ae07a4f050f4c5fc7d0710928bf8fe20c84",
+            ]:
                 continue
-            if swap.swap_input.address_stake in dex.order_selector:
+            if swap.swap_input.address_stake in stake_addresses:
                 try:
                     datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
                 except:
                     print(f"failed parse: {swap.swap_input.tx_hash}")
+                    print(swap.swap_input.datum_cbor)
                     raise
                 print(f"successfully parsed datum: {swap.swap_input.tx_hash}")
                 found_datum = True

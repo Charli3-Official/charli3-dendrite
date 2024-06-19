@@ -3,6 +3,8 @@ import pytest
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
+from cardex import MinswapDJEDUSDMStableState
+from cardex import SundaeSwapV3CPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_cancel_utxos
 from cardex.backend.dbsync import get_historical_order_utxos
@@ -49,8 +51,6 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
         MinswapDJEDUSDMStableState,
     ]:
         assert len(result) == 1
-    elif dex in [SundaeSwapV3CPPState]:
-        assert len(result) == 2
     elif dex == WingRidersSSPState:
         assert len(result) == 2
     else:
@@ -72,6 +72,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
         MinswapDJEDUSDMStableState,
+        SundaeSwapV3CPPState,
     ]:
         assert result[0].plutus_v2
     else:

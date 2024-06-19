@@ -128,16 +128,6 @@ class ScriptReference(CardexBaseModel):
     script: str | None
 
 
-class ScriptReference(CardexBaseModel):
-    tx_hash: str
-    tx_index: int
-    address: str
-    assets: Assets
-    datum_hash: str
-    datum_cbor: str
-    script: str | None
-
-
 class BlockInfo(CardexBaseModel):
     epoch_slot_no: int
     block_no: int

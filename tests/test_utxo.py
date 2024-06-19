@@ -224,7 +224,9 @@ def test_address_from_datum(dex: AbstractPoolState):
         )
 
     if datum is not None:
-        assert ADDRESS.encode() == datum.address_source().encode()
+        assert (
+            ADDRESS.payment_part.payload == datum.address_source().payment_part.payload
+        )
 
 
 @pytest.mark.parametrize(

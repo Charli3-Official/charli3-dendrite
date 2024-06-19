@@ -20,6 +20,7 @@ from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import VerificationKeyHash
 
 
 @dataclass
@@ -185,6 +186,39 @@ class SwapV3Config(PlutusData):
 
 
 @dataclass
+class DepositV3Config(PlutusData):
+    CONSTR_ID = 2
+    values: List[List[Union[int, bytes]]]
+
+
+@dataclass
+class WithdrawV3Config(PlutusData):
+    CONSTR_ID = 3
+    in_value: List[Union[int, bytes]]
+
+
+# @dataclass
+# class ZapInV3Config(PlutusData):
+#     CONSTR_ID = 4
+#     in_value: List[Union[int, bytes]]
+#     out_value: List[Union[int, bytes]]
+
+
+# @dataclass
+# class ZapOutV3Config(PlutusData):
+#     CONSTR_ID = 5
+#     token_a: int
+#     token_b: int
+
+
+@dataclass
+class DonateV3Config(PlutusData):
+    CONSTR_ID = 4
+    in_value: List[Union[int, bytes]]
+    out_value: List[Union[int, bytes]]
+
+
+@dataclass
 class Ident(PlutusData):
     CONSTR_ID = 0
     payload: bytes
@@ -195,11 +229,18 @@ class SundaeV3OrderDatum(PlutusData):
     CONSTR_ID = 0
 
     ident: Ident
-    owner: PlutusPartAddress  # NativeScript
+    owner: PlutusPartAddress
     max_protocol_fee: int
     destination: SundaeV3AddressWithDatum
-    swap: Union[SwapV3Config]
-    extension: bytes
+    swap: Union[
+        DepositV3Config,
+        WithdrawV3Config,
+        # ZapInV3Config,
+        # ZapOutV3Config,
+        DonateV3Config,
+        SwapV3Config,
+    ]
+    extension: Any
 
     @classmethod
     def create_datum(
@@ -211,7 +252,6 @@ class SundaeV3OrderDatum(PlutusData):
         fee: int,
     ):
         full_address = SundaeV3AddressWithDatum.from_address(address_source)
-        print(full_address)
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             direction = AtoB()
@@ -256,23 +296,22 @@ class SundaeV3OrderDatum(PlutusData):
         )
 
     def address_source(self) -> Address:
-        return self.address.address.address.to_address()
+        return Address(payment_part=VerificationKeyHash(self.owner.address))
 
     def requested_amount(self) -> Assets:
         if isinstance(self.swap, SwapConfig):
-            if isinstance(self.swap.direction, AtoB):
-                return Assets({"asset_b": self.swap.amount_out.min_receive})
-            else:
-                return Assets({"asset_a": self.swap.amount_out.min_receive})
+            return Assets(
+                {(self.out_value[0] + self.out_value[1]).hex(): self.out_value[2]}
+            )
         else:
             return Assets({})
 
     def order_type(self) -> OrderType:
-        if isinstance(self.swap, SwapConfig):
+        if isinstance(self.swap, SwapV3Config):
             return OrderType.swap
-        elif isinstance(self.swap, DepositConfig):
+        elif isinstance(self.swap, DepositV3Config):
             return OrderType.deposit
-        elif isinstance(self.swap, WithdrawConfig):
+        elif isinstance(self.swap, WithdrawV3Config):
             return OrderType.withdraw
 
 
@@ -467,7 +506,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     _batcher = Assets(lovelace=1000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
-        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqamryf9mtf9layje8u7u7wmap6alr28l90ry5t9nlyldjjss7ur6y8",
+        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     )
 
     @classmethod
