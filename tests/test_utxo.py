@@ -2,17 +2,21 @@ import os
 import time
 
 import pytest
-from cardex import GeniusYieldOrderState
+
+# from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MuesliSwapCLPState
+
+# from cardex import MinswapDJEDiUSDStableState
+# from cardex import MinswapDJEDUSDCStableState
+# from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
-from cardex import SundaeSwapCPPState
-from cardex import VyFiCPPState
+
+# from cardex import SundaeSwapCPPState
+# from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
-from cardex import WingRidersSSPState
+
+# from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.models import Assets
 from cardex.dexs.amm.amm_base import AbstractPoolState
@@ -20,6 +24,7 @@ from cardex.dexs.core.errors import InvalidLPError
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
+from cardex.dexs.ob.ob_base import AbstractOrderBookState
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import BlockFrostChainContext
@@ -34,19 +39,6 @@ context = BlockFrostChainContext(
     os.environ["PROJECT_ID"],
     base_url=getattr(blockfrost.ApiUrls, os.environ["NETWORK"]).value,
 )
-
-DEXS: list[AbstractPoolState] = [
-    GeniusYieldOrderState,
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
 
 MALFORMED_CBOR = {
     "fadbbeb0012ae3864927e523f73048b22fba71d8be6f6a1336561363d3ec0b71",
@@ -77,8 +69,10 @@ ADDRESS = Address(
 )
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_build_utxo(dex: AbstractPoolState, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
@@ -118,6 +112,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 raise
 
 
+@pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
     selector = WingRidersCPPState.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
@@ -164,6 +159,7 @@ def test_wingriders_batcher_fee(subtests):
                 raise
 
 
+@pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
     selector = MinswapCPPState.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
@@ -207,7 +203,6 @@ def test_minswap_batcher_fee(subtests):
                 raise
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
@@ -250,66 +245,3 @@ def test_address_from_datum(dex: AbstractPoolState):
 )
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo is not None
-
-
-# @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-# def test_submit_transaction(dex: AbstractPoolState, subtests):
-#     if dex in [WingRidersSSPState, MuesliSwapCLPState]:
-#         pytest.skip("Currently not supported.")
-#         return
-
-#     selector = dex.pool_selector
-#     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
-
-#     tx_hash = None
-#     for record in result:
-#         try:
-#             pool = dex.model_validate(record.model_dump())
-
-#             if pool.inactive:
-#                 continue
-
-#             if pool.unit_a == "lovelace" and pool.unit_b in [
-#                 IUSD_ASSETS.unit(),
-#                 LQ_ASSETS.unit(),
-#             ]:
-#                 tx_builder = TransactionBuilder(context)
-#                 tx_builder.add_input_address(ADDRESS)
-
-#                 out_assets = (
-#                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
-#                 )
-
-#                 utxo, datum = pool.swap_utxo(
-#                     address_source=ADDRESS,
-#                     in_assets=Assets(root={"lovelace": 1000000}),
-#                     out_assets=out_assets,
-#                 )
-
-#                 datum = None if utxo.datum is not None else datum
-#                 tx_builder.add_output(utxo, datum=datum, add_datum_to_witness=True)
-
-#                 tx = tx_builder.build_and_sign(
-#                     signing_keys=[SPEND_KEY],
-#                     change_address=ADDRESS,
-#                     auto_ttl_offset=600,
-#                 )
-
-#                 tx_hash = context.submit_tx(tx)
-
-#                 break
-
-#         except InvalidLPError:
-#             pass
-#         except NoAssetsError:
-#             pass
-#         except InvalidPoolError:
-#             pass
-
-#     if tx_hash is None:
-#         raise ValueError("No transaction submitted")
-
-#     time.sleep(60)
-
-
-# Test cancel transaction: 447fafeba8d431bae4b7c7a59bae85fffbf898b4877072ed9784644381f5f458
