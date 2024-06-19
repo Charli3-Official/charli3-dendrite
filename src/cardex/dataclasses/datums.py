@@ -1,4 +1,6 @@
 # noqa
+"""Dataclasses for the different datums used in the Cardex project."""
+from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Union
@@ -137,8 +139,7 @@ class CancelRedeemer(PlutusData):
     CONSTR_ID = 1
 
 
-@dataclass
-class PoolDatum(PlutusData):
+class PoolDatum(PlutusData, ABC):
     """Abstract base class for all pool datum types."""
 
     CONSTR_ID = 0
@@ -149,8 +150,7 @@ class PoolDatum(PlutusData):
         pass
 
 
-@dataclass
-class OrderDatum(PlutusData):
+class OrderDatum(PlutusData, ABC):
     """Abstract base class for all order datum types."""
 
     CONSTR_ID: int = 0
