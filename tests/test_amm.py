@@ -79,7 +79,11 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
                 raise
 
     assert counts < 10000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+    ]:
         assert counts == 1
     elif dex == WingRidersSSPState:
         assert counts == 2

@@ -1,16 +1,5 @@
 import pytest
 
-# from cardex import GeniusYieldOrderState
-# from cardex import MinswapCPPState
-# from cardex import MinswapDJEDiUSDStableState
-# from cardex import MinswapDJEDUSDCStableState
-# from cardex import MuesliSwapCLPState
-# from cardex import MuesliSwapCPPState
-# from cardex import SpectrumCPPState
-# from cardex import SundaeSwapCPPState
-# from cardex import VyFiCPPState
-# from cardex import WingRidersCPPState
-# from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
 from cardex.dataclasses.models import SwapTransactionInfo
