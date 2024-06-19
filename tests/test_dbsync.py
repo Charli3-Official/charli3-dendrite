@@ -1,4 +1,5 @@
 import pytest
+from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
@@ -18,16 +19,16 @@ from cardex.backend.dbsync import last_block
 from cardex.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
-    # MinswapCPPState,
-    # MinswapDJEDiUSDStableState,
-    # MinswapDJEDUSDCStableState,
-    # MuesliSwapCPPState,
-    # SpectrumCPPState,
-    # SundaeSwapCPPState,
-    SundaeSwapV3CPPState,
-    # VyFiCPPState,
-    # WingRidersCPPState,
-    # WingRidersSSPState,
+    GeniusYieldOrderState,
+    MinswapCPPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
+    MuesliSwapCPPState,
+    SpectrumCPPState,
+    SundaeSwapCPPState,
+    VyFiCPPState,
+    WingRidersCPPState,
+    WingRidersSSPState,
 ]
 
 

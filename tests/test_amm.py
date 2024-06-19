@@ -1,4 +1,5 @@
 import pytest
+from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
@@ -17,6 +18,7 @@ from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
 
 DEXS: list[AbstractPoolState] = [
+    GeniusYieldOrderState,
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
