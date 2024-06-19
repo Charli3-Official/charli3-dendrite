@@ -3,20 +3,11 @@ import time
 
 import pytest
 
-# from cardex import GeniusYieldOrderState
 from cardex import MinswapCPPState
-
-# from cardex import MinswapDJEDiUSDStableState
-# from cardex import MinswapDJEDUSDCStableState
-# from cardex import MuesliSwapCLPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
-
-# from cardex import SundaeSwapCPPState
-# from cardex import VyFiCPPState
 from cardex import WingRidersCPPState
 
-# from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.models import Assets
 from cardex.dexs.amm.amm_base import AbstractPoolState
