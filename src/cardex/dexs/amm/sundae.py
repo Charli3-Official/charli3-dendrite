@@ -299,9 +299,13 @@ class SundaeV3OrderDatum(PlutusData):
         return Address(payment_part=VerificationKeyHash(self.owner.address))
 
     def requested_amount(self) -> Assets:
-        if isinstance(self.swap, SwapConfig):
+        if isinstance(self.swap, SwapV3Config):
             return Assets(
-                {(self.out_value[0] + self.out_value[1]).hex(): self.out_value[2]}
+                {
+                    (
+                        self.swap.out_value[0] + self.swap.out_value[1]
+                    ).hex(): self.swap.out_value[2]
+                }
             )
         else:
             return Assets({})
