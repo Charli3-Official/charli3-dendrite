@@ -102,6 +102,20 @@ class SundaeV3PlutusNone(PlutusData):
 
 
 @dataclass
+class SundaeV3ReceiverDatumHash(PlutusData):
+    CONSTR_ID = 1
+
+    datum_hash: bytes
+
+
+@dataclass
+class SundaeV3ReceiverInlineDatum(PlutusData):
+    CONSTR_ID = 2
+
+    datum: Any
+
+
+@dataclass
 class SundaeAddressWithDatum(PlutusData):
     """SundaeSwap address with datum."""
 
@@ -124,7 +138,9 @@ class SundaeV3AddressWithDatum(PlutusData):
     CONSTR_ID = 0
 
     address: Union[PlutusFullAddress, PlutusScriptAddress]
-    datum: Union[SundaeV3PlutusNone, ReceiverDatum]
+    datum: Union[
+        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+    ]
 
     @classmethod
     def from_address(cls, address: Address):

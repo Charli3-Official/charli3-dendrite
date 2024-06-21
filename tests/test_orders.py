@@ -37,15 +37,8 @@ def test_get_orders(dex: AbstractPairState, benchmark):
             ]:
                 continue
             if swap.swap_input.address_stake in stake_addresses:
-                try:
-                    datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
-                except:
-                    print(f"failed parse: {swap.swap_input.tx_hash}")
-                    print(swap.swap_input.datum_cbor)
-                    raise
-                print(f"successfully parsed datum: {swap.swap_input.tx_hash}")
+                datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
                 found_datum = True
-                break
 
     assert found_datum
 
