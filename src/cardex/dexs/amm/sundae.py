@@ -288,7 +288,7 @@ class SundaeV3OrderDatum(PlutusData):
 
         return cls(
             ident=Ident(payload=ident),
-            owner=PlutusPartAddress(address=address_source.payment_part.payload),
+            owner=PlutusPartAddress(address=address_source.staking_part.payload),
             max_protocol_fee=fee,
             destination=full_address,
             swap=SwapV3Config(in_value=in_value, out_value=out_value),
@@ -296,7 +296,7 @@ class SundaeV3OrderDatum(PlutusData):
         )
 
     def address_source(self) -> Address:
-        return Address(payment_part=VerificationKeyHash(self.owner.address))
+        return Address(staking_part=VerificationKeyHash(self.owner.address))
 
     def requested_amount(self) -> Assets:
         if isinstance(self.swap, SwapV3Config):
