@@ -1,4 +1,7 @@
 # noqa
+"""Dataclasses for the different datums used in the Cardex project."""
+from abc import ABC
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Union
 
@@ -8,6 +11,7 @@ from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
 
 
 @dataclass
@@ -76,6 +80,7 @@ class PlutusFullAddress(PlutusData):
         )
 
     def to_address(self) -> Address:
+        """Convert back to an address."""
         payment_part = VerificationKeyHash(self.payment.address[:28])
         if isinstance(self.stake, PlutusNone):
             stake_part = None
@@ -117,7 +122,7 @@ class AssetClass(PlutusData):
         return AssetClass(policy=policy, asset_name=asset_name)
 
     @property
-    def assets(self):
+    def assets(self) -> Assets:
         """Convert back to assets."""
         if self.policy.hex() == "":
             asset = "lovelace"
@@ -132,3 +137,35 @@ class CancelRedeemer(PlutusData):
     """Cancel datum."""
 
     CONSTR_ID = 1
+
+
+class PoolDatum(PlutusData, ABC):
+    """Abstract base class for all pool datum types."""
+
+    CONSTR_ID = 0
+
+    @abstractmethod
+    def pool_pair(self) -> Union[Assets, None]:
+        """Return the asset pair associated with the pool."""
+        pass
+
+
+class OrderDatum(PlutusData, ABC):
+    """Abstract base class for all order datum types."""
+
+    CONSTR_ID: int = 0
+
+    @abstractmethod
+    def address_source(self) -> Address:
+        """This method should return the source address associated with the order."""
+        pass
+
+    @abstractmethod
+    def requested_amount(self) -> Assets:
+        """This method should return the amount requested in the order."""
+        pass
+
+    @abstractmethod
+    def order_type(self) -> OrderType:
+        """This method should return the type of the order."""
+        pass

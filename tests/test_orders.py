@@ -4,6 +4,7 @@ from pycardano import Address
 
 from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState
 
@@ -47,6 +48,10 @@ def test_get_orders(dex: AbstractPairState, benchmark):
                 break
 
     assert found_datum
+
+
+def test_order_type(dex: AbstractPairState):
+    assert issubclass(dex.order_datum_class, OrderDatum)
 
 
 @pytest.mark.parametrize("block", [9655329])

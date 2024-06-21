@@ -1,3 +1,4 @@
+"""VyFi DEX implementation."""
 import json
 import time
 from dataclasses import dataclass
@@ -6,25 +7,26 @@ from typing import ClassVar
 from typing import Optional
 from typing import Union
 
-import requests
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import Assets
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
+import requests
+from cardex.dataclasses.datums import PoolDatum
+from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.models import OrderType
+from cardex.dataclasses.models import PoolSelector
+from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.core.errors import NoAssetsError
+from cardex.dexs.core.errors import NotAPoolError
+from cardex.utility import Assets
+
 
 @dataclass
-class VyFiPoolDatum(PlutusData):
+class VyFiPoolDatum(PoolDatum):
     """TODO: Figure out what each of these numbers mean."""
-
-    CONSTR_ID = 0
 
     a: int
     b: int
@@ -48,12 +50,16 @@ class VyFiPoolDatum(PlutusData):
 
 @dataclass
 class Deposit(PlutusData):
+    """Deposit assets into the pool."""
+
     CONSTR_ID = 0
     min_lp_receive: int
 
 
 @dataclass
 class WithdrawPair(PlutusData):
+    """Withdraw pair of assets."""
+
     CONSTR_ID = 0
     min_amount_a: int
     min_amount_b: int
@@ -61,42 +67,55 @@ class WithdrawPair(PlutusData):
 
 @dataclass
 class Withdraw(PlutusData):
+    """Withdraw assets from the pool."""
+
     CONSTR_ID = 1
     min_lp_receive: WithdrawPair
 
 
 @dataclass
 class LPFlushA(PlutusData):
+    """Flush LP tokens from A."""
+
     CONSTR_ID = 2
 
 
 @dataclass
 class AtoB(PlutusData):
+    """A to B swap direction."""
+
     CONSTR_ID = 3
     min_receive: int
 
 
 @dataclass
 class BtoA(PlutusData):
+    """B to A swap direction."""
+
     CONSTR_ID = 4
     min_receive: int
 
 
 @dataclass
 class ZapInA(PlutusData):
+    """Zap in A."""
+
     CONSTR_ID = 5
     min_lp_receive: int
 
 
 @dataclass
 class ZapInB(PlutusData):
+    """Zap in B."""
+
     CONSTR_ID = 6
     min_lp_receive: int
 
 
 @dataclass
-class VyFiOrderDatum(PlutusData):
-    CONSTR_ID = 0
+class VyFiOrderDatum(OrderDatum):
+    """VyFi order datum."""
+
     address: bytes
     order: Union[AtoB, BtoA, Deposit, LPFlushA, Withdraw, ZapInA, ZapInB]
 
@@ -111,6 +130,7 @@ class VyFiOrderDatum(PlutusData):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ):
+        """Create a new order datum."""
         address_hash = (
             address_source.payment_part.to_primitive()
             + address_source.staking_part.to_primitive()
@@ -159,17 +179,23 @@ class VyFiOrderDatum(PlutusData):
 
 
 class VyFiTokenDefinition(BaseModel):
+    """VyFi token definition."""
+
     tokenName: str
     currencySymbol: str
 
 
 class VyFiFees(BaseModel):
+    """VyFi fees."""
+
     barFee: int
     processFee: int
     liqFee: int
 
 
 class VyFiPoolTokens(BaseModel):
+    """VyFi pool tokens."""
+
     aAsset: VyFiTokenDefinition
     bAsset: VyFiTokenDefinition
     mainNFT: VyFiTokenDefinition
@@ -180,6 +206,8 @@ class VyFiPoolTokens(BaseModel):
 
 
 class VyFiPoolDefinition(BaseModel):
+    """VyFi pool definition."""
+
     unitsPair: str
     poolValidatorUtxoAddress: str
     lpPolicyId_assetId: str = Field(alias="lpPolicyId-assetId")
@@ -190,6 +218,8 @@ class VyFiPoolDefinition(BaseModel):
 
 
 class VyFiCPPState(AbstractConstantProductPoolState):
+    """VyFi CPP state."""
+
     _batcher = Assets(lovelace=1900000)
     _deposit = Assets(lovelace=2000000)
     _pools: ClassVar[dict[str, VyFiPoolDefinition] | None] = None
@@ -205,6 +235,7 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def pools(cls) -> dict[str, VyFiPoolDefinition]:
+        """Get the pools."""
         if cls._pools is None or (time.time() - cls._pools_refresh) > 3600:
             cls._pools = {}
             for p in requests.get("https://api.vyfi.io/lp?networkId=1&v2=true").json():
