@@ -1,19 +1,11 @@
+"""MuesliSwap DEX implementation."""
+
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
 from typing import Optional
 from typing import Union
 
-from cardex.backend.dbsync import get_script_from_address
-from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import PlutusFullAddress
-from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.utility import Assets
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
@@ -25,14 +17,31 @@ from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Value
 
+from cardex.backend.dbsync import get_script_from_address
+from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import PlutusFullAddress
+from cardex.dataclasses.datums import PlutusNone
+from cardex.dataclasses.datums import PoolDatum
+from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.models import OrderType
+from cardex.dataclasses.models import PoolSelector
+from cardex.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
+from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.utility import Assets
+
 
 @dataclass
 class MuesliSometimesNone(PlutusData):
+    """A dataclass that can be None."""
+
     CONSTR_ID = 0
 
 
 @dataclass
 class MuesliOrderConfig(PlutusData):
+    """The order configuration for MuesliSwap."""
+
     CONSTR_ID = 0
 
     full_address: PlutusFullAddress
@@ -46,8 +55,8 @@ class MuesliOrderConfig(PlutusData):
 
 
 @dataclass
-class MuesliOrderDatum(PlutusData):
-    CONSTR_ID = 0
+class MuesliOrderDatum(OrderDatum):
+    """The order datum for MuesliSwap."""
 
     value: MuesliOrderConfig
 
@@ -62,6 +71,7 @@ class MuesliOrderDatum(PlutusData):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ):
+        """Create a MuesliSwap order datum."""
         full_address = PlutusFullAddress.from_address(address_source)
 
         if in_assets.unit() == "lovelace":
@@ -105,8 +115,8 @@ class MuesliOrderDatum(PlutusData):
 
 
 @dataclass
-class MuesliPoolDatum(PlutusData):
-    CONSTR_ID = 0
+class MuesliPoolDatum(PoolDatum):
+    """The pool datum for MuesliSwap."""
 
     asset_a: AssetClass
     asset_b: AssetClass
@@ -119,6 +129,8 @@ class MuesliPoolDatum(PlutusData):
 
 @dataclass
 class PreciseFloat(PlutusData):
+    """A precise float dataclass."""
+
     CONSTR_ID = 0
 
     numerator: int
@@ -127,6 +139,8 @@ class PreciseFloat(PlutusData):
 
 @dataclass
 class MuesliCLPoolDatum(MuesliPoolDatum):
+    """The pool datum for MuesliSwap constant liquidity pools."""
+
     upper: PreciseFloat
     lower: PreciseFloat
     price_sqrt: PreciseFloat
@@ -135,10 +149,14 @@ class MuesliCLPoolDatum(MuesliPoolDatum):
 
 @dataclass
 class MuesliCancelRedeemer(PlutusData):
+    """The cancel redeemer for MuesliSwap."""
+
     CONSTR_ID = 0
 
 
 class MuesliSwapCPPState(AbstractConstantProductPoolState):
+    """The MuesliSwap constant product pool state."""
+
     fee: int = 30
     _batcher = Assets(lovelace=950000)
     _deposit = Assets(lovelace=1700000)
@@ -281,7 +299,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         else:
             nfts = [asset for asset, quantity in assets.items() if quantity == 1]
             if len(nfts) != 1:
-                raise InvalidPool(
+                raise InvalidPoolError(
                     f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
@@ -299,6 +317,8 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):
+    """The MuesliSwap constant liquidity pool state."""
+
     inactive: bool = True
 
     @classmethod
