@@ -8,6 +8,8 @@ from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
+from pycardano import PlutusV1Script
+from pycardano import PlutusV2Script
 from pycardano import VerificationKeyHash
 
 from cardex.backend.dbsync import get_datum_from_address
@@ -581,6 +583,10 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     @property
     def dex(cls) -> str:
         return "SundaeSwap"
+
+    @classmethod
+    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        return PlutusV2Script
 
     @classmethod
     @property
