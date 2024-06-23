@@ -49,7 +49,7 @@ class _PlutusConstrWrapper(PlutusData):
     """Hidden wrapper to match Minswap stake address constructs."""
 
     CONSTR_ID = 0
-    wrapped: Union["_PlutusConstrWrapper", PlutusPartAddress]
+    wrapped: Union["_PlutusConstrWrapper", PlutusPartAddress, PlutusScriptPartAddress]
 
 
 @dataclass
