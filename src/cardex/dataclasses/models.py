@@ -1,4 +1,5 @@
 # noqa
+from collections.abc import Iterable
 from enum import Enum
 
 from pydantic import BaseModel
@@ -11,6 +12,8 @@ from pydantic.alias_generators import to_camel
 
 
 class CardexBaseModel(BaseModel):
+    """Base model for Cardex with configuration settings."""
+
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
@@ -53,15 +56,15 @@ class BaseList(RootModel):
 class BaseDict(BaseList):
     """Utility class for dict models."""
 
-    def items(self):  # noqa: ANN201
+    def items(self) -> Iterable[tuple[str, int]]:
         """Return iterable of key-value pairs."""
         return self.root.items()
 
-    def keys(self):  # noqa: ANN201
+    def keys(self) -> Iterable[str]:
         """Return iterable of keys."""
         return self.root.keys()
 
-    def values(self):  # noqa: ANN201
+    def values(self) -> Iterable[int]:
         """Return iterable of values."""
         return self.root.values()
 
@@ -84,16 +87,17 @@ class Assets(BaseDict):
         return list(self.values())[index]
 
     @model_validator(mode="before")
-    def _digest_assets(cls, values: dict) -> dict:
+    def _digest_assets(self, values: dict) -> dict:
         if hasattr(values, "root"):
             root = values.root
         elif "values" in values and isinstance(values["values"], list):
             root = {v.unit: v.quantity for v in values["values"]}
         elif isinstance(values, list) and isinstance(values[0], dict):
             if not all(len(v) == 1 for v in values):
-                raise ValueError(
-                    "For a list of dictionaries, each dictionary must be of length 1.",
+                error_msg = (
+                    "For a list of dictionaries, each dictionary must be of length 1."
                 )
+                raise ValueError(error_msg)
             root = {k: v for d in values for k, v in d.items()}
         else:
             root = dict(values.items())
@@ -101,24 +105,26 @@ class Assets(BaseDict):
             sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0]),
         )
 
-    def __add__(a: "Assets", b: "Assets") -> "Assets":
+    def __add__(self: "Assets", b: "Assets") -> "Assets":
         """Add two assets."""
-        intersection = set(a.keys()) | set(b.keys())
+        intersection = set(self.keys()) | set(b.keys())
 
-        result = {key: a[key] + b[key] for key in intersection}
+        result = {key: self[key] + b[key] for key in intersection}
 
         return Assets(**result)
 
-    def __sub__(a: "Assets", b: "Assets") -> "Assets":
+    def __sub__(self: "Assets", b: "Assets") -> "Assets":
         """Subtract two assets."""
-        intersection = set(a.keys()) | set(b.keys())
+        intersection = set(self.keys()) | set(b.keys())
 
-        result = {key: a[key] - b[key] for key in intersection}
+        result = {key: self[key] - self[key] for key in intersection}
 
         return Assets(**result)
 
 
 class ScriptReference(CardexBaseModel):
+    """Model for script reference information."""
+
     tx_hash: str | None
     tx_index: int | None
     address: str | None
@@ -129,6 +135,8 @@ class ScriptReference(CardexBaseModel):
 
 
 class BlockInfo(CardexBaseModel):
+    """Model for block information."""
+
     epoch_slot_no: int
     block_no: int
     tx_count: int
@@ -136,10 +144,14 @@ class BlockInfo(CardexBaseModel):
 
 
 class BlockList(BaseList):
+    """Model representing a list of block information."""
+
     root: list[BlockInfo]
 
 
 class PoolStateInfo(CardexBaseModel):
+    """Model for pool state information."""
+
     address: str
     tx_hash: str
     tx_index: int
@@ -153,10 +165,14 @@ class PoolStateInfo(CardexBaseModel):
 
 
 class PoolStateList(BaseList):
+    """Model representing a list of pool states."""
+
     root: list[PoolStateInfo]
 
 
 class SwapSubmitInfo(CardexBaseModel):
+    """Model for swap submission information."""
+
     address_inputs: list[str] = Field(..., alias="submit_address_inputs")
     address_stake: str = Field(..., alias="submit_address_stake")
     assets: Assets = Field(..., alias="submit_assets")
@@ -174,6 +190,8 @@ class SwapSubmitInfo(CardexBaseModel):
 
 
 class SwapExecuteInfo(CardexBaseModel):
+    """Model for swap execution information."""
+
     address: str
     tx_hash: str
     tx_index: int
@@ -184,11 +202,14 @@ class SwapExecuteInfo(CardexBaseModel):
 
 
 class SwapStatusInfo(CardexBaseModel):
+    """Model representing the status of a swap."""
+
     swap_input: SwapSubmitInfo
     swap_output: SwapExecuteInfo | PoolStateInfo | None = None
 
     @model_validator(mode="before")
-    def from_dbsync(cls, values: dict) -> dict:
+    def from_dbsync(self, values: dict) -> dict:
+        """Create a SwapStatusInfo object from dbsync values."""
         swap_input = SwapSubmitInfo.model_validate(values)
 
         if "datum_cbor" in values and values["datum_cbor"] is not None:
@@ -205,6 +226,7 @@ class SwapStatusInfo(CardexBaseModel):
 
     @model_serializer(mode="plain", when_used="always")
     def to_dbsync(self) -> dict:
+        """Converts the SwapStatusInfo object to a dictionary format suitable for dbsync."""
         output = {key: None for key in PoolStateInfo.model_fields}
         if self.swap_output is not None:
             output.update(self.swap_output.model_dump())
@@ -213,24 +235,31 @@ class SwapStatusInfo(CardexBaseModel):
 
 
 class SwapTransactionInfo(BaseList):
+    """Model for swap transaction information."""
+
     root: list[SwapStatusInfo]
 
     @model_validator(mode="before")
-    def from_dbsync(cls, values: list):
+    def from_dbsync(self, values: list) -> list:
+        """Return a SwapTransactionInfo List from dbsync values."""
         if not all(
             item["submit_tx_hash"] == values[0]["submit_tx_hash"] for item in values
         ):
-            raise ValueError(
-                "All transaction info must have the same submission transaction.",
+            error_msg = (
+                "All transaction info must have the same submission transaction."
             )
+            raise ValueError(error_msg)
         return values
 
 
 class SwapTransactionList(BaseList):
+    """Model representing a list of swap transactions."""
+
     root: list[SwapTransactionInfo]
 
     @model_validator(mode="before")
-    def from_dbsync(cls, values: list):
+    def from_dbsync(self, values: list) -> list:
+        """Return SwapStatusInfo list from dbsync values."""
         if len(values) == 0:
             return []
 
@@ -254,6 +283,8 @@ class SwapTransactionList(BaseList):
 
 
 class OrderType(Enum):
+    """Enumeration for order types."""
+
     zap_in = "ZapIn"
     deposit = "Deposit"
     withdraw = "Withdraw"

@@ -73,14 +73,14 @@ class PlutusFullAddress(PlutusData):
                 ),
             )
         else:
-            stake = PlutusNone
+            stake = PlutusNone()
         return PlutusFullAddress(
             PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
             stake=stake,
         )
 
     def to_address(self) -> Address:
-        """Convert back to an address."""
+        """Convert PlutusFullAddress to an Address object."""
         payment_part = VerificationKeyHash(self.payment.address[:28])
         if isinstance(self.stake, PlutusNone):
             stake_part = None

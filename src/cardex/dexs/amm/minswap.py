@@ -1,25 +1,29 @@
-"""Minswap AMM module."""
+"""Data classes and utilities for Minswap Dex.
 
+This contains data classes and utilities for handling various order and pool datums
+"""
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
-from typing import List
 from typing import Union
 
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
+from pycardano import PlutusV2Script
 
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.core.constants import ONE_VALUE
+from cardex.dexs.core.constants import TWO_VALUE
 from cardex.utility import Assets
 
 
@@ -32,10 +36,11 @@ class SwapExactIn(PlutusData):
     minimum_receive: int
 
     @classmethod
-    def from_assets(cls, asset: Assets):
+    def from_assets(cls, asset: Assets) -> "SwapExactIn":
         """Parse an Assets object into a SwapExactIn datum."""
-        assert len(asset) == 1
-
+        if len(asset) != ONE_VALUE:
+            error_msg = "Asset should only have one token"
+            raise ValueError(error_msg)
         return SwapExactIn(
             desired_coin=AssetClass.from_assets(asset),
             minimum_receive=asset.quantity(),
@@ -52,11 +57,14 @@ class StableSwapExactIn(PlutusData):
     minimum_receive: int
 
     @classmethod
-    def from_assets(cls, in_assets: Assets, out_assets: Assets):
+    def from_assets(cls, in_assets: Assets, out_assets: Assets) -> "StableSwapExactIn":
         """Parse an Assets object into a SwapExactIn datum."""
-        assert len(in_assets) == 1
-        assert len(out_assets) == 1
-
+        if len(in_assets) != ONE_VALUE:
+            error_msg = "in_assets should only have one token"
+            raise ValueError(error_msg)
+        if len(out_assets) != ONE_VALUE:
+            error_msg = "out_assets should only have one token"
+            raise ValueError(error_msg)
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             input_coin = 0
@@ -80,9 +88,11 @@ class StableSwapDeposit(PlutusData):
     expected_receive: int
 
     @classmethod
-    def from_assets(cls, asset: Assets):
+    def from_assets(cls, asset: Assets) -> "StableSwapDeposit":
         """Parse an Assets object into a SwapExactOut datum."""
-        assert len(asset) == 1
+        if len(asset) != ONE_VALUE:
+            error_msg = "Asset should only have one token"
+            raise ValueError(error_msg)
 
         return StableSwapDeposit(
             expected_receive=asset.quantity(),
@@ -94,12 +104,14 @@ class StableSwapWithdraw(PlutusData):
     """Swap exact out order datum."""
 
     CONSTR_ID = 2
-    expected_receive: List[int]
+    expected_receive: list[int]
 
     @classmethod
-    def from_assets(cls, asset: Assets):
+    def from_assets(cls, asset: Assets) -> "StableSwapWithdraw":
         """Parse an Assets object into a SwapExactOut datum."""
-        assert len(asset) == 2
+        if len(asset) != TWO_VALUE:
+            error_msg = "Asset should have two tokens"
+            raise ValueError(error_msg)
 
         return StableSwapWithdraw(
             expected_receive=[asset.quantity(), asset.quantity(1)],
@@ -114,9 +126,11 @@ class StableSwapWithdrawOneCoin(PlutusData):
     expected_receive: Any
 
     @classmethod
-    def from_assets(cls, coin_index: int, asset: Assets):
+    def from_assets(cls, coin_index: int, asset: Assets) -> "StableSwapWithdrawOneCoin":
         """Parse an Assets object into a SwapExactOut datum."""
-        assert len(asset) == 1
+        if len(asset) != ONE_VALUE:
+            error_msg = "Asset should only have one token"
+            raise ValueError(error_msg)
 
         return StableSwapWithdrawOneCoin(
             expected_receive=[coin_index, asset.quantity()],
@@ -132,9 +146,11 @@ class SwapExactOut(PlutusData):
     expected_receive: int
 
     @classmethod
-    def from_assets(cls, asset: Assets):
+    def from_assets(cls, asset: Assets) -> "SwapExactOut":
         """Parse an Assets object into a SwapExactOut datum."""
-        assert len(asset) == 1
+        if len(asset) != ONE_VALUE:
+            error_msg = "Asset should only have one token"
+            raise ValueError(error_msg)
 
         return SwapExactOut(
             desired_coin=AssetClass.from_assets(asset),
@@ -190,17 +206,30 @@ class MinswapOrderDatum(OrderDatum):
     deposit: int
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         address_source: Address,
-        in_assets: Assets,
+        in_assets: Assets,  # noqa: ARG003
         out_assets: Assets,
         batcher_fee: Assets,
         deposit: Assets,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ):
-        """Create an order datum."""
+    ) -> "MinswapOrderDatum":
+        """Create a Minswap order datum.
+
+        Args:
+            address_source: Source address for the order.
+            in_assets: Input assets for the order.
+            out_assets: Output assets for the order.
+            batcher_fee: Batcher fee for the order.
+            deposit: Deposit amount for the order.
+            address_target: Target address for the order (optional).
+            datum_target: Target datum for the order (optional).
+
+        Returns:
+            MinswapOrderDatum: Constructed order datum instance.
+        """
         full_address_source = PlutusFullAddress.from_address(address_source)
         step = SwapExactIn.from_assets(out_assets)
 
@@ -222,49 +251,54 @@ class MinswapOrderDatum(OrderDatum):
         )
 
     def address_source(self) -> str:
-        """The source address."""
+        """Returns the source address of the sender."""
+        if self.sender.to.to_address() is None:
+            error_msg = "None"
+            raise ValueError(error_msg)
         return self.sender.to_address()
 
     def requested_amount(self) -> Assets:
-        """The requested amount."""
+        """Returns the requested amount based on the order type."""
         if isinstance(self.step, SwapExactIn):
             return Assets(
                 {self.step.desired_coin.assets.unit(): self.step.minimum_receive},
             )
-        elif isinstance(self.step, SwapExactOut):
+        if isinstance(self.step, SwapExactOut):
             return Assets(
                 {self.step.desired_coin.assets.unit(): self.step.expected_receive},
             )
-        elif isinstance(self.step, Deposit):
+        if isinstance(self.step, Deposit):
             return Assets({"lp": self.step.minimum_lp})
-        elif isinstance(self.step, Withdraw):
+        if isinstance(self.step, Withdraw):
             return Assets(
                 {"asset_a": self.step.min_asset_a, "asset_b": self.step.min_asset_a},
             )
-        elif isinstance(self.step, ZapIn):
+        if isinstance(self.step, ZapIn):
             return Assets({self.step.desired_coin.assets.unit(): self.step.minimum_lp})
+        raise ValueError
 
     def order_type(self) -> OrderType:
-        """The order type."""
+        """Returns the type of order (swap, deposit, withdraw, zap_in)."""
         if isinstance(self.step, (SwapExactIn, SwapExactOut, StableSwapExactIn)):
             return OrderType.swap
-        elif isinstance(self.step, (Deposit, StableSwapDeposit)):
+        if isinstance(self.step, (Deposit, StableSwapDeposit)):
             return OrderType.deposit
-        elif isinstance(
+        if isinstance(
             self.step,
             (Withdraw, StableSwapWithdraw, StableSwapWithdrawOneCoin),
         ):
             return OrderType.withdraw
-        elif isinstance(self.step, ZapIn):
+        if isinstance(self.step, ZapIn):
             return OrderType.zap_in
+        return None
 
 
 @dataclass
 class MinswapStableOrderDatum(MinswapOrderDatum):
-    """MinSwap Stable Order Datum."""
+    """A stable order datum for Minswap."""
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         address_source: Address,
         in_assets: Assets,
@@ -273,8 +307,21 @@ class MinswapStableOrderDatum(MinswapOrderDatum):
         deposit: Assets,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ):
-        """Create an order datum."""
+    ) -> "MinswapStableOrderDatum":
+        """Create a Minswap stable order datum.
+
+        Args:
+            address_source: Source address for the order.
+            in_assets: Input assets for the order.
+            out_assets: Output assets for the order.
+            batcher_fee: Batcher fee for the order.
+            deposit: Deposit amount for the order.
+            address_target: Target address for the order (optional).
+            datum_target: Target datum for the order (optional).
+
+        Returns:
+            MinswapStableOrderDatum: Constructed stable order datum instance.
+        """
         full_address_source = PlutusFullAddress.from_address(address_source)
         step = StableSwapExactIn.from_assets(in_assets=in_assets, out_assets=out_assets)
 
@@ -334,7 +381,7 @@ class MinswapPoolDatum(PoolDatum):
     fee_sharing: Union[_FeeSwitchWrapper, PlutusNone]
 
     def pool_pair(self) -> Assets | None:
-        """Return the asset pair associated with the pool."""
+        """Returns the pair of assets in the pool."""
         return self.asset_a.assets + self.asset_b.assets
 
 
@@ -344,13 +391,13 @@ class MinswapStablePoolDatum(PlutusData):
 
     CONSTR_ID = 0
 
-    balances: List[int]
+    balances: list[int]
     total_liquidity: int
     amp: int
     order_hash: bytes
 
     def pool_pair(self) -> Assets | None:
-        """Return the asset pair associated with the pool."""
+        """Returns the pair of assets in the pool (Not Implemented)."""
         raise NotImplementedError
 
 
@@ -361,7 +408,7 @@ class MinswapDJEDiUSDStablePoolDatum(MinswapStablePoolDatum):
     CONSTR_ID = 0
 
     def pool_pair(self) -> Assets | None:
-        """Return the asset pair associated with the pool."""
+        """Returns the pair of assets in the DJEDiUSD stable pool."""
         return Assets(
             **{
                 "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": 0,
@@ -393,6 +440,7 @@ class MinswapDJEDUSDMStablePoolDatum(MinswapStablePoolDatum):
     CONSTR_ID = 0
 
     def pool_pair(self) -> Assets | None:
+        """Returns the pair of assets in the DJEDUSDM stable pool."""
         return Assets(
             **{
                 "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": 0,
@@ -402,7 +450,7 @@ class MinswapDJEDUSDMStablePoolDatum(MinswapStablePoolDatum):
 
 
 class MinswapCPPState(AbstractConstantProductPoolState):
-    """Minswap Constant Product Pool State."""
+    """Represents the state of a constant product pool for Minswap."""
 
     fee: int = 30
     _batcher = Assets(lovelace=2000000)
@@ -417,18 +465,18 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
+        """Returns the name of the DEX."""
         return "Minswap"
 
     @classmethod
-    @property
-    def order_selector(self) -> list[str]:
-        return [s.encode() for s in self._stake_address]
+    def order_selector(cls) -> list[str]:
+        """Returns the order selectors."""
+        return [s.encode() for s in cls._stake_address]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector."""
         return PoolSelector(
             selector_type="assets",
             selector=[
@@ -438,31 +486,33 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
+        """Returns whether the swap direction is forward."""
         return True
 
     @property
     def stake_address(self) -> Address:
+        """Returns the stake address."""
         return self._stake_address[0]
 
     @classmethod
-    @property
-    def order_datum_class(self) -> type[MinswapOrderDatum]:
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Returns the class type of order datum."""
         return MinswapOrderDatum
 
     @classmethod
-    @property
-    def script_class(self) -> type[MinswapOrderDatum]:
+    def script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """Returns the script class."""
         return PlutusV1Script
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[MinswapPoolDatum]:
+    def pool_datum_class(cls) -> type[MinswapPoolDatum]:
+        """Returns the class type of pool datum."""
         return MinswapPoolDatum
 
     def batcher_fee(
         self,
-        in_assets: Assets | None = None,
-        out_assets: Assets | None = None,
+        in_assets: Assets | None = None,  # noqa: ARG002
+        out_assets: Assets | None = None,  # noqa: ARG002
         extra_assets: Assets | None = None,
     ) -> Assets:
         """Batcher fee.
@@ -470,9 +520,9 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         For Minswap, the batcher fee decreases linearly from 2.0 ADA to 1.5 ADA as the
         MIN in the input assets from 0 - 50,000 MIN.
         """
-        MIN = "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e"
-        if extra_assets is not None and MIN in extra_assets:
-            fee_reduction = min(extra_assets[MIN] // 10**5, 500000)
+        min_addr = "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e"
+        if extra_assets is not None and min_addr in extra_assets:
+            fee_reduction = min(extra_assets[min_addr] // 10**5, 500000)
         else:
             fee_reduction = 0
         return self._batcher - Assets(lovelace=fee_reduction)
@@ -480,28 +530,38 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
+        if self.pool_nft is None:
+            error_msg = "pool_nft is None"
+            raise ValueError(error_msg)
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
+        """Returns pool policy."""
         return ["0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1"]
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str]:
+        """Returns lp policy."""
         return ["e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
+        """Returns dex policy."""
         return ["13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f"]
 
 
 class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPState):
-    """Minswap DJED/iUSD Stable State."""
+    """Represents the state of the DJEDiUSD stable pool in Minswap.
 
-    fee: float = 1
+    Attributes:
+        fee (float): The fee percentage.
+        _batcher (Assets): The batcher assets.
+        _deposit (Assets): The deposit assets.
+        _stake_address (ClassVar[Address]): The stake addresses.
+    """
+
+    fee: int = 1
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
@@ -511,19 +571,30 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     ]
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MinswapStableOrderDatum]:
+        """Returns the order datum class used for the DJEDiUSD stable pool."""
         return MinswapStableOrderDatum
 
     def get_amount_out(
         self,
         asset: Assets,
         precise: bool = True,
+        fee_on_input: bool = False,
     ) -> tuple[Assets, float]:
+        """Calculates the amount out and slippage for given input asset.
+
+        Args:
+            asset (Assets): The input asset.
+            precise (bool, optional): Whether to calculate precisely. Defaults to True.
+            fee_on_input (bool, optional): Whether the fee is applied on the input. Defaults to False
+
+        Returns:
+            tuple[Assets, float]: The amount out and slippage.
+        """
         out_asset, slippage = super().get_amount_out(
             asset=asset,
             precise=precise,
-            fee_on_input=False,
+            fee_on_input=fee_on_input,
         )
 
         return out_asset, slippage
@@ -532,26 +603,39 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         self,
         asset: Assets,
         precise: bool = True,
+        fee_on_input: bool = False,
     ) -> tuple[Assets, float]:
+        """Calculates the amount in and slippage for given output asset.
+
+        Args:
+            asset (Assets): The output asset.
+            precise (bool, optional): Whether to calculate precisely. Defaults to True.
+            fee_on_input (bool, optional): Whether the fee is applied on the input. Defaults to False
+
+        Returns:
+            tuple[Assets, float]: The amount in and slippage.
+        """
         in_asset, slippage = super().get_amount_in(
             asset=asset,
             precise=precise,
-            fee_on_input=False,
+            fee_on_input=fee_on_input,
         )
 
         return in_asset, slippage
 
     @classmethod
-    def post_init(cls, values: dict[str, ...]):
-        """Post initialization checks.
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Performs post-initialization checks and updates.
 
         Args:
-            values: The pool initialization parameters
+            values (dict[str, Any]): The pool initialization parameters.
+
+        Returns:
+            dict[str, Any]: Updated pool initialization parameters.
         """
         super().post_init(values)
         assets = values["assets"]
-
-        datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
+        datum = MinswapPoolDatum.from_cbor(values["datum_cbor"])
 
         assets.root[assets.unit()] = datum.balances[0]
         assets.root[assets.unit(1)] = datum.balances[1]
@@ -560,11 +644,12 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
 
     @property
     def amp(self) -> int:
+        """Returns the amplification factor (amp) of the DJEDiUSD stable pool."""
         return self.pool_datum.amp
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector for the DJEDiUSD stable pool."""
         return PoolSelector(
             selector_type="assets",
             selector=[
@@ -573,37 +658,40 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         )
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[MinswapDJEDiUSDStablePoolDatum]:
+    def pool_datum_class(cls) -> type[MinswapDJEDiUSDStablePoolDatum]:
+        """Returns the pool datum class used for the DJEDiUSD stable pool."""
         return MinswapDJEDiUSDStablePoolDatum
 
     @property
     def pool_id(self) -> str:
-        """A unique identifier for the pool."""
+        """Returns the unique identifier (pool_id) of the DJEDiUSD stable pool."""
+        if self.pool_nft is None:
+            error_msg = "pool_nft is None"
+            raise ValueError(error_msg)
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
+        """Returns the pool policy for the DJEDiUSD stable pool."""
         return [
             "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
         ]
 
     @classmethod
-    @property
-    def lp_policy(cls) -> list[str] | None:
-        return None
+    def lp_policy(cls) -> list[str]:
+        """Returns the LP policy for the DJEDiUSD stable pool."""
+        return []
 
     @classmethod
-    @property
-    def dex_policy(cls) -> list[str] | None:
-        return None
+    def dex_policy(cls) -> list[str]:
+        """Returns the DEX policy for the DJEDiUSD stable pool."""
+        return []
 
 
 class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
-    """Minswap DJED/USDC Stable State."""
+    """Pool Datum for DJEDiUSD stable pool."""
 
-    asset_mulitipliers: list[int] = [1, 100]
+    asset_multippliers: ClassVar[list[int]] = [1, 100]
 
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
@@ -612,8 +700,8 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector for the DJEDUSDC stable pool."""
         return PoolSelector(
             selector_type="assets",
             selector=[
@@ -622,13 +710,13 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
         )
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[MinswapDJEDUSDCStablePoolDatum]:
-        return MinswapDJEDUSDCStablePoolDatum
+    def pool_datum_class(cls) -> type[MinswapDJEDUSDMStablePoolDatum]:
+        """Returns the pool datum class used for the DJEDUSDC stable pool."""
+        return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
+        """Returns the pool policy for the DJEDUSDC stable pool."""
         return [
             "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
         ]
@@ -652,12 +740,10 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
         return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",

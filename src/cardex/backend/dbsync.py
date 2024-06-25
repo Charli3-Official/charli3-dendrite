@@ -2,6 +2,7 @@
 import os
 from datetime import datetime
 from threading import Lock
+from typing import Any
 
 import psycopg_pool
 from dotenv import load_dotenv
@@ -49,7 +50,7 @@ def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
     return POOL
 
 
-def db_query(query: str, args: tuple | None = None) -> list[tuple]:
+def db_query(query: str, args: tuple | None = None) -> list[dict[str, Any]]:
     """Fetch results from a query."""
     with get_dbsync_pool().connection() as conn:  # noqa: SIM117
         with conn.cursor(row_factory=dict_row) as cursor:
@@ -145,17 +146,21 @@ LIMIT %(limit)s
 OFFSET %(offset)s
 """
 
-    values = {"limit": limit, "offset": page * limit}
+    values: dict[str, Any] = {"limit": limit, "offset": page * limit}
     if assets is not None:
-        values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
-        values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
+        values.update(
+            {
+                "policies": [bytes.fromhex(p[:56]) for p in assets],
+                "names": [bytes.fromhex(p[56:]) for p in assets],
+            },
+        )
 
     elif addresses is not None:
         values.update(
             {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
         )
 
-    r = db_query(datum_selector, values)
+    r = db_query(datum_selector, tuple(values))
 
     return PoolStateList.model_validate(r)
 
@@ -202,7 +207,7 @@ LEFT JOIN block ON tx.block_id = block.id
 WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
 """
 
-    values = {"tx_hash": tx_hash}
+    values: dict[str, Any] = {"tx_hash": tx_hash}
     if assets is not None:
         values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
         values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
@@ -212,7 +217,7 @@ WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
             {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
         )
 
-    r = db_query(datum_selector, values)
+    r = db_query(datum_selector, tuple(values))
 
     return PoolStateList.model_validate(r)
 
@@ -232,7 +237,7 @@ FROM block
 WHERE block_no IS NOT null
 ORDER BY block_no DESC
 LIMIT %(last_n_blocks)s""",
-        {"last_n_blocks": last_n_blocks},
+        tuple({"last_n_blocks": last_n_blocks}),
     )
     return BlockList.model_validate(r)
 
@@ -250,13 +255,14 @@ LEFT JOIN block ON tx.block_id = block.id
 WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
 """
     )
-    r = db_query(datum_selector, {"block_no": block_no})
+    r = db_query(datum_selector, tuple({"block_no": block_no}))
 
     return PoolStateList.model_validate(r)
 
 
 def get_script_from_address(address: Address) -> ScriptReference:
-    SCRIPT_SELECTOR = """
+    """Get script reference from address."""
+    script_selector = """
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
 tx_out.address,
@@ -286,12 +292,13 @@ WHERE s.hash = %(address)b
 ORDER BY block.time DESC
 LIMIT 1
 """
-    r = db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
+    r = db_query(script_selector, (address.payment_part.payload,))
+    result = r[0]
 
-    if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
-        r[0]["assets"] = None
+    if result["assets"] is not None and result["assets"][0].get("lovelace") is None:
+        result["assets"] = None
 
-    return ScriptReference.model_validate(r[0])
+    return ScriptReference.model_validate(result)
 
 
 def get_datum_from_address(address: Address) -> ScriptReference:
@@ -401,7 +408,18 @@ def get_historical_order_utxos(
     after_time: datetime | int | None = None,
     limit: int = 1000,
     page: int = 0,
-):
+) -> SwapTransactionList:
+    """Retrieves historical order UTXOs for the given stake addresses.
+
+    Args:
+        stake_addresses: A list of stake addresses to filter by.
+        after_time: An optional datetime or timestamp to filter UTXOs created after a specific time.
+        limit: The maximum number of UTXOs to return.
+        page: The page number for pagination.
+
+    Returns:
+        A SwapTransactionList containing the matching UTXOs.
+    """
     if isinstance(after_time, int):
         after_time = datetime.fromtimestamp(after_time)
 
@@ -513,22 +531,24 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        {
-            "addresses": [
-                Address.decode(a).payment_part.payload for a in stake_addresses
-            ],
-            "limit": limit,
-            "offset": page * limit,
-            "after_time": None
-            if after_time is None
-            else after_time.strftime("%Y-%m-%d %H:%M:%S"),
-        },
+        tuple(
+            {
+                "addresses": [
+                    Address.decode(a).payment_part.payload for a in stake_addresses
+                ],
+                "limit": limit,
+                "offset": page * limit,
+                "after_time": None
+                if after_time is None
+                else after_time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        ),
     )
 
     return SwapTransactionList.model_validate(r)
 
 
-def get_order_utxos_by_block_or_tx(
+def get_order_utxos_by_block_or_tx(  # noqa: PLR0913
     stake_addresses: list[str],
     out_tx_hash: list[str] | None = None,
     in_tx_hash: list[str] | None = None,
@@ -537,6 +557,7 @@ def get_order_utxos_by_block_or_tx(
     limit: int = 1000,
     page: int = 0,
 ) -> SwapTransactionList:
+    """Get order UTXOs by block or transaction."""
     utxo_selector = """
 SELECT (
 	SELECT array_agg(DISTINCT txo.address)
@@ -668,21 +689,23 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        {
-            "addresses": [
-                Address.decode(a).payment_part.payload for a in stake_addresses
-            ],
-            "limit": limit,
-            "offset": page * limit,
-            "block_no": block_no,
-            "after_block": after_block,
-            "out_tx_hash": None
-            if out_tx_hash is None
-            else [bytes.fromhex(h) for h in out_tx_hash],
-            "in_tx_hash": None
-            if in_tx_hash is None
-            else [bytes.fromhex(h) for h in in_tx_hash],
-        },
+        tuple(
+            {
+                "addresses": [
+                    Address.decode(a).payment_part.payload for a in stake_addresses
+                ],
+                "limit": limit,
+                "offset": page * limit,
+                "block_no": block_no,
+                "after_block": after_block,
+                "out_tx_hash": None
+                if out_tx_hash is None
+                else [bytes.fromhex(h) for h in out_tx_hash],
+                "in_tx_hash": None
+                if in_tx_hash is None
+                else [bytes.fromhex(h) for h in in_tx_hash],
+            },
+        ),
     )
 
     return SwapTransactionList.model_validate(r)
@@ -694,7 +717,8 @@ def get_cancel_utxos(
     after_time: datetime | int | None = None,
     limit: int = 1000,
     page: int = 0,
-):
+) -> SwapTransactionList:
+    """Retrieve cancel UTXOs for given stake addresses."""
     if isinstance(after_time, int):
         after_time = datetime.fromtimestamp(after_time)
 
@@ -792,7 +816,8 @@ COALESCE(
         utxo_selector += """
     WHERE block.block_no = %(block_no)s"""
     else:
-        raise ValueError("Either after_time or block_no should be defined.")
+        error_msg = "Either after_time or block_no should be defined."
+        raise ValueError(error_msg)
 
     utxo_selector += """
     GROUP BY tx.hash, txo.value, txo.id, block.hash, block.time, block.block_no,
@@ -816,17 +841,19 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        {
-            "addresses": [
-                Address.decode(a).payment_part.payload for a in stake_addresses
-            ],
-            "limit": limit,
-            "offset": page * limit,
-            "after_time": None
-            if after_time is None
-            else after_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "block_no": block_no,
-        },
+        tuple(
+            {
+                "addresses": [
+                    Address.decode(a).payment_part.payload for a in stake_addresses
+                ],
+                "limit": limit,
+                "offset": page * limit,
+                "after_time": None
+                if after_time is None
+                else after_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "block_no": block_no,
+            },
+        ),
     )
 
     return SwapTransactionList.model_validate(r)

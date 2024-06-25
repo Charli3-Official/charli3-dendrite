@@ -1,22 +1,30 @@
+"""."""
 from abc import abstractmethod
 from decimal import Decimal
+from typing import Any
 
-from cardex.dataclasses.models import Assets
-from cardex.dexs.core.base import AbstractPairState
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import Assets
-from cardex.utility import asset_to_value
-from cardex.utility import naturalize_assets
 from pycardano import Address
 from pycardano import DeserializeException
 from pycardano import PlutusData
 from pycardano import TransactionOutput
 from pydantic import model_validator
 
+from cardex.dataclasses.models import Assets
+from cardex.dexs.core.base import AbstractPairState
+from cardex.dexs.core.constants import ONE_VALUE
+from cardex.dexs.core.constants import THREE_VALUE
+from cardex.dexs.core.constants import TWO_VALUE
+from cardex.dexs.core.constants import ZERO_VALUE
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NoAssetsError
+from cardex.dexs.core.errors import NotAPoolError
+from cardex.utility import asset_to_value
+from cardex.utility import naturalize_assets
+
 
 class AbstractPoolState(AbstractPairState):
+    """Abstract class representing the state of a pool in an exchange."""
+
     datum_cbor: str
     datum_hash: str
     inactive: bool = False
@@ -39,45 +47,27 @@ class AbstractPoolState(AbstractPairState):
         dex, and is necessary for dexs that have more than one pool for a pair but with
         different fee structures.
         """
-        raise NotImplementedError("Unique pool id is not specified.")
+        error_msg = "This method must be implemented by subclasses"
+        raise NotImplementedError(error_msg)
 
-    @property
     @abstractmethod
     def pool_datum_class(self) -> type[PlutusData]:
+        """Abstract pool state datum.
+
+        Raises:
+        NotImplementedError: This method must be implemented by subclasses.
+
+        Returns:
+        type[PlutusData]: Class object of the PlutusData type representing pool state datum.
+        """
         raise NotImplementedError
 
     @property
     def pool_datum(self) -> PlutusData:
         """The pool state datum."""
-        return self.pool_datum_class.from_cbor(self.datum_cbor)
+        return self.pool_datum_class().from_cbor(self.datum_cbor)
 
-    def swap_datum(
-        self,
-        address_source: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-    ) -> PlutusData:
-        if self.swap_forward and address_target is not None:
-            print(f"{self.__class__.__name__} does not support swap forwarding.")
-
-        return self.order_datum_class.create_datum(
-            address_source=address_source,
-            in_assets=in_assets,
-            out_assets=out_assets,
-            batcher_fee=self.batcher_fee(
-                in_assets=in_assets,
-                out_assets=out_assets,
-                extra_assets=extra_assets,
-            ),
-            deposit=self.deposit(in_assets=in_assets, out_assets=out_assets),
-            address_target=address_target,
-            datum_target=datum_target,
-        )
-
-    def swap_utxo(
+    def swap_utxo(  # noqa: PLR0913
         self,
         address_source: Address,
         in_assets: Assets,
@@ -86,12 +76,26 @@ class AbstractPoolState(AbstractPairState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> TransactionOutput:
+        """Swap utxo that generates a transaction output representing the swap.
+
+        Args:
+            address_source (Address): The source address for the swap.
+            in_assets (Assets): The assets to be swapped in.
+            out_assets (Assets): The assets to be received after swapping.
+            extra_assets (Assets, optional): Additional assets involved in the swap. Defaults to None.
+            address_target (Address, optional): The target address for the swap. Defaults to None.
+            datum_target (PlutusData, optional): The target datum for the swap. Defaults to None.
+
+        Raises:
+            ValueError: If more than one asset is supplied as input or output.
+
+        Returns:
+            Tuple[TransactionOutput, PlutusData]: The transaction output and the datum representing the swap operation.
+        """
         # Basic checks
-        if len(in_assets) != 1 or len(out_assets) != 1:
-            raise ValueError(
-                "Only one asset can be supplied as input, "
-                + "and one asset supplied as output.",
-            )
+        if len(in_assets) != ONE_VALUE or len(out_assets) != ONE_VALUE:
+            error_msg = "Only one asset can be supplied as input and as output."
+            raise ValueError(error_msg)
 
         order_datum = self.swap_datum(
             address_source=address_source,
@@ -128,7 +132,6 @@ class AbstractPoolState(AbstractPairState):
         return output, order_datum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str] | None:
         """The pool nft policies.
 
@@ -144,7 +147,6 @@ class AbstractPoolState(AbstractPairState):
         return None
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str] | None:
         """The lp token policies.
 
@@ -163,7 +165,7 @@ class AbstractPoolState(AbstractPairState):
         return None
 
     @classmethod
-    def extract_dex_nft(cls, values: dict[str, ...]) -> Assets | None:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -183,15 +185,16 @@ class AbstractPoolState(AbstractPairState):
         assets = values["assets"]
 
         # If no dex policy id defined, return nothing
-        if cls.dex_policy is None:
-            dex_nft = None
+        dex_policy = cls.dex_policy()
+        if dex_policy is None:
+            return None
 
-        # If the dex nft is in the values, it's been parsed already
-        elif "dex_nft" in values:
+        if "dex_nft" in values and values["dex_nft"] is not None:
             if not any(
-                any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
+                any(p.startswith(d) for d in dex_policy) for p in values["dex_nft"]
             ):
-                raise NotAPoolError("Invalid DEX NFT")
+                error_msg = "Invalid DEX NFT"
+                raise NotAPoolError(error_msg)
             dex_nft = values["dex_nft"]
 
         # Check for the dex nft
@@ -199,19 +202,18 @@ class AbstractPoolState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.dex_policy)
+                if any(asset.startswith(policy) for policy in dex_policy)
             ]
-            if len(nfts) < 1:
-                raise NotAPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token.",
-                )
+            if len(nfts) < ONE_VALUE:
+                error_msg = f"{cls.__name__}: Pool must have one DEX NFT token."
+                raise NotAPoolError(error_msg)
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["dex_nft"] = dex_nft
 
         return dex_nft
 
     @classmethod
-    def extract_pool_nft(cls, values) -> Assets:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the pool nft from the UTXO.
 
         Some DEXs put a pool nft into the pool UTXO.
@@ -231,18 +233,19 @@ class AbstractPoolState(AbstractPairState):
         assets = values["assets"]
 
         # If no pool policy id defined, return nothing
-        if cls.pool_policy is None:
+        pool_policy = cls.pool_policy()
+        if pool_policy is None:
             return None
 
         # If the pool nft is in the values, it's been parsed already
-        elif "pool_nft" in values:
-            if not any(
-                any(p.startswith(d) for d in cls.pool_policy)
-                for p in values["pool_nft"]
+        if "pool_nft" in values:
+            if values["pool_nft"] is not None and not any(
+                any(p.startswith(d) for d in pool_policy) for p in values["pool_nft"]
             ):
-                raise InvalidPoolError(f"{cls.__name__}: Invalid pool NFT: {values}")
+                error_msg = f"{cls.__name__}: Invalid pool NFT: {values}"
+                raise InvalidPoolError(error_msg)
             pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()},
+                **dict(values["pool_nft"].items()),
             )
 
         # Check for the pool nft
@@ -250,18 +253,18 @@ class AbstractPoolState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.pool_policy)
+                if any(asset.startswith(policy) for policy in pool_policy)
             ]
-
-            if len(nfts) != 1:
+            if len(nfts) != ONE_VALUE:
+                error_msg = f"{cls.__name__}: A pool must have one pool NFT token."
                 raise InvalidPoolError(
-                    f"{cls.__name__}: A pool must have one pool NFT token.",
+                    error_msg,
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 
         assets = values["assets"]
-        pool_id = pool_nft.unit()[len(cls.pool_policy) :]
+        pool_id = pool_nft.unit()[len(pool_policy) :]
         lps = [asset for asset in assets if asset.endswith(pool_id)]
         for lp in lps:
             assets.root.pop(lp)
@@ -269,7 +272,7 @@ class AbstractPoolState(AbstractPairState):
         return pool_nft
 
     @classmethod
-    def extract_lp_tokens(cls, values) -> Assets:
+    def extract_lp_tokens(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the lp tokens from the UTXO.
 
         Some DEXs put lp tokens into the pool UTXO.
@@ -283,19 +286,19 @@ class AbstractPoolState(AbstractPairState):
         assets = values["assets"]
 
         # If no pool policy id defined, return nothing
-        if cls.lp_policy is None:
+        lp_policy = cls.lp_policy()
+        if lp_policy is None:
             return None
 
         # If the pool nft is in the values, it's been parsed already
-        elif "lp_tokens" in values:
-            if values["lp_tokens"] is not None:
-                if not any(
-                    any(p.startswith(d) for d in cls.lp_policy)
-                    for p in values["lp_tokens"]
-                ):
-                    raise InvalidPoolError(
-                        f"{cls.__name__}: Pool has invalid LP tokens.",
-                    )
+        if "lp_tokens" in values:
+            if values["lp_tokens"] is not None and not any(
+                any(p.startswith(d) for d in lp_policy) for p in values["lp_tokens"]
+            ):
+                error_msg = f"{cls.__name__}: Pool has invalid LP tokens."
+                raise InvalidPoolError(
+                    error_msg,
+                )
             lp_tokens = values["lp_tokens"]
 
         # Check for the pool nft
@@ -303,9 +306,9 @@ class AbstractPoolState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.lp_policy)
+                if any(asset.startswith(policy) for policy in lp_policy)
             ]
-            if len(nfts) > 0:
+            if len(nfts) > ZERO_VALUE:
                 lp_tokens = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
                 values["lp_tokens"] = lp_tokens
             else:
@@ -315,7 +318,7 @@ class AbstractPoolState(AbstractPairState):
         return lp_tokens
 
     @classmethod
-    def skip_init(cls, values: dict[str, ...]) -> bool:
+    def skip_init(cls, values: dict[str, Any]) -> bool:  # noqa: ARG003
         """An initial check to determine if parsing should be carried out.
 
         Args:
@@ -327,7 +330,7 @@ class AbstractPoolState(AbstractPairState):
         return False
 
     @classmethod
-    def post_init(cls, values: dict[str, ...]):
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Post initialization checks.
 
         Args:
@@ -336,32 +339,31 @@ class AbstractPoolState(AbstractPairState):
         assets = values["assets"]
         non_ada_assets = [a for a in assets if a != "lovelace"]
 
-        if len(assets) == 2:
-            # ADA pair
-            assert (
-                len(non_ada_assets) == 1
-            ), f"Pool must only have 1 non-ADA asset: {values}"
-
-        elif len(assets) == 3:
-            # Non-ADA pair
-            assert len(non_ada_assets) == 2, "Pool must only have 2 non-ADA assets."
+        if len(assets) == TWO_VALUE:
+            if len(non_ada_assets) != ONE_VALUE:
+                error_msg = f"Pool must only have 1 non-ADA asset: {values}"
+                raise InvalidPoolError(error_msg)
+            if len(assets) == THREE_VALUE and len(non_ada_assets) != THREE_VALUE:
+                error_msg = f"Pool must only have 2 non-ADA assets: {values}"
+                raise InvalidPoolError(error_msg)
 
             # Send the ADA token to the end
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
+        elif len(assets) == ONE_VALUE and "lovelace" in assets:
+            error_msg = f"Invalid pool, only contains lovelace: assets={assets}"
+            raise NoAssetsError(
+                error_msg,
+            )
         else:
-            if len(assets) == 1 and "lovelace" in assets:
-                raise NoAssetsError(
-                    f"Invalid pool, only contains lovelace: assets={assets}",
-                )
-            else:
-                raise InvalidPoolError(
-                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}",
-                )
+            error_msg = f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}"
+            raise InvalidPoolError(
+                error_msg,
+            )
         return values
 
     @model_validator(mode="before")
-    def translate_address(cls, values):
+    def translate_address(self, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
 
         Args:
@@ -372,23 +374,25 @@ class AbstractPoolState(AbstractPairState):
         """
         if "assets" in values:
             if values["assets"] is None:
-                raise NoAssetsError("No assets in the pool.")
-            elif not isinstance(values["assets"], Assets):
+                error_msg = "No assets in the pool."
+                raise NoAssetsError(error_msg)
+            if not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
-        if cls.skip_init(values):
+        if self.skip_init(values):
             return values
 
         # Parse the pool datum
         try:
-            datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
+            datum = PlutusData.from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
-            raise NotAPoolError(
+            error_msg = (
                 "Pool datum could not be deserialized: \n "
-                + f"    error={e}\n"
-                + f"    tx_hash={values['tx_hash']}\n"
-                + f"    datum={values['datum_cbor']}\n",
+                + f" error={e}\n"
+                + f"   tx_hash={values['tx_hash']}\n"
+                + f"    datum={values['datum_cbor']}\n"
             )
+            raise NotAPoolError(error_msg) from e
 
         # To help prevent edge cases, remove pool tokens while running other checks
         pair = Assets({})
@@ -397,22 +401,23 @@ class AbstractPoolState(AbstractPairState):
                 try:
                     pair.root.update({token: values["assets"].root.pop(token)})
                 except KeyError:
-                    raise InvalidPoolError(
+                    error_msg = (
                         "Pool does not contain expected asset.\n"
                         + f"    Expected: {token}\n"
-                        + f"    Actual: {values['assets']}",
+                        + f"    Actual: {values['assets']}"
                     )
+                    raise InvalidPoolError(error_msg) from KeyError
 
-        dex_nft = cls.extract_dex_nft(values)
+        _ = self.extract_dex_nft(values)
 
-        lp_tokens = cls.extract_lp_tokens(values)
+        _ = self.extract_lp_tokens(values)
 
-        pool_nft = cls.extract_pool_nft(values)
+        _ = self.extract_pool_nft(values)
 
         # Add the pool tokens back in
         values["assets"].root.update(pair.root)
 
-        cls.post_init(values)
+        self.post_init(values)
 
         return values
 
@@ -427,12 +432,10 @@ class AbstractPoolState(AbstractPairState):
         """
         nat_assets = naturalize_assets(self.assets)
 
-        prices = (
+        return (
             (nat_assets[self.unit_a] / nat_assets[self.unit_b]),
             (nat_assets[self.unit_b] / nat_assets[self.unit_a]),
         )
-
-        return prices
 
     @property
     def tvl(self) -> Decimal:
@@ -442,10 +445,9 @@ class AbstractPoolState(AbstractPairState):
             NotImplementedError: Only ADA pool TVL is implemented.
         """
         if self.unit_a != "lovelace":
-            raise NotImplementedError("tvl for non-ADA pools is not implemented.")
+            error_msg = "tvl for non-ADA pools is not implemented."
+            raise NotImplementedError(error_msg)
 
-        tvl = 2 * (Decimal(self.reserve_a) / Decimal(10**6)).quantize(
+        return 2 * (Decimal(self.reserve_a) / Decimal(10**6)).quantize(
             1 / Decimal(10**6),
         )
-
-        return tvl

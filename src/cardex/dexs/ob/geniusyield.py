@@ -5,6 +5,20 @@ from typing import Dict
 from typing import List
 from typing import Union
 
+from pycardano import Address
+from pycardano import PlutusData
+from pycardano import PlutusV1Script
+from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
+from pycardano import Redeemer
+from pycardano import ScriptHash
+from pycardano import TransactionBuilder
+from pycardano import TransactionId
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
+from pycardano import UTxO
+from pycardano.utils import min_lovelace
+
 from cardex.backend.dbsync import get_datum_from_address
 from cardex.backend.dbsync import get_pool_in_tx
 from cardex.backend.dbsync import get_pool_utxos
@@ -23,19 +37,6 @@ from cardex.dexs.ob.ob_base import BuyOrderBook
 from cardex.dexs.ob.ob_base import OrderBookOrder
 from cardex.dexs.ob.ob_base import SellOrderBook
 from cardex.utility import asset_to_value
-from pycardano import Address
-from pycardano import PlutusData
-from pycardano import PlutusV1Script
-from pycardano import PlutusV2Script
-from pycardano import RawPlutusData
-from pycardano import Redeemer
-from pycardano import ScriptHash
-from pycardano import TransactionBuilder
-from pycardano import TransactionId
-from pycardano import TransactionInput
-from pycardano import TransactionOutput
-from pycardano import UTxO
-from pycardano.utils import min_lovelace
 
 
 @dataclass
@@ -532,7 +533,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def tvl(self) -> int:
-        """Return the total value locked in the order
+        """Return the total value locked in the order.
 
         Raises:
             NotImplementedError: Only ADA pool TVL is implemented.

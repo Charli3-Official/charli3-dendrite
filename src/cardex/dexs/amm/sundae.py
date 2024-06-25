@@ -1,9 +1,10 @@
-"""SundaeSwap AMM module."""
+"""Data classes and utilities for Sundae Dex.
 
+This contains data classes and utilities for handling various order and pool datums
+"""
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
-from typing import List
 from typing import Union
 
 from pycardano import Address
@@ -25,6 +26,8 @@ from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
+from cardex.dexs.core.constants import THREE_VALUE
+from cardex.dexs.core.constants import TWO_VALUE
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
@@ -32,21 +35,21 @@ from cardex.dexs.core.errors import NotAPoolError
 
 @dataclass
 class AtoB(PlutusData):
-    """A to B swap direction."""
+    """Represents the direction of a swap from asset A to asset B."""
 
     CONSTR_ID = 0
 
 
 @dataclass
 class BtoA(PlutusData):
-    """B to A swap direction."""
+    """Represents the direction of a swap from asset B to asset A."""
 
     CONSTR_ID = 1
 
 
 @dataclass
 class AmountOut(PlutusData):
-    """Minimum amount to receive."""
+    """Represents the minimum amount to be received in a swap."""
 
     CONSTR_ID = 0
     min_receive: int
@@ -54,7 +57,7 @@ class AmountOut(PlutusData):
 
 @dataclass
 class SwapConfig(PlutusData):
-    """Swap configuration."""
+    """Configuration for a swap operation."""
 
     CONSTR_ID = 0
 
@@ -65,7 +68,7 @@ class SwapConfig(PlutusData):
 
 @dataclass
 class DepositPairQuantity(PlutusData):
-    """Deposit pair quantity."""
+    """Represents the quantity of asset pairs to be deposited."""
 
     CONSTR_ID = 0
     amount_a: int
@@ -74,7 +77,7 @@ class DepositPairQuantity(PlutusData):
 
 @dataclass
 class DepositPair(PlutusData):
-    """Deposit pair."""
+    """Represents a pair of assets to be deposited."""
 
     CONSTR_ID = 1
     assets: DepositPairQuantity
@@ -82,7 +85,7 @@ class DepositPair(PlutusData):
 
 @dataclass
 class DepositConfig(PlutusData):
-    """Deposit configuration."""
+    """Configuration for a deposit operation."""
 
     CONSTR_ID = 2
 
@@ -91,7 +94,7 @@ class DepositConfig(PlutusData):
 
 @dataclass
 class WithdrawConfig(PlutusData):
-    """Withdraw configuration."""
+    """Configuration for a withdrawal operation."""
 
     CONSTR_ID = 1
 
@@ -119,7 +122,7 @@ class SundaeV3ReceiverInlineDatum(PlutusData):
 
 @dataclass
 class SundaeAddressWithDatum(PlutusData):
-    """SundaeSwap address with datum."""
+    """Represents an address with an associated datum."""
 
     CONSTR_ID = 0
 
@@ -145,16 +148,17 @@ class SundaeV3AddressWithDatum(PlutusData):
     ]
 
     @classmethod
-    def from_address(cls, address: Address):
-        return cls(
-            address=PlutusFullAddress.from_address(address),
-            datum=SundaeV3PlutusNone(),
-        )
+    def from_address(cls, address: Address) -> "SundaeAddressWithDatum":
+        """Creates a SundaeAddressWithDatum from an Address."""
+        return cls(address=PlutusFullAddress.from_address(address), datum=SundaeV3PlutusNone())
 
 
 @dataclass
 class SundaeAddressWithDestination(PlutusData):
-    """For now, destination is set to none, should be updated."""
+    """Represents an address with an associated destination.
+
+    For now, the destination is set to none and should be updated.
+    """
 
     CONSTR_ID = 0
 
@@ -163,7 +167,7 @@ class SundaeAddressWithDestination(PlutusData):
 
     @classmethod
     def from_address(cls, address: Address) -> "SundaeAddressWithDestination":
-        """Create a new address with destination."""
+        """Creates a SundaeAddressWithDestination from an Address."""
         null = SundaeAddressWithDatum.from_address(address)
         return cls(address=null, destination=PlutusNone())
 
@@ -172,13 +176,17 @@ class SundaeAddressWithDestination(PlutusData):
 class SundaeOrderDatum(OrderDatum):
     """SundaeSwap order datum."""
 
+    """Represents the datum for a SundaeSwap order."""
+
+    CONSTR_ID = 0
+
     ident: bytes
     address: SundaeAddressWithDestination
     fee: int
     swap: Union[DepositConfig, SwapConfig, WithdrawConfig]
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         ident: bytes,
         address_source: Address,
@@ -186,13 +194,12 @@ class SundaeOrderDatum(OrderDatum):
         out_assets: Assets,
         fee: int,
     ) -> "SundaeOrderDatum":
-        """Create a new order datum."""
+        """Creates a SundaeOrderDatum."""
         full_address = SundaeAddressWithDestination.from_address(address_source)
         merged = in_assets + out_assets
-        if in_assets.unit() == merged.unit():
-            direction = AtoB()
-        else:
-            direction = BtoA()
+        direction: Union[AtoB, BtoA] = (
+            AtoB() if in_assets.unit() == merged.unit() else BtoA()
+        )
         swap = SwapConfig(
             direction=direction,
             amount_in=in_assets.quantity(),
@@ -202,67 +209,52 @@ class SundaeOrderDatum(OrderDatum):
         return cls(ident=ident, address=full_address, fee=fee, swap=swap)
 
     def address_source(self) -> Address:
-        """Get the source address."""
+        """Returns the source address of the order."""
         return self.address.address.address.to_address()
 
     def requested_amount(self) -> Assets:
-        """Get the requested amount."""
+        """Returns the amount requested in the order."""
         if isinstance(self.swap, SwapConfig):
             if isinstance(self.swap.direction, AtoB):
                 return Assets({"asset_b": self.swap.amount_out.min_receive})
-            else:
-                return Assets({"asset_a": self.swap.amount_out.min_receive})
-        else:
-            return Assets({})
+            return Assets({"asset_a": self.swap.amount_out.min_receive})
+        return Assets({})
 
     def order_type(self) -> OrderType:
-        """Get the order type."""
+        """Returns the type of the order."""
         if isinstance(self.swap, SwapConfig):
             return OrderType.swap
-        elif isinstance(self.swap, DepositConfig):
+        if isinstance(self.swap, DepositConfig):
             return OrderType.deposit
-        elif isinstance(self.swap, WithdrawConfig):
+        if isinstance(self.swap, WithdrawConfig):
             return OrderType.withdraw
+        return None
 
 
 @dataclass
 class SwapV3Config(PlutusData):
     CONSTR_ID = 1
-    in_value: List[Union[int, bytes]]
-    out_value: List[Union[int, bytes]]
+    in_value: list[Union[int, bytes]]
+    out_value: list[Union[int, bytes]]
 
 
 @dataclass
 class DepositV3Config(PlutusData):
     CONSTR_ID = 2
-    values: List[List[Union[int, bytes]]]
+    values: list[list[Union[int, bytes]]]
 
 
 @dataclass
 class WithdrawV3Config(PlutusData):
     CONSTR_ID = 3
-    in_value: List[Union[int, bytes]]
-
-
-# @dataclass
-# class ZapInV3Config(PlutusData):
-#     CONSTR_ID = 4
-#     in_value: List[Union[int, bytes]]
-#     out_value: List[Union[int, bytes]]
-
-
-# @dataclass
-# class ZapOutV3Config(PlutusData):
-#     CONSTR_ID = 5
-#     token_a: int
-#     token_b: int
+    in_value: list[Union[int, bytes]]
 
 
 @dataclass
 class DonateV3Config(PlutusData):
     CONSTR_ID = 4
-    in_value: List[Union[int, bytes]]
-    out_value: List[Union[int, bytes]]
+    in_value: list[Union[int, bytes]]
+    out_value: list[Union[int, bytes]]
 
 
 @dataclass
@@ -300,11 +292,8 @@ class SundaeV3OrderDatum(OrderDatum):
     ):
         full_address = SundaeV3AddressWithDatum.from_address(address_source)
         merged = in_assets + out_assets
-        if in_assets.unit() == merged.unit():
-            direction = AtoB()
-        else:
-            direction = BtoA()
-        swap = SwapConfig(
+        direction = AtoB() if in_assets.unit() == merged.unit() else BtoA()
+        _ = SwapConfig(
             direction=direction,
             amount_in=in_assets.quantity(),
             amount_out=AmountOut(min_receive=out_assets.quantity()),
@@ -368,7 +357,7 @@ class SundaeV3OrderDatum(OrderDatum):
 
 @dataclass
 class LPFee(PlutusData):
-    """Liquidity pool fee."""
+    """Represents the fee structure for a liquidity pool."""
 
     CONSTR_ID = 0
     numerator: int
@@ -377,7 +366,7 @@ class LPFee(PlutusData):
 
 @dataclass
 class LiquidityPoolAssets(PlutusData):
-    """Liquidity pool assets."""
+    """Represents the assets in a liquidity pool."""
 
     CONSTR_ID = 0
     asset_a: AssetClass
@@ -386,14 +375,16 @@ class LiquidityPoolAssets(PlutusData):
 
 @dataclass
 class SundaePoolDatum(PoolDatum):
-    """SundaeSwap pool datum."""
+    """Represents the datum for a SundaeSwap liquidity pool."""
 
+    CONSTR_ID = 0
     assets: LiquidityPoolAssets
     ident: bytes
     last_swap: int
     fee: LPFee
 
     def pool_pair(self) -> Assets | None:
+        """Returns the pair of assets in the liquidity pool."""
         return self.assets.asset_a.assets + self.assets.asset_b.assets
 
 
@@ -401,7 +392,7 @@ class SundaePoolDatum(PoolDatum):
 class SundaeV3PoolDatum(PlutusData):
     CONSTR_ID = 0
     ident: bytes
-    assets: List[List[bytes]]
+    assets: list[list[bytes]]
     circulation_lp: int
     bid_fees_per_10_thousand: int
     ask_fees_per_10_thousand: int
@@ -426,9 +417,9 @@ class SundaeV3Settings(PlutusData):
     metadata_admin: PlutusFullAddress
     treasury_admin: Any  # NativeScript
     treasury_address: PlutusFullAddress
-    treasury_allowance: List[int]
-    authorized_scoopers: Union[PlutusNone, Any]  # List[PlutusPartAddress]]
-    authorized_staking_keys: List[Any]
+    treasury_allowance: list[int]
+    authorized_scoopers: Union[PlutusNone, Any]  # list[PlutusPartAddress]]
+    authorized_staking_keys: list[Any]
     base_fee: int
     simple_fee: int
     strategy_fee: int
@@ -437,7 +428,7 @@ class SundaeV3Settings(PlutusData):
 
 
 class SundaeSwapCPPState(AbstractConstantProductPoolState):
-    """SundaeSwap constant product pool state."""
+    """Represents the state of a SundaeSwap constant product pool."""
 
     fee: int
     _batcher = Assets(lovelace=2500000)
@@ -447,19 +438,16 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     )
 
     @classmethod
-    @property
     def dex(cls) -> str:
         """Get the DEX name."""
         return "SundaeSwap"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         """Get the order selector."""
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         """Get the pool selector."""
         return PoolSelector(
@@ -594,8 +582,8 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector for the DEX."""
         return PoolSelector(
             selector_type="addresses",
             selector=[
@@ -604,41 +592,47 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         )
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return ["e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b"]
 
     @property
     def swap_forward(self) -> bool:
+        """Indicates if swap forwarding is supported."""
         return False
 
     @property
     def stake_address(self) -> Address:
+        """Returns the stake address for the DEX."""
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SundaeV3OrderDatum]:
+        """Returns the class for the order datum."""
         return SundaeV3OrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[SundaeV3PoolDatum]:
+        """Returns the class for the pool datum."""
         return SundaeV3PoolDatum
 
     @property
     def pool_id(self) -> str:
-        """A unique identifier for the pool."""
+        """Returns a unique identifier for the pool."""
+        if self.pool_nft is None:
+            error_msg = "pool_nft is None"
+            raise ValueError(error_msg)
         return self.pool_nft.unit()
 
     @classmethod
-    def skip_init(cls, values) -> bool:
+    def skip_init(cls, values: dict[str, Any]) -> bool:
+        """Determines if initialization should be skipped based on the provided values."""
         if "pool_nft" in values and "dex_nft" in values and "fee" in values:
             try:
                 super().extract_pool_nft(values)
-            except InvalidPoolError:
-                raise NotAPoolError("No pool NFT found.")
-            if len(values["assets"]) == 3:
+            except InvalidPoolError as err:
+                error_msg = "No pool NFT found."
+                raise NotAPoolError(error_msg) from err
+            if len(values["assets"]) == THREE_VALUE:
                 # Send the ADA token to the end
                 if isinstance(values["assets"], Assets):
                     values["assets"].root["lovelace"] = values["assets"].root.pop(
@@ -648,18 +642,18 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
                     values["assets"]["lovelace"] = values["assets"].pop("lovelace")
             values["assets"] = Assets.model_validate(values["assets"])
             return True
-        else:
-            return False
+        return False
 
     @classmethod
-    def extract_pool_nft(cls, values) -> Assets:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Assets | None:
+        """Extracts the pool NFT from the provided values."""
         try:
-            super().extract_pool_nft(values)
-        except InvalidPoolError:
+            return super().extract_pool_nft(values)
+        except InvalidPoolError as err:
             if len(values["assets"]) == 0:
-                raise NoAssetsError
-            else:
-                raise NotAPoolError("No pool NFT found.")
+                raise NoAssetsError from err
+            error_msg = "No pool NFT found."
+            raise NotAPoolError(error_msg) from err
 
     def batcher_fee(
         self,
@@ -675,39 +669,48 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
         return Assets(lovelace=datum.simple_fee + datum.base_fee)
+    @classmethod
+    def pool_policy(cls) -> list[str]:
+        """Returns the policy IDs for the pool."""
+        return ["0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b91370"]
 
     @classmethod
-    def post_init(cls, values):
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Performs post-initialization tasks on the provided values."""
         super().post_init(values)
 
         assets = values["assets"]
         datum = SundaeV3PoolDatum.from_cbor(values["datum_cbor"])
 
-        if len(assets) == 2:
+        if len(assets) == TWO_VALUE:
             assets.root[assets.unit(0)] -= datum.protocol_fees
 
         values["fee"] = datum.bid_fees_per_10_thousand
+        return values
 
-    def swap_datum(
+    def swap_datum(  # noqa: PLR0913
         self,
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
-        extra_assets: Assets | None = None,
+        extra_assets: Assets | None = None,  # noqa: ARG002
         address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
+        datum_target: PlutusData | None = None,  # noqa: ARG002
     ) -> PlutusData:
+        """Creates the datum for a swap operation."""
         if self.swap_forward and address_target is not None:
-            print(f"{self.__class__.__name__} does not support swap forwarding.")
+            error_msg = f"{self.__class__.__name__} does not support swap forwarding."
+            raise ValueError(error_msg)
+        if self.pool_nft is None:
+            error_msg = "Pool NFT cannot be None"
+            raise ValueError(error_msg)
 
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
-        datum = SundaeV3OrderDatum.create_datum(
+        return SundaeV3OrderDatum.create_datum(
             ident=ident,
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
         )
-
-        return datum

@@ -1,5 +1,12 @@
+"""Base classes & utility functions for managing order books in the DEX."""
+
 from abc import abstractmethod
 from decimal import Decimal
+
+from pycardano import DeserializeException
+from pycardano import PlutusData
+from pycardano import UTxO
+from pydantic import model_validator
 
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import BaseList
@@ -7,11 +14,6 @@ from cardex.dataclasses.models import CardexBaseModel
 from cardex.dexs.core.base import AbstractPairState
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import Assets
-from pycardano import DeserializeException
-from pycardano import PlutusData
-from pycardano import UTxO
-from pydantic import model_validator
 
 
 class AbstractOrderState(AbstractPairState):
@@ -233,24 +235,32 @@ class AbstractOrderState(AbstractPairState):
 
 
 class OrderBookOrder(CardexBaseModel):
+    """Represents an order in the order book."""
+
     price: float
     quantity: int
     state: AbstractOrderState | None = None
 
 
 class BuyOrderBook(BaseList):
+    """Represents a buy order book with sorted orders."""
+
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
+    def sort_descend(self, v: list[OrderBookOrder]) -> list[OrderBookOrder]:
+        """Sort orders in descending order by price."""
         return sorted(v, key=lambda x: x.price)
 
 
 class SellOrderBook(BaseList):
+    """Represents a sell order book with sorted orders."""
+
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
+    def sort_descend(self, v: list[OrderBookOrder]) -> list[OrderBookOrder]:
+        """Sort orders in descending order by price."""
         return sorted(v, key=lambda x: x.price)
 
 
@@ -265,7 +275,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_out(
         self,
         asset: Assets,
-        precise: bool = True,
+        precise: bool = True,  # noqa: ARG002
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token output for the given input.
@@ -277,11 +287,14 @@ class AbstractOrderBookState(AbstractPairState):
         Returns:
             tuple[Assets, float]: The output assets and slippage.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            error_msg = "Asset should only have one token."
+            raise ValueError(error_msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            error_msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(error_msg)
 
         if asset.unit() == self.unit_a:
             book = self.sell_book_full
@@ -313,7 +326,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_in(
         self,
         asset: Assets,
-        precise: bool = True,
+        precise: bool = True, # noqa: ARG002
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token input for the given output.
@@ -325,11 +338,14 @@ class AbstractOrderBookState(AbstractPairState):
         Returns:
             tuple[Assets, float]: The output assets and slippage.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            error_msg = "Asset should only have one token."
+            raise ValueError(error_msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            error_msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(error_msg)
 
         if asset.unit() == self.unit_b:
             book = self.sell_book_full
@@ -360,8 +376,8 @@ class AbstractOrderBookState(AbstractPairState):
         return in_assets, 0
 
     @classmethod
-    @property
-    def reference_utxo(self) -> UTxO | None:
+    def reference_utxo(cls) -> UTxO | None:
+        """Returns reference utxo."""
         return None
 
     @property
@@ -373,12 +389,10 @@ class AbstractOrderBookState(AbstractPairState):
                 1 of token B in units of token A, and the second `Decimal` is the price
                 to buy 1 of token A in units of token B.
         """
-        prices = (
+        return (
             Decimal((self.buy_book[0].price + 1 / self.sell_book[0].price) / 2),
             Decimal((self.sell_book[0].price + 1 / self.buy_book[0].price) / 2),
         )
-
-        return prices
 
     @property
     def tvl(self) -> Decimal:
@@ -388,7 +402,8 @@ class AbstractOrderBookState(AbstractPairState):
             NotImplementedError: Only ADA pool TVL is implemented.
         """
         if self.unit_a != "lovelace":
-            raise NotImplementedError("tvl for non-ADA pools is not implemented.")
+            error_msg = "tvl for non-ADA pools is not implemented."
+            raise NotImplementedError(error_msg)
 
         tvl = sum(b.quantity / b.price for b in self.buy_book) + sum(
             s.quantity * s.price for s in self.sell_book

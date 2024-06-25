@@ -1,9 +1,10 @@
-"""MuesliSwap DEX implementation."""
+"""Data classes and utilities for Muesli Dex.
 
+This contains data classes and utilities for handling various order and pool datums
+"""
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
-from typing import Optional
 from typing import Union
 
 from pycardano import Address
@@ -33,14 +34,14 @@ from cardex.utility import Assets
 
 @dataclass
 class MuesliSometimesNone(PlutusData):
-    """A dataclass that can be None."""
+    """Represents a data structure for Muesli, sometimes with None."""
 
     CONSTR_ID = 0
 
 
 @dataclass
 class MuesliOrderConfig(PlutusData):
-    """The order configuration for MuesliSwap."""
+    """Represents configuration data for a Muesli order."""
 
     CONSTR_ID = 0
 
@@ -57,21 +58,28 @@ class MuesliOrderConfig(PlutusData):
 @dataclass
 class MuesliOrderDatum(OrderDatum):
     """The order datum for MuesliSwap."""
+    """Represents the datum for Muesli orders.
+
+    Attributes:
+        value (MuesliOrderConfig): Configuration data for a Muesli order.
+    """
+
+    CONSTR_ID = 0
 
     value: MuesliOrderConfig
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         batcher_fee: Assets,
         deposit: Assets,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-    ):
-        """Create a MuesliSwap order datum."""
+        address_target: Address | None = None,  # noqa: ARG003
+        datum_target: PlutusData | None = None,  # noqa: ARG003
+    ) -> "MuesliOrderConfig":
+        """Creates an instance of MuesliOrderDatum based on provided parameters."""
         full_address = PlutusFullAddress.from_address(address_source)
 
         if in_assets.unit() == "lovelace":
@@ -102,15 +110,18 @@ class MuesliOrderDatum(OrderDatum):
         return cls(value=config)
 
     def address_source(self) -> str:
+        """Returns the source address associated with this order."""
         return self.value.full_address.to_address()
 
     def requested_amount(self) -> Assets:
+        """Returns the requested amount based on the order configuration."""
         token_out = self.value.token_out_policy.hex() + self.value.token_out_name.hex()
         if token_out == "":
-            token_out = "lovelace"
+            token_out = "lovelace"  # noqa: S105
         return Assets({token_out: self.value.min_receive})
 
     def order_type(self) -> OrderType:
+        """Returns the type of order (always 'swap' for Muesli orders)."""
         return OrderType.swap
 
 
@@ -118,18 +129,21 @@ class MuesliOrderDatum(OrderDatum):
 class MuesliPoolDatum(PoolDatum):
     """The pool datum for MuesliSwap."""
 
+    CONSTR_ID = 0
+
     asset_a: AssetClass
     asset_b: AssetClass
     lp: int
     fee: int
 
     def pool_pair(self) -> Assets | None:
+        """Returns the pool pair assets if available."""
         return self.asset_a.assets + self.asset_b.assets
 
 
 @dataclass
 class PreciseFloat(PlutusData):
-    """A precise float dataclass."""
+    """Represents a precise floating-point number."""
 
     CONSTR_ID = 0
 
@@ -139,7 +153,7 @@ class PreciseFloat(PlutusData):
 
 @dataclass
 class MuesliCLPoolDatum(MuesliPoolDatum):
-    """The pool datum for MuesliSwap constant liquidity pools."""
+    """Represents extended datum for Muesli constant liquidity pools."""
 
     upper: PreciseFloat
     lower: PreciseFloat
@@ -149,13 +163,13 @@ class MuesliCLPoolDatum(MuesliPoolDatum):
 
 @dataclass
 class MuesliCancelRedeemer(PlutusData):
-    """The cancel redeemer for MuesliSwap."""
+    """Represents the redeemer for canceling Muesli orders."""
 
     CONSTR_ID = 0
 
 
 class MuesliSwapCPPState(AbstractConstantProductPoolState):
-    """The MuesliSwap constant product pool state."""
+    """Represents the state of a Muesli constant product pool."""
 
     fee: int = 30
     _batcher = Assets(lovelace=950000)
@@ -169,18 +183,18 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
+        """Returns the name of the DEX ('MuesliSwap')."""
         return "MuesliSwap"
 
     @classmethod
-    @property
-    def order_selector(self) -> list[str]:
-        return [self._stake_address.encode()]
+    def order_selector(cls) -> list[str]:
+        """Returns the order selector list."""
+        return [cls._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector."""
         return PoolSelector(
             selector_type="assets",
             selector=cls.dex_policy,
@@ -188,11 +202,12 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
+        """Returns whether the swap is forward."""
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
+        """Returns the reference UTxO."""
         if cls._reference_utxo is None:
             script_bytes = bytes.fromhex(
                 get_script_from_address(cls._stake_address).script,
@@ -222,26 +237,30 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def stake_address(self) -> Address:
+        """Returns the stake address."""
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MuesliOrderDatum]:
+        """Returns the order datum class type."""
         return MuesliOrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliPoolDatum]:
+        """Returns the pool datum class type."""
         return MuesliPoolDatum
 
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
+        if self.pool_nft is None:
+            error_msg = "pool_nft is None"
+            raise ValueError(error_msg)
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
+        """Returns the DEX policy list."""
         return [
             "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
             "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",
@@ -250,7 +269,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         ]
 
     @classmethod
-    def extract_dex_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -269,13 +288,14 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         """
         dex_nft = super().extract_dex_nft(values)
 
-        if cls._test_pool in dex_nft:
-            raise InvalidPoolError("This is a test pool.")
+        if dex_nft is not None and cls._test_pool in dex_nft:
+            error_msg = "This is a test pool."
+            raise InvalidPoolError(error_msg)
 
         return dex_nft
 
     @classmethod
-    def extract_pool_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -294,13 +314,16 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         """
         assets = values["assets"]
 
-        if "pool_nft" in values:
+        if values.get("pool_nft") is not None:
             pool_nft = Assets(root=values["pool_nft"])
         else:
             nfts = [asset for asset, quantity in assets.items() if quantity == 1]
             if len(nfts) != 1:
+                error_msg = (
+                    f"MuesliSwap pools must have exactly one pool nft: assets={assets}"
+                )
                 raise InvalidPoolError(
-                    f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
+                    error_msg,
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
@@ -308,22 +331,24 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return pool_nft
 
     @classmethod
-    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """Returns the default script class for the pool."""
         return PlutusV2Script
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
+        """Returns the cancel redeemer."""
         return Redeemer(MuesliCancelRedeemer())
 
 
 class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState):
-    """The MuesliSwap constant liquidity pool state."""
+    """Represents the state of a Muesli constant liquidity pool."""
 
     inactive: bool = True
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
+        """Returns the DEX policy list for constant liquidity pools."""
         return [
             # "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
             # "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",
@@ -332,6 +357,6 @@ class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState)
         ]
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliCLPoolDatum]:
+        """Returns the pool datum class type."""
         return MuesliCLPoolDatum

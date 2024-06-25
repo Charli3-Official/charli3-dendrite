@@ -1,3 +1,6 @@
+"""This module defines custom exceptions for handling specific errorsl."""
+
+
 class NotAPoolError(Exception):
     """Error raised when a utxo is supplied and it does not contain pool data."""
 
