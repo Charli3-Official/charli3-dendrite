@@ -1,7 +1,10 @@
 import pytest
 
+from pycardano import Address
+
 from cardex.backend.dbsync import get_historical_order_utxos
 from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState
 
@@ -11,13 +14,37 @@ def test_get_orders(dex: AbstractPairState, benchmark):
     result = benchmark(
         get_historical_order_utxos,
         stake_addresses=order_selector,
-        limit=10,
+        limit=1000,
     )
 
     # Test roundtrip parsing
     for ind, r in enumerate(result):
         reparsed = SwapTransactionInfo(r.model_dump())
         assert reparsed == r
+
+    # Test datum parsing
+    found_datum = False
+    stake_addresses = []
+    for address in dex.order_selector:
+        stake_addresses.append(
+            Address(payment_part=Address.decode(address).payment_part).encode()
+        )
+
+    for ind, r in enumerate(result):
+        for swap in r:
+            if swap.swap_input.tx_hash in [
+                "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb",
+            ]:
+                continue
+            if swap.swap_input.address_stake in stake_addresses:
+                datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
+                found_datum = True
+
+    assert found_datum
+
+
+def test_order_type(dex: AbstractPairState):
+    assert issubclass(dex.order_datum_class, OrderDatum)
 
 
 @pytest.mark.parametrize("block", [9655329])
