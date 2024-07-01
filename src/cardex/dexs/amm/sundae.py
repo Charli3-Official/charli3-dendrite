@@ -633,7 +633,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
     @classmethod
     def skip_init(cls, values) -> bool:
-        if "pool_nft" in values and "dex_nft" in values and "fee" in values:
+        if "pool_nft" in values:
             try:
                 super().extract_pool_nft(values)
             except InvalidPoolError:
@@ -688,6 +688,8 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= datum.protocol_fees
+
+        values["fee"] = datum.bid_fees_per_10_thousand
 
     def swap_datum(
         self,
