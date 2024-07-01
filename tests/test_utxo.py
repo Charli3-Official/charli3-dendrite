@@ -224,7 +224,18 @@ def test_address_from_datum(dex: AbstractPoolState):
         )
 
     if datum is not None:
-        assert ADDRESS.encode() == datum.address_source().encode()
+        if datum.address_source().payment_part is not None:
+            assert (
+                ADDRESS.payment_part.payload
+                == datum.address_source().payment_part.payload
+            )
+        elif datum.address_source().staking_part is not None:
+            assert (
+                ADDRESS.staking_part.payload
+                == datum.address_source().staking_part.payload
+            )
+        else:
+            raise TypeError
 
 
 @pytest.mark.parametrize(

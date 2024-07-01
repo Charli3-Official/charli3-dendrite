@@ -57,7 +57,7 @@ class PlutusFullAddress(PlutusData):
     """A full address, including payment and staking keys."""
 
     CONSTR_ID = 0
-    payment: PlutusPartAddress
+    payment: Union[PlutusPartAddress, PlutusScriptPartAddress]
     stake: Union[_PlutusConstrWrapper, PlutusNone]
 
     @classmethod

@@ -2,6 +2,7 @@ import pytest
 
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
+from cardex import MinswapDJEDUSDMStableState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dexs.amm.amm_base import AbstractPoolState
