@@ -582,7 +582,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def dex(cls) -> str:
-        return "SundaeSwap"
+        return "SundaeSwapV3"
 
     @classmethod
     def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
@@ -646,6 +646,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
                     )
                 else:
                     values["assets"]["lovelace"] = values["assets"].pop("lovelace")
+
+            datum = SundaeV3PoolDatum.from_cbor(values["datum_cbor"])
+            values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
             return True
         else:
@@ -685,8 +688,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= datum.protocol_fees
-
-        values["fee"] = datum.bid_fees_per_10_thousand
 
     def swap_datum(
         self,
