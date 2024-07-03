@@ -301,50 +301,20 @@ LIMIT 1
     return ScriptReference.model_validate(result)
 
 
-def get_datum_from_address(address: Address) -> ScriptReference:
-    SCRIPT_SELECTOR = """
-SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
-tx_out.index as "tx_index",
-tx_out.address,
-ENCODE(datum.hash,'hex') as "datum_hash",
-ENCODE(datum.bytes,'hex') as "datum_cbor",
-COALESCE (
-    json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
-        SELECT json_agg(
-            json_build_object(
-                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                mto.quantity::TEXT
-            )
-        )
-        FROM ma_tx_out mto
-        JOIN multi_asset ma ON (mto.ident = ma.id)
-        WHERE mto.tx_out_id = tx_out.id
-    )::jsonb,
-    jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
-) AS "assets",
-ENCODE(s.bytes, 'hex') as "script"
-FROM tx_out
-LEFT JOIN tx ON tx.id = tx_out.tx_id
-LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
-LEFT JOIN block on block.id = tx.block_id
-LEFT JOIN script s ON s.id = tx_out.reference_script_id
-WHERE tx_out.payment_cred = %(address)b
-AND tx_out.inline_datum_id IS NOT NULL
-ORDER BY block.time DESC
-LIMIT 1
-"""
-    r = db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
-
-    if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
-        r[0]["assets"] = None
-
-    return ScriptReference.model_validate(r[0])
-
-
 def get_datum_from_address(
     address: Address,
     asset: str | None = None,
 ) -> ScriptReference:
+    """Retrieve script reference information for a given address and optional asset.
+
+    Args:
+        address (Address): The payment address to query.
+        asset (str, optional): An optional asset identifier in concatenated hex format
+            (policy id followed by asset name). Defaults to None.
+
+    Returns:
+        ScriptReference: A validated ScriptReference object containing the retrieved data.
+    """
     kwargs = {"address": address.payment_part.payload}
 
     if asset is not None:
@@ -355,7 +325,7 @@ def get_datum_from_address(
             },
         )
 
-    SCRIPT_SELECTOR = """
+    script_selector = """
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
 tx_out.address,
@@ -386,16 +356,16 @@ LEFT JOIN script s ON s.id = tx_out.reference_script_id
 WHERE tx_out.payment_cred = %(address)b"""
 
     if asset is not None:
-        SCRIPT_SELECTOR += """
+        script_selector += """
 AND policy = %(policy)b AND name = %(name)b
 """
 
-    SCRIPT_SELECTOR += """
+    script_selector += """
 AND tx_out.inline_datum_id IS NOT NULL
 ORDER BY block.time DESC
 LIMIT 1
 """
-    r = db_query(SCRIPT_SELECTOR, kwargs)
+    r = db_query(script_selector, tuple(kwargs))
 
     if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
         r[0]["assets"] = None

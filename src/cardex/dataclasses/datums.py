@@ -1,4 +1,3 @@
-# noqa
 """Dataclasses for the different datums used in the Cardex project."""
 from abc import ABC
 from abc import abstractmethod

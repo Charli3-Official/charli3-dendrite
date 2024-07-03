@@ -21,10 +21,10 @@ from pycardano import VerificationKeyHash
 
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector

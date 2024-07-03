@@ -1,8 +1,12 @@
+"""Data classes and utilities for GeniusYield.
+
+This contains data classes and utilities for handling various order and pool datums
+"""
 import time
 from dataclasses import dataclass
+from dataclasses import field
 from math import ceil
-from typing import Dict
-from typing import List
+from typing import Any
 from typing import Union
 
 from pycardano import Address
@@ -41,39 +45,50 @@ from cardex.utility import asset_to_value
 
 @dataclass
 class GeniusTxRef(PlutusData):
+    """Represent a Genius transaction reference."""
+
     CONSTR_ID = 0
     tx_hash: bytes
 
 
 @dataclass
 class GeniusUTxORef(PlutusData):
+    """Represent a Genius UTXO (Unspent Transaction Output) reference."""
+
     CONSTR_ID = 0
     tx_ref: GeniusTxRef
     index: int
 
     def __hash__(self) -> bytes:
+        """The hash of the UTXO reference."""
         return hash(self.hash().payload)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        """Compare this UTXO reference with another for equality."""
         if isinstance(other, GeniusUTxORef):
             return self.hash() == other.hash()
-        else:
-            return False
+        return False
 
 
 @dataclass
 class GeniusSubmitRedeemer(PlutusData):
+    """Represent a submit redeemer in Genius."""
+
     CONSTR_ID = 1
     spend_amount: int
 
 
 @dataclass
 class GeniusCompleteRedeemer(PlutusData):
+    """Represent a complete redeemer in Genius."""
+
     CONSTR_ID = 2
 
 
 @dataclass
 class GeniusContainedFee(PlutusData):
+    """Represent contained fees in Genius."""
+
     CONSTR_ID = 0
     lovelaces: int
     offered_tokens: int
@@ -82,12 +97,16 @@ class GeniusContainedFee(PlutusData):
 
 @dataclass
 class GeniusTimestamp(PlutusData):
+    """Represent a timestamp."""
+
     CONSTR_ID = 0
     timestamp: int
 
 
 @dataclass
 class GeniusRational(PlutusData):
+    """Represent a rational number."""
+
     CONSTR_ID = 0
     numerator: int
     denominator: int
@@ -95,6 +114,8 @@ class GeniusRational(PlutusData):
 
 @dataclass
 class GeniusYieldOrder(PlutusData):
+    """Represent a yield order in Genius."""
+
     CONSTR_ID = 0
     owner_key: bytes
     owner_address: PlutusFullAddress
@@ -113,31 +134,38 @@ class GeniusYieldOrder(PlutusData):
     contained_payment: int
 
     def pool_pair(self) -> Assets | None:
+        """Get the pool pair."""
         return self.offered_asset.assets + self.asked_asset.assets
 
     def address_source(self) -> str | None:
+        """Get the address source of the order."""
         return None
 
     def requested_amount(self) -> Assets:
-        asset = self.offered_asset.assets
-        return asset
+        """Get the requested amount."""
+        return self.offered_asset.assets
 
     def order_type(self) -> OrderType:
+        """Get the type of the order."""
         return OrderType.swap
 
 
 @dataclass
 class GeniusYieldFeeDatum(PlutusData):
+    """represent yield fee data in Genius."""
+
     CONSTR_ID = 0
-    fees: Dict[GeniusUTxORef, Dict[bytes, Dict[bytes, int]]]
-    reserved_value: Dict[bytes, Dict[bytes, int]]
-    spent_utxo: Union[GeniusUTxORef, PlutusNone] = PlutusNone()
+    fees: dict[GeniusUTxORef, dict[bytes, dict[bytes, int]]]
+    reserved_value: dict[bytes, dict[bytes, int]]
+    spent_utxo: Union[GeniusUTxORef, PlutusNone] = field(default_factory=PlutusNone())
 
 
 @dataclass
 class GeniusYieldSettings(PlutusData):
+    """Represent yield settings in Genius."""
+
     CONSTR_ID = 0
-    signatories: List[bytes]
+    signatories: list[bytes]
     req_signatories: int
     nft_symbol: bytes
     fee_address: PlutusFullAddress
@@ -162,7 +190,6 @@ class GeniusYieldOrderState(AbstractOrderState):
     _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str] | None:
         """The dex nft policy.
 
@@ -179,13 +206,13 @@ class GeniusYieldOrderState(AbstractOrderState):
         ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         """Official dex name."""
         return "GeniusYield"
 
     @property
     def reference_utxo(self) -> UTxO | None:
+        """Get the reference UTXO."""
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
         script = get_script_from_address(Address.decode(order_info[0].address))
@@ -204,6 +231,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def fee_reference_utxo(self) -> UTxO | None:
+        """Get the fee reference UTXO."""
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
         script = get_script_from_address(Address.decode(order_info[0].address))
@@ -231,7 +259,11 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def mint_reference_utxo(self) -> UTxO | None:
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        """Get the mint reference UTXO."""
+        order_info = get_pool_in_tx(  # noqa: F841
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+        )
         script = get_script_from_address(
             Address(
                 payment_part=ScriptHash(
@@ -254,6 +286,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def settings_datum(self) -> GeniusYieldSettings:
+        """Get the settings datum."""
         script = get_datum_from_address(
             address=Address.decode(
                 "addr1wxcqkdhe7qcfkqcnhlvepe7zmevdtsttv8vdfqlxrztaq2gge58rd",
@@ -263,31 +296,36 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         from pycardano import RawPlutusData
 
-        datum = RawPlutusData.from_cbor(script.datum_cbor)
+        datum = RawPlutusData.from_cbor(script.datum_cbor)  # noqa: F841
         return GeniusYieldSettings.from_cbor(script.datum_cbor)
 
-    def swap_utxo(
+    def swap_utxo(  # noqa: PLR0913, PLR0915
         self,
-        address_source: Address,
+        address_source: Address,  # noqa: ARG002
         in_assets: Assets,
         out_assets: Assets,
         tx_builder: TransactionBuilder,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
+        extra_assets: Assets | None = None,  # noqa: ARG002
+        address_target: Address | None = None,  # noqa: ARG002
+        datum_target: PlutusData | None = None,  # noqa: ARG002
     ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Creates the swap UTXO."""
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
         # Ensure the output matches required outputs
         out_check, _ = self.get_amount_out(asset=in_assets)
-        assert out_check.quantity() == out_assets.quantity()
+        if out_check.quantity() != out_assets.quantity():
+            error_msg = "Output quantity does not match required outputs."
+            raise ValueError(error_msg)
 
         # Ensure user is not overpaying
         in_check, _ = self.get_amount_in(asset=out_assets)
-        assert (
-            in_assets.quantity() - in_check.quantity()
-            == 0  # <= self.price[0] / self.price[1]
-        )
+        if (
+            in_assets.quantity() - in_check.quantity() != 0
+        ):  # <= self.price[0] / self.price[1]
+            error_msg = "User is overpaying."
+            raise ValueError(error_msg)
+
         in_assets = in_check
 
         assets = self.assets + Assets(**{self.dex_nft.unit(): 1})
@@ -419,7 +457,15 @@ class GeniusYieldOrderState(AbstractOrderState):
         return txo, order_datum
 
     @classmethod
-    def post_init(cls, values: dict[str, ...]):
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Performs post-initialization checks and updates.
+
+        Args:
+            values (dict[str, Any]): The pool initialization parameters.
+
+        Returns:
+            dict[str, Any]: Updated pool initialization parameters.
+        """
         super().post_init(values)
         datum = cls.order_datum_class.from_cbor(values["datum_cbor"])
 
@@ -444,7 +490,12 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         return values
 
-    def get_amount_out(self, asset: Assets, precise=True) -> tuple[Assets, float]:
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Calculates the amount out and slippage for given input asset."""
         amount_out, slippage = super().get_amount_out(asset=asset, precise=precise)
 
         if self.price[0] / self.price[1] > 1:
@@ -464,7 +515,20 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         return amount_out, slippage
 
-    def get_amount_in(self, asset: Assets, precise=False) -> tuple[Assets, float]:
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise=False,  # noqa: ANN001
+    ) -> tuple[Assets, float]:
+        """Calculates the amount in and slippage for given output asset.
+
+        Args:
+            asset (Assets): The output asset.
+            precise (bool, optional): Whether to calculate precisely. Defaults to True.
+
+        Returns:
+            tuple[Assets, float]: The amount in and slippage.
+        """
         fee = self.fee
         self.fee *= 1.003
         amount_in, slippage = super().get_amount_in(asset=asset, precise=precise)
@@ -484,7 +548,6 @@ class GeniusYieldOrderState(AbstractOrderState):
         return amount_in, slippage
 
     @classmethod
-    @property
     def order_selector(cls) -> list[str]:
         """Order selection information."""
         return [
@@ -493,7 +556,6 @@ class GeniusYieldOrderState(AbstractOrderState):
         ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         """Pool selection information."""
         return PoolSelector(
@@ -503,23 +565,27 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def swap_forward(self) -> bool:
+        """Returns True."""
         return True
 
     @property
     def stake_address(self) -> Address | None:
+        """Represents stake_address. Returns None."""
         return None
 
     @classmethod
-    @property
-    def order_datum_class(self) -> type[PlutusData]:
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Returns the class type of order."""
         return GeniusYieldOrder
 
     @classmethod
-    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """Returns the default script class for the pool."""
         return PlutusV2Script
 
     @property
     def price(self) -> tuple[int, int]:
+        """Get the price of the order as a tuple of numerator and denominator."""
         # if self.assets.unit() == Assets.model_validate(self.assets.model_dump()).unit():
         return [
             self.order_datum.price.numerator,
@@ -551,11 +617,18 @@ class GeniusYieldOrderState(AbstractOrderState):
 
 
 class GeniusYieldOrderBook(AbstractOrderBookState):
+    """Represents Order book."""
+
     fee: int = 30 / 1.003
     _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
-    def get_book(cls, assets: Assets, orders: list[GeniusYieldOrderState] | None):
+    def get_book(
+        cls,
+        assets: Assets,
+        orders: list[GeniusYieldOrderState] | None,
+    ) -> "GeniusYieldOrderBook":
+        """Retrieve and sort orders into buy and sell categories."""
         if orders is None:
             selector = GeniusYieldOrderState.pool_selector
 
@@ -598,41 +671,43 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         return ob
 
     @classmethod
-    @property
     def dex(cls) -> str:
+        """Returns dex name."""
         return "GeniusYield"
 
     @classmethod
-    @property
-    def order_selector(self) -> list[str]:
+    def order_selector(cls) -> list[str]:
         """Order selection information."""
         return GeniusYieldOrderState.order_selector
 
     @classmethod
-    @property
-    def pool_selector(self) -> PoolSelector:
+    def pool_selector(cls) -> PoolSelector:
         """Pool selection information."""
         return GeniusYieldOrderState.pool_selector
 
     @property
     def swap_forward(self) -> bool:
+        """Represents swap forward. Returns False."""
         return False
 
     @classmethod
-    def default_script_class(cls):
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """Returns the default script class."""
         return GeniusYieldOrderState.default_script_class
 
     @classmethod
-    @property
-    def order_datum_class(cls):
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Returns the class type of order datum."""
         return GeniusYieldOrderState.order_datum_class
 
     @property
     def pool_id(self) -> str:
+        """A unique identifier for the pool."""
         return "GeniusYield"
 
     @property
     def stake_address(self) -> Address | None:
+        """Get the stake address."""
         return None
 
     def get_amount_out(
@@ -641,6 +716,7 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         precise: bool = True,
         apply_fee: bool = True,
     ) -> tuple[Assets, float]:
+        """Calculates the amount out and slippage for given input asset."""
         return super().get_amount_out(asset=asset, precise=precise, apply_fee=apply_fee)
 
     def get_amount_in(
@@ -649,18 +725,20 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         precise: bool = True,
         apply_fee: bool = True,
     ) -> tuple[Assets, float]:
+        """Calculates the amount in and slippage for given input asset."""
         return super().get_amount_in(asset=asset, precise=precise, apply_fee=apply_fee)
 
-    def swap_utxo(
+    def swap_utxo(  # noqa: PLR0913
         self,
         address_source: Address,
         in_assets: Assets,
-        out_assets: Assets,
+        out_assets: Assets,  # noqa: ARG002
         tx_builder: TransactionBuilder,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
+        extra_assets: Assets | None = None,  # noqa: ARG002
+        address_target: Address | None = None,  # noqa: ARG002
+        datum_target: PlutusData | None = None,  # noqa: ARG002
     ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Swap utxo that generates a transaction output representing the swap."""
         if in_assets.unit() == self.assets.unit():
             book = self.sell_book_full
         else:

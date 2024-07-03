@@ -20,10 +20,10 @@ from pycardano import Value
 
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
@@ -58,6 +58,7 @@ class MuesliOrderConfig(PlutusData):
 @dataclass
 class MuesliOrderDatum(OrderDatum):
     """The order datum for MuesliSwap."""
+
     """Represents the datum for Muesli orders.
 
     Attributes:

@@ -723,6 +723,8 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
 
 
 class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
+    """Pool Datum for DJEDUSDM stable pool."""
+
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
             "addr1wxr9ppdymqgw6g0hvaaa7wc6j0smwh730ujx6lczgdynehsguav8d",
@@ -730,8 +732,8 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector."""
         return PoolSelector(
             selector_type="assets",
             selector=[
@@ -740,11 +742,13 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
         )
 
     @classmethod
-    def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
+    def pool_datum_class(cls) -> type[MinswapDJEDUSDMStablePoolDatum]:
+        """Returns the pool datum."""
         return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod
     def pool_policy(cls) -> list[str]:
+        """Returns the pool policy."""
         return [
             "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
         ]
