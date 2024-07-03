@@ -330,7 +330,9 @@ class SundaeV3OrderDatum(OrderDatum):
         """
         full_address = SundaeV3AddressWithDatum.from_address(address_source)
         merged = in_assets + out_assets
-        direction = AtoB() if in_assets.unit() == merged.unit() else BtoA()
+        direction: Union[AtoB, BtoA] = (
+            AtoB() if in_assets.unit() == merged.unit() else BtoA()
+        )
         _ = SwapConfig(
             direction=direction,
             amount_in=in_assets.quantity(),
@@ -349,12 +351,12 @@ class SundaeV3OrderDatum(OrderDatum):
             out_policy = out_assets.unit()[:56]
             out_name = out_assets.unit()[56:]
 
-        in_value = [
+        in_value: list[int | bytes] = [
             bytes.fromhex(in_policy),
             bytes.fromhex(in_name),
             in_assets.quantity(),
         ]
-        out_value = [
+        out_value: list[int | bytes] = [
             bytes.fromhex(out_policy),
             bytes.fromhex(out_name),
             out_assets.quantity(),
@@ -376,13 +378,15 @@ class SundaeV3OrderDatum(OrderDatum):
     def requested_amount(self) -> Assets:
         """Return the requested amount based on the swap configuration, if available."""
         if isinstance(self.swap, SwapV3Config):
-            return Assets(
-                {
-                    (
-                        self.swap.out_value[0] + self.swap.out_value[1]
-                    ).hex(): self.swap.out_value[2],
-                },
-            )
+            out_value_0 = self.swap.out_value[0]
+            out_value_1 = self.swap.out_value[1]
+
+            if isinstance(out_value_0, bytes) and isinstance(out_value_1, bytes):
+                return Assets(
+                    {
+                        (out_value_0 + out_value_1).hex(): self.swap.out_value[2],
+                    },
+                )
         return Assets({})
 
     def order_type(self) -> OrderType:
@@ -397,7 +401,8 @@ class SundaeV3OrderDatum(OrderDatum):
             return OrderType.deposit
         if isinstance(self.swap, WithdrawV3Config):
             return OrderType.withdraw
-        return None
+        error_msg = "Unknown order type. Expected one of: SwapV3Config, DepositV3Config, WithdrawV3Config."
+        raise ValueError(error_msg)
 
 
 @dataclass
@@ -528,6 +533,9 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
+        if self.pool_nft is None:
+            error_msg = "pool_nft is None"
+            raise ValueError(error_msg)
         return self.pool_nft.unit()
 
     @classmethod
@@ -552,10 +560,10 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         return False
 
     @classmethod
-    def extract_pool_nft(cls, values: dict[str, Any]) -> Assets:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the pool NFT."""
         try:
-            super().extract_pool_nft(values)
+            return super().extract_pool_nft(values)
         except InvalidPoolError as err:
             if len(values["assets"]) == 0:
                 raise NoAssetsError from err
@@ -588,6 +596,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         numerator = datum.fee.numerator
         denominator = datum.fee.denominator
         values["fee"] = int(numerator * 10000 / denominator)
+        return values
 
     def swap_datum(  # noqa: PLR0913
         self,
@@ -604,6 +613,9 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
                 f"{self.__class__.__name__} does not support swap forwarding.",
                 stacklevel=2,
             )
+        if self.pool_nft is None:
+            error_msg = "Pool NFT cannot be None"
+            raise ValueError(error_msg)
 
         ident = bytes.fromhex(self.pool_nft.unit()[60:])
 

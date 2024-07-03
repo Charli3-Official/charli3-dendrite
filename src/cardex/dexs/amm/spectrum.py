@@ -204,9 +204,11 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             UTxO | None: The reference UTxO or None if not set.
         """
         if cls._reference_utxo is None:
-            script_bytes = bytes.fromhex(
-                get_script_from_address(cls._stake_address).script,
-            )
+            script = get_script_from_address(cls._stake_address).script
+            if script is None:
+                error_msg = "No script found from the address."
+                raise ValueError(error_msg)
+            script_bytes = bytes.fromhex(script)
 
             script = cls.default_script_class()(script_bytes)
 

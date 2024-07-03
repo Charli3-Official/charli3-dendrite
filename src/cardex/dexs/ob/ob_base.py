@@ -80,14 +80,11 @@ class AbstractOrderState(AbstractPairState):
         in_quantity = asset.quantity() * (10000 - fee) // 10000
 
         available_quantity = int(self.available.quantity())
-
-        out_assets.root[self.out_unit] = min(
-            (in_quantity * denom) // num,
-            available_quantity,
-        )
+        calculated_amount = int((in_quantity * denom) // num)
+        out_assets.root[self.out_unit] = min(calculated_amount, available_quantity)
 
         if precise:
-            out_assets.root[self.out_unit] = int(out_assets.quantity())
+            out_assets.root[self.out_unit] = int(out_assets[self.out_unit])
 
         return out_assets, 0
 
@@ -114,9 +111,9 @@ class AbstractOrderState(AbstractPairState):
         denom, num = self.price
         in_assets = Assets(**{self.in_unit: 0})
         out_quantity = asset.quantity()
-        in_assets.root[self.in_unit] = (
-            min(out_quantity, self.available.quantity()) * denom
-        ) / num
+        in_assets.root[self.in_unit] = int(
+            (min(out_quantity, self.available.quantity()) * denom) / num,
+        )
         fees = in_assets[self.in_unit] * self.fee / 10000
         in_assets.root[self.in_unit] += fees
 
@@ -158,13 +155,14 @@ class AbstractOrderState(AbstractPairState):
         assets = values["assets"]
 
         # If no dex policy id defined, return nothing
-        if cls.dex_policy is None:
-            dex_nft = None
+        dex_policy = cls.dex_policy()
+        if dex_policy is None:
+            return None
 
         # If the dex nft is in the values, it's been parsed already
-        elif "dex_nft" in values:
+        if "dex_nft" in values and values["dex_nft"] is not None:
             if not any(
-                any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
+                any(p.startswith(d) for d in dex_policy) for p in values["dex_nft"]
             ):
                 error_msg = "Invalid DEX NFT"
                 raise NotAPoolError(error_msg)
@@ -175,9 +173,9 @@ class AbstractOrderState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.dex_policy)
+                if any(asset.startswith(policy) for policy in dex_policy)
             ]
-            if len(nfts) < 1:
+            if len(nfts) < ONE_VALUE:
                 error_msg = f"{cls.__name__}: Pool must have one DEX NFT token."
                 raise NotAPoolError(error_msg)
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
@@ -196,7 +194,7 @@ class AbstractOrderState(AbstractPairState):
             ValueError: If the order datum is not valid.
         """
         if self._datum_parsed is None:
-            self._datum_parsed = self.order_datum_class.from_cbor(self.datum_cbor)
+            self._datum_parsed = self.order_datum_class().from_cbor(self.datum_cbor)
         return self._datum_parsed
 
     @classmethod
@@ -234,7 +232,7 @@ class AbstractOrderState(AbstractPairState):
         return values
 
     @model_validator(mode="before")
-    def translate_address(self, values: dict[str, Any]) -> dict[str:Any]:
+    def translate_address(self, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
 
         Args:
@@ -255,7 +253,7 @@ class AbstractOrderState(AbstractPairState):
 
         # Parse the order datum
         try:
-            datum = self.order_datum_class.from_cbor(values["datum_cbor"])
+            datum = self.order_datum_class().from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
             raise NotAPoolError(
                 "Order datum could not be deserialized: \n "
@@ -360,7 +358,8 @@ class AbstractOrderBookState(AbstractPairState):
 
         in_quantity = asset.quantity()
         if apply_fee:
-            in_quantity = in_quantity * (10000 - self.fee) // 10000
+            fee = self.fee if self.fee is not None else 0
+            in_quantity = in_quantity * (10000 - fee) // 10000
 
         index = 0
         out_assets = Assets({unit_out: 0})
@@ -445,9 +444,17 @@ class AbstractOrderBookState(AbstractPairState):
                 1 of token B in units of token A, and the second `Decimal` is the price
                 to buy 1 of token A in units of token B.
         """
+        buy_price = Decimal(0)
+        sell_price = Decimal(0)
+
+        if self.buy_book is not None and self.buy_book[0] is not None:
+            buy_price = self.buy_book[0].price
+
+        if self.sell_book is not None and self.sell_book[0] is not None:
+            sell_price = self.sell_book[0].price
         return (
-            Decimal((self.buy_book[0].price + 1 / self.sell_book[0].price) / 2),
-            Decimal((self.sell_book[0].price + 1 / self.buy_book[0].price) / 2),
+            Decimal((buy_price + 1 / sell_price) / 2),
+            Decimal((sell_price + 1 / buy_price) / 2),
         )
 
     @property
@@ -461,8 +468,11 @@ class AbstractOrderBookState(AbstractPairState):
             error_msg = "tvl for non-ADA pools is not implemented."
             raise NotImplementedError(error_msg)
 
-        tvl = sum(b.quantity / b.price for b in self.buy_book) + sum(
-            s.quantity * s.price for s in self.sell_book
+        if self.buy_book is None or self.sell_book is None:
+            return Decimal(0)
+
+        tvl = sum(b.quantity / b.price for b in self.buy_book if b is not None) + sum(
+            s.quantity * s.price for s in self.sell_book if s is not None
         )
 
         return Decimal(int(tvl) / 10**6)

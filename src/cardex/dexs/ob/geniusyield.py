@@ -5,8 +5,10 @@ This contains data classes and utilities for handling various order and pool dat
 import time
 from dataclasses import dataclass
 from dataclasses import field
+from decimal import Decimal
 from math import ceil
 from typing import Any
+from typing import Optional
 from typing import Union
 
 from pycardano import Address
@@ -59,7 +61,7 @@ class GeniusUTxORef(PlutusData):
     tx_ref: GeniusTxRef
     index: int
 
-    def __hash__(self) -> bytes:
+    def __hash__(self) -> int:
         """The hash of the UTXO reference."""
         return hash(self.hash().payload)
 
@@ -183,7 +185,7 @@ class GeniusYieldOrderState(AbstractOrderState):
     datum_cbor: str
     datum_hash: str
     inactive: bool = False
-    fee: int = 30 / 1.003
+    fee: int = int(30 / 1.003)
 
     _batcher: Assets = Assets(lovelace=1000000)
     _datum_parsed: PlutusData | None = None
@@ -210,12 +212,18 @@ class GeniusYieldOrderState(AbstractOrderState):
         """Official dex name."""
         return "GeniusYield"
 
-    @property
-    def reference_utxo(self) -> UTxO | None:
+    @classmethod
+    def reference_utxo(cls) -> UTxO | None:
         """Get the reference UTXO."""
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        if cls.dex_nft is None:
+            return None
+
+        order_info = get_pool_in_tx(cls.tx_hash, assets=[cls.dex_nft.unit()])
 
         script = get_script_from_address(Address.decode(order_info[0].address))
+
+        if script.tx_hash is None or script.script is None or script.assets is None:
+            return None
 
         return UTxO(
             input=TransactionInput(
@@ -232,9 +240,15 @@ class GeniusYieldOrderState(AbstractOrderState):
     @property
     def fee_reference_utxo(self) -> UTxO | None:
         """Get the fee reference UTXO."""
+        if self.dex_nft is None:
+            return None
+
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
         script = get_script_from_address(Address.decode(order_info[0].address))
+
+        if script.tx_hash is None or script.script is None or script.assets is None:
+            return None
 
         return UTxO(
             input=TransactionInput(
@@ -260,6 +274,8 @@ class GeniusYieldOrderState(AbstractOrderState):
     @property
     def mint_reference_utxo(self) -> UTxO | None:
         """Get the mint reference UTXO."""
+        if self.dex_nft is None:
+            return None
         order_info = get_pool_in_tx(  # noqa: F841
             self.tx_hash,
             assets=[self.dex_nft.unit()],
@@ -271,6 +287,9 @@ class GeniusYieldOrderState(AbstractOrderState):
                 ),
             ),
         )
+
+        if script.tx_hash is None or script.script is None or script.assets is None:
+            return None
 
         return UTxO(
             input=TransactionInput(
@@ -304,12 +323,20 @@ class GeniusYieldOrderState(AbstractOrderState):
         address_source: Address,  # noqa: ARG002
         in_assets: Assets,
         out_assets: Assets,
-        tx_builder: TransactionBuilder,
+        tx_builder: Optional[TransactionBuilder] = None,
         extra_assets: Assets | None = None,  # noqa: ARG002
         address_target: Address | None = None,  # noqa: ARG002
         datum_target: PlutusData | None = None,  # noqa: ARG002
     ) -> tuple[TransactionOutput | None, PlutusData]:
         """Creates the swap UTXO."""
+        if self.dex_nft is None:
+            error_msg = "Dex nft is none."
+            raise ValueError(error_msg)
+
+        if tx_builder is None:
+            error_msg = "TransactionBuilder is required for this operation"
+            raise ValueError(error_msg)
+
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
         # Ensure the output matches required outputs
@@ -355,10 +382,13 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         tx_builder.reference_inputs.add(self.fee_reference_utxo)
 
-        order_datum = self.order_datum_class.from_cbor(self.order_datum.to_cbor())
+        order_datum = self.order_datum_class().from_cbor(self.order_datum.to_cbor())
         order_datum.offered_amount -= out_assets.quantity() + 1
         order_datum.partial_fills += 1
         order_datum.contained_fee.lovelaces += 1000000
+        if self.volume_fee is None:
+            error_msg = "Volume fee is not defined."
+            raise ValueError(error_msg)
         order_datum.contained_fee.asked_tokens += (
             int(in_assets.quantity() * self.volume_fee) // 10000
         )
@@ -467,7 +497,7 @@ class GeniusYieldOrderState(AbstractOrderState):
             dict[str, Any]: Updated pool initialization parameters.
         """
         super().post_init(values)
-        datum = cls.order_datum_class.from_cbor(values["datum_cbor"])
+        datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
 
         ask_unit = datum.asked_asset.assets.unit()
         offer_unit = datum.offered_asset.assets.unit()
@@ -530,7 +560,7 @@ class GeniusYieldOrderState(AbstractOrderState):
             tuple[Assets, float]: The amount in and slippage.
         """
         fee = self.fee
-        self.fee *= 1.003
+        self.fee = int(self.fee * 1.003)
         amount_in, slippage = super().get_amount_in(asset=asset, precise=precise)
         self.fee = fee
 
@@ -584,13 +614,13 @@ class GeniusYieldOrderState(AbstractOrderState):
         return PlutusV2Script
 
     @property
-    def price(self) -> tuple[int, int]:
+    def price(self) -> tuple[Decimal, Decimal]:
         """Get the price of the order as a tuple of numerator and denominator."""
         # if self.assets.unit() == Assets.model_validate(self.assets.model_dump()).unit():
-        return [
+        return (
             self.order_datum.price.numerator,
             self.order_datum.price.denominator,
-        ]
+        )
 
     @property
     def available(self) -> Assets:
@@ -598,7 +628,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         return Assets(**{self.out_unit: self.order_datum.offered_amount})
 
     @property
-    def tvl(self) -> int:
+    def tvl(self) -> Decimal:
         """Return the total value locked in the order.
 
         Raises:
@@ -613,26 +643,35 @@ class GeniusYieldOrderState(AbstractOrderState):
         Raises:
             NotImplementedError: Only ADA pool TVL is implemented.
         """
+        if self.dex_nft is None:
+            error_msg = "Dex NFT is none."
+            raise ValueError(error_msg)
         return self.dex_nft.unit()
 
 
 class GeniusYieldOrderBook(AbstractOrderBookState):
     """Represents Order book."""
 
-    fee: int = 30 / 1.003
+    fee: int = int(30 / 1.003)
     _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
     def get_book(
         cls,
-        assets: Assets,
-        orders: list[GeniusYieldOrderState] | None,
+        assets: Assets | None = None,
+        orders: list[GeniusYieldOrderState] | None = None,
     ) -> "GeniusYieldOrderBook":
         """Retrieve and sort orders into buy and sell categories."""
         if orders is None:
-            selector = GeniusYieldOrderState.pool_selector
+            selector = GeniusYieldOrderState.pool_selector()
 
-            result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+            selector_dict = selector.to_dict()
+
+            result = get_pool_utxos(
+                limit=10000,
+                historical=False,
+                addresses=selector_dict.get("addresses"),
+            )
 
             orders = [
                 GeniusYieldOrderState.model_validate(r.model_dump()) for r in result
@@ -641,6 +680,11 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         # sort orders into buy and sell
         buy_orders = []
         sell_orders = []
+
+        if assets is None:
+            error_msg = "Assets cannot be None."
+            raise ValueError(error_msg)
+
         for order in orders:
             if order.inactive:
                 continue
@@ -678,12 +722,12 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
     @classmethod
     def order_selector(cls) -> list[str]:
         """Order selection information."""
-        return GeniusYieldOrderState.order_selector
+        return GeniusYieldOrderState.order_selector()
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         """Pool selection information."""
-        return GeniusYieldOrderState.pool_selector
+        return GeniusYieldOrderState.pool_selector()
 
     @property
     def swap_forward(self) -> bool:
@@ -693,12 +737,12 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
     @classmethod
     def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
         """Returns the default script class."""
-        return GeniusYieldOrderState.default_script_class
+        return GeniusYieldOrderState.default_script_class()
 
     @classmethod
     def order_datum_class(cls) -> type[PlutusData]:
         """Returns the class type of order datum."""
-        return GeniusYieldOrderState.order_datum_class
+        return GeniusYieldOrderState.order_datum_class()
 
     @property
     def pool_id(self) -> str:
@@ -728,17 +772,21 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         """Calculates the amount in and slippage for given input asset."""
         return super().get_amount_in(asset=asset, precise=precise, apply_fee=apply_fee)
 
-    def swap_utxo(  # noqa: PLR0913
+    def swap_utxo(  # noqa: PLR0913, PLR0912
         self,
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,  # noqa: ARG002
-        tx_builder: TransactionBuilder,
+        tx_builder: Optional[TransactionBuilder] = None,
         extra_assets: Assets | None = None,  # noqa: ARG002
         address_target: Address | None = None,  # noqa: ARG002
         datum_target: PlutusData | None = None,  # noqa: ARG002
     ) -> tuple[TransactionOutput | None, PlutusData]:
         """Swap utxo that generates a transaction output representing the swap."""
+        if tx_builder is None:
+            error_msg = "TransactionBuilder is required for this operation"
+            raise ValueError(error_msg)
+
         if in_assets.unit() == self.assets.unit():
             book = self.sell_book_full
         else:
@@ -749,6 +797,7 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         fee_datum: GeniusYieldFeeDatum | None = None
         txo: TransactionOutput | None = None
         datum = None
+
         for order in book:
             if txo is not None:
                 if fee_txo is None:
@@ -756,7 +805,8 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
                     fee_datum = datum
                 else:
                     fee_txo.amount += txo.amount
-                    fee_datum.fees.update(datum.fees)
+                    if fee_datum is not None and datum is not None:
+                        fee_datum.fees.update(datum.fees)
                     tx_builder._minting_script_to_redeemers.pop()
 
             state = order.state
@@ -771,29 +821,29 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
                 tx_builder=tx_builder,
             )
 
-            if fee_txo is not None:
-                txo.amount.coin -= 1000000
+            txo.amount.coin -= 1000000
 
-                if not isinstance(datum, GeniusYieldFeeDatum):
-                    datum.contained_fee.lovelaces -= 1000000
+            if not isinstance(datum, GeniusYieldFeeDatum):
+                datum.contained_fee.lovelaces -= 1000000
 
             in_total -= order_in
 
             if in_total.quantity() <= state.price[0] / state.price[1]:
                 break
 
-        if fee_txo is not None:
-            if isinstance(datum, GeniusYieldFeeDatum):
+        if isinstance(datum, GeniusYieldFeeDatum):
+            if fee_txo is not None and txo is not None:
                 fee_txo.amount += txo.amount
+            if fee_datum is not None:
                 fee_datum.fees.update(datum.fees)
-                tx_builder._minting_script_to_redeemers.pop()
-                txo = fee_txo
-                datum = fee_datum
-            else:
-                tx_builder.add_output(
-                    tx_out=fee_txo,
-                    datum=fee_datum,
-                    add_datum_to_witness=True,
-                )
+            tx_builder._minting_script_to_redeemers.pop()
+            txo = fee_txo
+            datum = fee_datum
+        else:
+            tx_builder.add_output(
+                tx_out=fee_txo,
+                datum=fee_datum,
+                add_datum_to_witness=True,
+            )
 
         return txo, datum

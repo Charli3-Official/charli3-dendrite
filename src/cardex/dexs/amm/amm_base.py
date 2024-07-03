@@ -2,10 +2,12 @@
 from abc import abstractmethod
 from decimal import Decimal
 from typing import Any
+from typing import Optional
 
 from pycardano import Address
 from pycardano import DeserializeException
 from pycardano import PlutusData
+from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pydantic import model_validator
 
@@ -72,16 +74,18 @@ class AbstractPoolState(AbstractPairState):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        tx_builder: Optional[TransactionBuilder] = None,  # noqa: ARG002
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ) -> TransactionOutput:
+    ) -> tuple[TransactionOutput | None, PlutusData]:
         """Swap utxo that generates a transaction output representing the swap.
 
         Args:
             address_source (Address): The source address for the swap.
             in_assets (Assets): The assets to be swapped in.
             out_assets (Assets): The assets to be received after swapping.
+            tx_builder (TransactionBuilder): Optional
             extra_assets (Assets, optional): Additional assets involved in the swap. Defaults to None.
             address_target (Address, optional): The target address for the swap. Defaults to None.
             datum_target (PlutusData, optional): The target datum for the swap. Defaults to None.

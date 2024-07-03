@@ -2,12 +2,14 @@
 from abc import ABC
 from abc import abstractmethod
 from decimal import Decimal
+from typing import Optional
 
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
+from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pycardano import UTxO
 
@@ -200,16 +202,18 @@ class AbstractPairState(CardexBaseModel, ABC):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        tx_builder: Optional[TransactionBuilder] = None,
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ) -> TransactionOutput:
+    ) -> tuple[TransactionOutput | None, PlutusData]:
         """Creates the swap UTXO.
 
         Args:
             address_source (Address): The source address.
             in_assets (Assets): The input assets.
             out_assets (Assets): The output assets.
+            tx_builder (TransactionBuilder): Optional
             extra_assets (Assets | None): Extra assets included in the transaction.
             address_target (Address | None): The target address.
             datum_target (PlutusData | None): The target datum.
@@ -218,7 +222,7 @@ class AbstractPairState(CardexBaseModel, ABC):
             NotImplementedError: If the method is not implemented.
 
         Returns:
-            TransactionOutput: The swap UTXO.
+            Tuple[TransactionOutput, PlutusData]: The transaction output and the datum representing the swap operation.
         """
         error_msg = "This method is not  implemented"
         raise NotImplementedError(error_msg)
