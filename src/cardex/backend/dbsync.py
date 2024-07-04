@@ -24,6 +24,7 @@ DBSYNC_USER = os.environ.get("DBSYNC_USER", None)
 DBSYNC_PASS = os.environ.get("DBSYNC_PASS", None)
 DBSYNC_HOST = os.environ.get("DBSYNC_HOST", None)
 DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
+DBSYNC_DB_NAME = os.environ.get("DBSYNC_DB_NAME", None)
 
 
 def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
@@ -32,9 +33,10 @@ def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
     with lock:
         if POOL is None:
             conninfo = (
-                f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer "
+                f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname={DBSYNC_DB_NAME} "
                 + f"user={DBSYNC_USER} password={DBSYNC_PASS}"
             )
+
             POOL = psycopg_pool.ConnectionPool(
                 conninfo=conninfo,
                 open=False,
