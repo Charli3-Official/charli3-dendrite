@@ -22,7 +22,6 @@ from pycardano import BlockFrostChainContext
 from pycardano import ExtendedSigningKey
 from pycardano import HDWallet
 from pycardano import blockfrost
-from pycardano import TransactionBuilder
 
 load_dotenv()
 

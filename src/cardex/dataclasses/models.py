@@ -1,6 +1,7 @@
 # noqa
 from collections.abc import Iterable
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -87,7 +88,8 @@ class Assets(BaseDict):
         return list(self.values())[index]
 
     @model_validator(mode="before")
-    def _digest_assets(self, values: dict) -> dict:
+    @classmethod
+    def _digest_assets(cls, values: dict[str, Any]) -> dict[str, Any]:
         if hasattr(values, "root"):
             root = values.root
         elif "values" in values and isinstance(values["values"], list):
@@ -97,7 +99,9 @@ class Assets(BaseDict):
                 error_msg = (
                     "For a list of dictionaries, each dictionary must be of length 1."
                 )
-                raise ValueError(error_msg)
+                raise ValueError(
+                    error_msg,
+                )
             root = {k: v for d in values for k, v in d.items()}
         else:
             root = dict(values.items())
