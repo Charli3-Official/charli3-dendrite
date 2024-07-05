@@ -305,7 +305,7 @@ class SundaeV3OrderDatum(OrderDatum):
         DonateV3Config,
         SwapV3Config,
     ]
-    extension: Any
+    extension: bytes
 
     @classmethod
     def create_datum(  # noqa: PLR0913

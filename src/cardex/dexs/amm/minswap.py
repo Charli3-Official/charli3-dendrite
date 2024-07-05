@@ -252,7 +252,7 @@ class MinswapOrderDatum(OrderDatum):
 
     def address_source(self) -> str:
         """Returns the source address of the sender."""
-        if self.sender.to.to_address() is None:
+        if self.sender.to_address() is None:
             error_msg = "None"
             raise ValueError(error_msg)
         return self.sender.to_address()
@@ -652,9 +652,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         """Returns the pool selector for the DJEDiUSD stable pool."""
         return PoolSelector(
             selector_type="assets",
-            selector=[
-                "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
-            ],
+            selector=cls.pool_policy(),
         )
 
     @classmethod
@@ -704,9 +702,7 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
         """Returns the pool selector for the DJEDUSDC stable pool."""
         return PoolSelector(
             selector_type="assets",
-            selector=[
-                "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
-            ],
+            selector=cls.pool_policy(),
         )
 
     @classmethod
@@ -736,9 +732,7 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
         """Returns the pool selector."""
         return PoolSelector(
             selector_type="assets",
-            selector=[
-                "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
-            ],
+            selector=cls.pool_policy(),
         )
 
     @classmethod

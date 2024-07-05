@@ -43,8 +43,8 @@ class AbstractPairState(CardexBaseModel, ABC):
     datum_hash: str | None = None
     dex_nft: Assets | None = None
 
-    _batcher_fee: Assets
-    _datum_parsed: PlutusData
+    _batcher_fee: Assets | None = None
+    _datum_parsed: PlutusData | None = None
 
     @classmethod
     @abstractmethod

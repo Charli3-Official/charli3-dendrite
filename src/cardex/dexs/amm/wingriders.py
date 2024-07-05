@@ -318,7 +318,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         """Returns the pool selector for the DEX."""
         return PoolSelector(
             selector_type="assets",
-            selector=cls.dex_policy,
+            selector=cls.dex_policy(),
         )
 
     @property

@@ -8,6 +8,8 @@ import psycopg_pool
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from pycardano import Address
+from pycardano import DecodingException
+from pycardano import VerificationKeyHash
 
 from cardex.dataclasses.models import BlockList
 from cardex.dataclasses.models import PoolStateList
@@ -52,7 +54,7 @@ def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
     return POOL
 
 
-def db_query(query: str, args: tuple | None = None) -> list[dict[str, Any]]:
+def db_query(query: str, args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Fetch results from a query."""
     with get_dbsync_pool().connection() as conn:  # noqa: SIM117
         with conn.cursor(row_factory=dict_row) as cursor:
@@ -100,14 +102,14 @@ def get_pool_utxos(
 ) -> PoolStateList:
     """Get transactions by policy or address."""
     error_msg = "Either policies or addresses must be defined, not both."
-    if assets is None and addresses is None:
-        raise ValueError(error_msg)
-
-    if assets is not None and addresses is not None:
+    if (assets is None and addresses is None) or (
+        assets is not None and addresses is not None
+    ):
         raise ValueError(error_msg)
 
     # Use the pool selector to format the output
     datum_selector = POOL_SELECTOR
+    values: dict[str, Any] = {"limit": limit, "offset": page * limit}
 
     # If assets are specified, select assets
     if assets is not None:
@@ -120,13 +122,32 @@ JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
 LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
 """
 
+        values["policies"] = [bytes.fromhex(p[:56]) for p in assets]
+        values["names"] = [bytes.fromhex(p[56:]) for p in assets]
+
     # If address is specified, select addresses
-    else:
+    elif addresses is not None:
         datum_selector += """FROM (
     SELECT *
     FROM tx_out
     WHERE tx_out.payment_cred = ANY(%(addresses)b)
 ) as txo"""
+
+        values["addresses"] = []
+        for addr in addresses:
+            address: Address | None = None
+            error_msg = ""
+            try:
+                address = Address.decode(addr)
+            except (DecodingException, TypeError):
+                error_msg = "Failed to decode "
+            try:
+                if address is None:
+                    address = Address(VerificationKeyHash(bytes.fromhex(addr)))
+            except ValueError as err:
+                error_msg += f"and construct by key Hash: {addr}"
+                raise ValueError(error_msg) from err
+            values["addresses"].append(address.payment_part.payload)
 
     datum_selector += """
 LEFT JOIN tx ON txo.tx_id = tx.id
@@ -148,21 +169,7 @@ LIMIT %(limit)s
 OFFSET %(offset)s
 """
 
-    values: dict[str, Any] = {"limit": limit, "offset": page * limit}
-    if assets is not None:
-        values.update(
-            {
-                "policies": [bytes.fromhex(p[:56]) for p in assets],
-                "names": [bytes.fromhex(p[56:]) for p in assets],
-            },
-        )
-
-    elif addresses is not None:
-        values.update(
-            {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
-        )
-
-    r = db_query(datum_selector, tuple(values))
+    r = db_query(datum_selector, values)
 
     return PoolStateList.model_validate(r)
 
@@ -211,15 +218,15 @@ WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
 
     values: dict[str, Any] = {"tx_hash": tx_hash}
     if assets is not None:
-        values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
-        values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
+        values["policies"] = [bytes.fromhex(p[:56]) for p in assets]
+        values["names"] = [bytes.fromhex(p[56:]) for p in assets]
 
     elif addresses is not None:
-        values.update(
-            {"addresses": [Address.decode(a).payment_part.payload for a in addresses]},
-        )
+        values["addresses"] = [
+            Address.decode(a).payment_part.payload for a in addresses
+        ]
 
-    r = db_query(datum_selector, tuple(values))
+    r = db_query(datum_selector, (values))
 
     return PoolStateList.model_validate(r)
 
@@ -239,7 +246,7 @@ FROM block
 WHERE block_no IS NOT null
 ORDER BY block_no DESC
 LIMIT %(last_n_blocks)s""",
-        tuple({"last_n_blocks": last_n_blocks}),
+        ({"last_n_blocks": last_n_blocks}),
     )
     return BlockList.model_validate(r)
 
@@ -257,7 +264,7 @@ LEFT JOIN block ON tx.block_id = block.id
 WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
 """
     )
-    r = db_query(datum_selector, tuple({"block_no": block_no}))
+    r = db_query(datum_selector, ({"block_no": block_no}))
 
     return PoolStateList.model_validate(r)
 
@@ -294,7 +301,7 @@ WHERE s.hash = %(address)b
 ORDER BY block.time DESC
 LIMIT 1
 """
-    r = db_query(script_selector, (address.payment_part.payload,))
+    r = db_query(script_selector, (address.payment_part.payload))
     result = r[0]
 
     if result["assets"] is not None and result["assets"][0].get("lovelace") is None:
@@ -367,7 +374,7 @@ AND tx_out.inline_datum_id IS NOT NULL
 ORDER BY block.time DESC
 LIMIT 1
 """
-    r = db_query(script_selector, tuple(kwargs))
+    r = db_query(script_selector, (kwargs))
 
     if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
         r[0]["assets"] = None
@@ -503,7 +510,7 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        tuple(
+        (
             {
                 "addresses": [
                     Address.decode(a).payment_part.payload for a in stake_addresses
@@ -513,7 +520,7 @@ OFFSET %(offset)s"""
                 "after_time": None
                 if after_time is None
                 else after_time.strftime("%Y-%m-%d %H:%M:%S"),
-            },
+            }
         ),
     )
 
@@ -661,7 +668,7 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        tuple(
+        (
             {
                 "addresses": [
                     Address.decode(a).payment_part.payload for a in stake_addresses
@@ -676,7 +683,7 @@ OFFSET %(offset)s"""
                 "in_tx_hash": None
                 if in_tx_hash is None
                 else [bytes.fromhex(h) for h in in_tx_hash],
-            },
+            }
         ),
     )
 
@@ -813,7 +820,7 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        tuple(
+        (
             {
                 "addresses": [
                     Address.decode(a).payment_part.payload for a in stake_addresses
@@ -824,7 +831,7 @@ OFFSET %(offset)s"""
                 if after_time is None
                 else after_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "block_no": block_no,
-            },
+            }
         ),
     )
 

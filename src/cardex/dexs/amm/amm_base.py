@@ -35,9 +35,9 @@ class AbstractPoolState(AbstractPairState):
     tx_index: int
     tx_hash: str
 
-    _batcher_fee: Assets
+    _batcher_fee: Assets | None = None
     _datum_parsed: PlutusData | None = None
-    _deposit: Assets
+    _deposit: Assets | None = None
     _volume_fee: int | None = None
 
     @property
@@ -52,8 +52,9 @@ class AbstractPoolState(AbstractPairState):
         error_msg = "This method must be implemented by subclasses"
         raise NotImplementedError(error_msg)
 
+    @classmethod
     @abstractmethod
-    def pool_datum_class(self) -> type[PlutusData]:
+    def pool_datum_class(cls) -> type[PlutusData]:
         """Abstract pool state datum.
 
         Raises:
@@ -193,6 +194,7 @@ class AbstractPoolState(AbstractPairState):
         if dex_policy is None:
             return None
 
+        # If the dex nft is in the values, it's been parsed already
         if "dex_nft" in values and values["dex_nft"] is not None:
             if not any(
                 any(p.startswith(d) for d in dex_policy) for p in values["dex_nft"]
@@ -367,7 +369,8 @@ class AbstractPoolState(AbstractPairState):
         return values
 
     @model_validator(mode="before")
-    def translate_address(self, values: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
 
         Args:
@@ -383,12 +386,12 @@ class AbstractPoolState(AbstractPairState):
             if not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
-        if self.skip_init(values):
+        if cls.skip_init(values):
             return values
 
         # Parse the pool datum
         try:
-            datum = PlutusData.from_cbor(values["datum_cbor"])
+            datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
             error_msg = (
                 "Pool datum could not be deserialized: \n "
@@ -412,16 +415,16 @@ class AbstractPoolState(AbstractPairState):
                     )
                     raise InvalidPoolError(error_msg) from KeyError
 
-        _ = self.extract_dex_nft(values)
+        _ = cls.extract_dex_nft(values)
 
-        _ = self.extract_lp_tokens(values)
+        _ = cls.extract_lp_tokens(values)
 
-        _ = self.extract_pool_nft(values)
+        _ = cls.extract_pool_nft(values)
 
         # Add the pool tokens back in
         values["assets"].root.update(pair.root)
 
-        self.post_init(values)
+        cls.post_init(values)
 
         return values
 

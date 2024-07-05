@@ -201,40 +201,40 @@ class VyFiOrderDatum(OrderDatum):
 class VyFiTokenDefinition(BaseModel):
     """Represents the definition of a VyFi token."""
 
-    token_name: str
-    currency_symbol: str
+    token_name: str = Field(alias="tokenName")
+    currency_symbol: str = Field(alias="currencySymbol")
 
 
 class VyFiFees(BaseModel):
     """Represents the fees in the VyFi protocol."""
 
-    bar_fee: int
-    process_fee: int
-    liq_fee: int
+    bar_fee: int = Field(alias="barFee")
+    process_fee: int = Field(alias="processFee")
+    liq_fee: int = Field(alias="liqFee")
 
 
 class VyFiPoolTokens(BaseModel):
     """Represents the tokens in a VyFi liquidity pool."""
 
-    a_asset: VyFiTokenDefinition
-    b_asset: VyFiTokenDefinition
-    main_nft: VyFiTokenDefinition
-    operator_token: VyFiTokenDefinition
-    lptoken_name: dict[str, str]
-    fees_settings: VyFiFees
-    stake_key: Optional[str]
+    a_asset: VyFiTokenDefinition = Field(alias="aAsset")
+    b_asset: VyFiTokenDefinition = Field(alias="bAsset")
+    main_nft: VyFiTokenDefinition = Field(alias="mainNFT")
+    operator_token: VyFiTokenDefinition = Field(alias="operatorToken")
+    lptoken_name: dict[str, str] = Field(alias="lpTokenName")
+    fees_settings: VyFiFees = Field(alias="feesSettings")
+    stake_key: Optional[str] = Field(alias="stakeKey")
 
 
 class VyFiPoolDefinition(BaseModel):
     """Represents the definition of a VyFi liquidity pool."""
 
-    units_pair: str
-    pool_validator_utxo_address: str
+    units_pair: str = Field(alias="unitsPair")
+    pool_validator_utxo_address: str = Field(alias="poolValidatorUtxoAddress")
     lp_policy_id_asset_id: str = Field(alias="lpPolicyId-assetId")
     json_: VyFiPoolTokens = Field(alias="json")
     pair: str
-    is_live: bool
-    order_validator_utxo_address: str
+    is_live: bool = Field(alias="isLive")
+    order_validator_utxo_address: str = Field(alias="orderValidatorUtxoAddress")
 
 
 class VyFiCPPState(AbstractConstantProductPoolState):
@@ -266,7 +266,7 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             ).json():
                 p["json"] = json.loads(p["json"])
                 cls._pools[
-                    p["json"]["main_nft"]["currency_symbol"]
+                    p["json"]["mainNFT"]["currencySymbol"]
                 ] = VyFiPoolDefinition.model_validate(p)
             cls._pools_refresh = time.time()
 
@@ -276,14 +276,19 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     def order_selector(cls) -> list[str]:
         """Returns the order selector for the DEX."""
         if cls._pools is None:
-            return []
+            return [p.order_validator_utxo_address for p in cls.pools().values()]
         return [p.order_validator_utxo_address for p in cls._pools.values()]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector for the DEX."""
         if cls._pools is None:
-            return PoolSelector(selector_type="addresses", selector=[])
+            return PoolSelector(
+                selector_type="addresses",
+                selector=[
+                    pool.pool_validator_utxo_address for pool in cls.pools().values()
+                ],
+            )
         return PoolSelector(
             selector_type="addresses",
             selector=[pool.pool_validator_utxo_address for pool in cls._pools.values()],

@@ -31,6 +31,7 @@ from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
@@ -115,7 +116,7 @@ class GeniusRational(PlutusData):
 
 
 @dataclass
-class GeniusYieldOrder(PlutusData):
+class GeniusYieldOrder(OrderDatum):
     """Represent a yield order in Genius."""
 
     CONSTR_ID = 0
@@ -192,7 +193,7 @@ class GeniusYieldOrderState(AbstractOrderState):
     _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
-    def dex_policy(cls) -> list[str] | None:
+    def dex_policy(cls) -> list[str]:
         """The dex nft policy.
 
         This should be the policy or policy+name of the dex nft.
@@ -590,7 +591,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         """Pool selection information."""
         return PoolSelector(
             selector_type=PoolSelectorType.address,
-            selector=cls.order_selector,
+            selector=cls.order_selector(),
         )
 
     @property
@@ -604,7 +605,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         return None
 
     @classmethod
-    def order_datum_class(cls) -> type[PlutusData]:
+    def order_datum_class(cls) -> type[GeniusYieldOrder]:
         """Returns the class type of order."""
         return GeniusYieldOrder
 
@@ -664,13 +665,13 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         """Retrieve and sort orders into buy and sell categories."""
         if orders is None:
             selector = GeniusYieldOrderState.pool_selector()
-
             selector_dict = selector.to_dict()
 
             result = get_pool_utxos(
-                limit=10000,
-                historical=False,
                 addresses=selector_dict.get("addresses"),
+                assets=selector_dict.get("assets"),
+                limit=1,
+                historical=False,
             )
 
             orders = [

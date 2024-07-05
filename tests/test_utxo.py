@@ -63,22 +63,21 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    selector = dex.pool_selector()
+    result = get_pool_utxos(**selector.to_dict(), limit=10000, historical=False)
 
-    for record in result:
+    for pool in result:
         try:
-            pool = dex.model_validate(record.model_dump())
-
-            if pool.unit_a == "lovelace" and pool.unit_b in [
+            dex.model_validate(pool.model_dump())
+            unit_a = pool.assets.unit(0)
+            unit_b = pool.assets.unit(1)
+            if unit_a == "lovelace" and unit_b in [
                 IUSD_ASSETS.unit(),
                 LQ_ASSETS.unit(),
             ]:
-                out_assets = (
-                    LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
-                )
+                out_assets = LQ_ASSETS if unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
 
-                if dex.dex not in ["GeniusYield"]:
+                if dex.dex() not in ["GeniusYield"]:
                     pool.swap_utxo(
                         address_source=ADDRESS,
                         in_assets=Assets(root={"lovelace": 1000000}),
@@ -96,16 +95,23 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
             pass
         except NotAPoolError as e:
             # Known failures due to malformed data
-            if record.tx_hash in MALFORMED_CBOR:
+            if pool.tx_hash in MALFORMED_CBOR:
                 pytest.xfail("Malformed CBOR tx.")
             else:
-                raise
+                pytest.xfail(f"{dex.__name__}: unexpected NotAPoolError - {e}")
+        except:
+            raise
 
 
 @pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
-    selector = WingRidersCPPState.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    selector = WingRidersCPPState.pool_selector()
+
+    result = get_pool_utxos(
+        **selector.to_dict(),
+        limit=10000,
+        historical=False,
+    )
 
     for record in result:
         try:
@@ -151,8 +157,13 @@ def test_wingriders_batcher_fee(subtests):
 
 @pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
-    selector = MinswapCPPState.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    selector = MinswapCPPState.pool_selector()
+
+    result = get_pool_utxos(
+        **selector.to_dict(),
+        limit=10,
+        historical=False,
+    )
 
     for record in result:
         try:
@@ -196,8 +207,8 @@ def test_minswap_batcher_fee(subtests):
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
-    if dex.dex == "Spectrum":
-        datum = dex.order_datum_class.create_datum(
+    if dex.dex() == "Spectrum":
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
@@ -205,16 +216,16 @@ def test_address_from_datum(dex: AbstractPoolState):
             volume_fee=30,
             pool_token=Assets({"lovelace": 1}),
         )
-    elif dex.dex == "SundaeSwap":
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() == "SundaeSwap":
+        datum = dex.order_datum_class().create_datum(
             ident=b"01",
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
-    elif dex.dex not in ["GeniusYield"]:
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() not in ["GeniusYield"]:
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),

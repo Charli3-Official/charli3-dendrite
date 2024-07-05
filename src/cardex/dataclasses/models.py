@@ -264,6 +264,8 @@ class SwapTransactionList(BaseList):
     @model_validator(mode="before")
     def from_dbsync(self, values: list) -> list:
         """Return SwapStatusInfo list from dbsync values."""
+        if not isinstance(values, list):
+            return []
         if len(values) == 0:
             return []
 

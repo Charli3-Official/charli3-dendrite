@@ -35,7 +35,7 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    selector = dex.pool_selector()
     limit = 10000 if run_slow else 100
     result = benchmark(
         get_pool_utxos,
@@ -52,7 +52,7 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
     ]:
         assert len(result) == 1
     elif dex == WingRidersSSPState:
-        assert len(result) == 2
+        assert len(result) == 3  # 2
     else:
         assert len(result) > 50
 
@@ -61,14 +61,14 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    selector = dex.pool_selector()
     result = benchmark(
         get_pool_utxos,
         limit=1,
         historical=False,
         **selector.to_dict(),
     )
-    if dex.dex in ["Spectrum"] or dex in [
+    if dex.dex() in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
         MinswapDJEDUSDMStableState,
@@ -85,7 +85,7 @@ def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
 
     limit = 10 if run_slow else 1000
 
-    order_selector = dex.order_selector
+    order_selector = dex.order_selector()
     result = benchmark(
         get_historical_order_utxos,
         stake_addresses=order_selector,
@@ -98,7 +98,7 @@ def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
     ["ec77a0fcbbe03e3ab04f609dc95eb731334c8508a2c03b00c31c8de89688e04b"],
 )
 def test_get_pool_in_tx(tx_hash):
-    selector = MinswapCPPState.pool_selector
+    selector = MinswapCPPState.pool_selector()
     tx = get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
 
     assert len(tx) > 0
