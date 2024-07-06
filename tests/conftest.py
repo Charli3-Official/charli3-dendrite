@@ -5,57 +5,6 @@ from cardex.dexs.core.base import AbstractPairState
 subclass_walk = [AbstractPairState]
 D = []
 
-tests_db_sync_success = [
-    "SpectrumCPPState",
-    "SundaeSwapCPPState",
-    "SundaeSwapV3CPPState",
-    "MuesliSwapCPPState",
-    "WingRidersSSPState",
-    "WingRidersCPPState",
-    "MinswapCPPState",
-    "MinswapDJEDUSDCStableState",
-    "MinswapDJEDUSDMStableState",
-    "MinswapDJEDiUSDStableState",
-    "VyFiCPPState",
-    "GeniusYieldOrderState",
-    "GeniusYieldOrderBook",
-]
-
-tests_amm_success = [
-    "MinswapCPPState",
-    "SpectrumCPPState",
-    "MinswapDJEDUSDMStableState",
-    "MinswapDJEDiUSDStableState",
-    "MinswapDJEDUSDCStableState",
-    "SundaeSwapCPPState",
-    "SundaeSwapV3CPPState",
-    "WingRidersSSPState",
-    "WingRidersCPPState",
-    "VyFiCPPState",
-    "MuesliSwapCPPState",
-    "GeniusYieldOrderBook",
-    "GeniusYieldOrderState",  # Tests for GeniusYieldOrderState Failing
-]
-
-tests_utxo_success = [
-    # "GeniusYieldOrderBook",
-    # "MuesliSwapCPPState",
-    # "SundaeSwapCPPState",
-    # "WingRidersSSPState",
-    # "MinswapCPPState",
-    # "VyFiCPPState",
-    # "WingRidersCPPState",
-    # "SpectrumCPPState",
-    # "SundaeSwapV3CPPState",
-    # "MinswapDJEDUSDCStableState"
-]
-
-tests_utxo_failed = [
-    "MinswapDJEDUSDMStableState",
-    "MinswapDJEDiUSDStableState",
-    "GeniusYieldOrderState",
-]
-
 while len(subclass_walk) > 0:
     c = subclass_walk.pop()
 
@@ -63,14 +12,9 @@ while len(subclass_walk) > 0:
 
     try:
         # Try calling the dex method
-        if (
-            isinstance(c.dex(), str)
-            and c.__name__ not in ["MuesliSwapCLPState"]
-            and c.__name__ not in tests_utxo_failed
-        ):
+        if isinstance(c.dex(), str) and c.__name__ not in ["MuesliSwapCLPState"]:
             D.append(c)
     except NotImplementedError:
-        # Skip if the method is not implemented
         subclass_walk.extend(subclasses)
     except TypeError:
         # Skip if dex is not a callable method

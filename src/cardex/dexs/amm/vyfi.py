@@ -21,6 +21,7 @@ from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.core.constants import ADDRESS_LENGTH
 from cardex.dexs.core.constants import ONE_VALUE
@@ -284,13 +285,13 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         """Returns the pool selector for the DEX."""
         if cls._pools is None:
             return PoolSelector(
-                selector_type="addresses",
+                selector_type=PoolSelectorType.address,
                 selector=[
                     pool.pool_validator_utxo_address for pool in cls.pools().values()
                 ],
             )
         return PoolSelector(
-            selector_type="addresses",
+            selector_type=PoolSelectorType.address,
             selector=[pool.pool_validator_utxo_address for pool in cls._pools.values()],
         )
 

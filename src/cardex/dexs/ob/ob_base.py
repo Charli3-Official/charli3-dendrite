@@ -232,7 +232,8 @@ class AbstractOrderState(AbstractPairState):
         return values
 
     @model_validator(mode="before")
-    def translate_address(self, values: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
 
         Args:
@@ -248,40 +249,41 @@ class AbstractOrderState(AbstractPairState):
             if not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
-        if self.skip_init(values):
+        if cls.skip_init(values):
             return values
 
         # Parse the order datum
         try:
-            datum = self.order_datum_class().from_cbor(values["datum_cbor"])
+            datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
-            raise NotAPoolError(
+            error_msg = (
                 "Order datum could not be deserialized: \n "
-                + f"    error={e}\n"
-                + f"    tx_hash={values['tx_hash']}\n"
-                + f"    datum={values['datum_cbor']}\n",
-            ) from e
+                + f" error={e}\n"
+                + f"   tx_hash={values['tx_hash']}\n"
+                + f"    datum={values['datum_cbor']}\n"
+            )
+            raise NotAPoolError(error_msg) from e
 
         # To help prevent edge cases, remove pool tokens while running other checks
         pair = datum.pool_pair()
         if datum.pool_pair() is not None:
             for token in datum.pool_pair():
                 try:
-                    if token in values["assets"]:
-                        pair.root.update({token: values["assets"].root.pop(token)})
-                except KeyError as err:
-                    raise InvalidPoolError(
+                    pair.root.update({token: values["assets"].root.pop(token)})
+                except KeyError:
+                    error_msg = (
                         "Order does not contain expected asset.\n"
                         + f"    Expected: {token}\n"
-                        + f"    Actual: {values['assets']}",
-                    ) from err
+                        + f"    Actual: {values['assets']}"
+                    )
+                    raise InvalidPoolError(error_msg) from KeyError
 
-        _ = self.extract_dex_nft(values)
+        _ = cls.extract_dex_nft(values)
 
-        # Add the pool tokens back in
+        # Add the order tokens back in
         values["assets"].root.update(pair.root)
 
-        self.post_init(values)
+        cls.post_init(values)
 
         return values
 

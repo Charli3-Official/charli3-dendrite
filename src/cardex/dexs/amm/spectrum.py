@@ -28,6 +28,7 @@ from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.core.constants import THREE_VALUE
 from cardex.dexs.core.constants import TWO_VALUE
@@ -184,7 +185,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector."""
         return PoolSelector(
-            selector_type="addresses",
+            selector_type=PoolSelectorType.address,
             selector=[
                 "addr1x8nz307k3sr60gu0e47cmajssy4fmld7u493a4xztjrll0aj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrswgxsta",
                 "addr1x94ec3t25egvhqy2n265xfhq882jxhkknurfe9ny4rl9k6dj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrst84slu",

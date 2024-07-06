@@ -591,7 +591,10 @@ class GeniusYieldOrderState(AbstractOrderState):
         """Pool selection information."""
         return PoolSelector(
             selector_type=PoolSelectorType.address,
-            selector=cls.order_selector(),
+            selector=[
+                "addr1wx5d0l6u7nq3wfcz3qmjlxkgu889kav2u9d8s5wyzes6frqktgru2",
+                "addr1w8kllanr6dlut7t480zzytsd52l7pz4y3kcgxlfvx2ddavcshakwd",
+            ],
         )
 
     @property

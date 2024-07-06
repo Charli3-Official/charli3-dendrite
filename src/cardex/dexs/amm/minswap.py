@@ -20,6 +20,7 @@ from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.core.constants import ONE_VALUE
@@ -478,7 +479,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=[
                 "13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f4d494e53574150",
             ],
@@ -651,7 +652,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector for the DJEDiUSD stable pool."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=cls.pool_policy(),
         )
 
@@ -701,7 +702,7 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector for the DJEDUSDC stable pool."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=cls.pool_policy(),
         )
 
@@ -731,7 +732,7 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=cls.pool_policy(),
         )
 

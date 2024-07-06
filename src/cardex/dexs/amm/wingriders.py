@@ -19,6 +19,7 @@ from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.amm.amm_types import AbstractStableSwapPoolState
 from cardex.dexs.core.constants import BATCHER_FEE_THRESHOLD_HIGH
@@ -317,7 +318,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector for the DEX."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=cls.dex_policy(),
         )
 

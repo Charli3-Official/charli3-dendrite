@@ -64,7 +64,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
         return
 
     selector = dex.pool_selector()
-    result = get_pool_utxos(**selector.to_dict(), limit=10000, historical=False)
+    result = get_pool_utxos(**selector.to_dict(), limit=1000, historical=False)
 
     for pool in result:
         try:

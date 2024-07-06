@@ -26,6 +26,7 @@ from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.core.errors import InvalidPoolError
@@ -197,7 +198,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector."""
         return PoolSelector(
-            selector_type="assets",
+            selector_type=PoolSelectorType.asset,
             selector=cls.dex_policy(),
         )
 

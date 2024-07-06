@@ -26,6 +26,7 @@ from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
+from cardex.dataclasses.models import PoolSelectorType
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
 from cardex.dexs.core.constants import THREE_VALUE
 from cardex.dexs.core.constants import TWO_VALUE
@@ -506,7 +507,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Get the pool selector."""
         return PoolSelector(
-            selector_type="addresses",
+            selector_type=PoolSelectorType.address,
             selector=["addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"],
         )
 
@@ -657,7 +658,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         """Returns the pool selector for the DEX."""
         return PoolSelector(
-            selector_type="addresses",
+            selector_type=PoolSelectorType.address,
             selector=[
                 "addr1x8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz26rnxqnmtv3hdu2t6chcfhl2zzjh36a87nmd6dwsu3jenqsslnz7e",
             ],
