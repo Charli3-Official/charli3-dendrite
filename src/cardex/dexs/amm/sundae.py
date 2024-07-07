@@ -582,7 +582,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def dex(cls) -> str:
-        return "SundaeSwap"
+        return "SundaeSwapV3"
 
     @classmethod
     def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
@@ -633,7 +633,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
     @classmethod
     def skip_init(cls, values) -> bool:
-        if "pool_nft" in values and "dex_nft" in values and "fee" in values:
+        if "pool_nft" in values:
             try:
                 super().extract_pool_nft(values)
             except InvalidPoolError:
@@ -646,6 +646,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
                     )
                 else:
                     values["assets"]["lovelace"] = values["assets"].pop("lovelace")
+
+            datum = SundaeV3PoolDatum.from_cbor(values["datum_cbor"])
+            values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
             return True
         else:
