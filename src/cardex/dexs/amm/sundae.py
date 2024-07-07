@@ -650,6 +650,15 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             datum = SundaeV3PoolDatum.from_cbor(values["datum_cbor"])
             values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
+
+            settings = get_datum_from_address(
+                Address.decode(
+                    "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
+                ),
+            )
+
+            datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
+            cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
             return True
         else:
             return False
@@ -664,20 +673,20 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             else:
                 raise NotAPoolError("No pool NFT found.")
 
-    def batcher_fee(
-        self,
-        in_assets: Assets | None = None,
-        out_assets: Assets | None = None,
-        extra_assets: Assets | None = None,
-    ) -> Assets:
-        settings = get_datum_from_address(
-            Address.decode(
-                "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
-            ),
-        )
+    # def batcher_fee(
+    #     self,
+    #     in_assets: Assets | None = None,
+    #     out_assets: Assets | None = None,
+    #     extra_assets: Assets | None = None,
+    # ) -> Assets:
+    #     settings = get_datum_from_address(
+    #         Address.decode(
+    #             "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
+    #         ),
+    #     )
 
-        datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
-        return Assets(lovelace=datum.simple_fee + datum.base_fee)
+    #     datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
+    #     return Assets(lovelace=datum.simple_fee + datum.base_fee)
 
     @classmethod
     def post_init(cls, values):
@@ -690,6 +699,15 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             assets.root[assets.unit(0)] -= datum.protocol_fees
 
         values["fee"] = datum.bid_fees_per_10_thousand
+
+        settings = get_datum_from_address(
+            Address.decode(
+                "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
+            ),
+        )
+
+        datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
+        cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
 
     def swap_datum(
         self,

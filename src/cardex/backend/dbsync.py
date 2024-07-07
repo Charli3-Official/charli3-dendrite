@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from pycardano import Address
 
+from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import BlockList
 from cardex.dataclasses.models import PoolStateList
 from cardex.dataclasses.models import ScriptReference
