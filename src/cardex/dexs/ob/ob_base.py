@@ -242,16 +242,18 @@ class BuyOrderBook(BaseList):
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
-        return sorted(v, key=lambda x: x.price)
+    def sort_descend(self):
+        self.root.sort(key=lambda x: x.price)
+        return self
 
 
 class SellOrderBook(BaseList):
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(v: list[OrderBookOrder]):
-        return sorted(v, key=lambda x: x.price)
+    def sort_descend(self):
+        self.root.sort(key=lambda x: x.price)
+        return self
 
 
 class AbstractOrderBookState(AbstractPairState):
