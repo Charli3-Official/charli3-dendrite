@@ -258,3 +258,15 @@ class OrderType(Enum):
     deposit = "Deposit"
     withdraw = "Withdraw"
     swap = "Swap"
+
+
+class TokenSummary(CardexBaseModel):
+    """Summary of token information."""
+
+    ticker: str
+    name: str
+    policy_id: str
+    policy_name: str
+    decimals: int
+    price_numerator: int = 0
+    price_denominator: int = 0
