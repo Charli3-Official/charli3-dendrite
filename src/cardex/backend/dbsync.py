@@ -510,21 +510,18 @@ OFFSET %(offset)s"""
 
     r = db_query(
         utxo_selector,
-        (
-            {
-                "addresses": [
-                    Address.decode(a).payment_part.payload for a in stake_addresses
-                ],
-                "limit": limit,
-                "offset": page * limit,
-                "after_time": None
-                if after_time is None
-                else after_time.strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        ),
+        {
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
+            "limit": limit,
+            "offset": page * limit,
+            "after_time": None
+            if after_time is None
+            else after_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
     )
-
-    return SwapTransactionList.model_validate(r)
+    return SwapTransactionList.model_validate([r])
 
 
 def get_order_utxos_by_block_or_tx(  # noqa: PLR0913
@@ -687,7 +684,7 @@ OFFSET %(offset)s"""
         ),
     )
 
-    return SwapTransactionList.model_validate(r)
+    return SwapTransactionList.model_validate([r])
 
 
 def get_cancel_utxos(
@@ -835,4 +832,4 @@ OFFSET %(offset)s"""
         ),
     )
 
-    return SwapTransactionList.model_validate(r)
+    return SwapTransactionList.model_validate([r])

@@ -1,4 +1,4 @@
-"""."""
+"""AMM base module."""
 from abc import abstractmethod
 from decimal import Decimal
 from typing import Any

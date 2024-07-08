@@ -2,6 +2,7 @@
 from collections.abc import Iterable
 from enum import Enum
 from typing import Any
+from typing import Union
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -185,7 +186,7 @@ class SwapSubmitInfo(CardexBaseModel):
     block_index: int = Field(..., alias="submit_block_index")
     datum_hash: str = Field(..., alias="submit_datum_hash")
     datum_cbor: str = Field(..., alias="submit_datum_cbor")
-    metadata: list[list | dict | str | int | None] | None = Field(
+    metadata: Union[list[Any], dict[str, Any], str, int, None] = Field(
         ...,
         alias="submit_metadata",
     )
@@ -196,13 +197,13 @@ class SwapSubmitInfo(CardexBaseModel):
 class SwapExecuteInfo(CardexBaseModel):
     """Model for swap execution information."""
 
-    address: str
-    tx_hash: str
-    tx_index: int
-    block_time: int
-    block_index: int
-    block_hash: str
-    assets: Assets
+    address: str | None
+    tx_hash: str | None
+    tx_index: int | None
+    block_time: int | None
+    block_index: int | None
+    block_hash: str | None
+    assets: Assets | None
 
 
 class SwapStatusInfo(CardexBaseModel):
@@ -212,10 +213,10 @@ class SwapStatusInfo(CardexBaseModel):
     swap_output: SwapExecuteInfo | PoolStateInfo | None = None
 
     @model_validator(mode="before")
-    def from_dbsync(self, values: dict) -> dict:
+    @classmethod
+    def from_dbsync(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Create a SwapStatusInfo object from dbsync values."""
         swap_input = SwapSubmitInfo.model_validate(values)
-
         if "datum_cbor" in values and values["datum_cbor"] is not None:
             swap_output = PoolStateInfo.model_validate(values)
         elif "address" in values and values["address"] is not None:
@@ -244,7 +245,10 @@ class SwapTransactionInfo(BaseList):
     root: list[SwapStatusInfo]
 
     @model_validator(mode="before")
-    def from_dbsync(self, values: list) -> list:
+    def from_dbsync(
+        cls,  # noqa: N805
+        values: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Return a SwapTransactionInfo List from dbsync values."""
         if not all(
             item["submit_tx_hash"] == values[0]["submit_tx_hash"] for item in values
@@ -252,7 +256,9 @@ class SwapTransactionInfo(BaseList):
             error_msg = (
                 "All transaction info must have the same submission transaction."
             )
-            raise ValueError(error_msg)
+            raise ValueError(
+                error_msg,
+            )
         return values
 
 
@@ -261,17 +267,16 @@ class SwapTransactionList(BaseList):
 
     root: list[SwapTransactionInfo]
 
+    @classmethod
     @model_validator(mode="before")
-    def from_dbsync(self, values: list) -> list:
-        """Return SwapStatusInfo list from dbsync values."""
-        if not isinstance(values, list):
-            return []
+    def from_dbsync(cls, values: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        """Return a SwapTransactionInfo List from dbsync values."""
         if len(values) == 0:
             return []
 
         output = []
 
-        tx_hash = values[0]["submit_tx_hash"]
+        tx_hash = values[0].get("submit_tx_hash")
         start = 0
         for end, record in enumerate(values):
             if record["submit_tx_hash"] == tx_hash:

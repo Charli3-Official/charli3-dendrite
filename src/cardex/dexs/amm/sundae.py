@@ -652,7 +652,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     @classmethod
     def order_selector(cls) -> list[str]:
         """Returns: The order selector list."""
-        return [cls._stake_address.encode()]
+        return [(cls._stake_address).encode()]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
