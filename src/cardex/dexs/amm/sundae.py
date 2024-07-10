@@ -572,7 +572,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
 
 class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
-    fee: int = 30
+    fee: list[int] = [30, 30]
     _batcher = Assets(lovelace=1000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
@@ -698,7 +698,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= datum.protocol_fees
 
-        values["fee"] = datum.bid_fees_per_10_thousand
+        values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
         settings = get_datum_from_address(
             Address.decode(
