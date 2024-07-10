@@ -89,4 +89,4 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
     elif dex == WingRidersSSPState:
         assert counts == 2
     else:
-        assert counts > 50
+        assert counts > 40

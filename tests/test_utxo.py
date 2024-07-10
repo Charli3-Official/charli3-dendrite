@@ -218,7 +218,7 @@ def test_address_from_datum(dex: AbstractPoolState):
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
-            out_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={IUSD: 1000000}),
             batcher_fee=Assets(root={"lovelace": 1000000}),
             deposit=Assets(root={"lovelace": 1000000}),
         )
