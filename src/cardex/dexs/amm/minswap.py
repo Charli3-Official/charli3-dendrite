@@ -947,11 +947,11 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         """Batcher fee.
 
         For Minswap, the batcher fee decreases linearly from 2.0 ADA to 1.5 ADA as the
-        MIN in the input assets from 0 - 50,000 MIN.
+        MIN in the input assets from 0 - 25,000 MIN.
         """
         MIN = "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e"
         if extra_assets is not None and MIN in extra_assets:
-            fee_reduction = min(extra_assets[MIN] // 10**5, 250000)
+            fee_reduction = min(extra_assets[MIN] // (2 * 10**5), 250000)
         else:
             fee_reduction = 0
         return self._batcher - Assets(lovelace=fee_reduction)
