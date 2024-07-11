@@ -224,7 +224,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         fee_on_input=True,
     ) -> tuple[Assets, float]:
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
+        if isinstance(self.volume_fee, (int, float)):
             volume_fee = self.volume_fee
         elif asset.unit() == self.unit_a:
             volume_fee = self.volume_fee[0]
@@ -266,7 +266,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         fee_on_input=True,
     ) -> tuple[Assets, float]:
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
+        if isinstance(self.volume_fee, (int, float)):
             volume_fee = self.volume_fee
         elif asset.unit() == self.unit_a:
             volume_fee = self.volume_fee[0]
