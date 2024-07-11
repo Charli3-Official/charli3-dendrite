@@ -886,7 +886,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
 class MinswapV2CPPState(AbstractConstantProductPoolState):
     """Minswap Constant Product Pool State."""
 
-    fee: list[int] = [30, 30]
+    fee: int | list[int] = [30, 30]
     _batcher = Assets(lovelace=1000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
