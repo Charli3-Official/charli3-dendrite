@@ -35,5 +35,14 @@ jobs:
           pipx install nox
 
       - name: Run tests with nox
+        env:
+          DBSYNC_USER: ${{ secrets.DBSYNC_USER }}
+          DBSYNC_PASS: ${{ secrets.DBSYNC_PASS }}
+          DBSYNC_HOST: ${{ secrets.DBSYNC_HOST }}
+          DBSYNC_PORT: ${{ secrets.DBSYNC_PORT }}
+          DBSYNC_DB_NAME: ${{ secrets.DBSYNC_DB_NAME }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          NETWORK: ${{ secrets.NETWORK }}
+          WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
         run: |
           nox --reuse-venv=yes --session tests --python ${{ matrix.python-version }}
