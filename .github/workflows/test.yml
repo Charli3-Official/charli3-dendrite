@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+jobs:
+  unit_tests:
+    name: unit-tests ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"] # Versions specified in noxfile.py file.
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install nox
+        run: |
+          pipx install nox
+
+      - name: Run tests with nox
+        run: |
+          nox --reuse-venv=yes --session tests --python ${{ matrix.python-version }}
