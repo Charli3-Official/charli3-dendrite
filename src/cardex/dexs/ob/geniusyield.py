@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass
+from dataclasses import field
 from math import ceil
 from typing import Dict
 from typing import List
@@ -131,7 +132,7 @@ class GeniusYieldFeeDatum(PlutusData):
     CONSTR_ID = 0
     fees: Dict[GeniusUTxORef, Dict[bytes, Dict[bytes, int]]]
     reserved_value: Dict[bytes, Dict[bytes, int]]
-    spent_utxo: Union[GeniusUTxORef, PlutusNone] = PlutusNone()
+    spent_utxo: Union[GeniusUTxORef, PlutusNone] = field(default_factory=PlutusNone)
 
 
 @dataclass
