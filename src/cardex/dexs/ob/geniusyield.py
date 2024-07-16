@@ -11,6 +11,7 @@ from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
@@ -93,7 +94,7 @@ class GeniusRational(PlutusData):
 
 
 @dataclass
-class GeniusYieldOrder(PlutusData):
+class GeniusYieldOrder(OrderDatum):
     CONSTR_ID = 0
     owner_key: bytes
     owner_address: PlutusFullAddress

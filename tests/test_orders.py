@@ -27,7 +27,9 @@ def test_get_orders(dex: AbstractPairState, benchmark):
     stake_addresses = []
     for address in dex.order_selector:
         stake_addresses.append(
-            Address(payment_part=Address.decode(address).payment_part).encode()
+            Address(
+                payment_part=Address.decode(address).payment_part
+            ).payment_part.payload
         )
 
     for ind, r in enumerate(result):
@@ -36,7 +38,11 @@ def test_get_orders(dex: AbstractPairState, benchmark):
                 "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb",
             ]:
                 continue
-            if swap.swap_input.address_stake in stake_addresses:
+            if (
+                Address.decode(swap.swap_input.address_stake).payment_part.payload
+                in stake_addresses
+            ):
+                print(f"cbor: {swap.swap_input.datum_cbor}")
                 datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
                 found_datum = True
 
