@@ -54,7 +54,7 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
         return
 
     selector = dex.pool_selector
-    limit = 10000 if run_slow else 100
+    limit = 20000 if run_slow else 100
     result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
 
     counts = 0
@@ -80,7 +80,7 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
             except:
                 raise
 
-    assert counts < 10000
+    assert counts < 20000
     if dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,

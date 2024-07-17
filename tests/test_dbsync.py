@@ -36,7 +36,7 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
         return
 
     selector = dex.pool_selector
-    limit = 10000 if run_slow else 100
+    limit = 20000 if run_slow else 100
     result = benchmark(
         get_pool_utxos,
         limit=limit,
@@ -44,7 +44,7 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
         **selector.to_dict(),
     )
 
-    assert len(result) < 9000
+    assert len(result) < 20000
     if dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
