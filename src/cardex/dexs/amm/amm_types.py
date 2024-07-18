@@ -30,8 +30,16 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             reserve_in, reserve_out = self.reserve_b, self.reserve_a
             unit_out = self.unit_a
 
+        volume_fee: int = 0
+        if isinstance(self.volume_fee, int):
+            volume_fee = self.volume_fee
+        elif asset.unit() == self.unit_a:
+            volume_fee = self.volume_fee[0]
+        else:
+            volume_fee = self.volume_fee[1]
+
         # Calculate the amount out
-        fee_modifier = 10000 - self.volume_fee
+        fee_modifier = 10000 - volume_fee
         numerator: int = asset.quantity() * fee_modifier * reserve_out
         denominator: int = asset.quantity() * fee_modifier + reserve_in * 10000
         amount_out = Assets(**{unit_out: numerator // denominator})
@@ -76,8 +84,16 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             reserve_in, reserve_out = self.reserve_b, self.reserve_a
             unit_out = self.unit_b
 
+        volume_fee: int = 0
+        if isinstance(self.volume_fee, int):
+            volume_fee = self.volume_fee
+        elif asset.unit() == self.unit_b:
+            volume_fee = self.volume_fee[0]
+        else:
+            volume_fee = self.volume_fee[1]
+
         # Estimate the required input
-        fee_modifier = 10000 - self.volume_fee
+        fee_modifier = 10000 - volume_fee
         numerator: int = asset.quantity() * 10000 * reserve_in
         denominator: int = (reserve_out - asset.quantity()) * fee_modifier
         amount_in = Assets(**{unit_out: numerator // denominator})
@@ -207,11 +223,19 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         precise: bool = True,
         fee_on_input=True,
     ) -> tuple[Assets, float]:
+        volume_fee: int = 0
+        if isinstance(self.volume_fee, (int, float)):
+            volume_fee = self.volume_fee
+        elif asset.unit() == self.unit_a:
+            volume_fee = self.volume_fee[0]
+        else:
+            volume_fee = self.volume_fee[1]
+
         if fee_on_input:
             in_asset = Assets(
                 **{
                     asset.unit(): int(
-                        asset.quantity() * (10000 - self.volume_fee) / 10000,
+                        asset.quantity() * (10000 - volume_fee) / 10000,
                     ),
                 },
             )
@@ -228,7 +252,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
         if not fee_on_input:
             out_asset.root[out_asset.unit()] = int(
-                out_asset.quantity() * (10000 - self.volume_fee) / 10000,
+                out_asset.quantity() * (10000 - volume_fee) / 10000,
             )
         if precise:
             out_asset.root[out_asset.unit()] = int(out_asset.quantity())
@@ -241,11 +265,19 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         precise: bool = True,
         fee_on_input=True,
     ) -> tuple[Assets, float]:
+        volume_fee: int = 0
+        if isinstance(self.volume_fee, (int, float)):
+            volume_fee = self.volume_fee
+        elif asset.unit() == self.unit_a:
+            volume_fee = self.volume_fee[0]
+        else:
+            volume_fee = self.volume_fee[1]
+
         if not fee_on_input:
             out_asset = Assets(
                 **{
                     asset.unit(): int(
-                        asset.quantity() * 10000 / (10000 - self.volume_fee),
+                        asset.quantity() * 10000 / (10000 - volume_fee),
                     ),
                 },
             )
@@ -261,7 +293,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
         if fee_on_input:
             in_asset.root[in_asset.unit()] = int(
-                in_asset.quantity() * 10000 / (10000 - self.volume_fee),
+                in_asset.quantity() * 10000 / (10000 - volume_fee),
             )
         if precise:
             in_asset.root[in_asset.unit()] = int(in_asset.quantity())

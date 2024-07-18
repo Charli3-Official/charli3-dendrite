@@ -3,6 +3,7 @@ from cardex.dexs.amm.minswap import MinswapCPPState
 from cardex.dexs.amm.minswap import MinswapDJEDiUSDStableState
 from cardex.dexs.amm.minswap import MinswapDJEDUSDCStableState
 from cardex.dexs.amm.minswap import MinswapDJEDUSDMStableState
+from cardex.dexs.amm.minswap import MinswapV2CPPState
 from cardex.dexs.amm.muesli import MuesliSwapCLPState
 from cardex.dexs.amm.muesli import MuesliSwapCPPState
 from cardex.dexs.amm.spectrum import SpectrumCPPState

@@ -33,20 +33,13 @@ def test_pools_script_version(dex: AbstractPoolState, subtests):
 
     counts = 0
     for pool in result:
-        with subtests.test(f"Testing: {dex.dex}", i=pool):
-            try:
-                dex.model_validate(pool.model_dump())
-                counts += 1
-            except InvalidLPError:
-                pytest.xfail(
-                    f"{dex.dex}: expected failure lp tokens were not found or invalid - {pool.assets}",
-                )
-            except NoAssetsError:
-                pytest.xfail(f"{dex.dex}: expected failure no assets - {pool.assets}")
-            except InvalidPoolError:
-                pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
-            except:
-                raise
+        try:
+            dex.model_validate(pool.model_dump())
+            counts += 1
+        except (InvalidLPError, NoAssetsError, InvalidPoolError):
+            pass
+        except:
+            raise
 
 
 def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
@@ -59,26 +52,19 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
 
     counts = 0
     for pool in result:
-        with subtests.test(f"Testing: {dex.dex}", i=pool):
-            try:
-                dex.model_validate(pool.model_dump())
-                counts += 1
-            except InvalidLPError:
-                pytest.xfail(
-                    f"{dex.dex}: expected failure lp tokens were not found or invalid - {pool.assets}",
-                )
-            except NoAssetsError:
-                pytest.xfail(f"{dex.dex}: expected failure no assets - {pool.assets}")
-            except InvalidPoolError:
-                pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
-            except NotAPoolError as e:
-                # Known failures due to malformed data
-                if pool.tx_hash in MALFORMED_CBOR:
-                    pytest.xfail("Malformed CBOR tx.")
-                else:
-                    raise
-            except:
+        try:
+            dex.model_validate(pool.model_dump())
+            counts += 1
+        except (InvalidLPError, NoAssetsError, InvalidPoolError):
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if pool.tx_hash in MALFORMED_CBOR:
+                pass
+            else:
                 raise
+        except:
+            raise
 
     assert counts < 20000
     if dex in [

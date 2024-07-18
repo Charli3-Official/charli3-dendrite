@@ -4,6 +4,7 @@ from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
 from cardex import MinswapDJEDUSDMStableState
+from cardex import MinswapV2CPPState
 from cardex import SundaeSwapV3CPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_cancel_utxos
@@ -75,6 +76,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
         MinswapDJEDUSDCStableState,
         MinswapDJEDUSDMStableState,
         SundaeSwapV3CPPState,
+        MinswapV2CPPState,
     ]:
         assert result[0].plutus_v2
     else:

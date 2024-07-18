@@ -58,7 +58,7 @@ class PlutusFullAddress(PlutusData):
 
     CONSTR_ID = 0
     payment: Union[PlutusPartAddress, PlutusScriptPartAddress]
-    stake: Union[_PlutusConstrWrapper, PlutusNone]
+    stake: Union[_PlutusConstrWrapper, PlutusNone, None] = None
 
     @classmethod
     def from_address(cls, address: Address) -> "PlutusFullAddress":
