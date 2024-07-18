@@ -10,6 +10,7 @@ from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
 from pycardano import VerificationKeyHash
 
 from cardex.backend.dbsync import get_datum_from_address
@@ -114,7 +115,7 @@ class SundaeV3ReceiverDatumHash(PlutusData):
 class SundaeV3ReceiverInlineDatum(PlutusData):
     CONSTR_ID = 2
 
-    datum: Any
+    datum: RawPlutusData
 
 
 @dataclass
@@ -287,7 +288,7 @@ class SundaeV3OrderDatum(OrderDatum):
         DonateV3Config,
         SwapV3Config,
     ]
-    extension: Any
+    extension: Union[RawPlutusData, bytes]
 
     @classmethod
     def create_datum(
@@ -422,9 +423,9 @@ class SundaeV3PoolDatum(PlutusData):
 @dataclass
 class SundaeV3Settings(PlutusData):
     CONSTR_ID = 0
-    settings_admin: Any  # NativeScript
+    settings_admin: RawPlutusData  # NativeScript
     metadata_admin: PlutusFullAddress
-    treasury_admin: Any  # NativeScript
+    treasury_admin: RawPlutusData  # NativeScript
     treasury_address: PlutusFullAddress
     treasury_allowance: List[int]
     authorized_scoopers: Union[PlutusNone, Any]  # List[PlutusPartAddress]]
@@ -433,7 +434,7 @@ class SundaeV3Settings(PlutusData):
     simple_fee: int
     strategy_fee: int
     pool_creation_fee: int
-    extensions: Any
+    extensions: Union[RawPlutusData, bytes]
 
 
 class SundaeSwapCPPState(AbstractConstantProductPoolState):

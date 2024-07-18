@@ -9,4 +9,14 @@ def tests(session: nox.Session) -> None:
     session.install("poetry")
     session.run("echo", f"{session.python}")
     session.run("poetry", "install")
-    session.run("poetry", "run", "pytest", "--benchmark-disable", "-x", "-v", "--slow")
+    session.run(
+        "poetry",
+        "run",
+        "pytest",
+        "--benchmark-disable",
+        "-x",
+        "-v",
+        "--slow",
+        "-n",
+        "auto",
+    )
