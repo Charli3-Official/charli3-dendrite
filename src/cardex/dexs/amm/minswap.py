@@ -12,6 +12,7 @@ from pycardano import VerificationKeyHash
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
 
 from cardex.dataclasses.datums import _PlutusConstrWrapper
 from cardex.dataclasses.datums import AssetClass
@@ -366,7 +367,7 @@ class DepositV2(PlutusData):
     """DepositV2 order datum."""
 
     CONSTR_ID = 4
-    deposit_amount_option: Any
+    deposit_amount_option: RawPlutusData
     minimum_lp: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -376,7 +377,7 @@ class WithdrawV2(PlutusData):
     """WithdrawV2 order datum."""
 
     CONSTR_ID = 5
-    withdrawal_amount_option: Any
+    withdrawal_amount_option: RawPlutusData
     minimum_asset_a: int
     minimum_asset_b: int
     killable: Union[BoolTrue, BoolFalse]
@@ -388,7 +389,7 @@ class ZapOutV2(PlutusData):
 
     CONSTR_ID = 6
     a_to_b_direction: Union[BoolTrue, BoolFalse]
-    withdrawal_amount_option: Any
+    withdrawal_amount_option: RawPlutusData
     minimum_receive: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -412,7 +413,7 @@ class WithdrawImbalanceV2(PlutusData):
     """WithdrawImbalanceV2 order datum."""
 
     CONSTR_ID = 8
-    withdrawal_amount_optino: Any
+    withdrawal_amount_optino: RawPlutusData
     ratio_asset_a: int
     ratio_asset_b: int
     minimum_asset_a: int
@@ -424,7 +425,7 @@ class SwapMultiRoutingV2(PlutusData):
     """SwapMultiRoutingV2 order datum."""
 
     CONSTR_ID = 9
-    routings: List[Any]
+    routings: List[RawPlutusData]
     swap_amount_option: Union[SAOSpecificAmount, SAOAll]
     minimum_receive: int
 
