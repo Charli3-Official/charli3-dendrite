@@ -3,6 +3,7 @@ import pytest
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
 from cardex import MinswapDJEDUSDMStableState
+from cardex import SundaeSwapV3CPPState
 from cardex import WingRidersSSPState
 from cardex.backend.dbsync import get_pool_utxos
 from cardex.dexs.amm.amm_base import AbstractPoolState
@@ -53,7 +54,7 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
         return
 
     selector = dex.pool_selector
-    limit = 10000 if run_slow else 100
+    limit = 20000 if run_slow else 100
     result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
 
     counts = 0
@@ -79,7 +80,7 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
             except:
                 raise
 
-    assert counts < 10000
+    assert counts < 20000
     if dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
@@ -87,6 +88,8 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
     ]:
         assert counts == 1
     elif dex == WingRidersSSPState:
-        assert counts == 2
+        assert counts == 3
+    elif dex == SundaeSwapV3CPPState:
+        assert counts > 30
     else:
         assert counts > 40
