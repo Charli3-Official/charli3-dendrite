@@ -15,6 +15,7 @@ from cardex.backend.dbsync import get_axo_target
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
@@ -43,8 +44,6 @@ from pycardano import Value
 from pycardano.utils import min_lovelace
 from pydantic import BaseModel
 from pydantic import field_validator
-
-from api.databases.postgres import get_token_prices
 
 formatter = logging.Formatter(
     fmt="%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s",
@@ -77,7 +76,7 @@ class RationaleWrapper(PlutusData):
 
 
 @dataclass
-class AxoOrderDatum(PlutusData):
+class AxoOrderDatum(OrderDatum):
     CONSTR_ID = 0
 
     node_allocation: Dict[int, Dict[bytes, Dict[bytes, int]]]

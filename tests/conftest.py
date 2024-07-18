@@ -17,7 +17,7 @@ while len(subclass_walk) > 0:
     else:
         subclass_walk.extend(subclasses)
 
-D = list(set(D))
+D = list(sorted(set(D), key=lambda d: d.__name__))
 
 # This sets up each DEX to be selected for testing individually
 DEXS = [pytest.param(d, marks=getattr(pytest.mark, d.dex.lower())) for d in D]
@@ -49,7 +49,7 @@ def run_slow(request) -> bool:
 
 def pytest_addoption(parser):
     """Add pytest configuration options."""
-    dex_names = list(set([d.dex for d in D]))
+    dex_names = list(sorted(set([d.dex for d in D])))
 
     for name in dex_names:
         parser.addoption(
@@ -69,7 +69,7 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     """Modify tests based on command line arguments."""
-    dex_names = list(set([d.dex.lower() for d in D]))
+    dex_names = list(sorted(set([d.dex.lower() for d in D])))
     if not any([config.getoption(f"--{d}") for d in dex_names]):
         return
 
