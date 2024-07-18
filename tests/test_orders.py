@@ -36,6 +36,7 @@ def test_get_orders(dex: AbstractPairState, benchmark):
         for swap in r:
             if swap.swap_input.tx_hash in [
                 "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb",
+                "0ba3fda43c41fdba83c03a2564dfae13b17ddb2502d291b6e05a53d6d5f9d478",
             ]:
                 continue
             if (

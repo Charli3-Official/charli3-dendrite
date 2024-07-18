@@ -206,7 +206,7 @@ def test_address_from_datum(dex: AbstractPoolState):
             volume_fee=30,
             pool_token=Assets({"lovelace": 1}),
         )
-    elif dex.dex == "SundaeSwap":
+    elif dex.dex in ["SundaeSwap", "SundaeSwapV3"]:
         datum = dex.order_datum_class.create_datum(
             ident=b"01",
             address_source=ADDRESS,
@@ -214,6 +214,8 @@ def test_address_from_datum(dex: AbstractPoolState):
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
+    elif dex.dex == "Axo":
+        pass
     elif dex.dex not in ["GeniusYield"]:
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,

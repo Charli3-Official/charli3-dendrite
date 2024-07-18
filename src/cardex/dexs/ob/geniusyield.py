@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass
+from dataclasses import field
 from math import ceil
 from typing import Dict
 from typing import List
@@ -11,6 +12,7 @@ from cardex.backend.dbsync import get_pool_utxos
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.models import Assets
@@ -93,7 +95,7 @@ class GeniusRational(PlutusData):
 
 
 @dataclass
-class GeniusYieldOrder(PlutusData):
+class GeniusYieldOrder(OrderDatum):
     CONSTR_ID = 0
     owner_key: bytes
     owner_address: PlutusFullAddress
@@ -130,7 +132,7 @@ class GeniusYieldFeeDatum(PlutusData):
     CONSTR_ID = 0
     fees: Dict[GeniusUTxORef, Dict[bytes, Dict[bytes, int]]]
     reserved_value: Dict[bytes, Dict[bytes, int]]
-    spent_utxo: Union[GeniusUTxORef, PlutusNone] = PlutusNone()
+    spent_utxo: Union[GeniusUTxORef, PlutusNone] = field(default_factory=PlutusNone)
 
 
 @dataclass
