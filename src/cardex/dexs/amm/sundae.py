@@ -10,6 +10,7 @@ from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
 from pycardano import VerificationKeyHash
 
 from cardex.backend.dbsync import get_datum_from_address
@@ -114,7 +115,7 @@ class SundaeV3ReceiverDatumHash(PlutusData):
 class SundaeV3ReceiverInlineDatum(PlutusData):
     CONSTR_ID = 2
 
-    datum: Any
+    datum: RawPlutusData
 
 
 @dataclass
@@ -287,7 +288,7 @@ class SundaeV3OrderDatum(OrderDatum):
         DonateV3Config,
         SwapV3Config,
     ]
-    extension: Any
+    extension: Union[RawPlutusData, bytes]
 
     @classmethod
     def create_datum(
@@ -422,9 +423,9 @@ class SundaeV3PoolDatum(PlutusData):
 @dataclass
 class SundaeV3Settings(PlutusData):
     CONSTR_ID = 0
-    settings_admin: Any  # NativeScript
+    settings_admin: RawPlutusData  # NativeScript
     metadata_admin: PlutusFullAddress
-    treasury_admin: Any  # NativeScript
+    treasury_admin: RawPlutusData  # NativeScript
     treasury_address: PlutusFullAddress
     treasury_allowance: List[int]
     authorized_scoopers: Union[PlutusNone, Any]  # List[PlutusPartAddress]]
@@ -433,7 +434,7 @@ class SundaeV3Settings(PlutusData):
     simple_fee: int
     strategy_fee: int
     pool_creation_fee: int
-    extensions: Any
+    extensions: Union[RawPlutusData, bytes]
 
 
 class SundaeSwapCPPState(AbstractConstantProductPoolState):
@@ -572,7 +573,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
 
 class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
-    fee: int = 30
+    fee: int | list[int] = [30, 30]
     _batcher = Assets(lovelace=1000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
@@ -698,7 +699,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= datum.protocol_fees
 
-        values["fee"] = datum.bid_fees_per_10_thousand
+        values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
         settings = get_datum_from_address(
             Address.decode(

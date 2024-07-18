@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cardex"
-version = "0.2.0-dev98"
+version = "0.2.0-dev100"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
@@ -12,7 +12,7 @@ requests = "^2.31.0"
 pydantic = "^2.5.2"
 psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
 python-dotenv = "0.21.1"
-pycardano = "0.10.0"
+pycardano = {git = "https://github.com/theeldermillenial/pycardano.git", rev = "bugfix/datum"}
 blockfrost-python = "^0.5.3"
 
 
@@ -27,6 +27,7 @@ mypy = "^1.7.1"
 pytest = "^7.4.3"
 pytest-benchmark = "^4.0.0"
 pytest-dependency = "^0.5.1"
+pytest-xdist = "^3.6.1"
 
 
 [tool.poetry.group.devs.dependencies]
