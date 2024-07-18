@@ -111,7 +111,8 @@ class StableSwapWithdrawOneCoin(PlutusData):
     """Swap exact out order datum."""
 
     CONSTR_ID = 4
-    expected_receive: Any
+    coin: int
+    expected_receive: int
 
     @classmethod
     def from_assets(cls, coin_index: int, asset: Assets):
