@@ -13,6 +13,9 @@ from pydantic.alias_generators import to_camel
 class CardexBaseModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
+    def __hash__(self) -> int:
+        return hash(self.model_dump_json())
+
 
 class PoolSelectorType(Enum):
     """How to identify a pool.
@@ -39,6 +42,9 @@ class PoolSelector(CardexBaseModel):
 
 class BaseList(RootModel):
     """Utility class for list models."""
+
+    def __hash__(self) -> int:
+        return hash(self.model_dump_json())
 
     def __iter__(self):  # noqa
         return iter(self.root)
@@ -258,3 +264,15 @@ class OrderType(Enum):
     deposit = "Deposit"
     withdraw = "Withdraw"
     swap = "Swap"
+
+
+class TokenSummary(CardexBaseModel):
+    """Summary of token information."""
+
+    ticker: str
+    name: str
+    policy_id: str
+    policy_name: str
+    decimals: int
+    price_numerator: int = 0
+    price_denominator: int = 0
