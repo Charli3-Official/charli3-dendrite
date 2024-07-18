@@ -976,7 +976,7 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
     @classmethod
     @property
     def dex_policy(cls) -> list[str]:
-        return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"]
+        return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350"]
 
     @classmethod
     def post_init(cls, values):
