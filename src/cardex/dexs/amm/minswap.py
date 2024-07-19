@@ -586,7 +586,7 @@ class MinswapV2OrderDatum(OrderDatum):
             else:
                 return Assets({"asset_b": self.step.expected_receive})
         elif isinstance(self.step, DepositV2):
-            return Assets({"lp": self.step.expected_receive})
+            return Assets({"lp": self.step.minimum_lp})
         elif isinstance(self.step, WithdrawV2):
             return Assets(
                 {

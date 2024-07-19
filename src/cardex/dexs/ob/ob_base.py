@@ -50,7 +50,7 @@ class AbstractOrderState(AbstractPairState):
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
-        in_quantity = asset.quantity() * (10000 - self.fee) // 10000
+        in_quantity = asset.quantity() * (10000 - self.volume_fee) // 10000
         out_assets.root[self.out_unit] = min(
             (in_quantity * denom) // num,
             self.available.quantity(),
@@ -70,7 +70,7 @@ class AbstractOrderState(AbstractPairState):
         in_assets.root[self.in_unit] = (
             min(out_quantity, self.available.quantity()) * denom
         ) / num
-        fees = in_assets[self.in_unit] * self.fee / 10000
+        fees = in_assets[self.in_unit] * self.volume_fee / 10000
         in_assets.root[self.in_unit] += fees
 
         if precise:

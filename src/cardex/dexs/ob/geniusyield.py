@@ -186,6 +186,10 @@ class GeniusYieldOrderState(AbstractOrderState):
         return "GeniusYield"
 
     @property
+    def volume_fee(self) -> float:
+        return 30 / 1.003
+
+    @property
     def reference_utxo(self) -> UTxO | None:
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
