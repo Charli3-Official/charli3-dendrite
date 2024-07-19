@@ -44,5 +44,6 @@ jobs:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           NETWORK: ${{ secrets.NETWORK }}
           WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
+          AXO_API_KEY: ${{ secrets.AXO_API_KEY }}
         run: |
           nox --reuse-venv=yes --session tests --python ${{ matrix.python-version }}
