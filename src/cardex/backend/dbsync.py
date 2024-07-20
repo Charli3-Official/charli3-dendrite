@@ -378,7 +378,8 @@ LEFT JOIN tx ON tx.id = tx_out.tx_id
 LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
 LEFT JOIN block on block.id = tx.block_id
 LEFT JOIN script s ON s.id = tx_out.reference_script_id
-WHERE tx_out.payment_cred = %(address)b"""
+LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
+WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL"""
 
     if asset is not None:
         SCRIPT_SELECTOR += """
