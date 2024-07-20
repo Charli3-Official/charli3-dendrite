@@ -26,6 +26,7 @@ from cardex.dexs.ob.ob_base import OrderBookOrder
 from cardex.dexs.ob.ob_base import SellOrderBook
 from cardex.utility import asset_to_value
 from pycardano import Address
+from pycardano import datum_hash
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
@@ -211,26 +212,31 @@ class GeniusYieldOrderState(AbstractOrderState):
     def fee_reference_utxo(self) -> UTxO | None:
         order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
 
-        script = get_script_from_address(Address.decode(order_info[0].address))
+        if (
+            Address.decode(order_info[0].address).payment_part.payload.hex()
+            == "a8d7ff5cf4c117270288372f9ac8e1ce5b758ae15a7851c41661a48c"
+        ):
+            address = Address.decode(
+                "addr1wxcqkdhe7qcfkqcnhlvepe7zmevdtsttv8vdfqlxrztaq2gge58rd"
+            )
+            asset = "fae686ea8f21d567841d703dea4d4221c2af071a6f2b433ff07c0af2682fd5d4b0d834a3aa219880fa193869b946ffb80dba5532abca0910c55ad5cd"
+        else:
+            address = Address.decode(
+                "addr1w9zr09hgj7z6vz3d7wnxw0u4x30arsp5k8avlcm84utptls8uqd0z"
+            )
+            asset = "fae686ea8f21d567841d703dea4d4221c2af071a6f2b433ff07c0af24aff78908ef2dce98bfe435fb3fd2529747b1c4564dff5adebedf4e46d0fc63d"
+
+        script = get_datum_from_address(address, asset=asset)
 
         return UTxO(
             input=TransactionInput(
                 TransactionId(bytes.fromhex(script.tx_hash)),
-                index=0,
+                index=script.tx_index,
             ),
             output=TransactionOutput(
                 address=script.address,
-                amount=asset_to_value(
-                    Assets(
-                        **{
-                            "lovelace": 2133450,
-                            "fae686ea8f21d567841d703dea4d4221c2af071a6f2b433ff07c0af2682fd5d4b0d834a3aa219880fa193869b946ffb80dba5532abca0910c55ad5cd": 1,
-                        },
-                    ),
-                ),
-                datum=RawPlutusData.from_cbor(
-                    "d8799f9f581cf43138a5c2f37cc8c074c90a5b347d7b2b3ebf729a44b9bbdc883787581c7a3c29ca42cc2d4856682a4564c776843e8b9135cf73c3ed9e986aba581c4fd090d48fceef9df09819f58c1d8d7cbf1b3556ca8414d3865a201c581cad27a6879d211d50225f7506534bbb3c8a47e66bbe78ef800dc7b3bcff03581c642c1f7bf79ca48c0f97239fcb2f3b42b92f2548184ab394e1e1e503d8799fd8799f581caf21fa93ded7a12960b09bd1bc95d007f90513be8977ca40c97582d7ffd87a80ff1a000f4240d8799f031903e8ff1a000f42401a00200b20ff",
-                ),
+                amount=asset_to_value(script.assets),
+                datum=RawPlutusData.from_cbor(script.datum_cbor),
             ),
         )
 
@@ -293,6 +299,7 @@ class GeniusYieldOrderState(AbstractOrderState):
             in_assets.quantity() - in_check.quantity()
             == 0  # <= self.price[0] / self.price[1]
         )
+        original_assets = in_assets
         in_assets = in_check
 
         assets = self.assets + Assets(**{self.dex_nft.unit(): 1})
@@ -310,7 +317,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         if out_assets.quantity() < self.available.quantity():
             redeemer = Redeemer(
-                GeniusSubmitRedeemer(spend_amount=out_assets.quantity() + 1),
+                GeniusSubmitRedeemer(spend_amount=out_assets.quantity()),
             )
         else:
             redeemer = Redeemer(GeniusCompleteRedeemer())
@@ -323,17 +330,18 @@ class GeniusYieldOrderState(AbstractOrderState):
         tx_builder.reference_inputs.add(self.fee_reference_utxo)
 
         order_datum = self.order_datum_class.from_cbor(self.order_datum.to_cbor())
-        order_datum.offered_amount -= out_assets.quantity() + 1
+        order_datum.offered_amount -= out_assets.quantity()
         order_datum.partial_fills += 1
-        order_datum.contained_fee.lovelaces += 1000000
+        order_datum.contained_fee.lovelaces += self.order_datum.maker_lovelace_fee
         order_datum.contained_fee.asked_tokens += (
             int(in_assets.quantity() * self.volume_fee) // 10000
         )
         order_datum.contained_payment += (
-            int(in_assets.quantity() * (10000 - self.volume_fee)) // 10000
-        ) + 1
-        assets.root[in_assets.unit()] += in_assets.quantity()
-        assets.root[out_assets.unit()] -= out_assets.quantity() + 1
+            original_assets.quantity()
+            - int(in_assets.quantity() * self.volume_fee) // 10000
+        )
+        assets.root[in_assets.unit()] += original_assets.quantity()
+        assets.root[out_assets.unit()] -= out_assets.quantity()
         assets += self._batcher
 
         if out_assets.quantity() < self.available.quantity():
@@ -389,8 +397,12 @@ class GeniusYieldOrderState(AbstractOrderState):
             fee_assets = Assets(
                 **{
                     "lovelace": self.order_datum.contained_fee.lovelaces,
-                    self.out_unit: self.order_datum.contained_fee.offered_tokens,
                 },
+            )
+            fee_assets += Assets(
+                **{
+                    self.out_unit: self.order_datum.contained_fee.offered_tokens,
+                }
             )
             fee_assets += Assets(
                 **{self.in_unit: self.order_datum.contained_fee.asked_tokens},
@@ -398,14 +410,14 @@ class GeniusYieldOrderState(AbstractOrderState):
             fee_address = settings.fee_address.to_address()
             asset_value = asset_to_value(fee_assets).to_primitive()
             asset_dict = {b"": {b"": asset_value[0]}}
-            asset_dict.update(asset_value[1])
+            # asset_dict.update(asset_value[1])
             fee_datum = GeniusYieldFeeDatum(
                 fees={pay_datum: asset_dict},
                 reserved_value={},
             )
             fee_assets.root["lovelace"] += 1000000
             fee_assets += Assets(
-                **{self.in_unit: (in_assets.quantity() * self.fee) // 10000},
+                **{self.in_unit: (in_assets.quantity() * self.volume_fee) // 10000},
             )
             fee_txo = TransactionOutput(
                 address=fee_address,
@@ -485,6 +497,15 @@ class GeniusYieldOrderState(AbstractOrderState):
         ):
             amount_in.root[self.in_unit] += 1
             amount_out, _ = self.get_amount_out(asset=amount_in)
+
+        temp_amount_in = Assets.model_validate(amount_in.model_dump())
+        amount_out, _ = self.get_amount_out(asset=amount_in)
+        temp_amount_in.root[temp_amount_in.unit()] -= 1
+        temp_amount_out, _ = self.get_amount_out(asset=temp_amount_in)
+        while temp_amount_out.quantity() == amount_out.quantity():
+            amount_in.root[self.in_unit] += temp_amount_out.quantity()
+            temp_amount_in.root[temp_amount_in.unit()] -= 1
+            temp_amount_out, _ = self.get_amount_out(asset=temp_amount_in)
 
         return amount_in, slippage
 

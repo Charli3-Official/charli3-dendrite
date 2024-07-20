@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from decimal import Decimal
+from math import ceil
 
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import BaseList
@@ -50,9 +51,11 @@ class AbstractOrderState(AbstractPairState):
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
-        in_quantity = asset.quantity() * (10000 - self.volume_fee) // 10000
+        in_quantity = asset.quantity() - ceil(
+            asset.quantity() * self.volume_fee / 10000
+        )
         out_assets.root[self.out_unit] = min(
-            (in_quantity * denom) // num,
+            ceil(in_quantity * denom / num),
             self.available.quantity(),
         )
 
