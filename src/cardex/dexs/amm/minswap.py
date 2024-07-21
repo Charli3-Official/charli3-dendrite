@@ -611,7 +611,7 @@ class MinswapV2OrderDatum(OrderDatum):
             ),
         ):
             return OrderType.swap
-        elif isinstance(self.step, DepositV2, DonationV2):
+        elif isinstance(self.step, (DepositV2, DonationV2)):
             return OrderType.deposit
         elif isinstance(self.step, (WithdrawV2, ZapOutV2, WithdrawImbalanceV2)):
             return OrderType.withdraw
