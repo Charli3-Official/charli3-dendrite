@@ -372,13 +372,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
             payment_assets += Assets(
                 **{
-                    self.in_unit: ceil(
-                        (
-                            self.price[0] * self.order_datum.offered_original_amount
-                            + (self.price[1] - 1)
-                        )
-                        / self.price[1],
-                    ),
+                    self.in_unit: ceil(order_datum.contained_payment),
                 },
             )
             pay_datum = GeniusUTxORef(
@@ -411,6 +405,10 @@ class GeniusYieldOrderState(AbstractOrderState):
             asset_value = asset_to_value(fee_assets).to_primitive()
             asset_dict = {b"": {b"": asset_value[0]}}
             # asset_dict.update(asset_value[1])
+            for policy, v in asset_value[1].items():
+                for name, quantity in v.items():
+                    if quantity > 0:
+                        asset_dict.update(asset_value[1])
             fee_datum = GeniusYieldFeeDatum(
                 fees={pay_datum: asset_dict},
                 reserved_value={},
