@@ -40,9 +40,9 @@ def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
                 conninfo=conninfo,
                 open=False,
                 min_size=1,
-                max_size=30,
+                max_size=10,
                 max_idle=10,
-                reconnect_timeout=30,
+                reconnect_timeout=10,
                 max_lifetime=60,
                 check=psycopg_pool.ConnectionPool.check_connection,
             )

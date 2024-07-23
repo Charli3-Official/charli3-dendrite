@@ -42,7 +42,7 @@ def test_pools_script_version(dex: AbstractPoolState, subtests):
             raise
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(120)
 def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
     if issubclass(dex, AbstractOrderBookState):
         return

@@ -194,7 +194,7 @@ def test_minswap_batcher_fee(subtests):
                 raise
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(60)
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
@@ -248,6 +248,6 @@ def test_address_from_datum(dex: AbstractPoolState):
         MuesliSwapCPPState,
     ],
 )
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(60)
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo is not None

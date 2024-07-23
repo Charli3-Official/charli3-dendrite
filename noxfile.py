@@ -19,4 +19,5 @@ def tests(session: nox.Session) -> None:
         "--slow",
         "-n",
         "auto",
+        "--timeout=120",
     )
