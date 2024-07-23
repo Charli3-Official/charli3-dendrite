@@ -248,5 +248,7 @@ def test_address_from_datum(dex: AbstractPoolState):
         MuesliSwapCPPState,
     ],
 )
+
+@pytest.mark.timeout(30)
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo is not None
