@@ -28,6 +28,7 @@ pytest = "^7.4.3"
 pytest-benchmark = "^4.0.0"
 pytest-dependency = "^0.5.1"
 pytest-xdist = "^3.6.1"
+pytest-timeout = "^2.3.1"
 
 
 [tool.poetry.group.devs.dependencies]

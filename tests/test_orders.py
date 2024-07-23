@@ -9,6 +9,7 @@ from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState
 
 
+@pytest.mark.timeout(30)
 def test_get_orders(dex: AbstractPairState, benchmark):
     order_selector = dex.order_selector
     result = benchmark(

@@ -14,7 +14,7 @@ def tests(session: nox.Session) -> None:
         "run",
         "pytest",
         "--benchmark-disable",
-        "-x",
+        # "-x",
         "-v",
         "--slow",
         "-n",

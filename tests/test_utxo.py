@@ -194,6 +194,7 @@ def test_minswap_batcher_fee(subtests):
                 raise
 
 
+@pytest.mark.timeout(30)
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
