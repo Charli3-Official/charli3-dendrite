@@ -1,3 +1,4 @@
+"""Utility functions for handling asset information."""
 import json
 from datetime import datetime
 from datetime import timedelta
@@ -13,12 +14,23 @@ ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 
 ASSET_PATH.mkdir(parents=True, exist_ok=True)
 
+HTTP_SUCCESS = 200
 
-def asset_info(unit: str, update=False):
+
+def asset_info(unit: str, update: bool = False) -> dict:  # noqa: ARG001
+    """Fetch and cache asset information.
+
+    Args:
+        unit (str): The unit of the asset to retrieve information for.
+        update (bool): Whether to update the asset info forcefully.
+
+    Returns:
+        dict: dictionary containing asset information.
+    """
     path = ASSET_PATH.joinpath(f"{unit}.json")
 
     if path.exists():
-        with open(path) as fr:
+        with path.open() as fr:
             parsed = json.load(fr)
             if "timestamp" in parsed and (
                 datetime.now() - datetime.fromtimestamp(parsed["timestamp"])
@@ -27,14 +39,16 @@ def asset_info(unit: str, update=False):
 
     response = requests.get(
         f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{unit}.json",
+        timeout=10,
     )
 
-    if response.status_code != 200:
-        raise requests.HTTPError(f"Error fetching asset info, {unit}: {response.text}")
+    if response.status_code != HTTP_SUCCESS:
+        msg = f"Error fetching asset info, {unit}: {response.text}"
+        raise requests.HTTPError(msg)
 
     parsed = response.json()
     parsed["timestamp"] = datetime.now().timestamp()
-    with open(path, "w") as fw:
+    with path.open("w") as fw:
         json.dump(response.json(), fw)
 
     return response.json()
@@ -56,12 +70,12 @@ def asset_decimals(unit: str) -> int:
     """
     if unit == "lovelace":
         return 6
-    else:
-        parsed = asset_info(unit)
-        if "decimals" not in parsed:
-            return 0
-        else:
-            return int(parsed["decimals"]["value"])
+
+    parsed = asset_info(unit)
+    if "decimals" not in parsed:
+        return 0
+
+    return int(parsed["decimals"]["value"])
 
 
 def asset_ticker(unit: str) -> str:
@@ -132,8 +146,7 @@ def asset_to_value(assets: Assets) -> Value:
 
     if len(cnts) == 0:
         return Value.from_primitive([coin])
-    else:
-        return Value.from_primitive([coin, cnts])
+    return Value.from_primitive([coin, cnts])
 
 
 def naturalize_assets(assets: Assets) -> dict[str, Decimal]:
@@ -142,7 +155,7 @@ def naturalize_assets(assets: Assets) -> dict[str, Decimal]:
     This returns a `Decimal` with the proper precision context.
 
     Args:
-        asset: The policy id plus hex encoded name of an asset.
+        assets (Assets): The policy id plus hex encoded name of an asset.
 
     Returns:
         A dictionary where assets are keys and values are `Decimal` objects containing
