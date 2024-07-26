@@ -43,7 +43,7 @@ class AbstractOrderState(AbstractPairState):
 
     @property
     @abstractmethod
-    def price(self) -> tuple[int, int]:
+    def price(self) -> tuple[Decimal, Decimal]:
         """Returns the price."""
         raise NotImplementedError
 
@@ -151,15 +151,15 @@ class AbstractOrderState(AbstractPairState):
             Assets: None or the dex nft.
         """
         assets = values["assets"]
-
+        dex_policy = cls.dex_policy()
         # If no dex policy id defined, return nothing
-        if cls.dex_policy is None:
+        if dex_policy is None:
             dex_nft = None
 
         # If the dex nft is in the values, it's been parsed already
         elif "dex_nft" in values:
             if not any(
-                any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
+                any(p.startswith(d) for d in dex_policy) for p in values["dex_nft"]
             ):
                 msg = "Invalid DEX NFT"
                 raise NotAPoolError(msg)
@@ -170,7 +170,7 @@ class AbstractOrderState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.dex_policy)
+                if any(asset.startswith(policy) for policy in dex_policy)
             ]
             if len(nfts) < 1:
                 msg = f"{cls.__name__}: Pool must have one DEX NFT token."
@@ -251,7 +251,7 @@ class AbstractOrderState(AbstractPairState):
 
         # Parse the order datum
         try:
-            datum = cls.order_datum_class.from_cbor(values["datum_cbor"])
+            datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
             raise NotAPoolError(
                 "Order datum could not be deserialized: \n "
@@ -443,6 +443,14 @@ class AbstractOrderBookState(AbstractPairState):
                 1 of token B in units of token A, and the second `Decimal` is the price
                 to buy 1 of token A in units of token B.
         """
+        if (
+            self.buy_book is None
+            or self.sell_book is None
+            or len(self.buy_book) == 0
+            or len(self.sell_book) == 0
+        ):
+            msg = "Buy book or sell book is not initialized or empty."
+            raise ValueError(msg)
         return (
             Decimal((self.buy_book[0].price + 1 / self.sell_book[0].price) / 2),
             Decimal((self.sell_book[0].price + 1 / self.buy_book[0].price) / 2),
@@ -459,9 +467,12 @@ class AbstractOrderBookState(AbstractPairState):
             msg = "tvl for non-ADA pools is not implemented."
             raise NotImplementedError(msg)
 
-        tvl = sum(b.quantity / b.price for b in self.buy_book) + sum(
-            s.quantity * s.price for s in self.sell_book
-        )
+        tvl = Decimal(0)
+
+        if self.buy_book is not None:
+            tvl += sum(b.quantity / b.price for b in self.buy_book)
+        if self.sell_book is not None:
+            tvl += sum(s.quantity * s.price for s in self.sell_book)
 
         return Decimal(int(tvl) / 10**6)
 
