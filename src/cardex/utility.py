@@ -14,8 +14,6 @@ ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 
 ASSET_PATH.mkdir(parents=True, exist_ok=True)
 
-HTTP_SUCCESS = 200
-
 
 def asset_info(unit: str, update: bool = False) -> dict:  # noqa: ARG001
     """Fetch and cache asset information.
@@ -42,7 +40,7 @@ def asset_info(unit: str, update: bool = False) -> dict:  # noqa: ARG001
         timeout=10,
     )
 
-    if response.status_code != HTTP_SUCCESS:
+    if response.status_code != requests.codes.ok:
         msg = f"Error fetching asset info, {unit}: {response.text}"
         raise requests.HTTPError(msg)
 
