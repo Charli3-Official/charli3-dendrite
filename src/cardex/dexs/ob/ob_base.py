@@ -58,7 +58,7 @@ class AbstractOrderState(AbstractPairState):
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Calculate the output amount of assets for a given input.
+        """Calculate the output amount for a specific limit order in an order book.
 
         Args:
             asset (Assets): asset expected to contain exactly one unit type.
@@ -91,7 +91,7 @@ class AbstractOrderState(AbstractPairState):
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Calculate the input amount of assets needed for a given output.
+        """Calculate the input amount for a specific limit order in an order book.
 
         Args:
             asset (Assets): expected to contain exactly one unit type.
@@ -429,8 +429,8 @@ class AbstractOrderBookState(AbstractPairState):
 
         return in_assets, 0
 
-    @property
-    def reference_utxo(self) -> UTxO | None:
+    @classmethod
+    def reference_utxo(cls) -> UTxO | None:
         """Returns reference utxo."""
         return None
 
