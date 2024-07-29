@@ -2,8 +2,8 @@ import pytest
 
 from pycardano import Address
 
-from cardex.backend.dbsync import get_historical_order_utxos
-from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
+from cardex.backend.dbsync.orders import get_historical_order_utxos
+from cardex.backend.dbsync.orders import get_order_utxos_by_block_or_tx
 from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState

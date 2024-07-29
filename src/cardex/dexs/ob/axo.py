@@ -11,8 +11,8 @@ from typing import List
 from typing import Union
 
 import requests
-from cardex.backend.dbsync import get_axo_target
-from cardex.backend.dbsync import get_script_from_address
+from cardex.backend.dbsync.axo import get_axo_target
+from cardex.backend.dbsync.references import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.datums import OrderDatum

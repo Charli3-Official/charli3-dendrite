@@ -6,10 +6,10 @@ from typing import Dict
 from typing import List
 from typing import Union
 
-from cardex.backend.dbsync import get_datum_from_address
-from cardex.backend.dbsync import get_pool_in_tx
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.backend.dbsync import get_script_from_address
+from cardex.backend.dbsync.pools import get_pool_in_tx
+from cardex.backend.dbsync.pools import get_pool_utxos
+from cardex.backend.dbsync.references import get_script_from_address
+from cardex.backend.dbsync.references import get_datum_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.datums import OrderDatum
@@ -30,7 +30,7 @@ from pycardano import datum_hash
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import RawPlutusData
+from pycardano import Datum
 from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
@@ -192,7 +192,9 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def reference_utxo(self) -> UTxO | None:
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        order_info = get_pool_in_tx(
+            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+        )
 
         script = get_script_from_address(Address.decode(order_info[0].address))
 
@@ -210,7 +212,9 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def fee_reference_utxo(self) -> UTxO | None:
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        order_info = get_pool_in_tx(
+            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+        )
 
         if (
             Address.decode(order_info[0].address).payment_part.payload.hex()
@@ -236,13 +240,15 @@ class GeniusYieldOrderState(AbstractOrderState):
             output=TransactionOutput(
                 address=script.address,
                 amount=asset_to_value(script.assets),
-                datum=RawPlutusData.from_cbor(script.datum_cbor),
+                datum=Datum.from_cbor(script.datum_cbor),
             ),
         )
 
     @property
     def mint_reference_utxo(self) -> UTxO | None:
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        order_info = get_pool_in_tx(
+            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+        )
         script = get_script_from_address(
             Address(
                 payment_part=ScriptHash(
@@ -272,9 +278,9 @@ class GeniusYieldOrderState(AbstractOrderState):
             asset="fae686ea8f21d567841d703dea4d4221c2af071a6f2b433ff07c0af2682fd5d4b0d834a3aa219880fa193869b946ffb80dba5532abca0910c55ad5cd",
         )
 
-        from pycardano import RawPlutusData
+        from pycardano import Datum
 
-        datum = RawPlutusData.from_cbor(script.datum_cbor)
+        datum = Datum.from_cbor(script.datum_cbor)
         return GeniusYieldSettings.from_cbor(script.datum_cbor)
 
     def swap_utxo(
@@ -287,7 +293,9 @@ class GeniusYieldOrderState(AbstractOrderState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
-        order_info = get_pool_in_tx(self.tx_hash, assets=[self.dex_nft.unit()])
+        order_info = get_pool_in_tx(
+            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+        )
 
         # Ensure the output matches required outputs
         out_check, _ = self.get_amount_out(asset=in_assets)
@@ -517,12 +525,12 @@ class GeniusYieldOrderState(AbstractOrderState):
         ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
-        """Pool selection information."""
         return PoolSelector(
-            selector_type=PoolSelectorType.address,
-            selector=cls.order_selector,
+            addresses=[
+                "addr1wx5d0l6u7nq3wfcz3qmjlxkgu889kav2u9d8s5wyzes6frqktgru2",
+                "addr1w8kllanr6dlut7t480zzytsd52l7pz4y3kcgxlfvx2ddavcshakwd",
+            ],
         )
 
     @property
@@ -633,7 +641,6 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         return GeniusYieldOrderState.order_selector
 
     @classmethod
-    @property
     def pool_selector(self) -> PoolSelector:
         """Pool selection information."""
         return GeniusYieldOrderState.pool_selector

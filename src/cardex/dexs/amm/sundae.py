@@ -10,10 +10,10 @@ from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import RawPlutusData
+from pycardano import Datum
 from pycardano import VerificationKeyHash
 
-from cardex.backend.dbsync import get_datum_from_address
+from cardex.backend.dbsync.references import get_datum_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -115,7 +115,7 @@ class SundaeV3ReceiverDatumHash(PlutusData):
 class SundaeV3ReceiverInlineDatum(PlutusData):
     CONSTR_ID = 2
 
-    datum: RawPlutusData
+    datum: Datum
 
 
 @dataclass
@@ -288,7 +288,7 @@ class SundaeV3OrderDatum(OrderDatum):
         DonateV3Config,
         SwapV3Config,
     ]
-    extension: Union[RawPlutusData, bytes]
+    extension: Union[Datum, bytes]
 
     @classmethod
     def create_datum(
@@ -423,9 +423,9 @@ class SundaeV3PoolDatum(PlutusData):
 @dataclass
 class SundaeV3Settings(PlutusData):
     CONSTR_ID = 0
-    settings_admin: RawPlutusData  # NativeScript
+    settings_admin: Datum  # NativeScript
     metadata_admin: PlutusFullAddress
-    treasury_admin: RawPlutusData  # NativeScript
+    treasury_admin: Datum  # NativeScript
     treasury_address: PlutusFullAddress
     treasury_allowance: List[int]
     authorized_scoopers: Union[PlutusNone, Any]  # List[PlutusPartAddress]]
@@ -434,7 +434,7 @@ class SundaeV3Settings(PlutusData):
     simple_fee: int
     strategy_fee: int
     pool_creation_fee: int
-    extensions: Union[RawPlutusData, bytes]
+    extensions: Union[Datum, bytes]
 
 
 class SundaeSwapCPPState(AbstractConstantProductPoolState):
@@ -460,12 +460,9 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
-        """Get the pool selector."""
         return PoolSelector(
-            selector_type="addresses",
-            selector=["addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"],
+            addresses=["addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"],
         )
 
     @property
@@ -595,13 +592,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="addresses",
-            selector=[
-                "addr1x8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz26rnxqnmtv3hdu2t6chcfhl2zzjh36a87nmd6dwsu3jenqsslnz7e",
-            ],
+            addresses=["addr1w8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz2cp9h6f8"],
         )
 
     @classmethod

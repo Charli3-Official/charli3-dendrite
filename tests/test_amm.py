@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from cardex import MinswapDJEDiUSDStableState
@@ -5,7 +7,9 @@ from cardex import MinswapDJEDUSDCStableState
 from cardex import MinswapDJEDUSDMStableState
 from cardex import SundaeSwapV3CPPState
 from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_pool_utxos
+
+# from cardex.backend.dbsync import get_pool_utxos
+from cardex.backend.dbsync.pools import get_pool_utxos
 from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.ob.ob_base import AbstractOrderBookState
 from cardex.dexs.core.errors import InvalidLPError
@@ -28,8 +32,8 @@ def test_pools_script_version(dex: AbstractPoolState, subtests):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
-    result = get_pool_utxos(limit=1, historical=False, **selector.to_dict())
+    selector = dex.pool_selector()
+    result = get_pool_utxos(limit=1, historical=False, **selector.model_dump())
 
     counts = 0
     for pool in result:
@@ -46,9 +50,9 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    selector = dex.pool_selector()
     limit = 20000 if run_slow else 100
-    result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
+    result = get_pool_utxos(limit=limit, historical=False, **selector.model_dump())
 
     counts = 0
     for pool in result:

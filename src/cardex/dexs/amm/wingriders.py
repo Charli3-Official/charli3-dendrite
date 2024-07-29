@@ -291,11 +291,13 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=cls.dex_policy,
+            addresses=[
+                "addr1w8nvjzjeydcn4atcd93aac8allvrpjn7pjr2qsweukpnayghhwcpj",
+                "addr1wxvx34v0hlxzk9x0clv7as9hvhn7dlzwj5xfcf6g4n5uucg4tkd7w",
+            ],
+            assets=cls.dex_policy,
         )
 
     @property
