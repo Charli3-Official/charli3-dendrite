@@ -1,18 +1,22 @@
+"""This module defines base classes and utilities for order book handling in DEX."""
 from abc import abstractmethod
 from decimal import Decimal
 from math import ceil
+from typing import Any
+
+from pycardano import DeserializeException
+from pycardano import PlutusData
+from pycardano import UTxO
+from pydantic import model_validator
 
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import BaseList
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dexs.core.base import AbstractPairState
 from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
 from cardex.utility import Assets
-from pycardano import DeserializeException
-from pycardano import PlutusData
-from pycardano import UTxO
-from pydantic import model_validator
 
 
 class AbstractOrderState(AbstractPairState):
@@ -29,15 +33,18 @@ class AbstractOrderState(AbstractPairState):
 
     @property
     def in_unit(self) -> str:
+        """Returns input assets unit."""
         return self.assets.unit()
 
     @property
     def out_unit(self) -> str:
+        """Returns output assets unit."""
         return self.assets.unit(1)
 
     @property
     @abstractmethod
-    def price(self) -> tuple[int, int]:
+    def price(self) -> tuple[Decimal, Decimal]:
+        """Returns the price."""
         raise NotImplementedError
 
     @property
@@ -46,13 +53,28 @@ class AbstractOrderState(AbstractPairState):
         """Max amount of output asset that can be used to fill the order."""
         raise NotImplementedError
 
-    def get_amount_out(self, asset: Assets, precise=True) -> tuple[Assets, float]:
-        assert asset.unit() == self.in_unit and len(asset) == 1
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Calculate the output amount for a specific limit order in an order book.
+
+        Args:
+            asset (Assets): asset expected to contain exactly one unit type.
+            precise (bool): If True: the output rounded to the nearest integer.
+
+        Returns:
+            tuple[Assets, float]: Output assets and a float, always 0 in this context.
+        """
+        if not (asset.unit() == self.in_unit and len(asset) == 1):
+            msg = "The asset must match the input unit and contain exactly one value."
+            raise ValueError(msg)
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
         in_quantity = asset.quantity() - ceil(
-            asset.quantity() * self.volume_fee / 10000
+            asset.quantity() * self.volume_fee / 10000,
         )
         out_assets.root[self.out_unit] = min(
             ceil(in_quantity * denom / num),
@@ -64,8 +86,25 @@ class AbstractOrderState(AbstractPairState):
 
         return out_assets, 0
 
-    def get_amount_in(self, asset: Assets, precise=True) -> tuple[Assets, float]:
-        assert asset.unit() == self.out_unit and len(asset) == 1
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Calculate the input amount for a specific limit order in an order book.
+
+        Args:
+            asset (Assets): expected to contain exactly one unit type.
+            precise (bool): If True, input quantity rounded to the nearest integer.
+
+        Returns:
+            tuple[Assets, float]: Input assets and a float, always 0 in this context.
+        """
+        if not (asset.unit() == self.out_unit and len(asset) == 1):
+            msg = (
+                "The asset unit must match the out unit and contain exactly one value."
+            )
+            raise ValueError(msg)
 
         denom, num = self.price
         in_assets = Assets(**{self.in_unit: 0})
@@ -82,7 +121,7 @@ class AbstractOrderState(AbstractPairState):
         return in_assets, 0
 
     @classmethod
-    def skip_init(cls, values: dict[str, ...]) -> bool:
+    def skip_init(cls, values: dict[str, Any]) -> bool:  # noqa: ARG003
         """An initial check to determine if parsing should be carried out.
 
         Args:
@@ -94,7 +133,7 @@ class AbstractOrderState(AbstractPairState):
         return False
 
     @classmethod
-    def extract_dex_nft(cls, values: dict[str, ...]) -> Assets | None:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -112,17 +151,18 @@ class AbstractOrderState(AbstractPairState):
             Assets: None or the dex nft.
         """
         assets = values["assets"]
-
+        dex_policy = cls.dex_policy()
         # If no dex policy id defined, return nothing
-        if cls.dex_policy is None:
+        if dex_policy is None:
             dex_nft = None
 
         # If the dex nft is in the values, it's been parsed already
         elif "dex_nft" in values:
             if not any(
-                any(p.startswith(d) for d in cls.dex_policy) for p in values["dex_nft"]
+                any(p.startswith(d) for d in dex_policy) for p in values["dex_nft"]
             ):
-                raise NotAPoolError("Invalid DEX NFT")
+                msg = "Invalid DEX NFT"
+                raise NotAPoolError(msg)
             dex_nft = values["dex_nft"]
 
         # Check for the dex nft
@@ -130,11 +170,12 @@ class AbstractOrderState(AbstractPairState):
             nfts = [
                 asset
                 for asset in assets
-                if any(asset.startswith(policy) for policy in cls.dex_policy)
+                if any(asset.startswith(policy) for policy in dex_policy)
             ]
             if len(nfts) < 1:
+                msg = f"{cls.__name__}: Pool must have one DEX NFT token."
                 raise NotAPoolError(
-                    f"{cls.__name__}: Pool must have one DEX NFT token.",
+                    msg,
                 )
             dex_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["dex_nft"] = dex_nft
@@ -143,12 +184,17 @@ class AbstractOrderState(AbstractPairState):
 
     @property
     def order_datum(self) -> PlutusData:
+        """Retrieve and parse the order datum if not already parsed.
+
+        Returns:
+            PlutusData: The parsed order datum.
+        """
         if self._datum_parsed is None:
             self._datum_parsed = self.order_datum_class.from_cbor(self.datum_cbor)
         return self._datum_parsed
 
     @classmethod
-    def post_init(cls, values: dict[str, ...]):
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Post initialization checks.
 
         Args:
@@ -157,32 +203,34 @@ class AbstractOrderState(AbstractPairState):
         assets = values["assets"]
         non_ada_assets = [a for a in assets if a != "lovelace"]
 
-        if len(assets) == 2:
-            # ADA pair
-            assert (
-                len(non_ada_assets) == 1
-            ), f"Pool must only have 1 non-ADA asset: {values}"
+        # ADA pair
+        if len(assets) == 2 and len(non_ada_assets) != 1:
+            msg = f"Pool must only have 1 non-ADA asset: {values}"
+            raise ValueError(msg)
 
-        elif len(assets) == 3:
-            # Non-ADA pair
-            assert len(non_ada_assets) == 2, "Pool must only have 2 non-ADA assets."
-
+        # Non-ADA pair
+        if len(assets) == 3:
+            if len(non_ada_assets) != 2:
+                msg = "Pool must only have 2 non-ADA assets."
+                raise ValueError(msg)
             # Send the ADA token to the end
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
+        elif len(assets) == 1 and "lovelace" in assets:
+            msg = f"Invalid pool, only contains lovelace: assets={assets}"
+            raise NoAssetsError(
+                msg,
+            )
         else:
-            if len(assets) == 1 and "lovelace" in assets:
-                raise NoAssetsError(
-                    f"Invalid pool, only contains lovelace: assets={assets}",
-                )
-            else:
-                raise InvalidPoolError(
-                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}",
-                )
+            msg = f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}"
+            raise InvalidPoolError(
+                msg,
+            )
         return values
 
+    @classmethod
     @model_validator(mode="before")
-    def translate_address(cls, values):
+    def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
 
         Args:
@@ -193,8 +241,9 @@ class AbstractOrderState(AbstractPairState):
         """
         if "assets" in values:
             if values["assets"] is None:
-                raise NoAssetsError("No assets in the pool.")
-            elif not isinstance(values["assets"], Assets):
+                msg = "No assets in the pool."
+                raise NoAssetsError(msg)
+            if not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
         if cls.skip_init(values):
@@ -202,14 +251,14 @@ class AbstractOrderState(AbstractPairState):
 
         # Parse the order datum
         try:
-            datum = cls.order_datum_class.from_cbor(values["datum_cbor"])
+            datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
         except (DeserializeException, TypeError) as e:
             raise NotAPoolError(
                 "Order datum could not be deserialized: \n "
                 + f"    error={e}\n"
                 + f"    tx_hash={values['tx_hash']}\n"
                 + f"    datum={values['datum_cbor']}\n",
-            )
+            ) from e
 
         # To help prevent edge cases, remove pool tokens while running other checks
         pair = datum.pool_pair()
@@ -223,9 +272,9 @@ class AbstractOrderState(AbstractPairState):
                         "Order does not contain expected asset.\n"
                         + f"    Expected: {token}\n"
                         + f"    Actual: {values['assets']}",
-                    )
+                    ) from KeyError
 
-        dex_nft = cls.extract_dex_nft(values)
+        _ = cls.extract_dex_nft(values)
 
         # Add the pool tokens back in
         values["assets"].root.update(pair.root)
@@ -236,25 +285,33 @@ class AbstractOrderState(AbstractPairState):
 
 
 class OrderBookOrder(CardexBaseModel):
+    """Represents an order in the order book."""
+
     price: float
     quantity: int
     state: AbstractOrderState | None = None
 
 
 class BuyOrderBook(BaseList):
+    """Represents a buy order book with sorted orders."""
+
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(self):
+    def sort_descend(self) -> list[OrderBookOrder]:
+        """Sort orders in descending order by price."""
         self.root.sort(key=lambda x: x.price)
         return self
 
 
 class SellOrderBook(BaseList):
+    """Represents a sell order book with sorted orders."""
+
     root: list[OrderBookOrder]
 
     @model_validator(mode="after")
-    def sort_descend(self):
+    def sort_descend(self) -> list[OrderBookOrder]:
+        """Sort orders in descending order by price."""
         self.root.sort(key=lambda x: x.price)
         return self
 
@@ -270,7 +327,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_out(
         self,
         asset: Assets,
-        precise: bool = True,
+        precise: bool = True,  # noqa: ARG002
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token output for the given input.
@@ -278,15 +335,19 @@ class AbstractOrderBookState(AbstractPairState):
         Args:
             asset: The input assets
             precise: If precise, uses integers. Defaults to True.
+            apply_fee: If True, applies transaction fees. Defaults to False.
 
         Returns:
             tuple[Assets, float]: The output assets and slippage.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            msg = "Asset should only have one token."
+            raise ValueError(msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(msg)
 
         if asset.unit() == self.unit_a:
             book = self.sell_book_full
@@ -318,7 +379,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_in(
         self,
         asset: Assets,
-        precise: bool = True,
+        precise: bool = True,  # noqa: ARG002
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token input for the given output.
@@ -326,15 +387,19 @@ class AbstractOrderBookState(AbstractPairState):
         Args:
             asset: The input assets
             precise: If precise, uses integers. Defaults to True.
+            apply_fee: If True, applies transaction fees. Defaults to False.
 
         Returns:
             tuple[Assets, float]: The output assets and slippage.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            msg = "Asset should only have one token."
+            raise ValueError(msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(msg)
 
         if asset.unit() == self.unit_b:
             book = self.sell_book_full
@@ -365,8 +430,8 @@ class AbstractOrderBookState(AbstractPairState):
         return in_assets, 0
 
     @classmethod
-    @property
-    def reference_utxo(self) -> UTxO | None:
+    def reference_utxo(cls) -> UTxO | None:
+        """Returns reference utxo."""
         return None
 
     @property
@@ -378,12 +443,18 @@ class AbstractOrderBookState(AbstractPairState):
                 1 of token B in units of token A, and the second `Decimal` is the price
                 to buy 1 of token A in units of token B.
         """
-        prices = (
+        if (
+            self.buy_book is None
+            or self.sell_book is None
+            or len(self.buy_book) == 0
+            or len(self.sell_book) == 0
+        ):
+            msg = "Buy book or sell book is not initialized or empty."
+            raise ValueError(msg)
+        return (
             Decimal((self.buy_book[0].price + 1 / self.sell_book[0].price) / 2),
             Decimal((self.sell_book[0].price + 1 / self.buy_book[0].price) / 2),
         )
-
-        return prices
 
     @property
     def tvl(self) -> Decimal:
@@ -393,11 +464,15 @@ class AbstractOrderBookState(AbstractPairState):
             NotImplementedError: Only ADA pool TVL is implemented.
         """
         if self.unit_a != "lovelace":
-            raise NotImplementedError("tvl for non-ADA pools is not implemented.")
+            msg = "tvl for non-ADA pools is not implemented."
+            raise NotImplementedError(msg)
 
-        tvl = sum(b.quantity / b.price for b in self.buy_book) + sum(
-            s.quantity * s.price for s in self.sell_book
-        )
+        tvl = Decimal(0)
+
+        if self.buy_book is not None:
+            tvl += sum(b.quantity / b.price for b in self.buy_book)
+        if self.sell_book is not None:
+            tvl += sum(s.quantity * s.price for s in self.sell_book)
 
         return Decimal(int(tvl) / 10**6)
 
@@ -408,4 +483,16 @@ class AbstractOrderBookState(AbstractPairState):
         assets: Assets | None = None,
         orders: list[AbstractOrderState] | None = None,
     ) -> "AbstractOrderBookState":
+        """Abstract method to retrieve an order book state.
+
+        Args:
+            assets: Optional. assets associated with the order book. Defaults to None.
+            orders: Optional. list to initialize the order book. Defaults to None.
+
+        Returns:
+            AbstractOrderBookState: An instance of an abstract order book state.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in the subclass.
+        """
         raise NotImplementedError
