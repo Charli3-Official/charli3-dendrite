@@ -27,10 +27,11 @@ from cardex.dexs.ob.ob_base import SellOrderBook
 from cardex.utility import asset_to_value
 from pycardano import Address
 from pycardano import datum_hash
+from pycardano import Datum
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import Datum
+from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
@@ -193,7 +194,9 @@ class GeniusYieldOrderState(AbstractOrderState):
     @property
     def reference_utxo(self) -> UTxO | None:
         order_info = get_pool_in_tx(
-            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+            **self.pool_selector().model_dump(exclude_none=True),
         )
 
         script = get_script_from_address(Address.decode(order_info[0].address))
@@ -213,7 +216,9 @@ class GeniusYieldOrderState(AbstractOrderState):
     @property
     def fee_reference_utxo(self) -> UTxO | None:
         order_info = get_pool_in_tx(
-            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+            **self.pool_selector().model_dump(exclude_none=True),
         )
 
         if (
@@ -240,14 +245,16 @@ class GeniusYieldOrderState(AbstractOrderState):
             output=TransactionOutput(
                 address=script.address,
                 amount=asset_to_value(script.assets),
-                datum=Datum.from_cbor(script.datum_cbor),
+                datum=RawPlutusData.from_cbor(script.datum_cbor),
             ),
         )
 
     @property
     def mint_reference_utxo(self) -> UTxO | None:
         order_info = get_pool_in_tx(
-            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+            **self.pool_selector().model_dump(exclude_defaults=True),
         )
         script = get_script_from_address(
             Address(
@@ -280,7 +287,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
         from pycardano import Datum
 
-        datum = Datum.from_cbor(script.datum_cbor)
+        datum = RawPlutusData.from_cbor(script.datum_cbor)
         return GeniusYieldSettings.from_cbor(script.datum_cbor)
 
     def swap_utxo(
@@ -294,7 +301,9 @@ class GeniusYieldOrderState(AbstractOrderState):
         datum_target: PlutusData | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
         order_info = get_pool_in_tx(
-            self.tx_hash, assets=[self.dex_nft.unit()], **self.pool_selector()
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+            **self.pool_selector().model_dump(exclude_none=True),
         )
 
         # Ensure the output matches required outputs
@@ -589,9 +598,11 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
     @classmethod
     def get_book(cls, assets: Assets, orders: list[GeniusYieldOrderState] | None):
         if orders is None:
-            selector = GeniusYieldOrderState.pool_selector
+            selector = GeniusYieldOrderState.pool_selector()
 
-            result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+            result = get_pool_utxos(
+                limit=10000, historical=False, **selector.model_dump()
+            )
 
             orders = [
                 GeniusYieldOrderState.model_validate(r.model_dump()) for r in result
@@ -643,7 +654,7 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
     @classmethod
     def pool_selector(self) -> PoolSelector:
         """Pool selection information."""
-        return GeniusYieldOrderState.pool_selector
+        return GeniusYieldOrderState.pool_selector()
 
     @property
     def swap_forward(self) -> bool:

@@ -97,8 +97,8 @@ def get_pool_in_tx(
     # If assets are specified, select assets
     if assets is not None:
         datum_selector += """
-LEFT JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
-LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
+LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = txo.id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
 """
 
     datum_selector += """
