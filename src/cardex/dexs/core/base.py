@@ -20,6 +20,7 @@ from cardex.utility import Assets
 
 class AbstractPairState(CardexBaseModel, ABC):
     """Abstract base class representing the state of a pair."""
+
     assets: Assets
     block_time: int
     block_index: int
