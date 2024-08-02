@@ -406,7 +406,9 @@ class AbstractConstantLiquidityPoolState(AbstractPoolState):
         raise NotImplementedError(error_msg)
 
     def get_amount_in(
-        self, asset: Assets, precise: bool = True,
+        self,
+        asset: Assets,
+        precise: bool = True,
     ) -> tuple[Assets, float]:
         """Calculate input amount needed for desired output in constant liquidity pool.
 
