@@ -15,7 +15,6 @@ from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dataclasses.models import PoolSelector
-from cardex.utility import Assets
 
 
 class AbstractPairState(CardexBaseModel, ABC):
