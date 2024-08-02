@@ -42,12 +42,13 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             unit_out = self.unit_a
 
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, int):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         # Calculate the amount out
         fee_modifier = 10000 - volume_fee
@@ -101,12 +102,13 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             unit_out = self.unit_b
 
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_b:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, int):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_b:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         # Estimate the required input
         fee_modifier = 10000 - volume_fee
@@ -261,12 +263,13 @@ class AbstractStableSwapPoolState(AbstractPoolState):
               assets are provided.
         """
         volume_fee: int = 0
-        if isinstance(self.volume_fee, (int, float)):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, (int, float)):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         if fee_on_input:
             in_asset = Assets(
@@ -325,12 +328,13 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             assets are provided.
         """
         volume_fee: int = 0
-        if isinstance(self.volume_fee, (int, float)):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, (int, float)):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         if not fee_on_input:
             out_asset = Assets(
@@ -381,7 +385,7 @@ class AbstractConstantLiquidityPoolState(AbstractPoolState):
     methods to calculate the input and output asset amounts for swaps.
     """
 
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:  # noqa: ARG002
+    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
         """Calculate the output amount for a given input in a constant liquidity pool.
 
         Args:
@@ -396,7 +400,7 @@ class AbstractConstantLiquidityPoolState(AbstractPoolState):
         error_msg = "CLPP amount out is not yet implemented."
         raise NotImplementedError(error_msg)
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:  # noqa: ARG002
+    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
         """Calculate input amount needed for desired output in constant liquidity pool.
 
         Args:

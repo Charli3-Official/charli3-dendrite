@@ -104,9 +104,9 @@ class AbstractPairState(CardexBaseModel, ABC):
         """Return the staking address."""
         raise NotImplementedError
 
-    @property
+    @classmethod
     @abstractmethod
-    def order_datum_class(self) -> type[PlutusData]:
+    def order_datum_class(cls) -> type[PlutusData]:
         """Returns data class used for handling order datums."""
         raise NotImplementedError
 
