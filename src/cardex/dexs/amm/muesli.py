@@ -1,4 +1,4 @@
-"""MuesliSwap DEX implementation."""
+"""AMM Module for MuesliSwap DEX."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -19,10 +19,10 @@ from pycardano import Value
 
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
@@ -61,16 +61,16 @@ class MuesliOrderDatum(OrderDatum):
     value: MuesliOrderConfig
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
         batcher_fee: Assets,
         deposit: Assets,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-    ):
+        address_target: Address | None = None,  # noqa: ARG003
+        datum_target: PlutusData | None = None,  # noqa: ARG003
+    ) -> "MuesliOrderConfig":
         """Create a MuesliSwap order datum."""
         full_address = PlutusFullAddress.from_address(address_source)
 
@@ -102,15 +102,18 @@ class MuesliOrderDatum(OrderDatum):
         return cls(value=config)
 
     def address_source(self) -> str:
+        """Returns the source address associated with this order."""
         return self.value.full_address.to_address()
 
     def requested_amount(self) -> Assets:
+        """Returns the requested amount based on the order configuration."""
         token_out = self.value.token_out_policy.hex() + self.value.token_out_name.hex()
         if token_out == "":
-            token_out = "lovelace"
+            token_out = "lovelace"  # noqa: S105
         return Assets({token_out: self.value.min_receive})
 
     def order_type(self) -> OrderType:
+        """Returns the type of order (always 'swap' for Muesli orders)."""
         return OrderType.swap
 
 
@@ -124,6 +127,7 @@ class MuesliPoolDatum(PoolDatum):
     fee: int
 
     def pool_pair(self) -> Assets | None:
+        """Returns the pool pair assets if available."""
         return self.asset_a.assets + self.asset_b.assets
 
 
@@ -162,25 +166,25 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     _deposit = Assets(lovelace=1700000)
     _test_pool: ClassVar[
         str
-    ] = "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"
+    ] = "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"  # noqa: E501
     _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1zyq0kyrml023kwjk8zr86d5gaxrt5w8lxnah8r6m6s4jp4g3r6dxnzml343sx8jweqn4vn3fz2kj8kgu9czghx0jrsyqqktyhv",
     )
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
+        """Returns the name of the DEX ('MuesliSwap')."""
         return "MuesliSwap"
 
     @classmethod
-    @property
-    def order_selector(self) -> list[str]:
-        return [self._stake_address.encode()]
+    def order_selector(cls) -> list[str]:
+        """Returns the order selector list."""
+        return [cls._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector."""
         return PoolSelector(
             selector_type="assets",
             selector=cls.dex_policy,
@@ -188,14 +192,23 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
+        """Returns if swap forwarding is enabled."""
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
+        """Get Reference UTXO.
+
+        Returns:
+            UTxO | None: UTxO object if it exists, otherwise None.
+        """
         if cls._reference_utxo is None:
+            script = get_script_from_address(cls._stake_address).script
+            if script is None:
+                msg = "Script from address is None"
+                raise ValueError(msg)
             script_bytes = bytes.fromhex(
-                get_script_from_address(cls._stake_address).script,
+                script,
             )
 
             script = cls.default_script_class()(script_bytes)
@@ -222,35 +235,39 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
 
     @property
     def stake_address(self) -> Address:
+        """Returns the stake address."""
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MuesliOrderDatum]:
+        """Returns the order datum class type."""
         return MuesliOrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliPoolDatum]:
+        """Returns the pool datum class type."""
         return MuesliPoolDatum
 
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
+        if self.pool_nft is None:
+            msg = "pool_nft is None, cannot determine pool_id"
+            raise ValueError(msg)
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
+        """Returns the DEX policy list."""
         return [
             "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
             "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",
-            # "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools
-            # "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy
+            # "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools  # noqa: E501, ERA001
+            # "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy  # noqa: E501, ERA001
         ]
 
     @classmethod
-    def extract_dex_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
+    def extract_dex_nft(cls, values: dict[str, Any]) -> Assets | None:
         """Extract the dex nft from the UTXO.
 
         Some DEXs put a DEX nft into the pool UTXO.
@@ -269,8 +286,9 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         """
         dex_nft = super().extract_dex_nft(values)
 
-        if cls._test_pool in dex_nft:
-            raise InvalidPoolError("This is a test pool.")
+        if dex_nft is not None and cls._test_pool in dex_nft:
+            msg = "This is a test pool."
+            raise InvalidPoolError(msg)
 
         return dex_nft
 
@@ -299,8 +317,12 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         else:
             nfts = [asset for asset, quantity in assets.items() if quantity == 1]
             if len(nfts) != 1:
+                msg = (
+                    f"MuesliSwap pools must have exactly one pool nft: "
+                    f"assets={assets}"
+                )
                 raise InvalidPoolError(
-                    f"MuesliSwap pools must have exactly one pool nft: assets={assets}",
+                    msg,
                 )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
@@ -308,11 +330,13 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return pool_nft
 
     @classmethod
-    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """Returns the default script class for the pool."""
         return PlutusV2Script
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
+        """Returns the cancel redeemer."""
         return Redeemer(MuesliCancelRedeemer())
 
 
@@ -322,16 +346,16 @@ class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState)
     inactive: bool = True
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
+        """Returns the DEX policy list for constant liquidity pools."""
         return [
-            # "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
-            # "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",
-            "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools
-            # "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy
+            # "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",  # noqa: E501, ERA001
+            # "ffcdbb9155da0602280c04d8b36efde35e3416567f9241aff09552694d7565736c69537761705f414d4d",  # noqa: E501, ERA001
+            "f33bf12af1c23d660e29ebb0d3206b0bfc56ffd87ffafe2d36c42a454d7565736c69537761705f634c50",  # constant liquidity pools  # noqa: E501
+            # "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c",  # test pool policy  # noqa: E501, ERA001
         ]
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliCLPoolDatum]:
+        """Returns the pool datum class type."""
         return MuesliCLPoolDatum
