@@ -385,11 +385,16 @@ class AbstractConstantLiquidityPoolState(AbstractPoolState):
     methods to calculate the input and output asset amounts for swaps.
     """
 
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
         """Calculate the output amount for a given input in a constant liquidity pool.
 
         Args:
             asset (Assets): The input asset amount for the swap.
+            precise (bool): If True: the output rounded to the nearest integer.
 
         Returns:
             tuple[Assets, float]: Tuple containing the output asset and float value.
@@ -400,11 +405,14 @@ class AbstractConstantLiquidityPoolState(AbstractPoolState):
         error_msg = "CLPP amount out is not yet implemented."
         raise NotImplementedError(error_msg)
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
+    def get_amount_in(
+        self, asset: Assets, precise: bool = True,
+    ) -> tuple[Assets, float]:
         """Calculate input amount needed for desired output in constant liquidity pool.
 
         Args:
             asset (Assets): The desired output asset amount for the swap.
+            precise (bool): If True: the output rounded to the nearest integer.
 
         Returns:
             tuple[Assets, float]: Tuple containing required input asset and float value.
