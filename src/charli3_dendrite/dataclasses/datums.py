@@ -7,7 +7,7 @@ from pycardano import DatumHash
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 
-from cardex.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import Assets
 
 
 @dataclass

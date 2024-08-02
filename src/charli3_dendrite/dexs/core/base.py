@@ -2,11 +2,11 @@ from abc import ABC
 from abc import abstractmethod
 from decimal import Decimal
 
-from cardex.dataclasses.datums import CancelRedeemer
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dataclasses.models import PoolSelector
-from cardex.utility import Assets
+from charli3_dendrite.dataclasses.datums import CancelRedeemer
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.utility import Assets
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
@@ -16,7 +16,7 @@ from pycardano import TransactionOutput
 from pycardano import UTxO
 
 
-class AbstractPairState(CardexBaseModel, ABC):
+class AbstractPairState(DendriteBaseModel, ABC):
     assets: Assets
     block_time: int
     block_index: int

@@ -1,5 +1,5 @@
 <div align="center">
-    <h1 align="center">Cardex</h1>
+    <h1 align="center">Charli3 Dendrite</h1>
     <p align="center">Python SDK for interacting with Cardano DEXs</p>
     <p>
         <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python version">
@@ -10,7 +10,7 @@
 
 ## Overview
 
-Cardex is a powerful Python SDK designed for seamless interaction with multiple Decentralized Exchanges (DEXs) on the Cardano blockchain. It provides a unified interface for developers to access various DEX functionalities, simplifying the process of building applications in the Cardano ecosystem.
+Charli3 Dendrite is a powerful Python SDK designed for seamless interaction with multiple Decentralized Exchanges (DEXs) on the Cardano blockchain. It provides a unified interface for developers to access various DEX functionalities, simplifying the process of building applications in the Cardano ecosystem.
 
 ## Key Features
 
@@ -28,14 +28,14 @@ Cardex is a powerful Python SDK designed for seamless interaction with multiple 
 
 ```bash
 # Using pip
-pip install cardex
+pip install charli3_dendrite
 
 # Using Poetry
-poetry add cardex
+poetry add charli3_dendrite
 ```
 
 ## Supported DEXs
-Cardex currently supports the following Cardano DEXs:
+Charli3 Dendrite currently supports the following Cardano DEXs:
 
 - Minswap
 - MuesliSwap
@@ -44,7 +44,7 @@ Cardex currently supports the following Cardano DEXs:
 - VyFi
 - WingRiders
 
-Each DEX is implemented as a separate module within the `cardex.dexs.amm` package.
+Each DEX is implemented as a separate module within the `charli3 dendrite.dexs.amm` package.
 ## Core Components
 ### AbstractPoolState
 The `AbstractPoolState` class in `amm_base.py` provides the base implementation for AMM (Automated Market Maker) pool states. It includes methods for:
@@ -58,21 +58,21 @@ The `AbstractPairState` class in `base.py` defines the interface for all pair st
 ### Assets
 The `Assets` class in `models.py` represents a collection of assets (tokens) and their quantities. It provides utility methods for working with asset collections, including addition and subtraction operations.
 ## Configuration
-Cardex can be configured using environment variables or a `.env` file. See `sample.env` for an example of the configuration options.
+Charli3 Dendrite can be configured using environment variables or a `.env` file. See `sample.env` for an example of the configuration options.
 
 ### Data Provider Configuration
 
-Cardex supports multiple data providers to fetch on-chain data. Currently, it supports Blockfrost and DBSync, with plans to add Ogmios and Kupo in the future.
+Charli3 Dendrite supports multiple data providers to fetch on-chain data. Currently, it supports Blockfrost and DBSync, with plans to add Ogmios and Kupo in the future.
 
 #### Blockfrost Configuration
 
-Blockfrost is the default data provider for Cardex. To use Blockfrost, you need to set up your API key in the environment variables or `.env` file:
+Blockfrost is the default data provider for Charli3 Dendrite. To use Blockfrost, you need to set up your API key in the environment variables or `.env` file:
 ```
 PROJECT_ID="your-blockfrost-project-id"
 NETWORK="mainnet"  # or "testnet" for the Cardano testnet
 ```
 #### DBSync Configuration
-Cardex also supports using a DBSync instance as a data provider. To configure DBSync, set the following environment variables:
+Charli3 Dendrite also supports using a DBSync instance as a data provider. To configure DBSync, set the following environment variables:
 ```bash
 DBSYNC_HOST="your-dbsync-host"
 DBSYNC_PORT="your-dbsync-port"
@@ -84,7 +84,7 @@ DBSYNC_PASS="your-dbsync-password"
 We are planning to add support for Ogmios and Kupo as additional data providers in future releases. These will offer alternative ways to interact with the Cardano blockchain and may provide performance improvements or additional features.
 Stay tuned for updates on the integration of these providers. Once implemented, they will be configurable in a similar manner to the existing providers.
 ### Wallet Configuration
-Cardex supports wallet integration for performing transactions. You can configure a wallet using a mnemonic phrase:
+Charli3 Dendrite supports wallet integration for performing transactions. You can configure a wallet using a mnemonic phrase:
 ```bash
 WALLET_MNEMONIC="your wallet mnemonic phrase"
 ```
@@ -104,4 +104,4 @@ For parallel test execution:
 poetry run pytest -n auto
 ```
 ## Contributing
-Contributions to Cardex are welcome! Please refer to the `CONTRIBUTING.md` file for guidelines on how to contribute to the project.
+Contributions to Charli3 Dendrite are welcome! Please refer to the `CONTRIBUTING.md` file for guidelines on how to contribute to the project.

@@ -1,5 +1,5 @@
-from cardex.dataclasses.models import Assets
-from cardex.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 
 
 class AbstractConstantProductPoolState(AbstractPoolState):

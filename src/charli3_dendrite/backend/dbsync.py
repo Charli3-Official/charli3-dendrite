@@ -8,10 +8,10 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from pycardano import Address
 
-from cardex.dataclasses.models import BlockList
-from cardex.dataclasses.models import PoolStateList
-from cardex.dataclasses.models import ScriptReference
-from cardex.dataclasses.models import SwapTransactionList
+from charli3_dendrite.dataclasses.models import BlockList
+from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import ScriptReference
+from charli3_dendrite.dataclasses.models import SwapTransactionList
 
 load_dotenv()
 

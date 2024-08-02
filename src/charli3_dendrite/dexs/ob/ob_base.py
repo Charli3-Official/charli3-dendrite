@@ -1,15 +1,15 @@
 from decimal import Decimal
 
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import BaseList
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dexs.core.base import AbstractPairState
-from cardex.utility import Assets
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import BaseList
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dexs.core.base import AbstractPairState
+from charli3_dendrite.utility import Assets
 from pycardano import UTxO
 from pydantic import model_validator
 
 
-class OrderBookOrder(CardexBaseModel):
+class OrderBookOrder(DendriteBaseModel):
     price: float
     quantity: int
     address: str | None = None

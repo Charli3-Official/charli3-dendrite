@@ -2,23 +2,23 @@ import os
 import time
 
 import pytest
-from cardex import MinswapCPPState
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MuesliSwapCLPState
-from cardex import MuesliSwapCPPState
-from cardex import SpectrumCPPState
-from cardex import SundaeSwapCPPState
-from cardex import VyFiCPPState
-from cardex import WingRidersCPPState
-from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.dataclasses.models import Assets
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.core.errors import InvalidLPError
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
+from charli3_dendrite import MinswapCPPState
+from charli3_dendrite import MinswapDJEDiUSDStableState
+from charli3_dendrite import MinswapDJEDUSDCStableState
+from charli3_dendrite import MuesliSwapCLPState
+from charli3_dendrite import MuesliSwapCPPState
+from charli3_dendrite import SpectrumCPPState
+from charli3_dendrite import SundaeSwapCPPState
+from charli3_dendrite import VyFiCPPState
+from charli3_dendrite import WingRidersCPPState
+from charli3_dendrite import WingRidersSSPState
+from charli3_dendrite.backend.dbsync import get_pool_utxos
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import BlockFrostChainContext

@@ -10,7 +10,7 @@ from pydantic import model_validator
 from pydantic.alias_generators import to_camel
 
 
-class CardexBaseModel(BaseModel):
+class DendriteBaseModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
@@ -26,7 +26,7 @@ class PoolSelectorType(Enum):
     asset = "assets"
 
 
-class PoolSelector(CardexBaseModel):
+class PoolSelector(DendriteBaseModel):
     """Pool selection information for dbsync."""
 
     selector_type: PoolSelectorType
@@ -118,7 +118,7 @@ class Assets(BaseDict):
         return Assets(**result)
 
 
-class ScriptReference(CardexBaseModel):
+class ScriptReference(DendriteBaseModel):
     tx_hash: str | None
     tx_index: int | None
     address: str | None
@@ -126,7 +126,7 @@ class ScriptReference(CardexBaseModel):
     script: str
 
 
-class BlockInfo(CardexBaseModel):
+class BlockInfo(DendriteBaseModel):
     epoch_slot_no: int
     block_no: int
     tx_count: int
@@ -137,7 +137,7 @@ class BlockList(BaseList):
     root: list[BlockInfo]
 
 
-class PoolStateInfo(CardexBaseModel):
+class PoolStateInfo(DendriteBaseModel):
     address: str
     tx_hash: str
     tx_index: int
@@ -154,7 +154,7 @@ class PoolStateList(BaseList):
     root: list[PoolStateInfo]
 
 
-class SwapSubmitInfo(CardexBaseModel):
+class SwapSubmitInfo(DendriteBaseModel):
     address_inputs: list[str] = Field(..., alias="submit_address_inputs")
     address_stake: str = Field(..., alias="submit_address_stake")
     assets: Assets = Field(..., alias="submit_assets")
@@ -171,7 +171,7 @@ class SwapSubmitInfo(CardexBaseModel):
     tx_index: int = Field(..., alias="submit_tx_index")
 
 
-class SwapExecuteInfo(CardexBaseModel):
+class SwapExecuteInfo(DendriteBaseModel):
     address: str
     tx_hash: str
     tx_index: int
@@ -181,7 +181,7 @@ class SwapExecuteInfo(CardexBaseModel):
     assets: Assets
 
 
-class SwapStatusInfo(CardexBaseModel):
+class SwapStatusInfo(DendriteBaseModel):
     swap_input: SwapSubmitInfo
     swap_output: SwapExecuteInfo | PoolStateInfo | None = None
 

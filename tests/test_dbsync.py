@@ -1,20 +1,20 @@
 import pytest
-from cardex import MinswapCPPState
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MuesliSwapCLPState
-from cardex import MuesliSwapCPPState
-from cardex import SpectrumCPPState
-from cardex import SundaeSwapCPPState
-from cardex import VyFiCPPState
-from cardex import WingRidersCPPState
-from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_cancel_utxos
-from cardex.backend.dbsync import get_historical_order_utxos
-from cardex.backend.dbsync import get_pool_in_tx
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.backend.dbsync import last_block
-from cardex.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite import MinswapCPPState
+from charli3_dendrite import MinswapDJEDiUSDStableState
+from charli3_dendrite import MinswapDJEDUSDCStableState
+from charli3_dendrite import MuesliSwapCLPState
+from charli3_dendrite import MuesliSwapCPPState
+from charli3_dendrite import SpectrumCPPState
+from charli3_dendrite import SundaeSwapCPPState
+from charli3_dendrite import VyFiCPPState
+from charli3_dendrite import WingRidersCPPState
+from charli3_dendrite import WingRidersSSPState
+from charli3_dendrite.backend.dbsync import get_cancel_utxos
+from charli3_dendrite.backend.dbsync import get_historical_order_utxos
+from charli3_dendrite.backend.dbsync import get_pool_in_tx
+from charli3_dendrite.backend.dbsync import get_pool_utxos
+from charli3_dendrite.backend.dbsync import last_block
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 
 DEXS: list[AbstractPoolState] = [
     MinswapCPPState,
