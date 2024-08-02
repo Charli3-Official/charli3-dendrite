@@ -126,7 +126,7 @@ class SpectrumCancelRedeemer(PlutusData):
 class SpectrumCPPState(AbstractConstantProductPoolState):
     """The Spectrum DEX constant product pool state."""
 
-    fee: int
+    fee: int = 0
     _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
@@ -203,8 +203,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return PlutusV2Script
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[SpectrumPoolDatum]:
+    def pool_datum_class(cls) -> type[SpectrumPoolDatum]:
         return SpectrumPoolDatum
 
     @property
