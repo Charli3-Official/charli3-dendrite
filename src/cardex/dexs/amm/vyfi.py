@@ -224,8 +224,8 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     _deposit = Assets(lovelace=2000000)
     _pools: ClassVar[dict[str, VyFiPoolDefinition] | None] = None
     _pools_refresh: ClassVar[float] = time.time()
-    lp_fee: int
-    bar_fee: int
+    lp_fee: int = 0
+    bar_fee: int = 0
 
     @classmethod
     @property
@@ -276,8 +276,7 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         return VyFiOrderDatum
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[VyFiPoolDatum]:
+    def pool_datum_class(cls) -> type[VyFiPoolDatum]:
         return VyFiPoolDatum
 
     @property
