@@ -1,8 +1,9 @@
 """Spectrum DEX module."""
 
 from dataclasses import dataclass
+from typing import Any
 from typing import ClassVar
-from typing import List
+from typing import Optional
 from typing import Union
 
 from pycardano import Address
@@ -19,10 +20,10 @@ from pycardano import VerificationKeyHash
 
 from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
@@ -47,7 +48,7 @@ class SpectrumOrderDatum(OrderDatum):
     min_receive: int
 
     @classmethod
-    def create_datum(
+    def create_datum(  # noqa: PLR0913
         cls,
         address_source: Address,
         in_assets: Assets,
@@ -82,6 +83,14 @@ class SpectrumOrderDatum(OrderDatum):
         )
 
     def address_source(self) -> Address:
+        """Construct an Address object from the stored payment and stake parts.
+
+        This method converts the payment part and stake part into an Address object.
+        If the stake part is of type PlutusNone, it sets the stake part to None.
+
+        Returns:
+            Address: An Address object containing the payment part and the staking part.
+        """
         payment_part = VerificationKeyHash(self.address_payment)
         if isinstance(self.address_stake, PlutusNone):
             stake_part = None
@@ -90,9 +99,25 @@ class SpectrumOrderDatum(OrderDatum):
         return Address(payment_part=payment_part, staking_part=stake_part)
 
     def requested_amount(self) -> Assets:
+        """Calculate the requested amount of assets.
+
+        This method returns an Assets object containing the unit of the output asset
+        and the minimum amount to receive.
+
+        Returns:
+            Assets: An Assets object with the unit of the output asset
+            and the minimum amount to receive.
+        """
         return Assets({self.out_asset.assets.unit(): self.min_receive})
 
     def order_type(self) -> OrderType:
+        """Retrieve the type of order.
+
+        This method returns the type of order, which is always `Swap`.
+
+        Returns:
+            OrderType: The type of order, which is `OrderType.swap`.
+        """
         return OrderType.swap
 
 
@@ -105,10 +130,11 @@ class SpectrumPoolDatum(PoolDatum):
     asset_b: AssetClass
     pool_lq: AssetClass
     fee_mod: int
-    maybe_address: List[bytes]
+    maybe_address: list[bytes]
     lq_bound: int
 
     def pool_pair(self) -> Assets | None:
+        """Returns the pool pair assets if available."""
         return self.asset_a.assets + self.asset_b.assets
 
 
@@ -135,18 +161,18 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
+        """Returns the name of the DEX ('MuesliSwap')."""
         return "Spectrum"
 
     @classmethod
-    @property
-    def order_selector(self) -> list[str]:
-        return [self._stake_address.encode()]
+    def order_selector(cls) -> list[str]:
+        """Returns the order selector list."""
+        return [cls._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
+        """Returns the pool selector."""
         return PoolSelector(
             selector_type="addresses",
             selector=[
@@ -157,18 +183,29 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
+        """Returns if swap forwarding is enabled."""
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
+        """Retrieve the reference UTxO for the Spectrum DEX.
+
+        This method checks if the reference UTxO is already set. If not, it retrieves
+        the script bytes from the stake address and sets the reference UTxO.
+
+        Returns:
+            UTxO | None: The reference UTxO if available, otherwise None.
+        """
         if cls._reference_utxo is None:
+            script = get_script_from_address(cls._stake_address).script
+            if script is None:
+                msg = "Script from address is None"
+                raise ValueError(msg)
+
             script_bytes = bytes.fromhex(
-                get_script_from_address(cls._stake_address).script,
+                script,
             )
-
             script = cls.default_script_class()(script_bytes)
-
             cls._reference_utxo = UTxO(
                 input=TransactionInput(
                     transaction_id=TransactionId(
@@ -191,37 +228,43 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
     @property
     def stake_address(self) -> Address:
+        """Return the staking address."""
         return self._stake_address
 
     @classmethod
-    @property
-    def order_datum_class(self) -> type[SpectrumOrderDatum]:
+    def order_datum_class(cls) -> type[SpectrumOrderDatum]:
+        """Returns data class used for handling order datums."""
         return SpectrumOrderDatum
 
     @classmethod
-    def default_script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        """The default script class used for handling scripts.
+
+        Returns:
+            type[PlutusV1Script] | type[PlutusV2Script]: The default script class.
+        """
         return PlutusV2Script
 
     @classmethod
     def pool_datum_class(cls) -> type[SpectrumPoolDatum]:
+        """This method returns the class, used for handling pool datums in the system.
+
+        Returns:
+            type[SpectrumPoolDatum]: The data class for pool datums.
+        """
         return SpectrumPoolDatum
 
     @property
     def pool_id(self) -> str:
         """A unique identifier for the pool."""
+        if self.pool_nft is None:
+            msg = "pool_nft is None, cannot determine pool_id"
+            raise ValueError(msg)
         return self.pool_nft.unit()
 
     @classmethod
-    def extract_pool_nft(cls, values) -> Assets:
+    def extract_pool_nft(cls, values: dict[str, Any]) -> Optional[Assets]:
         """Extract the pool nft from the UTXO.
-
-        Some DEXs put a pool nft into the pool UTXO.
-
-        This function checks to see if the pool nft is in the UTXO if the DEX policy is
-        defined.
-
-        If the pool nft is in the values, this value is skipped because it is assumed
-        that this utxo has already been parsed.
 
         Args:
             values: The pool UTXO inputs.
@@ -234,11 +277,12 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         # If the pool nft is in the values, it's been parsed already
         if "pool_nft" in values:
             pool_nft = Assets(
-                **{key: value for key, value in values["pool_nft"].items()},
+                **dict(values["pool_nft"].items()),
             )
             name = bytes.fromhex(pool_nft.unit()[56:]).split(b"_")
             if len(name) != 3 and name[2].decode().lower() != "nft":
-                raise NotAPoolError("A pool must have one pool NFT token.")
+                msg = "A pool must have one pool NFT token."
+                raise NotAPoolError(msg)
 
         # Check for the pool nft
         else:
@@ -251,14 +295,15 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                     pool_nft = Assets(**{asset: assets.root.pop(asset)})
                     break
             if pool_nft is None:
-                raise NotAPoolError("A pool must have one pool NFT token.")
+                msg = "A pool must have one pool NFT token."
+                raise NotAPoolError(msg)
 
             values["pool_nft"] = pool_nft
 
         return pool_nft
 
     @classmethod
-    def extract_lp_tokens(cls, values) -> Assets:
+    def extract_lp_tokens(cls, values: dict[str, Any]) -> Assets:
         """Extract the lp tokens from the UTXO.
 
         Some DEXs put lp tokens into the pool UTXO.
@@ -286,35 +331,26 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                     lp_tokens = Assets(**{asset: assets.root.pop(asset)})
                     break
             if lp_tokens is None:
+                token_names = [bytes.fromhex(a[56:]) for a in assets]
+                msg = f"A pool must have pool lp tokens. Token names: {token_names}"
                 raise InvalidLPError(
-                    f"A pool must have pool lp tokens. Token names: {[bytes.fromhex(a[56:]) for a in assets]}",
+                    msg,
                 )
 
             values["lp_tokens"] = lp_tokens
 
-        # response = requests.post(
-        #     "https://meta.spectrum.fi/cardano/minting/data/verifyPool/",
-        #     headers={"Content-Type": "application/json"},
-        #     data=json.dumps(
-        #         [
-        #             {
-        #                 "nftCs": datum.pool_nft.policy.hex(),
-        #                 "nftTn": datum.pool_nft.asset_name.hex(),
-        #                 "lqCs": datum.pool_lq.policy.hex(),
-        #                 "lqTn": datum.pool_lq.asset_name.hex(),
-        #             }
-        #         ]
-        #     ),
-        # ).json()
-        # valid_pool = response[0][1]
-
-        # if not valid_pool:
-        #     raise InvalidPoolError
-
         return lp_tokens
 
     @classmethod
-    def post_init(cls, values: dict[str, ...]):
+    def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Post initialization checks.
+
+        Args:
+            values: The pool initialization parameters
+
+        Returns:
+            dict[str, Any]: The updated values dictionary.
+        """
         super().post_init(values)
 
         # Check to see if the pool is active
@@ -322,17 +358,16 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
         assets = values["assets"]
 
-        if len(assets) == 2:
-            quantity = assets.quantity()
-        else:
-            quantity = assets.quantity(1)
+        quantity = assets.quantity() if len(assets) == 2 else assets.quantity(1)
 
         if 2 * quantity <= datum.lq_bound:
             values["inactive"] = True
 
         values["fee"] = (1000 - datum.fee_mod) * 10
 
-    def swap_datum(
+        return values
+
+    def swap_datum(  # noqa: PLR0913
         self,
         address_source: Address,
         in_assets: Assets,
@@ -341,8 +376,31 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> PlutusData:
+        """Create a PlutusData object representing a swap datum.
+
+        Args:
+            address_source (Address): The source address for the swap.
+            in_assets (Assets): The input assets for the swap.
+            out_assets (Assets): The output assets for the swap.
+            extra_assets (Assets | None): Additional assets for the swap.
+            Defaults to None.
+            address_target (Address | None): The target address for the swap.
+            Defaults to None.
+            datum_target (PlutusData | None): The target datum for the swap.
+            Defaults to None.
+
+        Returns:
+            PlutusData: A PlutusData object representing the swap datum.
+        """
         if self.swap_forward and address_source is not None:
-            print(f"{self.__class__.__name__} does not support swap forwarding.")
+            print(  # noqa: T201
+                f"{self.__class__.__name__} does not support swap forwarding.",
+            )
+
+        if self.pool_nft is None:
+            msg = "Pool token must not be None for creating swap datum."
+            raise ValueError(msg)
+        pool_token = self.pool_nft
 
         return SpectrumOrderDatum.create_datum(
             address_source=address_source,
@@ -352,9 +410,17 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
                 "lovelace"
             ],
             volume_fee=self.volume_fee,
-            pool_token=self.pool_nft,
+            pool_token=pool_token,
         )
 
     @classmethod
     def cancel_redeemer(cls) -> PlutusData:
+        """Create a PlutusData object representing a cancel redeemer.
+
+        This method constructs a cancel redeemer with predefined values and returns it
+        as a PlutusData object.
+
+        Returns:
+            PlutusData: A PlutusData object representing the cancel redeemer.
+        """
         return Redeemer(SpectrumCancelRedeemer(0, 0, 0, 1))
