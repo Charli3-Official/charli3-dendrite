@@ -162,7 +162,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
 
     @classmethod
     def dex(cls) -> str:
-        """Returns the name of the DEX ('MuesliSwap')."""
+        """Returns the name of the DEX ('Spectrum')."""
         return "Spectrum"
 
     @classmethod
