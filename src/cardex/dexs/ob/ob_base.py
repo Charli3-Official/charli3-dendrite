@@ -16,7 +16,10 @@ from cardex.dexs.core.base import AbstractPairState
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
 from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import Assets
+
+ASSET_COUNT_ONE = 1
+ASSET_COUNT_TWO = 2
+ASSET_COUNT_THREE = 3
 
 
 class AbstractOrderState(AbstractPairState):
@@ -73,8 +76,13 @@ class AbstractOrderState(AbstractPairState):
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
+
+        volume_fee: int = 0
+        if isinstance(self.volume_fee, int):
+            volume_fee = self.volume_fee
+
         in_quantity = asset.quantity() - ceil(
-            asset.quantity() * self.volume_fee / 10000,
+            asset.quantity() * (volume_fee) / 10000,
         )
         out_assets.root[self.out_unit] = min(
             ceil(in_quantity * denom / num),
@@ -109,9 +117,9 @@ class AbstractOrderState(AbstractPairState):
         denom, num = self.price
         in_assets = Assets(**{self.in_unit: 0})
         out_quantity = asset.quantity()
-        in_assets.root[self.in_unit] = (
-            min(out_quantity, self.available.quantity()) * denom
-        ) / num
+        in_assets.root[self.in_unit] = int(
+            (min(out_quantity, self.available.quantity()) * denom) / num
+        )
         fees = in_assets[self.in_unit] * self.volume_fee / 10000
         in_assets.root[self.in_unit] += fees
 
@@ -190,7 +198,7 @@ class AbstractOrderState(AbstractPairState):
             PlutusData: The parsed order datum.
         """
         if self._datum_parsed is None:
-            self._datum_parsed = self.order_datum_class.from_cbor(self.datum_cbor)
+            self._datum_parsed = self.order_datum_class().from_cbor(self.datum_cbor)
         return self._datum_parsed
 
     @classmethod
@@ -204,25 +212,28 @@ class AbstractOrderState(AbstractPairState):
         non_ada_assets = [a for a in assets if a != "lovelace"]
 
         # ADA pair
-        if len(assets) == 2 and len(non_ada_assets) != 1:
+        if len(assets) == ASSET_COUNT_TWO and len(non_ada_assets) != ASSET_COUNT_ONE:
             msg = f"Pool must only have 1 non-ADA asset: {values}"
             raise ValueError(msg)
 
         # Non-ADA pair
-        if len(assets) == 3:
-            if len(non_ada_assets) != 2:
+        if len(assets) == ASSET_COUNT_THREE:
+            if len(non_ada_assets) != ASSET_COUNT_TWO:
                 msg = "Pool must only have 2 non-ADA assets."
                 raise ValueError(msg)
             # Send the ADA token to the end
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
-        elif len(assets) == 1 and "lovelace" in assets:
+        elif len(assets) == ASSET_COUNT_ONE and "lovelace" in assets:
             msg = f"Invalid pool, only contains lovelace: assets={assets}"
             raise NoAssetsError(
                 msg,
             )
         else:
-            msg = f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}"
+            msg = (
+                f"Pool must have 2 or 3 assets except factor, NFT, "
+                f"and LP tokens: assets={assets}"
+            )
             raise InvalidPoolError(
                 msg,
             )
@@ -327,7 +338,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_out(
         self,
         asset: Assets,
-        precise: bool = True,  # noqa: ARG002
+        precise: bool = True,
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token output for the given input.
@@ -357,8 +368,11 @@ class AbstractOrderBookState(AbstractPairState):
             unit_out = self.unit_a
 
         in_quantity = asset.quantity()
+        fee: int = 0
+        if isinstance(self.fee, int):
+            fee = self.fee
         if apply_fee:
-            in_quantity = in_quantity * (10000 - self.fee) // 10000
+            in_quantity = in_quantity * (10000 - fee) // 10000
 
         index = 0
         out_assets = Assets({unit_out: 0})
@@ -379,7 +393,7 @@ class AbstractOrderBookState(AbstractPairState):
     def get_amount_in(
         self,
         asset: Assets,
-        precise: bool = True,  # noqa: ARG002
+        precise: bool = True,
         apply_fee: bool = False,
     ) -> tuple[Assets, float]:
         """Get the amount of token input for the given output.
@@ -392,7 +406,7 @@ class AbstractOrderBookState(AbstractPairState):
         Returns:
             tuple[Assets, float]: The output assets and slippage.
         """
-        if len(asset) != 1:
+        if len(asset) != ASSET_COUNT_ONE:
             msg = "Asset should only have one token."
             raise ValueError(msg)
         if asset.unit() not in [self.unit_a, self.unit_b]:
