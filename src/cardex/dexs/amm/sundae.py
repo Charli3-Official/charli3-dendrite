@@ -440,7 +440,7 @@ class SundaeV3Settings(PlutusData):
 class SundaeSwapCPPState(AbstractConstantProductPoolState):
     """SundaeSwap constant product pool state."""
 
-    fee: int
+    fee: int = 0
     _batcher = Assets(lovelace=2500000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
@@ -482,8 +482,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         return SundaeOrderDatum
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[SundaePoolDatum]:
+    def pool_datum_class(cls) -> type[SundaePoolDatum]:
         """Get the pool datum class."""
         return SundaePoolDatum
 
