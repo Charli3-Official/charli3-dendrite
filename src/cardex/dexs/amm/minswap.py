@@ -12,7 +12,7 @@ from pycardano import VerificationKeyHash
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import RawPlutusData
+from pycardano import Datum
 
 from cardex.dataclasses.datums import _PlutusConstrWrapper
 from cardex.dataclasses.datums import AssetClass
@@ -367,7 +367,7 @@ class DepositV2(PlutusData):
     """DepositV2 order datum."""
 
     CONSTR_ID = 4
-    deposit_amount_option: RawPlutusData
+    deposit_amount_option: Datum
     minimum_lp: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -377,7 +377,7 @@ class WithdrawV2(PlutusData):
     """WithdrawV2 order datum."""
 
     CONSTR_ID = 5
-    withdrawal_amount_option: RawPlutusData
+    withdrawal_amount_option: Datum
     minimum_asset_a: int
     minimum_asset_b: int
     killable: Union[BoolTrue, BoolFalse]
@@ -389,7 +389,7 @@ class ZapOutV2(PlutusData):
 
     CONSTR_ID = 6
     a_to_b_direction: Union[BoolTrue, BoolFalse]
-    withdrawal_amount_option: RawPlutusData
+    withdrawal_amount_option: Datum
     minimum_receive: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -413,7 +413,7 @@ class WithdrawImbalanceV2(PlutusData):
     """WithdrawImbalanceV2 order datum."""
 
     CONSTR_ID = 8
-    withdrawal_amount_optino: RawPlutusData
+    withdrawal_amount_optino: Datum
     ratio_asset_a: int
     ratio_asset_b: int
     minimum_asset_a: int
@@ -425,7 +425,7 @@ class SwapMultiRoutingV2(PlutusData):
     """SwapMultiRoutingV2 order datum."""
 
     CONSTR_ID = 9
-    routings: List[RawPlutusData]
+    routings: List[Datum]
     swap_amount_option: Union[SAOSpecificAmount, SAOAll]
     minimum_receive: int
 
@@ -814,11 +814,10 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         return [s.encode() for s in self._stake_address]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1w8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxzgusf9xw"],
+            assets=[
                 "13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f4d494e53574150",
             ],
         )
@@ -908,11 +907,10 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         return [s.encode() for s in self._stake_address]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1w84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau6ca7j5v4"],
+            assets=[
                 "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350",
             ],
         )
@@ -1056,11 +1054,10 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         return self.pool_datum.amp
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wy7kkcpuf39tusnnyga5t2zcul65dwx9yqzg7sep3cjscesx2q5m5"],
+            assets=[
                 "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
             ],
         )
@@ -1105,11 +1102,10 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wx8d45xlfrlxd7tctve8xgdtk59j849n00zz2pgyvv47t8sxa6t53"],
+            assets=[
                 "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
             ],
         )
@@ -1135,11 +1131,10 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wxxdvtj6y4fut4tmu796qpvy2xujtd836yg69ahat3e6jjcelrf94"],
+            assets=[
                 "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
             ],
         )

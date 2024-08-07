@@ -17,7 +17,7 @@ from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Value
 
-from cardex.backend.dbsync import get_script_from_address
+from cardex.backend.dbsync.references import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
@@ -179,11 +179,14 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=cls.dex_policy,
+            addresses=[
+                "addr1w9cy2gmar6cpn8yymll93lnd7lw96f27kn2p3eq5d4tjr7qkh3tzd",
+                "addr1w85t4tvj3rwf40wqnx6x72kqq6c6stra7jvkupnlqrqyarg2m74rn",
+                "addr1w8djr38pct9dpewvv7k67xuh45xpj5f9hyzs3cp939j0csc6nhwme",
+            ],
+            assets=cls.dex_policy,
         )
 
     @property

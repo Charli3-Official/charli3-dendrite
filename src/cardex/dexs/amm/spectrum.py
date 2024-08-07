@@ -17,7 +17,7 @@ from pycardano import UTxO
 from pycardano import Value
 from pycardano import VerificationKeyHash
 
-from cardex.backend.dbsync import get_script_from_address
+from cardex.backend.dbsync.references import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
@@ -145,11 +145,9 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="addresses",
-            selector=[
+            addresses=[
                 "addr1x8nz307k3sr60gu0e47cmajssy4fmld7u493a4xztjrll0aj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrswgxsta",
                 "addr1x94ec3t25egvhqy2n265xfhq882jxhkknurfe9ny4rl9k6dj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrst84slu",
             ],
