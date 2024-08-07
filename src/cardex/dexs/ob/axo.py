@@ -11,8 +11,6 @@ from typing import List
 from typing import Union
 
 import requests
-from cardex.backend.dbsync import get_axo_target
-from cardex.backend.dbsync import get_script_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.datums import OrderDatum
@@ -387,7 +385,7 @@ class AxoOBMarketState(AbstractOrderBookState):
     @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_reference = get_script_from_address(cls._stake_address)
+            script_reference = cls.get_backend().get_script_from_address(cls._stake_address)
 
             script = cls.default_script_class()(bytes.fromhex(script_reference.script))
 

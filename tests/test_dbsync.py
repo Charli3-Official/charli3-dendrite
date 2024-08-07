@@ -1,25 +1,36 @@
 import pytest
-
-from cardex import MinswapCPPState
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MinswapDJEDUSDMStableState
-from cardex import MinswapV2CPPState
-from cardex import SundaeSwapV3CPPState
-from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_cancel_utxos
-from cardex.backend.dbsync import get_historical_order_utxos
-from cardex.backend.dbsync import get_pool_in_tx
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.backend.dbsync import last_block
+from cardex.backend.dbsync import DbsyncBackend
+from cardex import (
+    MinswapCPPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
+    MinswapV2CPPState,
+    SundaeSwapV3CPPState,
+    WingRidersSSPState,
+)
 from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.ob.ob_base import AbstractOrderBookState
+
+# Set up the backend for all DEX classes
+backend = DbsyncBackend()
+dex_classes = [
+    MinswapCPPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
+    MinswapV2CPPState,
+    SundaeSwapV3CPPState,
+    WingRidersSSPState,
+]
+
+for dex_class in dex_classes:
+    dex_class.set_backend(backend)
 
 
 @pytest.mark.parametrize("n_blocks", range(1, 5))
 def test_last_blocks(n_blocks: int):
-    result = last_block(n_blocks)
-
+    result = backend.last_block(n_blocks)
     assert len(result) == n_blocks
 
 
@@ -28,8 +39,8 @@ def test_last_blocks(n_blocks: int):
     range(1, 14, 2),
     ids=[f"blocks={2**n}" for n in range(1, 14, 2)],
 )
-def test_last_blocks(n_blocks: int, benchmark):
-    result = benchmark(last_block, 2**n_blocks)
+def test_last_blocks_benchmark(n_blocks: int, benchmark):
+    result = benchmark(backend.last_block, 2**n_blocks)
 
 
 def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
@@ -39,7 +50,7 @@ def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
     selector = dex.pool_selector
     limit = 20000 if run_slow else 100
     result = benchmark(
-        get_pool_utxos,
+        backend.get_pool_utxos,
         limit=limit,
         historical=False,
         **selector.to_dict(),
@@ -66,7 +77,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
 
     selector = dex.pool_selector
     result = benchmark(
-        get_pool_utxos,
+        backend.get_pool_utxos,
         limit=1,
         historical=False,
         **selector.to_dict(),
@@ -91,7 +102,7 @@ def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
 
     order_selector = dex.order_selector
     result = benchmark(
-        get_historical_order_utxos,
+        backend.get_historical_order_utxos,
         stake_addresses=order_selector,
         limit=limit,
     )
@@ -103,6 +114,5 @@ def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
 )
 def test_get_pool_in_tx(tx_hash):
     selector = MinswapCPPState.pool_selector
-    tx = get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
-
+    tx = backend.get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
     assert len(tx) > 0

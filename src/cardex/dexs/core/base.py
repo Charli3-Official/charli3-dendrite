@@ -1,8 +1,10 @@
+from typing import ClassVar
 from abc import ABC
 from abc import abstractmethod
 from decimal import Decimal
 
 from cardex.dataclasses.datums import CancelRedeemer
+from cardex.backend.backend_base import AbstractBackend
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dataclasses.models import PoolSelector
@@ -31,6 +33,19 @@ class AbstractPairState(CardexBaseModel, ABC):
     _batcher_fee: Assets
     _datum_parsed: PlutusData
     # _deposit: Assets
+    _backend: ClassVar[AbstractBackend | None] = None
+
+    @classmethod
+    def set_backend(cls, backend: AbstractBackend):
+        """Set the backend for the class."""
+        cls._backend = backend
+
+    @classmethod
+    def get_backend(cls) -> AbstractBackend:
+        """Get the backend for the class."""
+        if cls._backend is None:
+            raise ValueError("Backend has not been set. Call set_backend() first.")
+        return cls._backend
 
     @classmethod
     @abstractmethod

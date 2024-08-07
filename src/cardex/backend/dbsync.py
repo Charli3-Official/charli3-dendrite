@@ -1,10 +1,12 @@
 """ Concrete implementation of AbstractBackend for db-sync. """
+import logging
 import os
 from datetime import datetime
 from threading import Lock
 from typing import List, Optional
 
 import psycopg_pool
+from psycopg_pool import PoolTimeout
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from pycardano import Address
@@ -68,6 +70,7 @@ class DbsyncBackend(AbstractBackend):
         self.DBSYNC_PASS = os.environ.get("DBSYNC_PASS", None)
         self.DBSYNC_HOST = os.environ.get("DBSYNC_HOST", None)
         self.DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
+        self.DBSYNC_DB_NAME = os.environ.get("DBSYNC_DB_NAME", None)
 
     def get_dbsync_pool(self) -> psycopg_pool.ConnectionPool:
         """
@@ -79,7 +82,7 @@ class DbsyncBackend(AbstractBackend):
         with self.lock:
             if self.POOL is None:
                 conninfo = (
-                    f"host={self.DBSYNC_HOST} port={self.DBSYNC_PORT} dbname=cexplorer "
+                    f"host={self.DBSYNC_HOST} port={self.DBSYNC_PORT} dbname={self.DBSYNC_DB_NAME} "
                     f"user={self.DBSYNC_USER} password={self.DBSYNC_PASS}"
                 )
                 self.POOL = psycopg_pool.ConnectionPool(
@@ -88,12 +91,24 @@ class DbsyncBackend(AbstractBackend):
                     min_size=1,
                     max_size=10,
                     max_idle=10,
-                    reconnect_timeout=10,
+                    reconnect_timeout=30,  # Increased from 10 to 30
                     max_lifetime=60,
                     check=psycopg_pool.ConnectionPool.check_connection,
                 )
-                self.POOL.open()
-                self.POOL.wait()
+                try:
+                    self.POOL.open()
+                    self.POOL.wait(timeout=60.0)  # Increased from 30 to 60 seconds
+                except PoolTimeout as e:
+                    logging.error(
+                        f"Database connection pool initialization timed out: {e}"
+                    )
+                    logging.error(
+                        f"Connection info: host={self.DBSYNC_HOST}, port={self.DBSYNC_PORT}, user={self.DBSYNC_USER}"
+                    )
+                    raise
+                except Exception as e:
+                    logging.error(f"Error initializing database connection pool: {e}")
+                    raise
         return self.POOL
 
     def db_query(self, query: str, args: Optional[tuple] = None) -> List[tuple]:
@@ -323,50 +338,11 @@ class DbsyncBackend(AbstractBackend):
 
         return ScriptReference.model_validate(r[0])
 
-    def get_datum_from_address(self, address: Address) -> ScriptReference:
-        SCRIPT_SELECTOR = """
-    SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
-    tx_out.index as "tx_index",
-    tx_out.address,
-    ENCODE(datum.hash,'hex') as "datum_hash",
-    ENCODE(datum.bytes,'hex') as "datum_cbor",
-    COALESCE (
-        json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
-            )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = tx_out.id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
-    ) AS "assets",
-    ENCODE(s.bytes, 'hex') as "script"
-    FROM tx_out
-    LEFT JOIN tx ON tx.id = tx_out.tx_id
-    LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
-    LEFT JOIN block on block.id = tx.block_id
-    LEFT JOIN script s ON s.id = tx_out.reference_script_id
-    WHERE tx_out.payment_cred = %(address)b
-    AND tx_out.inline_datum_id IS NOT NULL
-    ORDER BY block.time DESC
-    LIMIT 1
-    """
-        r = self.db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
-
-        if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
-            r[0]["assets"] = None
-
-        return ScriptReference.model_validate(r[0])
-
     def get_datum_from_address(
         self,
         address: Address,
         asset: str | None = None,
-    ) -> ScriptReference:
+    ) -> ScriptReference | None:
         kwargs = {"address": address.payment_part.payload}
 
         if asset is not None:
@@ -406,7 +382,8 @@ class DbsyncBackend(AbstractBackend):
     LEFT JOIN block on block.id = tx.block_id
     LEFT JOIN script s ON s.id = tx_out.reference_script_id
     LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
-    WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL"""
+    WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL
+    """
 
         if asset is not None:
             SCRIPT_SELECTOR += """
@@ -419,6 +396,9 @@ class DbsyncBackend(AbstractBackend):
     LIMIT 1
     """
         r = self.db_query(SCRIPT_SELECTOR, kwargs)
+
+        if not r:
+            return None
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None

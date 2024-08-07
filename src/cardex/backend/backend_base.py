@@ -179,7 +179,9 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_datum_from_address(self, address: str) -> Optional[str]:
+    def get_datum_from_address(
+        self, address: str, asset: str | None = None
+    ) -> Optional[str]:
         """
         Get datum from a given address.
 
@@ -188,21 +190,5 @@ class AbstractBackend(ABC):
 
         Returns:
             Optional[str]: The datum associated with the address, if any.
-        """
-        pass
-
-    @abstractmethod
-    def get_datum_from_address_and_asset(
-        self, address: str, asset: str | None = None
-    ) -> Optional[str]:
-        """
-        Get datum from a given address and asset.
-
-        Args:
-            address (str): The address to query.
-            asset (str): The asset ID to query.
-
-        Returns:
-            Optional[str]: The datum associated with the address and asset, if any.
         """
         pass

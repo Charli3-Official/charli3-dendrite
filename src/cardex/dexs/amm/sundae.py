@@ -13,7 +13,6 @@ from pycardano import PlutusV2Script
 from pycardano import RawPlutusData
 from pycardano import VerificationKeyHash
 
-from cardex.backend.dbsync import get_datum_from_address
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -652,7 +651,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
 
-            settings = get_datum_from_address(
+            settings = cls.get_backend().get_datum_from_address(
                 Address.decode(
                     "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
                 ),
@@ -701,7 +700,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
-        settings = get_datum_from_address(
+        settings = cls.get_backend().get_datum_from_address(
             Address.decode(
                 "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
             ),

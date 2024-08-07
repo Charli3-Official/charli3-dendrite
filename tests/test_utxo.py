@@ -8,7 +8,6 @@ from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
 from cardex import WingRidersCPPState
 
-from cardex.backend.dbsync import get_pool_utxos
 from cardex.dataclasses.models import Assets
 from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.core.errors import InvalidLPError
@@ -65,7 +64,9 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
         return
 
     selector = dex.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    result = AbstractPoolState.get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.to_dict()
+    )
 
     for record in result:
         try:
@@ -106,7 +107,9 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
 @pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
     selector = WingRidersCPPState.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    result = WingRidersCPPState.get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.to_dict()
+    )
 
     for record in result:
         try:
@@ -153,7 +156,9 @@ def test_wingriders_batcher_fee(subtests):
 @pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
     selector = MinswapCPPState.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    result = MinswapCPPState.get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.to_dict()
+    )
 
     for record in result:
         try:
