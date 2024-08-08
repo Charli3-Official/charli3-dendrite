@@ -59,13 +59,14 @@ ADDRESS = Address(
 )
 
 
-def test_build_utxo(dex: AbstractPoolState, subtests):
+def test_build_utxo(dex: AbstractPoolState, subtests, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    AbstractPoolState.set_backend(backend)
+    selector = dex.pool_selector()
     result = AbstractPoolState.get_backend().get_pool_utxos(
-        limit=10000, historical=False, **selector.to_dict()
+        limit=10000, historical=False, **selector.model_dump()
     )
 
     for record in result:

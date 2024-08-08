@@ -101,7 +101,7 @@ class AbstractPoolState(AbstractPairState):
                 f"{self.__class__.__name__} does not support swap forwarding.",
             )
 
-        return self.order_datum_class().create_datum(
+        return self.order_datum_class.create_datum(
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
