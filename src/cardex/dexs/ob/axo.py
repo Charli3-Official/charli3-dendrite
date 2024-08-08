@@ -357,12 +357,10 @@ class AxoOBMarketState(AbstractOrderBookState):
     _deposit: Assets = Assets(lovelace=8000000)
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Axo"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         """Order selection information."""
         addresses = [
@@ -476,7 +474,6 @@ class AxoOBMarketState(AbstractOrderBookState):
         return instance
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[PlutusData]:
         return AxoOrderDatum
 

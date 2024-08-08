@@ -165,7 +165,6 @@ class GeniusYieldOrderState(AbstractOrderState):
     _deposit: Assets = Assets(lovelace=0)
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str] | None:
         """The dex nft policy.
 
@@ -182,7 +181,6 @@ class GeniusYieldOrderState(AbstractOrderState):
         ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         """Official dex name."""
         return "GeniusYield"
@@ -525,7 +523,6 @@ class GeniusYieldOrderState(AbstractOrderState):
         return amount_in, slippage
 
     @classmethod
-    @property
     def order_selector(cls) -> list[str]:
         """Order selection information."""
         return [
@@ -551,7 +548,6 @@ class GeniusYieldOrderState(AbstractOrderState):
         return None
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[PlutusData]:
         return GeniusYieldOrder
 
@@ -641,15 +637,13 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         return ob
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "GeniusYield"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         """Order selection information."""
-        return GeniusYieldOrderState.order_selector
+        return GeniusYieldOrderState.order_selector()
 
     @classmethod
     def pool_selector(self) -> PoolSelector:
@@ -665,9 +659,8 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         return GeniusYieldOrderState.default_script_class
 
     @classmethod
-    @property
     def order_datum_class(cls):
-        return GeniusYieldOrderState.order_datum_class
+        return GeniusYieldOrderState.order_datum_class()
 
     @property
     def pool_id(self) -> str:

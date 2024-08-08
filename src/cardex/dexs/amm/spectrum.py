@@ -135,12 +135,10 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Spectrum"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
@@ -192,7 +190,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SpectrumOrderDatum]:
         return SpectrumOrderDatum
 

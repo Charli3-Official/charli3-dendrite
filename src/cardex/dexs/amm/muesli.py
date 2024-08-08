@@ -169,12 +169,10 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "MuesliSwap"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
@@ -186,7 +184,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
                 "addr1w85t4tvj3rwf40wqnx6x72kqq6c6stra7jvkupnlqrqyarg2m74rn",
                 "addr1w8djr38pct9dpewvv7k67xuh45xpj5f9hyzs3cp939j0csc6nhwme",
             ],
-            assets=cls.dex_policy,
+            assets=cls.dex_policy(),
         )
 
     @property
@@ -194,7 +192,6 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
             script_bytes = bytes.fromhex(
@@ -228,12 +225,10 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MuesliOrderDatum]:
         return MuesliOrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliPoolDatum]:
         return MuesliPoolDatum
 
@@ -243,7 +238,6 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return [
             "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
@@ -325,7 +319,6 @@ class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState)
     inactive: bool = True
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return [
             # "de9b756719341e79785aa13c164e7fe68c189ed04d61c9876b2fe53f4d7565736c69537761705f414d4d",
@@ -335,6 +328,5 @@ class MuesliSwapCLPState(AbstractConstantLiquidityPoolState, MuesliSwapCPPState)
         ]
 
     @classmethod
-    @property
     def pool_datum_class(cls) -> type[MuesliCLPoolDatum]:
         return MuesliCLPoolDatum

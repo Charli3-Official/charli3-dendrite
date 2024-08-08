@@ -256,10 +256,9 @@ class SwapTransactionList(BaseList):
 
 
 class OrderType(Enum):
-    zap_in = "ZapIn"
-    deposit = "Deposit"
-    withdraw = "Withdraw"
-    swap = "Swap"
+    swap = 0
+    deposit = 1
+    withdraw = 2
 
 
 class TokenSummary(CardexBaseModel):

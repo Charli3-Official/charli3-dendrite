@@ -197,8 +197,8 @@ def test_minswap_batcher_fee(subtests):
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
-    if dex.dex == "Spectrum":
-        datum = dex.order_datum_class.create_datum(
+    if dex.dex() == "Spectrum":
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
@@ -206,18 +206,18 @@ def test_address_from_datum(dex: AbstractPoolState):
             volume_fee=30,
             pool_token=Assets({"lovelace": 1}),
         )
-    elif dex.dex in ["SundaeSwap", "SundaeSwapV3"]:
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() in ["SundaeSwap", "SundaeSwapV3"]:
+        datum = dex.order_datum_class().create_datum(
             ident=b"01",
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
-    elif dex.dex == "Axo":
+    elif dex.dex() == "Axo":
         pass
-    elif dex.dex not in ["GeniusYield"]:
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() not in ["GeniusYield"]:
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={IUSD: 1000000}),
@@ -248,4 +248,4 @@ def test_address_from_datum(dex: AbstractPoolState):
     ],
 )
 def test_reference_utxo(dex: AbstractPoolState):
-    assert dex.reference_utxo is not None
+    assert dex.reference_utxo() is not None

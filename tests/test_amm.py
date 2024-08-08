@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from cardex import MinswapCPPState
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
 from cardex import MinswapDJEDUSDMStableState
