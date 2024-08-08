@@ -75,12 +75,12 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    selector = dex.pool_selector()
     result = benchmark(
         backend.get_pool_utxos,
         limit=1,
         historical=False,
-        **selector.to_dict(),
+        **selector.model_dump(),
     )
     if dex.dex in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
