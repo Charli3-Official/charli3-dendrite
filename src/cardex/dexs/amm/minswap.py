@@ -2,25 +2,24 @@
 
 from dataclasses import dataclass
 from hashlib import sha3_256
-from typing import Any
 from typing import ClassVar
 from typing import List
 from typing import Union
 
 from pycardano import Address
-from pycardano import VerificationKeyHash
+from pycardano import Datum
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import Datum
+from pycardano import VerificationKeyHash
 
-from cardex.dataclasses.datums import _PlutusConstrWrapper
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.datums import ReceiverDatum
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.datums import ReceiverDatum
+from cardex.dataclasses.datums import _PlutusConstrWrapper
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
@@ -487,11 +486,11 @@ class MinswapV2OrderDatum(OrderDatum):
     owner: Union[OAMMint, OAMSignature, OAMSpend, OAMWithdraw]
     refund_address: PlutusFullAddress
     refund_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum,
     ]
     receiver_address: PlutusFullAddress
     receiver_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum,
     ]
     lp_asset: AssetClass
     step: Union[
@@ -545,9 +544,9 @@ class MinswapV2OrderDatum(OrderDatum):
             Assets(
                 **{
                     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
-                    + pool_name: 0
-                }
-            )
+                    + pool_name: 0,
+                },
+            ),
         )
 
         return cls(

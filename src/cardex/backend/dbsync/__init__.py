@@ -1,43 +1,39 @@
-""" Concrete implementation of AbstractBackend for db-sync. """
+"""Concrete implementation of AbstractBackend for db-sync."""
 import logging
 import os
 from datetime import datetime
 from threading import Lock
-from typing import List, Optional
+from typing import List
+from typing import Optional
 
 import psycopg_pool
-from psycopg_pool import PoolTimeout
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
+from psycopg_pool import PoolTimeout
 from pycardano import Address
 
 from cardex.backend.backend_base import AbstractBackend
-from cardex.dataclasses.models import (
-    Assets,
-    BlockList,
-    PoolStateList,
-    ScriptReference,
-    SwapTransactionList,
-)
-
 from cardex.backend.dbsync.models import OrderSelector
 from cardex.backend.dbsync.models import PoolSelector
 from cardex.backend.dbsync.models import UTxOSelector
+from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import BlockList
+from cardex.dataclasses.models import PoolStateList
+from cardex.dataclasses.models import ScriptReference
+from cardex.dataclasses.models import SwapTransactionList
 
 load_dotenv()
 
 
 class DbsyncBackend(AbstractBackend):
-    """
-    Concrete implementation of AbstractBackend for db-sync.
+    """Concrete implementation of AbstractBackend for db-sync.
 
     This class provides methods to interact with a Cardano db-sync database
     for retrieving blockchain data.
     """
 
     def __init__(self):
-        """
-        Initialize the DbsyncBackend with database connection details.
+        """Initialize the DbsyncBackend with database connection details.
         """
         self.lock = Lock()
         self.POOL = None
@@ -48,8 +44,7 @@ class DbsyncBackend(AbstractBackend):
         self.DBSYNC_DB_NAME = os.environ.get("DBSYNC_DB_NAME", None)
 
     def get_dbsync_pool(self) -> psycopg_pool.ConnectionPool:
-        """
-        Get or create a connection pool for the db-sync database.
+        """Get or create a connection pool for the db-sync database.
 
         Returns:
             psycopg_pool.ConnectionPool: A connection pool for database operations.
@@ -75,10 +70,10 @@ class DbsyncBackend(AbstractBackend):
                     self.POOL.wait(timeout=60.0)  # Increased from 30 to 60 seconds
                 except PoolTimeout as e:
                     logging.error(
-                        f"Database connection pool initialization timed out: {e}"
+                        f"Database connection pool initialization timed out: {e}",
                     )
                     logging.error(
-                        f"Connection info: host={self.DBSYNC_HOST}, port={self.DBSYNC_PORT}, user={self.DBSYNC_USER}"
+                        f"Connection info: host={self.DBSYNC_HOST}, port={self.DBSYNC_PORT}, user={self.DBSYNC_USER}",
                     )
                     raise
                 except Exception as e:
@@ -87,8 +82,7 @@ class DbsyncBackend(AbstractBackend):
         return self.POOL
 
     def db_query(self, query: str, args: Optional[tuple] = None) -> List[tuple]:
-        """
-        Execute a database query using the connection pool.
+        """Execute a database query using the connection pool.
 
         Args:
             query (str): The SQL query to execute.
@@ -122,7 +116,6 @@ class DbsyncBackend(AbstractBackend):
         Returns:
             A list of pool states.
         """
-
         # Use the pool selector to format the output
         datum_selector = PoolSelector.select()
 
@@ -699,10 +692,9 @@ OFFSET %(offset)s"""
         return SwapTransactionList.model_validate(r)
 
     def get_axo_target(
-        self, assets: Assets, block_time: datetime | None = None
+        self, assets: Assets, block_time: datetime | None = None,
     ) -> str | None:
-        """
-        Get the target address for the given asset.
+        """Get the target address for the given asset.
         """
         SELECTOR = """
     SELECT DISTINCT txo.address, block.time

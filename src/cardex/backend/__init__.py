@@ -1,5 +1,4 @@
-"""
-Backend Management Module for Cardex.
+"""Backend Management Module for Cardex.
 
 This module provides a centralized system for managing the backend used throughout
 the Cardex application. It includes functions to get and set the global backend,
@@ -26,6 +25,7 @@ Ensure that the necessary environment variables are set before using this module
 
 import os
 from typing import Optional
+
 from dotenv import load_dotenv
 
 from cardex.backend.backend_base import AbstractBackend
@@ -39,8 +39,7 @@ BACKEND: Optional[AbstractBackend] = None
 
 
 def get_backend() -> AbstractBackend:
-    """
-    Retrieve the current backend instance.
+    """Retrieve the current backend instance.
 
     If no backend has been set, this function attempts to set a default backend
     based on environment variables. If no default can be set, it raises a ValueError.
@@ -60,8 +59,7 @@ def get_backend() -> AbstractBackend:
 
 
 def set_backend(backend: AbstractBackend) -> None:
-    """
-    Set the global backend instance.
+    """Set the global backend instance.
 
     Args:
         backend (AbstractBackend): The backend instance to set as the global backend.
@@ -71,8 +69,7 @@ def set_backend(backend: AbstractBackend) -> None:
 
 
 def set_default_backend() -> None:
-    """
-    Attempt to set a default backend based on environment variables.
+    """Attempt to set a default backend based on environment variables.
 
     This function checks for the presence of specific environment variables
     to determine which backend to use as the default. Currently, it only

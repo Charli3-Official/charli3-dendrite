@@ -1,18 +1,22 @@
 """Example script to test the backend functions."""
 
-import logging
 import json
-from datetime import datetime, timedelta
-from typing import Dict, Any
-
+import logging
+from datetime import datetime
+from datetime import timedelta
+from typing import Any
+from typing import Dict
 from pycardano import Address
 
-from cardex.backend import set_backend, get_backend
+from cardex import MinswapV2CPPState
+from cardex import SundaeSwapCPPState
+from cardex.backend import get_backend
+from cardex.backend import set_backend
 from cardex.backend.dbsync import DbsyncBackend
 from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.core.errors import InvalidLPError, InvalidPoolError, NoAssetsError
-from cardex import SundaeSwapCPPState
-from cardex import MinswapV2CPPState
+from cardex.dexs.core.errors import InvalidLPError
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.core.errors import NoAssetsError
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -39,13 +43,13 @@ def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json"):
 
 
 def test_get_pool_utxos(
-    backend: DbsyncBackend, dex: type[AbstractPoolState]
+    backend: DbsyncBackend, dex: type[AbstractPoolState],
 ) -> Dict[str, Any]:
     """Test get_pool_utxos function."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
     selector = dex.pool_selector()
     result = backend.get_pool_utxos(
-        limit=100000, historical=False, **selector.model_dump()
+        limit=100000, historical=False, **selector.model_dump(),
     )
 
     pool_data = {}
@@ -100,7 +104,7 @@ def test_get_script_from_address(backend: DbsyncBackend) -> Dict[str, Any]:
     """Test get_script_from_address function."""
     logger.info("Testing get_script_from_address...")
     address = Address.from_primitive(
-        "addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu"
+        "addr1w9qzpelu9hn45pefc0xr4ac4kdxeswq7pndul2vuj59u8tqaxdznu",
     )
     result = backend.get_script_from_address(address)
     logger.info("Retrieved script for address %s", address)
@@ -111,7 +115,7 @@ def test_get_datum_from_address(backend: DbsyncBackend) -> Dict[str, Any] | None
     """Test get_datum_from_address function."""
     logger.info("Testing get_datum_from_address...")
     address = Address.from_primitive(
-        "addr1wyxq728k9pka686lzfkdyv60marz94swec9ef9mkxfqhyfqezqyjz"
+        "addr1wyxq728k9pka686lzfkdyv60marz94swec9ef9mkxfqhyfqezqyjz",
     )
     result = backend.get_datum_from_address(address)
     if result:
@@ -125,11 +129,11 @@ def test_get_historical_order_utxos(backend: DbsyncBackend) -> list[Dict[str, An
     """Test get_historical_order_utxos function."""
     logger.info("Testing get_historical_order_utxos...")
     stake_addresses = [
-        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3"
+        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     ]
     after_time = datetime.now() - timedelta(days=1)  # Look at last 24 hours
     result = backend.get_historical_order_utxos(
-        stake_addresses, after_time=after_time, limit=10
+        stake_addresses, after_time=after_time, limit=10,
     )
     logger.info("Found %d historical order UTXOs", len(result))
     return [utxo.model_dump() for utxo in result]
@@ -139,13 +143,13 @@ def test_get_order_utxos_by_block_or_tx(backend: DbsyncBackend) -> list[Dict[str
     """Test get_order_utxos_by_block_or_tx function."""
     logger.info("Testing get_order_utxos_by_block_or_tx...")
     stake_addresses = [
-        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3"
+        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     ]
     blocks = backend.last_block(last_n_blocks=1)
     if not blocks:
         return []
     result = backend.get_order_utxos_by_block_or_tx(
-        stake_addresses, block_no=blocks[0].block_no, limit=10
+        stake_addresses, block_no=blocks[0].block_no, limit=10,
     )
     logger.info("Found %d order UTXOs in block %d", len(result), blocks[0].block_no)
     return [utxo.model_dump() for utxo in result]
@@ -155,7 +159,7 @@ def test_get_cancel_utxos(backend: DbsyncBackend) -> list[Dict[str, Any]]:
     """Test get_cancel_utxos function."""
     logger.info("Testing get_cancel_utxos...")
     stake_addresses = [
-        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3"
+        "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     ]
     after_time = datetime.now() - timedelta(days=1)  # Look at last 24 hours
     result = backend.get_cancel_utxos(stake_addresses, after_time=after_time, limit=10)

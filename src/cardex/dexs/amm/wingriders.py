@@ -10,8 +10,8 @@ from pycardano import Address
 from pycardano import PlutusData
 
 from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType

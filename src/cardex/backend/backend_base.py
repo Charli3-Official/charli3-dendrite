@@ -1,22 +1,22 @@
-""" Abstract base class for Cardano blockchain backend implementations. """
+"""Abstract base class for Cardano blockchain backend implementations."""
 
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import List
+from typing import Optional
+from typing import Union
 
 from pycardano import Address
 
-from cardex.dataclasses.models import (
-    BlockList,
-    PoolStateList,
-    ScriptReference,
-    SwapTransactionList,
-)
+from cardex.dataclasses.models import BlockList
+from cardex.dataclasses.models import PoolStateList
+from cardex.dataclasses.models import ScriptReference
+from cardex.dataclasses.models import SwapTransactionList
 
 
 class AbstractBackend(ABC):
-    """
-    Abstract base class for Cardano blockchain backend implementations.
+    """Abstract base class for Cardano blockchain backend implementations.
 
     This class defines the interface for interacting with various Cardano blockchain
     data sources such as db-sync, Ogmios, or Kupo.
@@ -31,8 +31,7 @@ class AbstractBackend(ABC):
         page: int = 0,
         historical: bool = True,
     ) -> PoolStateList:
-        """
-        Get UTXOs for specific assets or addresses.
+        """Get UTXOs for specific assets or addresses.
 
         Args:
             assets (Optional[List[str]]): List of asset IDs to filter by.
@@ -53,8 +52,7 @@ class AbstractBackend(ABC):
         assets: Optional[List[str]] = None,
         addresses: Optional[List[str]] = None,
     ) -> PoolStateList:
-        """
-        Get pool state for a specific transaction.
+        """Get pool state for a specific transaction.
 
         Args:
             tx_hash (str): The transaction hash to query.
@@ -68,8 +66,7 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def last_block(self, last_n_blocks: int = 2) -> BlockList:
-        """
-        Get information about the last n blocks.
+        """Get information about the last n blocks.
 
         Args:
             last_n_blocks (int): Number of recent blocks to retrieve.
@@ -81,8 +78,7 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def get_pool_utxos_in_block(self, block_no: int) -> PoolStateList:
-        """
-        Get pool UTXOs for a specific block.
+        """Get pool UTXOs for a specific block.
 
         Args:
             block_no (int): The block number to query.
@@ -94,8 +90,7 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def get_script_from_address(self, address: Address) -> ScriptReference:
-        """
-        Get script reference for a given address.
+        """Get script reference for a given address.
 
         Args:
             address (Address): The address to query.
@@ -113,8 +108,7 @@ class AbstractBackend(ABC):
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
-        """
-        Get historical order UTXOs for given stake addresses.
+        """Get historical order UTXOs for given stake addresses.
 
         Args:
             stake_addresses (List[str]): List of stake addresses to query.
@@ -138,8 +132,7 @@ class AbstractBackend(ABC):
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
-        """
-        Get order UTXOs by block or transaction.
+        """Get order UTXOs by block or transaction.
 
         Args:
             stake_addresses (List[str]): List of stake addresses to query.
@@ -163,8 +156,7 @@ class AbstractBackend(ABC):
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
-        """
-        Get cancelled order UTXOs.
+        """Get cancelled order UTXOs.
 
         Args:
             stake_addresses (List[str]): List of stake addresses to query.
@@ -180,10 +172,9 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def get_datum_from_address(
-        self, address: str, asset: str | None = None
+        self, address: str, asset: str | None = None,
     ) -> Optional[str]:
-        """
-        Get datum from a given address.
+        """Get datum from a given address.
 
         Args:
             address (str): The address to query.

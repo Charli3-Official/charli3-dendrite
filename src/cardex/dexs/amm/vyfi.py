@@ -7,15 +7,15 @@ from typing import ClassVar
 from typing import Optional
 from typing import Union
 
+import requests
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
-import requests
-from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState

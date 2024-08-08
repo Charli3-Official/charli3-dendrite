@@ -118,7 +118,7 @@ class AbstractOrderState(AbstractPairState):
         in_assets = Assets(**{self.in_unit: 0})
         out_quantity = asset.quantity()
         in_assets.root[self.in_unit] = int(
-            (min(out_quantity, self.available.quantity()) * denom) / num
+            (min(out_quantity, self.available.quantity()) * denom) / num,
         )
         fees = in_assets[self.in_unit] * self.volume_fee / 10000
         in_assets.root[self.in_unit] += fees
