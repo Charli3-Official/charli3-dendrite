@@ -197,9 +197,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_reference = get_backend().get_script_from_address(
-                cls._stake_address
-            )
+            script_reference = get_backend().get_script_from_address(cls._stake_address)
 
             if script_reference is None:
                 return None
