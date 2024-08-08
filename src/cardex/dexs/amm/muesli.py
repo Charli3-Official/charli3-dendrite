@@ -178,11 +178,14 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=cls.dex_policy,
+            addresses=[
+                "addr1w9cy2gmar6cpn8yymll93lnd7lw96f27kn2p3eq5d4tjr7qkh3tzd",
+                "addr1w85t4tvj3rwf40wqnx6x72kqq6c6stra7jvkupnlqrqyarg2m74rn",
+                "addr1w8djr38pct9dpewvv7k67xuh45xpj5f9hyzs3cp939j0csc6nhwme",
+            ],
+            assets=cls.dex_policy,
         )
 
     @property
@@ -193,7 +196,9 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_reference = cls.get_backend().get_script_from_address(cls._stake_address)
+            script_reference = cls.get_backend().get_script_from_address(
+                cls._stake_address
+            )
 
             if script_reference is None:
                 return None

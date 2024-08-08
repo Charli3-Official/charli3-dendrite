@@ -32,12 +32,8 @@ class PoolSelectorType(Enum):
 class PoolSelector(CardexBaseModel):
     """Pool selection information for dbsync."""
 
-    selector_type: PoolSelectorType
-    selector: list[str]
-
-    def to_dict(self) -> dict[str, list[str]]:
-        """Dump the model to a dictionary for use in dbsync methods."""
-        return {self.selector_type.value: self.selector}
+    addresses: list[str]
+    assets: list[str] | None = None
 
 
 class BaseList(RootModel):

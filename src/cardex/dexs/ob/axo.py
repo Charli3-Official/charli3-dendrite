@@ -385,7 +385,9 @@ class AxoOBMarketState(AbstractOrderBookState):
     @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_reference = cls.get_backend().get_script_from_address(cls._stake_address)
+            script_reference = cls.get_backend().get_script_from_address(
+                cls._stake_address
+            )
 
             script = cls.default_script_class()(bytes.fromhex(script_reference.script))
 

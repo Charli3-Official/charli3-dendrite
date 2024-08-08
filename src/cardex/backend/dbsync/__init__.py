@@ -20,36 +20,11 @@ from cardex.dataclasses.models import (
     SwapTransactionList,
 )
 
-load_dotenv()
+from cardex.backend.dbsync.models import OrderSelector
+from cardex.backend.dbsync.models import PoolSelector
+from cardex.backend.dbsync.models import UTxOSelector
 
-POOL_SELECTOR = """
-SELECT txo.address,
-ENCODE(tx.hash, 'hex') as "tx_hash",
-txo.index as "tx_index",
-EXTRACT(
-	epoch
-	FROM block.time
-)::INTEGER AS "block_time",
-tx.block_index as "block_index",
-ENCODE(block.hash,'hex') as "block_hash",
-ENCODE(datum.hash,'hex') as "datum_hash",
-ENCODE(datum.bytes,'hex') as "datum_cbor",
-COALESCE (
-    json_build_object('lovelace',txo.value::TEXT)::jsonb || (
-        SELECT json_agg(
-            json_build_object(
-                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                mto.quantity::TEXT
-            )
-        )
-        FROM ma_tx_out mto
-        JOIN multi_asset ma ON (mto.ident = ma.id)
-        WHERE mto.tx_out_id = txo.id
-    )::jsonb,
-    jsonb_build_array(json_build_object('lovelace',txo.value::TEXT)::jsonb)
-) AS "assets",
-(txo.inline_datum_id IS NOT NULL OR txo.reference_script_id IS NOT NULL) as "plutus_v2"
-"""
+load_dotenv()
 
 
 class DbsyncBackend(AbstractBackend):
@@ -135,73 +110,66 @@ class DbsyncBackend(AbstractBackend):
         page: int = 0,
         historical: bool = True,
     ) -> PoolStateList:
-        """Get transactions by policy or address."""
-        error_msg = "Either policies or addresses must be defined, not both."
-        if assets is None and addresses is None:
-            raise ValueError(error_msg)
+        """Get transactions by policy or address.
 
-        if assets is not None and addresses is not None:
-            raise ValueError(error_msg)
+        Args:
+            addresses: A list of addresses for pool or order contracts
+            assets: A list of assets used to filter utxos. Defaults to None.
+            limit: Number of values to return. Defaults to 1000.
+            page: Page of pools to return. Defaults to 0.
+            historical: If False, returns current pool states. Defaults to True.
+
+        Returns:
+            A list of pool states.
+        """
 
         # Use the pool selector to format the output
-        datum_selector = POOL_SELECTOR
+        datum_selector = PoolSelector.select()
+
+        # Get txo from pool script address
+        datum_selector += """FROM (
+    SELECT *
+    FROM tx_out
+    WHERE tx_out.payment_cred = ANY(%(addresses)b)
+) as txo"""
 
         # If assets are specified, select assets
         if assets is not None:
-            datum_selector += """FROM (
-        SELECT ma.policy, ma.name, ma.id
-        FROM multi_asset ma
-        WHERE policy = ANY(%(policies)b) AND name = ANY(%(names)b)
-    ) as ma
-    JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
-    LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
-    """
-
-        # If address is specified, select addresses
-        else:
-            datum_selector += """FROM (
-        SELECT *
-        FROM tx_out
-        WHERE tx_out.payment_cred = ANY(%(addresses)b)
-    ) as txo"""
+            datum_selector += """
+LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = txo.id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident"""
 
         datum_selector += """
-    LEFT JOIN tx ON txo.tx_id = tx.id
-    LEFT JOIN datum ON txo.data_hash = datum.hash
-    LEFT JOIN block ON tx.block_id = block.id"""
+LEFT JOIN tx ON txo.tx_id = tx.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN block ON tx.block_id = block.id
+LEFT JOIN tx_in ON tx_in.tx_out_id = txo.tx_id AND tx_in.tx_out_index = txo.index
+WHERE datum.hash IS NOT NULL"""
 
         if not historical:
             datum_selector += """
-    LEFT JOIN tx_in ON tx_in.tx_out_id = txo.tx_id AND tx_in.tx_out_index = txo.index
-    WHERE tx_in.tx_in_id IS NULL AND datum.hash IS NOT NULL
-    """
-        else:
+AND tx_in.tx_in_id IS NULL"""
+
+        if assets is not None:
             datum_selector += """
-    WHERE datum.hash IS NOT NULL
-    """
+AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
 
         datum_selector += """
-    LIMIT %(limit)s
-    OFFSET %(offset)s
-    """
+LIMIT %(limit)s
+OFFSET %(offset)s"""
 
-        values = {"limit": limit, "offset": page * limit}
+        values = {
+            "limit": limit,
+            "offset": page * limit,
+            "addresses": [Address.decode(a).payment_part.payload for a in addresses],
+        }
         if assets is not None:
             values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
             values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
-        elif addresses is not None:
-            values.update(
-                {
-                    "addresses": [
-                        Address.decode(a).payment_part.payload for a in addresses
-                    ]
-                },
-            )
-
         r = self.db_query(datum_selector, values)
 
-        return PoolStateList.model_validate(r)
+        return PoolSelector.parse(r)
 
     def get_pool_in_tx(
         self,
@@ -210,59 +178,42 @@ class DbsyncBackend(AbstractBackend):
         addresses: list[str] | None = None,
     ) -> PoolStateList:
         """Get transactions by policy or address."""
-        error_msg = "Either policies or addresses must be defined, not both."
-        if assets is None and addresses is None:
-            raise ValueError(error_msg)
-
-        if assets is not None and addresses is not None:
-            raise ValueError(error_msg)
-
         # Use the pool selector to format the output
-        datum_selector = POOL_SELECTOR
+        datum_selector = PoolSelector.select()
+
+        datum_selector += """FROM (
+    SELECT *
+    FROM tx_out
+    WHERE tx_out.payment_cred = ANY(%(addresses)b)
+) as txo"""
 
         # If assets are specified, select assets
         if assets is not None:
-            datum_selector += """FROM (
-        SELECT ma.policy, ma.name, ma.id
-        FROM multi_asset ma
-        WHERE policy = ANY(%(policies)b) AND name = ANY(%(names)b)
-    ) as ma
-    JOIN ma_tx_out mtxo ON ma.id = mtxo.ident
-    LEFT JOIN tx_out txo ON mtxo.tx_out_id = txo.id
-    """
-
-        # If address is specified, select addresses
-        else:
-            datum_selector += """FROM (
-        SELECT *
-        FROM tx_out
-        WHERE tx_out.payment_cred = ANY(%(addresses)b)
-    ) as txo"""
+            datum_selector += """
+LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = txo.id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident"""
 
         datum_selector += """
-    LEFT JOIN tx ON txo.tx_id = tx.id
-    LEFT JOIN datum ON txo.data_hash = datum.hash
-    LEFT JOIN block ON tx.block_id = block.id
-    WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')
-    """
+LEFT JOIN tx ON txo.tx_id = tx.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN block ON tx.block_id = block.id
+WHERE datum.hash IS NOT NULL AND tx.hash = DECODE(%(tx_hash)s, 'hex')"""
 
-        values = {"tx_hash": tx_hash}
+        if assets is not None:
+            datum_selector += """
+AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
+
+        values = {
+            "tx_hash": tx_hash,
+            "addresses": [Address.decode(a).payment_part.payload for a in addresses],
+        }
         if assets is not None:
             values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
             values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
-        elif addresses is not None:
-            values.update(
-                {
-                    "addresses": [
-                        Address.decode(a).payment_part.payload for a in addresses
-                    ]
-                },
-            )
-
         r = self.db_query(datum_selector, values)
 
-        return PoolStateList.model_validate(r)
+        return PoolSelector.parse(r)
 
     def last_block(self, last_n_blocks: int = 2) -> BlockList:
         """Get the last n blocks."""
@@ -287,7 +238,7 @@ class DbsyncBackend(AbstractBackend):
         """Get pool utxos in block."""
         # Use this for gathering all assets for multiple addresses
         datum_selector = (
-            POOL_SELECTOR
+            PoolSelector.select()
             + """
     FROM tx_out txo
     LEFT JOIN tx ON txo.tx_id = tx.id
@@ -298,45 +249,28 @@ class DbsyncBackend(AbstractBackend):
         )
         r = self.db_query(datum_selector, {"block_no": block_no})
 
-        return PoolStateList.model_validate(r)
+        return PoolSelector.parse(r)
 
     def get_script_from_address(self, address: Address) -> ScriptReference:
-        SCRIPT_SELECTOR = """
-    SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
-    tx_out.index as "tx_index",
-    tx_out.address,
-    ENCODE(datum.hash,'hex') as "datum_hash",
-    ENCODE(datum.bytes,'hex') as "datum_cbor",
-    COALESCE (
-        json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
-            )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = tx_out.id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
-    ) AS "assets",
-    ENCODE(s.bytes, 'hex') as "script"
-    FROM script s
-    LEFT JOIN tx_out ON s.id = tx_out.reference_script_id
-    LEFT JOIN tx ON tx.id = tx_out.tx_id
-    LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
-    LEFT JOIN block on block.id = tx.block_id
-    WHERE s.hash = %(address)b
-    ORDER BY block.time DESC
-    LIMIT 1
-    """
+        SCRIPT_SELECTOR = UTxOSelector.select()
+
+        SCRIPT_SELECTOR += """
+FROM script s
+LEFT JOIN tx_out ON s.id = tx_out.reference_script_id
+LEFT JOIN tx ON tx.id = tx_out.tx_id
+LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
+LEFT JOIN block on block.id = tx.block_id
+LEFT JOIN tx_in ON tx_in.tx_out_id = tx_out.tx_id AND tx_in.tx_out_index = tx_out.index
+WHERE s.hash = %(address)b AND tx_in.tx_in_id IS NULL
+ORDER BY block.time DESC
+LIMIT 1
+"""
         r = self.db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None
 
-        return ScriptReference.model_validate(r[0])
+        return UTxOSelector.parse(r[0])
 
     def get_datum_from_address(
         self,
@@ -353,57 +287,35 @@ class DbsyncBackend(AbstractBackend):
                 },
             )
 
-        SCRIPT_SELECTOR = """
-    SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
-    tx_out.index as "tx_index",
-    tx_out.address,
-    ENCODE(datum.hash,'hex') as "datum_hash",
-    ENCODE(datum.bytes,'hex') as "datum_cbor",
-    COALESCE (
-        json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
-            )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = tx_out.id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
-    ) AS "assets",
-    ENCODE(s.bytes, 'hex') as "script"
-    FROM tx_out
-    LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = tx_out.id
-    LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
-    LEFT JOIN tx ON tx.id = tx_out.tx_id
-    LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
-    LEFT JOIN block on block.id = tx.block_id
-    LEFT JOIN script s ON s.id = tx_out.reference_script_id
-    LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
-    WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL
-    """
+        SCRIPT_SELECTOR = UTxOSelector.select()
+
+        SCRIPT_SELECTOR += """
+FROM tx_out
+LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = tx_out.id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
+LEFT JOIN tx ON tx.id = tx_out.tx_id
+LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
+LEFT JOIN block on block.id = tx.block_id
+LEFT JOIN script s ON s.id = tx_out.reference_script_id
+LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
+WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL"""
 
         if asset is not None:
             SCRIPT_SELECTOR += """
-    AND policy = %(policy)b AND name = %(name)b
-    """
+AND policy = %(policy)b AND name = %(name)b
+"""
 
         SCRIPT_SELECTOR += """
-    AND tx_out.inline_datum_id IS NOT NULL
-    ORDER BY block.time DESC
-    LIMIT 1
-    """
+AND tx_out.inline_datum_id IS NOT NULL
+ORDER BY block.time DESC
+LIMIT 1
+"""
         r = self.db_query(SCRIPT_SELECTOR, kwargs)
-
-        if not r:
-            return None
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None
 
-        return ScriptReference.model_validate(r[0])
+        return UTxOSelector.parse(r[0])
 
     def get_historical_order_utxos(
         self,
@@ -415,111 +327,48 @@ class DbsyncBackend(AbstractBackend):
         if isinstance(after_time, int):
             after_time = datetime.fromtimestamp(after_time)
 
-        utxo_selector = """
-    SELECT (
-        SELECT array_agg(DISTINCT txo.address)
-        FROM tx_out txo
-        LEFT JOIN tx_in txi ON txo.tx_id = txi.tx_out_id AND txo.index = txi.tx_out_index
-        WHERE txi.tx_in_id = txo_stake.tx_id
-    ) AS "submit_address_inputs",
-    txo_stake.address as "submit_address_stake",
-    ENCODE(tx.hash, 'hex') as "submit_tx_hash",
-    txo_stake.index as "submit_tx_index",
-    ENCODE(block.hash,'hex') as "submit_block_hash",
-    EXTRACT(
-        epoch
-        FROM block.time
-    )::INTEGER AS "submit_block_time",
-    tx.block_index AS "submit_block_index",
-    (
-        SELECT array_agg(tx_metadata.json)
-        FROM tx_metadata
-        WHERE tx.id = tx_metadata.tx_id
-    ) AS "submit_metadata",
-    COALESCE(
-        json_build_object('lovelace',txo_stake.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
-            )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = txo_stake.id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',txo_stake.value::TEXT)::jsonb)
-    ) AS "submit_assets",
-    ENCODE(datum.hash,'hex') as "submit_datum_hash",
-    ENCODE(datum.bytes,'hex') as "submit_datum_cbor",
-    txo_output.address,
-    ENCODE(txo_output.tx_hash, 'hex') as "tx_hash",
-    txo_output.tx_index as "tx_index",
-    EXTRACT(
-        epoch
-        FROM txo_output.block_time
-    )::INTEGER AS "block_time",
-    txo_output.block_index AS "block_index",
-    ENCODE(txo_output.block_hash,'hex') AS "block_hash",
-    ENCODE(txo_output.datum_hash, 'hex') AS "datum_hash",
-    ENCODE(txo_output.datum_bytes, 'hex') AS "datum_cbor",
-    COALESCE(
-        json_build_object('lovelace',txo_output.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
-            )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = txo_output.tx_id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',txo_output.value::TEXT)::jsonb)
-    ) AS "assets",
-    (txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL) as "plutus_v2"
-    """
+        utxo_selector = OrderSelector.select()
 
         utxo_selector += """FROM (
-        SELECT *
-        FROM tx_out txo
-        WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL
-    ) txo_stake
-    LEFT JOIN tx ON tx.id = txo_stake.tx_id
+    SELECT *
+    FROM tx_out txo
+    WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL
+) txo_stake
+LEFT JOIN tx ON tx.id = txo_stake.tx_id
+LEFT JOIN block ON tx.block_id = block.id
+LEFT JOIN datum ON txo_stake.data_hash = datum.hash
+LEFT JOIN (
+    SELECT tx.hash AS "tx_hash",
+    txo.index AS "tx_index",
+    txo.value,
+    txo.id as "tx_id",
+    block.hash AS "block_hash",
+    block.time AS "block_time",
+    block.block_no,
+    tx.block_index AS "block_index",
+    tx_in.tx_out_id,
+    tx_in.tx_out_index,
+    txo.inline_datum_id,
+    txo.reference_script_id,
+    txo.address,
+    datum.hash as "datum_hash",
+    datum.bytes as "datum_bytes"
+    FROM tx_in
+    LEFT JOIN tx ON tx.id = tx_in.tx_in_id
+    LEFT JOIN tx_out txo ON tx.id = txo.tx_id
     LEFT JOIN block ON tx.block_id = block.id
-    LEFT JOIN datum ON txo_stake.data_hash = datum.hash
-    LEFT JOIN (
-        SELECT tx.hash AS "tx_hash",
-        txo.index AS "tx_index",
-        txo.value,
-        txo.id as "tx_id",
-        block.hash AS "block_hash",
-        block.time AS "block_time",
-        block.block_no,
-        tx.block_index AS "block_index",
-        tx_in.tx_out_id,
-        tx_in.tx_out_index,
-        txo.inline_datum_id,
-        txo.reference_script_id,
-        txo.address,
-        datum.hash as "datum_hash",
-        datum.bytes as "datum_bytes"
-        FROM tx_in
-        LEFT JOIN tx ON tx.id = tx_in.tx_in_id
-        LEFT JOIN tx_out txo ON tx.id = txo.tx_id
-        LEFT JOIN block ON tx.block_id = block.id
-        LEFT JOIN datum ON txo.data_hash = datum.hash
-    ) txo_output ON txo_output.tx_out_id = txo_stake.tx_id AND txo_output.tx_out_index = txo_stake.index
-    WHERE datum.hash IS NOT NULL"""
+    LEFT JOIN datum ON txo.data_hash = datum.hash
+) txo_output ON txo_output.tx_out_id = txo_stake.tx_id AND txo_output.tx_out_index = txo_stake.index
+WHERE datum.hash IS NOT NULL"""
 
         if after_time is not None:
             utxo_selector += """
-        AND block.time >= %(after_time)s"""
+AND block.time >= %(after_time)s"""
 
         utxo_selector += """
-    ORDER BY tx.id ASC
-    LIMIT %(limit)s
-    OFFSET %(offset)s"""
+ORDER BY tx.id ASC
+LIMIT %(limit)s
+OFFSET %(offset)s"""
 
         r = self.db_query(
             utxo_selector,
@@ -537,7 +386,7 @@ class DbsyncBackend(AbstractBackend):
             },
         )
 
-        return SwapTransactionList.model_validate(r)
+        return OrderSelector.parse(r)
 
     def get_order_utxos_by_block_or_tx(
         self,
@@ -701,7 +550,7 @@ class DbsyncBackend(AbstractBackend):
             },
         )
 
-        return SwapTransactionList.model_validate(r)
+        return OrderSelector.parse(r)
 
     def get_cancel_utxos(
         self,
@@ -715,120 +564,120 @@ class DbsyncBackend(AbstractBackend):
             after_time = datetime.fromtimestamp(after_time)
 
         utxo_selector = """
-    SELECT (
-        SELECT array_agg(DISTINCT tx_out.address)
-        FROM tx_out
-        LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
-        WHERE txi.tx_in_id = txo.tx_id
-    ) AS "submit_address_inputs",
-    txo.address as "submit_address_stake",
-    ENCODE(tx.hash, 'hex') as "submit_tx_hash",
-    txo.index as "submit_tx_index",
-    ENCODE(block.hash,'hex') as "submit_block_hash",
-    EXTRACT(
-        epoch
-        FROM block.time
-    )::INTEGER AS "submit_block_time",
-    tx.block_index AS "submit_block_index",
-    (
-        SELECT array_agg(tx_metadata.json)
-        FROM tx_metadata
-        WHERE txo.tx_id = tx_metadata.tx_id
-    ) AS "submit_metadata",
-    COALESCE(
-        json_build_object('lovelace',txo.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
+SELECT (
+    SELECT array_agg(DISTINCT tx_out.address)
+    FROM tx_out
+    LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
+    WHERE txi.tx_in_id = txo.tx_id
+) AS "submit_address_inputs",
+txo.address as "submit_address_stake",
+ENCODE(tx.hash, 'hex') as "submit_tx_hash",
+txo.index as "submit_tx_index",
+ENCODE(block.hash,'hex') as "submit_block_hash",
+EXTRACT(
+    epoch
+    FROM block.time
+)::INTEGER AS "submit_block_time",
+tx.block_index AS "submit_block_index",
+(
+    SELECT array_agg(tx_metadata.json)
+    FROM tx_metadata
+    WHERE txo.tx_id = tx_metadata.tx_id
+) AS "submit_metadata",
+COALESCE(
+    json_build_object('lovelace',txo.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
             )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = txo.id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',txo.value::TEXT)::jsonb)
-    ) AS "submit_assets",
-    ENCODE(datum.hash,'hex') as "submit_datum_hash",
-    ENCODE(datum.bytes,'hex') as "submit_datum_cbor",
-    txo_output.address,
-    ENCODE(txo_output.tx_hash, 'hex') as "tx_hash",
-    txo_output.tx_index as "tx_index",
-    EXTRACT(
-        epoch
-        FROM txo_output.block_time
-    )::INTEGER AS "block_time",
-    txo_output.block_index AS "block_index",
-    ENCODE(txo_output.block_hash,'hex') AS "block_hash",
-    ENCODE(txo_output.datum_hash, 'hex') AS "datum_hash",
-    ENCODE(txo_output.datum_bytes, 'hex') AS "datum_cbor",
-    COALESCE(
-        json_build_object('lovelace',txo_output.value::TEXT)::jsonb || (
-            SELECT json_agg(
-                json_build_object(
-                    CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
-                    mto.quantity::TEXT
-                )
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = txo.id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',txo.value::TEXT)::jsonb)
+) AS "submit_assets",
+ENCODE(datum.hash,'hex') as "submit_datum_hash",
+ENCODE(datum.bytes,'hex') as "submit_datum_cbor",
+txo_output.address,
+ENCODE(txo_output.tx_hash, 'hex') as "tx_hash",
+txo_output.tx_index as "tx_index",
+EXTRACT(
+    epoch
+    FROM txo_output.block_time
+)::INTEGER AS "block_time",
+txo_output.block_index AS "block_index",
+ENCODE(txo_output.block_hash,'hex') AS "block_hash",
+ENCODE(txo_output.datum_hash, 'hex') AS "datum_hash",
+ENCODE(txo_output.datum_bytes, 'hex') AS "datum_cbor",
+COALESCE(
+    json_build_object('lovelace',txo_output.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
             )
-            FROM ma_tx_out mto
-            JOIN multi_asset ma ON (mto.ident = ma.id)
-            WHERE mto.tx_out_id = txo_output.tx_id
-        )::jsonb,
-        jsonb_build_array(json_build_object('lovelace',txo_output.value::TEXT)::jsonb)
-    ) AS "assets",
-    (txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL) as "plutus_v2"
-    """
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = txo_output.tx_id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',txo_output.value::TEXT)::jsonb)
+) AS "assets",
+(txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL) as "plutus_v2"
+"""
 
         utxo_selector += """FROM (
-        SELECT tx.hash AS "tx_hash",
-        txo.index AS "tx_index",
-        txo.value,
-        txo.id as "tx_id",
-        block.hash AS "block_hash",
-        block.time AS "block_time",
-        block.block_no,
-        tx.block_index AS "block_index",
-        tx_in.tx_out_id,
-        tx_in.tx_out_index,
-        txo.inline_datum_id,
-        txo.reference_script_id,
-        txo.address,
-        datum.hash as "datum_hash",
-        datum.bytes as "datum_bytes"
-        FROM tx_in
-        LEFT JOIN tx ON tx.id = tx_in.tx_in_id
-        LEFT JOIN tx_out txo ON tx.id = txo.tx_id
-        LEFT JOIN block ON tx.block_id = block.id
-        LEFT JOIN datum ON txo.data_hash = datum.hash"""
+    SELECT tx.hash AS "tx_hash",
+    txo.index AS "tx_index",
+    txo.value,
+    txo.id as "tx_id",
+    block.hash AS "block_hash",
+    block.time AS "block_time",
+    block.block_no,
+    tx.block_index AS "block_index",
+    tx_in.tx_out_id,
+    tx_in.tx_out_index,
+    txo.inline_datum_id,
+    txo.reference_script_id,
+    txo.address,
+    datum.hash as "datum_hash",
+    datum.bytes as "datum_bytes"
+    FROM tx_in
+    LEFT JOIN tx ON tx.id = tx_in.tx_in_id
+    LEFT JOIN tx_out txo ON tx.id = txo.tx_id
+    LEFT JOIN block ON tx.block_id = block.id
+    LEFT JOIN datum ON txo.data_hash = datum.hash"""
 
         if after_time is not None:
             utxo_selector += """
-        WHERE block.time >= %(after_time)s"""
+    WHERE block.time >= %(after_time)s"""
         elif block_no is not None:
             utxo_selector += """
-        WHERE block.block_no = %(block_no)s"""
+    WHERE block.block_no = %(block_no)s"""
         else:
             raise ValueError("Either after_time or block_no should be defined.")
 
         utxo_selector += """
-        GROUP BY tx.hash, txo.value, txo.id, block.hash, block.time, block.block_no,
-        tx.block_index, tx_in.tx_out_id, tx_in.tx_out_index, txo.inline_datum_id, txo.reference_script_id,
-        txo.address, datum.hash, datum.bytes
-        HAVING COUNT(DISTINCT txo.address) = 1
-    ) txo_output
-    LEFT JOIN tx_out txo ON txo.tx_id = txo_output.tx_out_id
-        AND txo_output.tx_out_index = txo.index
-        AND txo.payment_cred = ANY(%(addresses)b)
-        AND txo.data_hash IS NOT NULL
-    LEFT JOIN tx ON tx.id = txo.tx_id
-    LEFT JOIN block ON tx.block_id = block.id
-    LEFT JOIN datum ON txo.data_hash = datum.hash
-    LEFT JOIN tx_in ON tx_in.tx_out_id = tx.id AND tx_in.tx_out_index = txo.index
-    LEFT JOIN tx tx_in_ref ON tx_in.tx_in_id = tx_in_ref.id
-    WHERE txo.id IS NOT NULL
-    ORDER BY txo.tx_id ASC
-    LIMIT %(limit)s
-    OFFSET %(offset)s"""
+    GROUP BY tx.hash, txo.value, txo.id, block.hash, block.time, block.block_no,
+    tx.block_index, tx_in.tx_out_id, tx_in.tx_out_index, txo.inline_datum_id, txo.reference_script_id,
+    txo.address, datum.hash, datum.bytes
+    HAVING COUNT(DISTINCT txo.address) = 1
+) txo_output
+LEFT JOIN tx_out txo ON txo.tx_id = txo_output.tx_out_id
+    AND txo_output.tx_out_index = txo.index
+    AND txo.payment_cred = ANY(%(addresses)b)
+    AND txo.data_hash IS NOT NULL
+LEFT JOIN tx ON tx.id = txo.tx_id
+LEFT JOIN block ON tx.block_id = block.id
+LEFT JOIN datum ON txo.data_hash = datum.hash
+LEFT JOIN tx_in ON tx_in.tx_out_id = tx.id AND tx_in.tx_out_index = txo.index
+LEFT JOIN tx tx_in_ref ON tx_in.tx_in_id = tx_in_ref.id
+WHERE txo.id IS NOT NULL
+ORDER BY txo.tx_id ASC
+LIMIT %(limit)s
+OFFSET %(offset)s"""
 
         r = self.db_query(
             utxo_selector,

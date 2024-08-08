@@ -7,7 +7,8 @@ from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState
 
 
-def test_get_orders(dex: AbstractPairState, benchmark):
+def test_get_orders(dex: AbstractPairState, benchmark, backend):
+    AbstractPairState.set_backend(backend)
     order_selector = dex.order_selector
     result = benchmark(
         AbstractPairState.get_backend().get_historical_order_utxos,
@@ -53,7 +54,8 @@ def test_order_type(dex: AbstractPairState):
 
 
 @pytest.mark.parametrize("block", [9655329])
-def test_get_orders_in_block(block: int, dexs: list[AbstractPairState]):
+def test_get_orders_in_block(block: int, dexs: list[AbstractPairState], backend):
+    AbstractPairState.set_backend(backend)
     order_selector = []
     for dex in dexs:
         order_selector.extend(dex.order_selector)
