@@ -228,7 +228,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     bar_fee: int = 0
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "VyFi"
 
@@ -248,7 +247,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         return cls._pools
 
     @classmethod
-    @property
     def order_selector(cls) -> list[str]:
         return [p.orderValidatorUtxoAddress for p in cls.pools.values()]
 
@@ -269,7 +267,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         )
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[VyFiOrderDatum]:
         return VyFiOrderDatum
 

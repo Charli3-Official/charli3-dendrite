@@ -11,19 +11,6 @@ from typing import List
 from typing import Union
 
 import requests
-from cardex.backend import get_backend
-from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import CancelRedeemer
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.ob.ob_base import AbstractOrderBookState
-from cardex.dexs.ob.ob_base import BuyOrderBook
-from cardex.dexs.ob.ob_base import OrderBookOrder
-from cardex.dexs.ob.ob_base import SellOrderBook
-from cardex.utility import asset_to_value
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import AlonzoMetadata
@@ -43,6 +30,20 @@ from pycardano import Value
 from pycardano.utils import min_lovelace
 from pydantic import BaseModel
 from pydantic import field_validator
+
+from cardex.backend import get_backend
+from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import CancelRedeemer
+from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.models import Assets
+from cardex.dataclasses.models import OrderType
+from cardex.dataclasses.models import PoolSelector
+from cardex.dexs.core.errors import InvalidPoolError
+from cardex.dexs.ob.ob_base import AbstractOrderBookState
+from cardex.dexs.ob.ob_base import BuyOrderBook
+from cardex.dexs.ob.ob_base import OrderBookOrder
+from cardex.dexs.ob.ob_base import SellOrderBook
+from cardex.utility import asset_to_value
 
 formatter = logging.Formatter(
     fmt="%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s",
@@ -356,12 +357,10 @@ class AxoOBMarketState(AbstractOrderBookState):
     _deposit: Assets = Assets(lovelace=8000000)
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Axo"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         """Order selection information."""
         addresses = [
@@ -383,7 +382,6 @@ class AxoOBMarketState(AbstractOrderBookState):
         return PlutusV2Script
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
             script_reference = get_backend().get_script_from_address(cls._stake_address)
@@ -475,7 +473,6 @@ class AxoOBMarketState(AbstractOrderBookState):
         return instance
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[PlutusData]:
         return AxoOrderDatum
 

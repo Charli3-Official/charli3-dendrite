@@ -38,7 +38,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark, backend):
         historical=False,
         **selector.model_dump(),
     )
-    if dex.dex in ["Spectrum"] or dex in [
+    if dex.dex() in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
         MinswapDJEDUSDMStableState,

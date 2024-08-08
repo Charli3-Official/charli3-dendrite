@@ -257,15 +257,13 @@ class MinswapOrderDatum(OrderDatum):
         """The order type."""
         if isinstance(self.step, (SwapExactIn, SwapExactOut, StableSwapExactIn)):
             return OrderType.swap
-        elif isinstance(self.step, (Deposit, StableSwapDeposit)):
+        elif isinstance(self.step, (Deposit, StableSwapDeposit, ZapIn)):
             return OrderType.deposit
         elif isinstance(
             self.step,
             (Withdraw, StableSwapWithdraw, StableSwapWithdrawOneCoin),
         ):
             return OrderType.withdraw
-        elif isinstance(self.step, ZapIn):
-            return OrderType.zap_in
 
 
 @dataclass
@@ -611,7 +609,7 @@ class MinswapV2OrderDatum(OrderDatum):
             ),
         ):
             return OrderType.swap
-        elif isinstance(self.step, DepositV2, DonationV2):
+        elif isinstance(self.step, (DepositV2, DonationV2)):
             return OrderType.deposit
         elif isinstance(self.step, (WithdrawV2, ZapOutV2, WithdrawImbalanceV2)):
             return OrderType.withdraw
@@ -804,12 +802,10 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Minswap"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [s.encode() for s in self._stake_address]
 
@@ -831,17 +827,14 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         return self._stake_address[0]
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[MinswapOrderDatum]:
         return MinswapOrderDatum
 
     @classmethod
-    @property
     def script_class(self) -> type[MinswapOrderDatum]:
         return PlutusV1Script
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapPoolDatum]:
         return MinswapPoolDatum
 
@@ -869,17 +862,14 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return ["0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1"]
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str]:
         return ["e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return ["13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f"]
 
@@ -897,12 +887,10 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
     ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "MinswapV2"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [s.encode() for s in self._stake_address]
 
@@ -924,17 +912,14 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         return self._stake_address[0]
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[MinswapV2OrderDatum]:
         return MinswapV2OrderDatum
 
     @classmethod
-    @property
     def script_class(self) -> type[PlutusV2Script]:
         return PlutusV2Script
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapV2PoolDatum]:
         return MinswapV2PoolDatum
 
@@ -961,18 +946,11 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         """A unique identifier for the pool."""
         return self.lp_tokens.unit()
 
-    # @classmethod
-    # @property
-    # def pool_policy(cls) -> list[str]:
-    #     return ["0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1"]
-
     @classmethod
-    @property
     def lp_policy(cls) -> list[str]:
         return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350"]
 
@@ -1002,7 +980,6 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     ]
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MinswapStableOrderDatum]:
         return MinswapStableOrderDatum
 
@@ -1042,7 +1019,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         super().post_init(values)
         assets = values["assets"]
 
-        datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
+        datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
 
         assets.root[assets.unit()] = datum.balances[0]
         assets.root[assets.unit(1)] = datum.balances[1]
@@ -1063,7 +1040,6 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDiUSDStablePoolDatum]:
         return MinswapDJEDiUSDStablePoolDatum
 
@@ -1073,19 +1049,16 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
         ]
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str] | None:
         return None
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str] | None:
         return None
 
@@ -1111,12 +1084,10 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDCStablePoolDatum]:
         return MinswapDJEDUSDCStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
@@ -1140,12 +1111,10 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
         return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",

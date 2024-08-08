@@ -1,6 +1,7 @@
 import pytest
 
 from pycardano import Address
+from pycardano import DeserializeException
 
 from cardex.backend import get_backend, set_backend
 from cardex.dataclasses.datums import OrderDatum
@@ -10,7 +11,7 @@ from cardex.dexs.amm.amm_base import AbstractPairState
 
 def test_get_orders(dex: AbstractPairState, benchmark, backend):
     set_backend(backend)
-    order_selector = dex.order_selector
+    order_selector = dex.order_selector()
     result = benchmark(
         get_backend().get_historical_order_utxos,
         stake_addresses=order_selector,
@@ -25,7 +26,7 @@ def test_get_orders(dex: AbstractPairState, benchmark, backend):
     # Test datum parsing
     found_datum = False
     stake_addresses = []
-    for address in dex.order_selector:
+    for address in dex.order_selector():
         stake_addresses.append(
             Address(
                 payment_part=Address.decode(address).payment_part
@@ -44,14 +45,14 @@ def test_get_orders(dex: AbstractPairState, benchmark, backend):
                 in stake_addresses
             ):
                 print(f"cbor: {swap.swap_input.datum_cbor}")
-                datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
+                datum = dex.order_datum_class().from_cbor(swap.swap_input.datum_cbor)
                 found_datum = True
 
     assert found_datum
 
 
 def test_order_type(dex: AbstractPairState):
-    assert issubclass(dex.order_datum_class, OrderDatum)
+    assert issubclass(dex.order_datum_class(), OrderDatum)
 
 
 @pytest.mark.parametrize("block", [9655329])
@@ -59,7 +60,7 @@ def test_get_orders_in_block(block: int, dexs: list[AbstractPairState], backend)
     set_backend(backend)
     order_selector = []
     for dex in dexs:
-        order_selector.extend(dex.order_selector)
+        order_selector.extend(dex.order_selector())
     orders = get_backend().get_order_utxos_by_block_or_tx(
         stake_addresses=order_selector, block_no=block
     )
@@ -69,9 +70,9 @@ def test_get_orders_in_block(block: int, dexs: list[AbstractPairState], backend)
         for swap in order:
             swap_input = swap.swap_input
             for dex in dexs:
-                if swap_input.address_stake in dex.order_selector:
+                if swap_input.address_stake in dex.order_selector():
                     try:
-                        datum = dex.order_datum_class.from_cbor(swap_input.datum_cbor)
+                        datum = dex.order_datum_class().from_cbor(swap_input.datum_cbor)
                         break
                     except (DeserializeException, TypeError, AssertionError):
                         continue
