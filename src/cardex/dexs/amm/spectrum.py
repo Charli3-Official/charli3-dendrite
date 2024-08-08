@@ -19,10 +19,10 @@ from pycardano import VerificationKeyHash
 
 from cardex.backend import get_backend
 from cardex.dataclasses.datums import AssetClass
+from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusNone
 from cardex.dataclasses.datums import PlutusPartAddress
 from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import Assets
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
@@ -135,12 +135,10 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Spectrum"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
@@ -158,7 +156,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
             script_reference = get_backend().get_script_from_address(cls._stake_address)
@@ -194,7 +191,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SpectrumOrderDatum]:
         return SpectrumOrderDatum
 

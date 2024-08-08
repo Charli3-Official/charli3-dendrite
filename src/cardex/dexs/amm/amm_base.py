@@ -101,7 +101,7 @@ class AbstractPoolState(AbstractPairState):
                 f"{self.__class__.__name__} does not support swap forwarding.",
             )
 
-        return self.order_datum_class.create_datum(
+        return self.order_datum_class().create_datum(
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets,
@@ -401,10 +401,9 @@ class AbstractPoolState(AbstractPairState):
             if len(non_ada_assets) != ASSET_COUNT_ONE:
                 error_msg = f"Pool must only have 1 non-ADA asset: {values}"
                 raise InvalidPoolError(error_msg)
-            if (
-                len(assets) == ASSET_COUNT_THREE
-                and len(non_ada_assets) != ASSET_COUNT_THREE
-            ):
+
+        elif len(assets) == ASSET_COUNT_THREE:
+            if len(non_ada_assets) != ASSET_COUNT_TWO:
                 error_msg = f"Pool must only have 2 non-ADA assets: {values}"
                 raise InvalidPoolError(error_msg)
 
@@ -426,7 +425,6 @@ class AbstractPoolState(AbstractPairState):
             )
         return values
 
-    @classmethod
     @model_validator(mode="before")
     def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:
         """The main validation function called when initialized.
