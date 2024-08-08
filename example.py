@@ -7,10 +7,12 @@ from typing import Dict, Any
 
 from pycardano import Address
 
+from cardex.backend import set_backend, get_backend
 from cardex.backend.dbsync import DbsyncBackend
 from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.core.errors import InvalidLPError, InvalidPoolError, NoAssetsError
 from cardex import SundaeSwapCPPState
+from cardex import MinswapV2CPPState
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -21,6 +23,7 @@ logger = logging.getLogger("cardex")
 
 DEXS: list[type[AbstractPoolState]] = [
     SundaeSwapCPPState,
+    MinswapV2CPPState,
     # Add other DEX states here
 ]
 
@@ -40,9 +43,10 @@ def test_get_pool_utxos(
 ) -> Dict[str, Any]:
     """Test get_pool_utxos function."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
-    selector = dex.pool_selector
-    addresses = selector.model_dump().pop("selector")
-    result = backend.get_pool_utxos(addresses=addresses, limit=100)
+    selector = dex.pool_selector()
+    result = backend.get_pool_utxos(
+        limit=100000, historical=False, **selector.model_dump()
+    )
 
     pool_data = {}
     for pool in result:
@@ -66,9 +70,8 @@ def test_get_pool_in_tx(backend: DbsyncBackend) -> list[Dict[str, Any]]:
     """Test get_pool_in_tx function."""
     logger.info("Testing get_pool_in_tx...")
     tx_hash = "14e59f304767ea9a659fe3dce74c1ea3837652b5008fab0bd6c56b023ad3f227"
-    dex = SundaeSwapCPPState
-    addresses = dex.pool_selector.model_dump().pop("selector")
-    result = backend.get_pool_in_tx(tx_hash, addresses=addresses)
+    selector = SundaeSwapCPPState.pool_selector()
+    result = backend.get_pool_in_tx(tx_hash, **selector.model_dump())
     logger.info("Found %d pools in transaction %s", len(result), tx_hash)
     return [pool.model_dump() for pool in result]
 
@@ -162,7 +165,8 @@ def test_get_cancel_utxos(backend: DbsyncBackend) -> list[Dict[str, Any]]:
 
 def main():
     """Main function to run all tests."""
-    backend = DbsyncBackend()
+    set_backend(DbsyncBackend())
+    backend = get_backend()
     all_data = {}
 
     # Test get_pool_utxos for each DEX
