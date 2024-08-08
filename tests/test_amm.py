@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from cardex.backend import get_backend, set_backend
 from cardex import MinswapDJEDiUSDStableState
 from cardex import MinswapDJEDUSDCStableState
 from cardex import MinswapDJEDUSDMStableState
@@ -53,10 +54,10 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    AbstractPoolState.set_backend(backend)
+    set_backend(backend)
     selector = dex.pool_selector()
     limit = 20000 if run_slow else 100
-    result = AbstractPoolState.get_backend().get_pool_utxos(
+    result = get_backend().get_pool_utxos(
         limit=limit, historical=False, **selector.model_dump()
     )
 

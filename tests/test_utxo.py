@@ -3,6 +3,7 @@ import time
 
 import pytest
 
+from cardex.backend import get_backend, set_backend
 from cardex import MinswapCPPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
@@ -63,9 +64,9 @@ def test_build_utxo(dex: AbstractPoolState, subtests, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    AbstractPoolState.set_backend(backend)
+    set_backend(backend)
     selector = dex.pool_selector()
-    result = AbstractPoolState.get_backend().get_pool_utxos(
+    result = get_backend().get_pool_utxos(
         limit=10000, historical=False, **selector.model_dump()
     )
 
@@ -108,7 +109,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests, backend):
 @pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
     selector = WingRidersCPPState.pool_selector
-    result = WingRidersCPPState.get_backend().get_pool_utxos(
+    result = get_backend().get_pool_utxos(
         limit=10000, historical=False, **selector.to_dict()
     )
 
@@ -157,7 +158,7 @@ def test_wingriders_batcher_fee(subtests):
 @pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
     selector = MinswapCPPState.pool_selector
-    result = MinswapCPPState.get_backend().get_pool_utxos(
+    result = get_backend().get_pool_utxos(
         limit=10000, historical=False, **selector.to_dict()
     )
 

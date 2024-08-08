@@ -17,6 +17,7 @@ from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Value
 
+from cardex.backend import get_backend
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import PlutusFullAddress
 from cardex.dataclasses.datums import PlutusNone
@@ -196,7 +197,7 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_reference = cls.get_backend().get_script_from_address(
+            script_reference = get_backend().get_script_from_address(
                 cls._stake_address
             )
 

@@ -6,6 +6,7 @@ from typing import Dict
 from typing import List
 from typing import Union
 
+from cardex.backend import get_backend
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import CancelRedeemer
 from cardex.dataclasses.datums import OrderDatum
@@ -189,11 +190,11 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def reference_utxo(self) -> UTxO | None:
-        order_info = self.get_backend().get_pool_in_tx(
+        order_info = get_backend().get_pool_in_tx(
             self.tx_hash, assets=[self.dex_nft.unit()]
         )
 
-        script = self.get_backend().get_script_from_address(
+        script = get_backend().get_script_from_address(
             Address.decode(order_info[0].address)
         )
 
@@ -211,7 +212,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def fee_reference_utxo(self) -> UTxO | None:
-        order_info = self.get_backend().get_pool_in_tx(
+        order_info = get_backend().get_pool_in_tx(
             self.tx_hash, assets=[self.dex_nft.unit()]
         )
 
@@ -229,7 +230,7 @@ class GeniusYieldOrderState(AbstractOrderState):
             )
             asset = "fae686ea8f21d567841d703dea4d4221c2af071a6f2b433ff07c0af24aff78908ef2dce98bfe435fb3fd2529747b1c4564dff5adebedf4e46d0fc63d"
 
-        script = self.get_backend().get_datum_from_address(address, asset=asset)
+        script = get_backend().get_datum_from_address(address, asset=asset)
 
         return UTxO(
             input=TransactionInput(
@@ -245,10 +246,10 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def mint_reference_utxo(self) -> UTxO | None:
-        order_info = self.get_backend().get_pool_in_tx(
+        order_info = get_backend().get_pool_in_tx(
             self.tx_hash, assets=[self.dex_nft.unit()]
         )
-        script = self.get_backend().get_script_from_address(
+        script = get_backend().get_script_from_address(
             Address(
                 payment_part=ScriptHash(
                     payload=bytes.fromhex(self.dex_nft.unit()[:56]),
@@ -270,7 +271,7 @@ class GeniusYieldOrderState(AbstractOrderState):
 
     @property
     def settings_datum(self) -> GeniusYieldSettings:
-        script = self.get_backend().get_datum_from_address(
+        script = get_backend().get_datum_from_address(
             address=Address.decode(
                 "addr1wxcqkdhe7qcfkqcnhlvepe7zmevdtsttv8vdfqlxrztaq2gge58rd",
             ),
@@ -292,7 +293,7 @@ class GeniusYieldOrderState(AbstractOrderState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
-        order_info = self.get_backend().get_pool_in_tx(
+        order_info = get_backend().get_pool_in_tx(
             self.tx_hash, assets=[self.dex_nft.unit()]
         )
 
@@ -590,7 +591,7 @@ class GeniusYieldOrderBook(AbstractOrderBookState):
         if orders is None:
             selector = GeniusYieldOrderState.pool_selector()
 
-            result = cls.get_backend().get_pool_utxos(
+            result = get_backend().get_pool_utxos(
                 limit=10000, historical=False, **selector.to_dict()
             )
 

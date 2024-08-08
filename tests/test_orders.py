@@ -2,16 +2,17 @@ import pytest
 
 from pycardano import Address
 
+from cardex.backend import get_backend, set_backend
 from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.models import SwapTransactionInfo
 from cardex.dexs.amm.amm_base import AbstractPairState
 
 
 def test_get_orders(dex: AbstractPairState, benchmark, backend):
-    AbstractPairState.set_backend(backend)
+    set_backend(backend)
     order_selector = dex.order_selector
     result = benchmark(
-        AbstractPairState.get_backend().get_historical_order_utxos,
+        get_backend().get_historical_order_utxos,
         stake_addresses=order_selector,
         limit=1000,
     )
@@ -55,11 +56,11 @@ def test_order_type(dex: AbstractPairState):
 
 @pytest.mark.parametrize("block", [9655329])
 def test_get_orders_in_block(block: int, dexs: list[AbstractPairState], backend):
-    AbstractPairState.set_backend(backend)
+    set_backend(backend)
     order_selector = []
     for dex in dexs:
         order_selector.extend(dex.order_selector)
-    orders = AbstractPairState.get_backend().get_order_utxos_by_block_or_tx(
+    orders = get_backend().get_order_utxos_by_block_or_tx(
         stake_addresses=order_selector, block_no=block
     )
 
