@@ -7,15 +7,15 @@ from typing import ClassVar
 from typing import Optional
 from typing import Union
 
+import requests
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
-import requests
-from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.datums import OrderDatum
+from cardex.dataclasses.datums import PoolDatum
 from cardex.dataclasses.models import OrderType
 from cardex.dataclasses.models import PoolSelector
 from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
@@ -228,7 +228,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     bar_fee: int = 0
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "VyFi"
 
@@ -248,7 +247,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         return cls._pools
 
     @classmethod
-    @property
     def order_selector(cls) -> list[str]:
         return [p.orderValidatorUtxoAddress for p in cls.pools.values()]
 
@@ -269,7 +267,6 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         )
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[VyFiOrderDatum]:
         return VyFiOrderDatum
 

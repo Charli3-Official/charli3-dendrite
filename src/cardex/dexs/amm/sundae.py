@@ -7,13 +7,13 @@ from typing import List
 from typing import Union
 
 from pycardano import Address
+from pycardano import Datum
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import Datum
 from pycardano import VerificationKeyHash
 
-from cardex.backend.dbsync.references import get_datum_from_address
+from cardex.backend import get_backend
 from cardex.dataclasses.datums import AssetClass
 from cardex.dataclasses.datums import OrderDatum
 from cardex.dataclasses.datums import PlutusFullAddress
@@ -142,7 +142,9 @@ class SundaeV3AddressWithDatum(PlutusData):
 
     address: Union[PlutusFullAddress, PlutusScriptAddress]
     datum: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+        SundaeV3PlutusNone,
+        SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatum,
     ]
 
     @classmethod
@@ -352,8 +354,8 @@ class SundaeV3OrderDatum(OrderDatum):
                 {
                     (
                         self.swap.out_value[0] + self.swap.out_value[1]
-                    ).hex(): self.swap.out_value[2]
-                }
+                    ).hex(): self.swap.out_value[2],
+                },
             )
         else:
             return Assets({})
@@ -448,13 +450,11 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
     )
 
     @classmethod
-    @property
     def dex(cls) -> str:
         """Get the DEX name."""
         return "SundaeSwap"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         """Get the order selector."""
         return [self._stake_address.encode()]
@@ -476,7 +476,6 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SundaeOrderDatum]:
         """Get the order datum class."""
         return SundaeOrderDatum
@@ -524,7 +523,6 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
                 raise NotAPoolError("No pool NFT found.")
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         """Get the pool policy."""
         return ["0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b91370"]
@@ -539,6 +537,9 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
         if len(assets) == 2:
             assets.root[assets.unit(0)] -= 2000000
+        elif len(assets) == 1:
+            msg = "Reserves contains only 1 token."
+            raise InvalidPoolError(msg)
 
         numerator = datum.fee.numerator
         denominator = datum.fee.denominator
@@ -577,7 +578,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     )
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "SundaeSwapV3"
 
@@ -586,7 +586,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return PlutusV2Script
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
@@ -597,7 +596,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         )
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return ["e0302560ced2fdcbfcb2602697df970cd0d6a38f94b32703f51c312b"]
 
@@ -610,12 +608,10 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SundaeV3OrderDatum]:
         return SundaeV3OrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[SundaeV3PoolDatum]:
         return SundaeV3PoolDatum
 
@@ -644,7 +640,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
 
-            settings = get_datum_from_address(
+            settings = get_backend().get_datum_from_address(
                 Address.decode(
                     "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
                 ),
@@ -666,21 +662,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             else:
                 raise NotAPoolError("No pool NFT found.")
 
-    # def batcher_fee(
-    #     self,
-    #     in_assets: Assets | None = None,
-    #     out_assets: Assets | None = None,
-    #     extra_assets: Assets | None = None,
-    # ) -> Assets:
-    #     settings = get_datum_from_address(
-    #         Address.decode(
-    #             "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
-    #         ),
-    #     )
-
-    #     datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
-    #     return Assets(lovelace=datum.simple_fee + datum.base_fee)
-
     @classmethod
     def post_init(cls, values):
         super().post_init(values)
@@ -693,7 +674,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
-        settings = get_datum_from_address(
+        settings = get_backend().get_datum_from_address(
             Address.decode(
                 "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
             ),

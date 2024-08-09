@@ -1,5 +1,5 @@
-from abc import abstractclassmethod
 from abc import ABC
+from abc import abstractclassmethod
 
 from cardex.dataclasses.models import CardexBaseModel
 from cardex.dataclasses.models import PoolStateList

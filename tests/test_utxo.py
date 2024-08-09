@@ -3,12 +3,12 @@ import time
 
 import pytest
 
+from cardex.backend import get_backend, set_backend
 from cardex import MinswapCPPState
 from cardex import MuesliSwapCPPState
 from cardex import SpectrumCPPState
 from cardex import WingRidersCPPState
 
-from cardex.backend.dbsync.pools import get_pool_utxos
 from cardex.dataclasses.models import Assets
 from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.core.errors import InvalidLPError
@@ -60,12 +60,15 @@ ADDRESS = Address(
 )
 
 
-def test_build_utxo(dex: AbstractPoolState, subtests):
+def test_build_utxo(dex: AbstractPoolState, subtests, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
+    set_backend(backend)
     selector = dex.pool_selector()
-    result = get_pool_utxos(limit=10000, historical=False, **selector.model_dump())
+    result = get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.model_dump()
+    )
 
     for record in result:
         try:
@@ -106,7 +109,9 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
 @pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
     selector = WingRidersCPPState.pool_selector()
-    result = get_pool_utxos(limit=10000, historical=False, **selector.model_dump())
+    result = get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.model_dump()
+    )
 
     for record in result:
         try:
@@ -153,7 +158,9 @@ def test_wingriders_batcher_fee(subtests):
 @pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
     selector = MinswapCPPState.pool_selector()
-    result = get_pool_utxos(limit=10000, historical=False, **selector.model_dump())
+    result = get_backend().get_pool_utxos(
+        limit=10000, historical=False, **selector.model_dump()
+    )
 
     for record in result:
         try:
@@ -197,8 +204,8 @@ def test_minswap_batcher_fee(subtests):
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
     datum = None
-    if dex.dex == "Spectrum":
-        datum = dex.order_datum_class.create_datum(
+    if dex.dex() == "Spectrum":
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
@@ -206,18 +213,18 @@ def test_address_from_datum(dex: AbstractPoolState):
             volume_fee=30,
             pool_token=Assets({"lovelace": 1}),
         )
-    elif dex.dex in ["SundaeSwap", "SundaeSwapV3"]:
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() in ["SundaeSwap", "SundaeSwapV3"]:
+        datum = dex.order_datum_class().create_datum(
             ident=b"01",
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
-    elif dex.dex == "Axo":
+    elif dex.dex() == "Axo":
         pass
-    elif dex.dex not in ["GeniusYield"]:
-        datum = dex.order_datum_class.create_datum(
+    elif dex.dex() not in ["GeniusYield"]:
+        datum = dex.order_datum_class().create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
             out_assets=Assets(root={IUSD: 1000000}),
@@ -248,4 +255,4 @@ def test_address_from_datum(dex: AbstractPoolState):
     ],
 )
 def test_reference_utxo(dex: AbstractPoolState):
-    assert dex.reference_utxo is not None
+    assert dex.reference_utxo() is not None
