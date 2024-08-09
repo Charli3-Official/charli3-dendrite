@@ -486,11 +486,15 @@ class MinswapV2OrderDatum(OrderDatum):
     owner: Union[OAMMint, OAMSignature, OAMSpend, OAMWithdraw]
     refund_address: PlutusFullAddress
     refund_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum,
+        SundaeV3PlutusNone,
+        SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatum,
     ]
     receiver_address: PlutusFullAddress
     receiver_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum,
+        SundaeV3PlutusNone,
+        SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatum,
     ]
     lp_asset: AssetClass
     step: Union[

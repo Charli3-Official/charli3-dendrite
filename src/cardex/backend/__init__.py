@@ -50,7 +50,6 @@ def get_backend() -> AbstractBackend:
     Raises:
         ValueError: If no backend has been set and no default can be determined.
     """
-    global BACKEND
     if BACKEND is None:
         set_default_backend()
     if BACKEND is None:
@@ -64,7 +63,7 @@ def set_backend(backend: AbstractBackend) -> None:
     Args:
         backend (AbstractBackend): The backend instance to set as the global backend.
     """
-    global BACKEND
+    global BACKEND  # noqa: PLW0603
     BACKEND = backend
 
 
@@ -87,10 +86,11 @@ def set_default_backend() -> None:
     if all(env_var in os.environ for env_var in dbsync_vars):
         set_backend(DbsyncBackend())
 
-    # Add checks for other backend types here as needed
-    # For example:
-    # elif all(env_var in os.environ for env_var in other_backend_vars):
-    #     set_backend(OtherBackend())
+    """ TODO: Add checks for other backend types here as needed
+    For example:
+    elif all(env_var in os.environ for env_var in other_backend_vars):
+        set_backend(OtherBackend())
+    """
 
 
 # Optional: Initialize the backend when the module is imported
