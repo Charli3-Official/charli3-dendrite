@@ -6,7 +6,6 @@ from datetime import datetime
 from datetime import timedelta
 from typing import Any
 from typing import Dict
-from pycardano import Address
 
 from cardex import MinswapV2CPPState
 from cardex import SundaeSwapCPPState
@@ -17,6 +16,7 @@ from cardex.dexs.amm.amm_base import AbstractPoolState
 from cardex.dexs.core.errors import InvalidLPError
 from cardex.dexs.core.errors import InvalidPoolError
 from cardex.dexs.core.errors import NoAssetsError
+from pycardano import Address
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -43,13 +43,16 @@ def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json"):
 
 
 def test_get_pool_utxos(
-    backend: DbsyncBackend, dex: type[AbstractPoolState],
+    backend: DbsyncBackend,
+    dex: type[AbstractPoolState],
 ) -> Dict[str, Any]:
     """Test get_pool_utxos function."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
     selector = dex.pool_selector()
     result = backend.get_pool_utxos(
-        limit=100000, historical=False, **selector.model_dump(),
+        limit=100000,
+        historical=False,
+        **selector.model_dump(),
     )
 
     pool_data = {}
@@ -133,7 +136,9 @@ def test_get_historical_order_utxos(backend: DbsyncBackend) -> list[Dict[str, An
     ]
     after_time = datetime.now() - timedelta(days=1)  # Look at last 24 hours
     result = backend.get_historical_order_utxos(
-        stake_addresses, after_time=after_time, limit=10,
+        stake_addresses,
+        after_time=after_time,
+        limit=10,
     )
     logger.info("Found %d historical order UTXOs", len(result))
     return [utxo.model_dump() for utxo in result]
@@ -149,7 +154,9 @@ def test_get_order_utxos_by_block_or_tx(backend: DbsyncBackend) -> list[Dict[str
     if not blocks:
         return []
     result = backend.get_order_utxos_by_block_or_tx(
-        stake_addresses, block_no=blocks[0].block_no, limit=10,
+        stake_addresses,
+        block_no=blocks[0].block_no,
+        limit=10,
     )
     logger.info("Found %d order UTXOs in block %d", len(result), blocks[0].block_no)
     return [utxo.model_dump() for utxo in result]

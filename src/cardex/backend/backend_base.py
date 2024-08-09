@@ -3,9 +3,6 @@
 from abc import ABC
 from abc import abstractmethod
 from datetime import datetime
-from typing import List
-from typing import Optional
-from typing import Union
 
 from pycardano import Address
 
@@ -23,10 +20,10 @@ class AbstractBackend(ABC):
     """
 
     @abstractmethod
-    def get_pool_utxos(
+    def get_pool_utxos(  # noqa: PLR0913
         self,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: list[str] | None = None,
+        addresses: list[str] | None = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
@@ -49,8 +46,8 @@ class AbstractBackend(ABC):
     def get_pool_in_tx(
         self,
         tx_hash: str,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: list[str] | None = None,
+        addresses: list[str] | None = None,
     ) -> PoolStateList:
         """Get pool state for a specific transaction.
 
@@ -103,8 +100,8 @@ class AbstractBackend(ABC):
     @abstractmethod
     def get_historical_order_utxos(
         self,
-        stake_addresses: List[str],
-        after_time: Optional[Union[datetime, int]] = None,
+        stake_addresses: list[str],
+        after_time: datetime | int | None = None,
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
@@ -122,13 +119,13 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_order_utxos_by_block_or_tx(
+    def get_order_utxos_by_block_or_tx(  # noqa: PLR0913
         self,
-        stake_addresses: List[str],
-        out_tx_hash: Optional[List[str]] = None,
-        in_tx_hash: Optional[List[str]] = None,
-        block_no: Optional[int] = None,
-        after_block: Optional[int] = None,
+        stake_addresses: list[str],
+        out_tx_hash: list[str] | None = None,
+        in_tx_hash: list[str] | None = None,
+        block_no: int | None = None,
+        after_block: int | None = None,
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
@@ -137,6 +134,7 @@ class AbstractBackend(ABC):
         Args:
             stake_addresses (List[str]): List of stake addresses to query.
             out_tx_hash (Optional[List[str]]): List of transaction hashes to filter by.
+            in_tx_hash: list of input transaction hashes to filter by.
             block_no (Optional[int]): Specific block number to query.
             after_block (Optional[int]): Filter results after this block number.
             limit (int): Maximum number of results to return.
@@ -148,11 +146,11 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_cancel_utxos(
+    def get_cancel_utxos(  # noqa: PLR0913
         self,
-        stake_addresses: List[str],
-        block_no: Optional[int] = None,
-        after_time: Optional[Union[datetime, int]] = None,
+        stake_addresses: list[str],
+        block_no: int | None = None,
+        after_time: datetime | int | None = None,
         limit: int = 1000,
         page: int = 0,
     ) -> SwapTransactionList:
@@ -172,14 +170,17 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def get_datum_from_address(
-        self, address: str, asset: str | None = None,
-    ) -> Optional[str]:
+        self,
+        address: str,
+        asset: str | None = None,
+    ) -> str | None:
         """Get datum from a given address.
 
         Args:
-            address (str): The address to query.
+            address: The address to query.
+            asset: Assets required to be in the UTxO.
 
         Returns:
-            Optional[str]: The datum associated with the address, if any.
+            The datum associated with the address, if any.
         """
         pass

@@ -33,8 +33,7 @@ class DbsyncBackend(AbstractBackend):
     """
 
     def __init__(self):
-        """Initialize the DbsyncBackend with database connection details.
-        """
+        """Initialize the DbsyncBackend with database connection details."""
         self.lock = Lock()
         self.POOL = None
         self.DBSYNC_USER = os.environ.get("DBSYNC_USER", None)
@@ -692,10 +691,11 @@ OFFSET %(offset)s"""
         return SwapTransactionList.model_validate(r)
 
     def get_axo_target(
-        self, assets: Assets, block_time: datetime | None = None,
+        self,
+        assets: Assets,
+        block_time: datetime | None = None,
     ) -> str | None:
-        """Get the target address for the given asset.
-        """
+        """Get the target address for the given asset."""
         SELECTOR = """
     SELECT DISTINCT txo.address, block.time
     FROM (
