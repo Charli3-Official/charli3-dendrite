@@ -43,12 +43,17 @@ Charli3 Dendrite currently supports the following Cardano DEXs:
 - SundaeSwap
 - VyFi
 - WingRiders
+- GeniusYield
+- Axo
+
 ## Upcoming DEXs
 
 - CardanoSwaps
 - Metadex
 - CSwap
+
 ## Not Supported
+
 - TeddySwap
 - Cerra
 - SaturnSwap
