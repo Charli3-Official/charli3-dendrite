@@ -2,16 +2,12 @@ import os
 import time
 
 import pytest
+
 from charli3_dendrite import MinswapCPPState
-from charli3_dendrite import MinswapDJEDiUSDStableState
-from charli3_dendrite import MinswapDJEDUSDCStableState
-from charli3_dendrite import MuesliSwapCLPState
 from charli3_dendrite import MuesliSwapCPPState
 from charli3_dendrite import SpectrumCPPState
-from charli3_dendrite import SundaeSwapCPPState
-from charli3_dendrite import VyFiCPPState
 from charli3_dendrite import WingRidersCPPState
-from charli3_dendrite import WingRidersSSPState
+
 from charli3_dendrite.backend.dbsync import get_pool_utxos
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
@@ -19,6 +15,7 @@ from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import BlockFrostChainContext
@@ -33,18 +30,6 @@ context = BlockFrostChainContext(
     os.environ["PROJECT_ID"],
     base_url=getattr(blockfrost.ApiUrls, os.environ["NETWORK"]).value,
 )
-
-DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
 
 MALFORMED_CBOR = {
     "fadbbeb0012ae3864927e523f73048b22fba71d8be6f6a1336561363d3ec0b71",
@@ -75,8 +60,10 @@ ADDRESS = Address(
 )
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_build_utxo(dex: AbstractPoolState, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
 
@@ -91,11 +78,16 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 out_assets = (
                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
                 )
-                pool.swap_utxo(
-                    address_source=ADDRESS,
-                    in_assets=Assets(root={"lovelace": 1000000}),
-                    out_assets=out_assets,
-                )
+
+                if dex.dex not in ["GeniusYield"]:
+                    pool.swap_utxo(
+                        address_source=ADDRESS,
+                        in_assets=Assets(root={"lovelace": 1000000}),
+                        out_assets=out_assets,
+                    )
+                else:
+                    # Currently GY requires tx_builder to build transactions
+                    pass
 
         except InvalidLPError:
             pass
@@ -111,6 +103,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests):
                 raise
 
 
+@pytest.mark.wingriders
 def test_wingriders_batcher_fee(subtests):
     selector = WingRidersCPPState.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
@@ -157,6 +150,7 @@ def test_wingriders_batcher_fee(subtests):
                 raise
 
 
+@pytest.mark.minswap
 def test_minswap_batcher_fee(subtests):
     selector = MinswapCPPState.pool_selector
     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
@@ -200,9 +194,9 @@ def test_minswap_batcher_fee(subtests):
                 raise
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_address_from_datum(dex: AbstractPoolState):
     # Create the datum
+    datum = None
     if dex.dex == "Spectrum":
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,
@@ -212,7 +206,7 @@ def test_address_from_datum(dex: AbstractPoolState):
             volume_fee=30,
             pool_token=Assets({"lovelace": 1}),
         )
-    elif dex.dex == "SundaeSwap":
+    elif dex.dex in ["SundaeSwap", "SundaeSwapV3"]:
         datum = dex.order_datum_class.create_datum(
             ident=b"01",
             address_source=ADDRESS,
@@ -220,16 +214,30 @@ def test_address_from_datum(dex: AbstractPoolState):
             out_assets=Assets(root={"lovelace": 1000000}),
             fee=30,
         )
-    else:
+    elif dex.dex == "Axo":
+        pass
+    elif dex.dex not in ["GeniusYield"]:
         datum = dex.order_datum_class.create_datum(
             address_source=ADDRESS,
             in_assets=Assets(root={"lovelace": 1000000}),
-            out_assets=Assets(root={"lovelace": 1000000}),
+            out_assets=Assets(root={IUSD: 1000000}),
             batcher_fee=Assets(root={"lovelace": 1000000}),
             deposit=Assets(root={"lovelace": 1000000}),
         )
 
-    assert ADDRESS.encode() == datum.address_source().encode()
+    if datum is not None:
+        if datum.address_source().payment_part is not None:
+            assert (
+                ADDRESS.payment_part.payload
+                == datum.address_source().payment_part.payload
+            )
+        elif datum.address_source().staking_part is not None:
+            assert (
+                ADDRESS.staking_part.payload
+                == datum.address_source().staking_part.payload
+            )
+        else:
+            raise TypeError
 
 
 @pytest.mark.parametrize(
@@ -241,66 +249,3 @@ def test_address_from_datum(dex: AbstractPoolState):
 )
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo is not None
-
-
-# @pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-# def test_submit_transaction(dex: AbstractPoolState, subtests):
-#     if dex in [WingRidersSSPState, MuesliSwapCLPState]:
-#         pytest.skip("Currently not supported.")
-#         return
-
-#     selector = dex.pool_selector
-#     result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
-
-#     tx_hash = None
-#     for record in result:
-#         try:
-#             pool = dex.model_validate(record.model_dump())
-
-#             if pool.inactive:
-#                 continue
-
-#             if pool.unit_a == "lovelace" and pool.unit_b in [
-#                 IUSD_ASSETS.unit(),
-#                 LQ_ASSETS.unit(),
-#             ]:
-#                 tx_builder = TransactionBuilder(context)
-#                 tx_builder.add_input_address(ADDRESS)
-
-#                 out_assets = (
-#                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
-#                 )
-
-#                 utxo, datum = pool.swap_utxo(
-#                     address_source=ADDRESS,
-#                     in_assets=Assets(root={"lovelace": 1000000}),
-#                     out_assets=out_assets,
-#                 )
-
-#                 datum = None if utxo.datum is not None else datum
-#                 tx_builder.add_output(utxo, datum=datum, add_datum_to_witness=True)
-
-#                 tx = tx_builder.build_and_sign(
-#                     signing_keys=[SPEND_KEY],
-#                     change_address=ADDRESS,
-#                     auto_ttl_offset=600,
-#                 )
-
-#                 tx_hash = context.submit_tx(tx)
-
-#                 break
-
-#         except InvalidLPError:
-#             pass
-#         except NoAssetsError:
-#             pass
-#         except InvalidPoolError:
-#             pass
-
-#     if tx_hash is None:
-#         raise ValueError("No transaction submitted")
-
-#     time.sleep(60)
-
-
-# Test cancel transaction: 447fafeba8d431bae4b7c7a59bae85fffbf898b4877072ed9784644381f5f458

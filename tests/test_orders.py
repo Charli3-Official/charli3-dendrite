@@ -1,39 +1,20 @@
 import pytest
-from charli3_dendrite import MinswapCPPState
-from charli3_dendrite import MinswapDJEDiUSDStableState
-from charli3_dendrite import MinswapDJEDUSDCStableState
-from charli3_dendrite import MuesliSwapCLPState
-from charli3_dendrite import MuesliSwapCPPState
-from charli3_dendrite import SpectrumCPPState
-from charli3_dendrite import SundaeSwapCPPState
-from charli3_dendrite import VyFiCPPState
-from charli3_dendrite import WingRidersCPPState
-from charli3_dendrite import WingRidersSSPState
+
+from pycardano import Address
+
 from charli3_dendrite.backend.dbsync import get_historical_order_utxos
 from charli3_dendrite.backend.dbsync import get_order_utxos_by_block_or_tx
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.models import SwapTransactionInfo
-from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
-
-DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
+from charli3_dendrite.dexs.amm.amm_base import AbstractPairState
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-def test_get_orders(dex: AbstractPoolState, benchmark):
+def test_get_orders(dex: AbstractPairState, benchmark):
     order_selector = dex.order_selector
     result = benchmark(
         get_historical_order_utxos,
         stake_addresses=order_selector,
-        limit=10,
+        limit=1000,
     )
 
     # Test roundtrip parsing
@@ -41,11 +22,42 @@ def test_get_orders(dex: AbstractPoolState, benchmark):
         reparsed = SwapTransactionInfo(r.model_dump())
         assert reparsed == r
 
+    # Test datum parsing
+    found_datum = False
+    stake_addresses = []
+    for address in dex.order_selector:
+        stake_addresses.append(
+            Address(
+                payment_part=Address.decode(address).payment_part
+            ).payment_part.payload
+        )
+
+    for ind, r in enumerate(result):
+        for swap in r:
+            if swap.swap_input.tx_hash in [
+                "042e04611944c260b8897e29e40c8149b843634bce272bf0cad8140455e29edb",
+                "0ba3fda43c41fdba83c03a2564dfae13b17ddb2502d291b6e05a53d6d5f9d478",
+            ]:
+                continue
+            if (
+                Address.decode(swap.swap_input.address_stake).payment_part.payload
+                in stake_addresses
+            ):
+                print(f"cbor: {swap.swap_input.datum_cbor}")
+                datum = dex.order_datum_class.from_cbor(swap.swap_input.datum_cbor)
+                found_datum = True
+
+    assert found_datum
+
+
+def test_order_type(dex: AbstractPairState):
+    assert issubclass(dex.order_datum_class, OrderDatum)
+
 
 @pytest.mark.parametrize("block", [9655329])
-def test_get_orders_in_block(block: int):
+def test_get_orders_in_block(block: int, dexs: list[AbstractPairState]):
     order_selector = []
-    for dex in DEXS:
+    for dex in dexs:
         order_selector.extend(dex.order_selector)
     orders = get_order_utxos_by_block_or_tx(
         stake_addresses=order_selector, block_no=block
@@ -55,7 +67,7 @@ def test_get_orders_in_block(block: int):
     for order in orders:
         for swap in order:
             swap_input = swap.swap_input
-            for dex in DEXS:
+            for dex in dexs:
                 if swap_input.address_stake in dex.order_selector:
                     try:
                         datum = dex.order_datum_class.from_cbor(swap_input.datum_cbor)

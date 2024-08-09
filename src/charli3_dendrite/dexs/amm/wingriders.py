@@ -1,23 +1,30 @@
+"""WingRiders DEX implementation."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from typing import ClassVar
 from typing import Union
 
+from pycardano import Address
+from pycardano import PlutusData
+
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PoolDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractStableSwapPoolState
 from charli3_dendrite.dexs.core.errors import NotAPoolError
-from pycardano import Address
-from pycardano import PlutusData
 
 
 @dataclass
 class WingriderAssetClass(PlutusData):
+    """Encode a pair of assets for the WingRiders DEX."""
+
     CONSTR_ID = 0
 
     asset_a: AssetClass
@@ -25,6 +32,7 @@ class WingriderAssetClass(PlutusData):
 
     @classmethod
     def from_assets(cls, in_assets: Assets, out_assets: Assets):
+        """Create a WingRiderAssetClass from a pair of assets."""
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             return cls(
@@ -57,6 +65,8 @@ class RewardPlutusFullAddress(PlutusFullAddress):
 
 @dataclass
 class WingRiderOrderConfig(PlutusData):
+    """Configuration for a WingRiders order."""
+
     CONSTR_ID = 0
 
     full_address: Union[PlutusFullAddress, RewardPlutusFullAddress]
@@ -72,6 +82,7 @@ class WingRiderOrderConfig(PlutusData):
         in_assets: Assets,
         out_assets: Assets,
     ):
+        """Create a WingRiders order configuration."""
         plutus_address = PlutusFullAddress.from_address(address)
         assets = WingriderAssetClass.from_assets(
             in_assets=in_assets,
@@ -88,16 +99,22 @@ class WingRiderOrderConfig(PlutusData):
 
 @dataclass
 class AtoB(PlutusData):
+    """A to B."""
+
     CONSTR_ID = 0
 
 
 @dataclass
 class BtoA(PlutusData):
+    """B to A."""
+
     CONSTR_ID = 1
 
 
 @dataclass
 class WingRidersOrderDetail(PlutusData):
+    """WingRiders order detail."""
+
     CONSTR_ID = 0
 
     direction: Union[AtoB, BtoA]
@@ -105,6 +122,7 @@ class WingRidersOrderDetail(PlutusData):
 
     @classmethod
     def from_assets(cls, in_assets: Assets, out_assets: Assets):
+        """Create a WingRidersOrderDetail from a pair of assets."""
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             return cls(direction=AtoB(), min_receive=out_assets.quantity())
@@ -114,6 +132,8 @@ class WingRidersOrderDetail(PlutusData):
 
 @dataclass
 class WingRidersDepositDetail(PlutusData):
+    """WingRiders deposit detail."""
+
     CONSTR_ID = 1
 
     min_lp_receive: int
@@ -121,6 +141,8 @@ class WingRidersDepositDetail(PlutusData):
 
 @dataclass
 class WingRidersWithdrawDetail(PlutusData):
+    """WingRiders withdraw detail."""
+
     CONSTR_ID = 2
 
     min_amount_a: int
@@ -129,17 +151,21 @@ class WingRidersWithdrawDetail(PlutusData):
 
 @dataclass
 class WingRidersMaybeFeeClaimDetail(PlutusData):
+    """WingRiders maybe fee claim detail."""
+
     CONSTR_ID = 3
 
 
 @dataclass
 class WingRidersStakeRewardDetail(PlutusData):
+    """WingRiders stake reward detail."""
+
     CONSTR_ID = 4
 
 
 @dataclass
-class WingRidersOrderDatum(PlutusData):
-    CONSTR_ID = 0
+class WingRidersOrderDatum(OrderDatum):
+    """WingRiders order datum."""
 
     config: WingRiderOrderConfig
     detail: Union[
@@ -161,6 +187,7 @@ class WingRidersOrderDatum(PlutusData):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ):
+        """Create a WingRiders order datum."""
         timeout = int(((datetime.utcnow() + timedelta(days=360)).timestamp()) * 1000)
 
         config = WingRiderOrderConfig.create_config(
@@ -214,6 +241,8 @@ class WingRidersOrderDatum(PlutusData):
 
 @dataclass
 class LiquidityPoolAssets(PlutusData):
+    """Encode a pair of assets for the WingRiders DEX."""
+
     CONSTR_ID = 0
     asset_a: AssetClass
     asset_b: AssetClass
@@ -221,6 +250,8 @@ class LiquidityPoolAssets(PlutusData):
 
 @dataclass
 class LiquidityPool(PlutusData):
+    """Encode a liquidity pool for the WingRiders DEX."""
+
     CONSTR_ID = 0
     assets: LiquidityPoolAssets
     last_swap: int
@@ -229,8 +260,9 @@ class LiquidityPool(PlutusData):
 
 
 @dataclass
-class WingRidersPoolDatum(PlutusData):
-    CONSTR_ID = 0
+class WingRidersPoolDatum(PoolDatum):
+    """WingRiders pool datum."""
+
     lp_hash: bytes
     datum: LiquidityPool
 
@@ -239,6 +271,8 @@ class WingRidersPoolDatum(PlutusData):
 
 
 class WingRidersCPPState(AbstractConstantProductPoolState):
+    """WingRiders CPP state."""
+
     fee: int = 35
     _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
@@ -358,6 +392,8 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
 
 
 class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):
+    """WingRiders SSP state."""
+
     fee: int = 6
     _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)

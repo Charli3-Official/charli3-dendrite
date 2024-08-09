@@ -1,18 +1,10 @@
+"""Spectrum DEX module."""
+
 from dataclasses import dataclass
 from typing import ClassVar
 from typing import List
 from typing import Union
 
-from charli3_dendrite.backend.dbsync import get_script_from_address
-from charli3_dendrite.dataclasses.datums import AssetClass
-from charli3_dendrite.dataclasses.datums import PlutusNone
-from charli3_dendrite.dataclasses.datums import PlutusPartAddress
-from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.dataclasses.models import OrderType
-from charli3_dendrite.dataclasses.models import PoolSelector
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
-from charli3_dendrite.dexs.core.errors import InvalidLPError
-from charli3_dendrite.dexs.core.errors import NotAPoolError
 from pycardano import Address
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
@@ -25,10 +17,23 @@ from pycardano import UTxO
 from pycardano import Value
 from pycardano import VerificationKeyHash
 
+from charli3_dendrite.backend.dbsync import get_script_from_address
+from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.datums import PlutusPartAddress
+from charli3_dendrite.dataclasses.datums import PoolDatum
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
+
 
 @dataclass
-class SpectrumOrderDatum(PlutusData):
-    CONSTR_ID = 0
+class SpectrumOrderDatum(OrderDatum):
+    """The order datum for the Spectrum DEX."""
 
     in_asset: AssetClass
     out_asset: AssetClass
@@ -50,7 +55,8 @@ class SpectrumOrderDatum(PlutusData):
         pool_token: Assets,
         batcher_fee: int,
         volume_fee: int,
-    ) -> "SpectrumOrder":
+    ) -> "SpectrumOrderDatum":
+        """Create a Spectrum order datum."""
         payment_part = bytes.fromhex(str(address_source.payment_part))
         stake_part = PlutusPartAddress(bytes.fromhex(str(address_source.staking_part)))
         in_asset = AssetClass.from_assets(in_assets)
@@ -91,8 +97,8 @@ class SpectrumOrderDatum(PlutusData):
 
 
 @dataclass
-class SpectrumPoolDatum(PlutusData):
-    CONSTR_ID = 0
+class SpectrumPoolDatum(PoolDatum):
+    """The pool datum for the Spectrum DEX."""
 
     pool_nft: AssetClass
     asset_a: AssetClass
@@ -108,6 +114,8 @@ class SpectrumPoolDatum(PlutusData):
 
 @dataclass
 class SpectrumCancelRedeemer(PlutusData):
+    """The cancel redeemer for the Spectrum DEX."""
+
     CONSTR_ID = 0
     a: int
     b: int
@@ -116,6 +124,8 @@ class SpectrumCancelRedeemer(PlutusData):
 
 
 class SpectrumCPPState(AbstractConstantProductPoolState):
+    """The Spectrum DEX constant product pool state."""
+
     fee: int
     _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)

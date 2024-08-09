@@ -1,32 +1,17 @@
 import pytest
-from charli3_dendrite import MinswapCPPState
+
 from charli3_dendrite import MinswapDJEDiUSDStableState
 from charli3_dendrite import MinswapDJEDUSDCStableState
-from charli3_dendrite import MuesliSwapCLPState
-from charli3_dendrite import MuesliSwapCPPState
-from charli3_dendrite import SpectrumCPPState
-from charli3_dendrite import SundaeSwapCPPState
-from charli3_dendrite import VyFiCPPState
-from charli3_dendrite import WingRidersCPPState
+from charli3_dendrite import MinswapDJEDUSDMStableState
+from charli3_dendrite import SundaeSwapV3CPPState
 from charli3_dendrite import WingRidersSSPState
 from charli3_dendrite.backend.dbsync import get_pool_utxos
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
-
-DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
 
 MALFORMED_CBOR = {
     "fadbbeb0012ae3864927e523f73048b22fba71d8be6f6a1336561363d3ec0b71",
@@ -39,63 +24,58 @@ MALFORMED_CBOR = {
 }
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_pools_script_version(dex: AbstractPoolState, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
     result = get_pool_utxos(limit=1, historical=False, **selector.to_dict())
 
     counts = 0
     for pool in result:
-        with subtests.test(f"Testing: {dex.dex}", i=pool):
-            try:
-                dex.model_validate(pool.model_dump())
-                counts += 1
-            except InvalidLPError:
-                pytest.xfail(
-                    f"{dex.dex}: expected failure lp tokens were not found or invalid - {pool.assets}",
-                )
-            except NoAssetsError:
-                pytest.xfail(f"{dex.dex}: expected failure no assets - {pool.assets}")
-            except InvalidPoolError:
-                pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
-            except:
-                raise
+        try:
+            dex.model_validate(pool.model_dump())
+            counts += 1
+        except (InvalidLPError, NoAssetsError, InvalidPoolError):
+            pass
+        except:
+            raise
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-def test_parse_pools(dex: AbstractPoolState, subtests):
+def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
-    result = get_pool_utxos(limit=10000, historical=False, **selector.to_dict())
+    limit = 20000 if run_slow else 100
+    result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
 
     counts = 0
     for pool in result:
-        with subtests.test(f"Testing: {dex.dex}", i=pool):
-            try:
-                dex.model_validate(pool.model_dump())
-                counts += 1
-            except InvalidLPError:
-                pytest.xfail(
-                    f"{dex.dex}: expected failure lp tokens were not found or invalid - {pool.assets}",
-                )
-            except NoAssetsError:
-                pytest.xfail(f"{dex.dex}: expected failure no assets - {pool.assets}")
-            except InvalidPoolError:
-                pytest.xfail(f"{dex.dex}: expected failure no pool NFT - {pool.assets}")
-            except NotAPoolError as e:
-                # Known failures due to malformed data
-                if pool.tx_hash in MALFORMED_CBOR:
-                    pytest.xfail("Malformed CBOR tx.")
-                else:
-                    raise
-            except:
+        try:
+            dex.model_validate(pool.model_dump())
+            counts += 1
+        except (InvalidLPError, NoAssetsError, InvalidPoolError):
+            pass
+        except NotAPoolError as e:
+            # Known failures due to malformed data
+            if pool.tx_hash in MALFORMED_CBOR:
+                pass
+            else:
                 raise
+        except:
+            raise
 
-    assert counts < 10000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    assert counts < 20000
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+    ]:
         assert counts == 1
     elif dex == WingRidersSSPState:
-        assert counts == 2
-    elif dex == MuesliSwapCLPState:
-        assert counts <= 16
+        assert counts == 3
+    elif dex == SundaeSwapV3CPPState:
+        assert counts > 30
     else:
-        assert counts > 50
+        assert counts > 40

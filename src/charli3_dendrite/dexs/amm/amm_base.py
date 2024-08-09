@@ -19,7 +19,6 @@ from pydantic import model_validator
 class AbstractPoolState(AbstractPairState):
     datum_cbor: str
     datum_hash: str
-    dex_nft: Assets | None = None
     inactive: bool = False
     lp_tokens: Assets | None = None
     pool_nft: Assets | None = None
@@ -253,6 +252,7 @@ class AbstractPoolState(AbstractPairState):
                 for asset in assets
                 if any(asset.startswith(policy) for policy in cls.pool_policy)
             ]
+
             if len(nfts) != 1:
                 raise InvalidPoolError(
                     f"{cls.__name__}: A pool must have one pool NFT token.",

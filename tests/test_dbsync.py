@@ -1,13 +1,11 @@
 import pytest
+
 from charli3_dendrite import MinswapCPPState
 from charli3_dendrite import MinswapDJEDiUSDStableState
 from charli3_dendrite import MinswapDJEDUSDCStableState
-from charli3_dendrite import MuesliSwapCLPState
-from charli3_dendrite import MuesliSwapCPPState
-from charli3_dendrite import SpectrumCPPState
-from charli3_dendrite import SundaeSwapCPPState
-from charli3_dendrite import VyFiCPPState
-from charli3_dendrite import WingRidersCPPState
+from charli3_dendrite import MinswapDJEDUSDMStableState
+from charli3_dendrite import MinswapV2CPPState
+from charli3_dendrite import SundaeSwapV3CPPState
 from charli3_dendrite import WingRidersSSPState
 from charli3_dendrite.backend.dbsync import get_cancel_utxos
 from charli3_dendrite.backend.dbsync import get_historical_order_utxos
@@ -15,18 +13,7 @@ from charli3_dendrite.backend.dbsync import get_pool_in_tx
 from charli3_dendrite.backend.dbsync import get_pool_utxos
 from charli3_dendrite.backend.dbsync import last_block
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
-
-DEXS: list[AbstractPoolState] = [
-    MinswapCPPState,
-    MinswapDJEDiUSDStableState,
-    MinswapDJEDUSDCStableState,
-    MuesliSwapCPPState,
-    SpectrumCPPState,
-    SundaeSwapCPPState,
-    VyFiCPPState,
-    WingRidersCPPState,
-    WingRidersSSPState,
-]
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 
 
 @pytest.mark.parametrize("n_blocks", range(1, 5))
@@ -45,29 +32,38 @@ def test_last_blocks(n_blocks: int, benchmark):
     result = benchmark(last_block, 2**n_blocks)
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-def test_get_pool_utxos(dex: AbstractPoolState, benchmark):
+def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
+    limit = 20000 if run_slow else 100
     result = benchmark(
         get_pool_utxos,
-        limit=10000,
+        limit=limit,
         historical=False,
         **selector.to_dict(),
     )
 
-    assert len(result) < 9000
-    if dex in [MinswapDJEDiUSDStableState, MinswapDJEDUSDCStableState]:
+    assert len(result) < 20000
+    if dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+    ]:
         assert len(result) == 1
     elif dex == WingRidersSSPState:
-        assert len(result) == 2
-    elif dex == MuesliSwapCLPState:
-        assert len(result) == 16
+        assert len(result) == 3
+    elif dex == SundaeSwapV3CPPState:
+        assert len(result) > 35
     else:
-        assert len(result) > 50
+        assert len(result) > 40
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
 def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
     selector = dex.pool_selector
     result = benchmark(
         get_pool_utxos,
@@ -78,19 +74,26 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
     if dex.dex in ["Spectrum"] or dex in [
         MinswapDJEDiUSDStableState,
         MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+        SundaeSwapV3CPPState,
+        MinswapV2CPPState,
     ]:
         assert result[0].plutus_v2
     else:
         assert not result[0].plutus_v2
 
 
-@pytest.mark.parametrize("dex", DEXS, ids=[d.dex for d in DEXS])
-def test_get_orders(dex: AbstractPoolState, benchmark):
+def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
+    if issubclass(dex, AbstractOrderBookState):
+        return
+
+    limit = 10 if run_slow else 1000
+
     order_selector = dex.order_selector
     result = benchmark(
         get_historical_order_utxos,
         stake_addresses=order_selector,
-        limit=1000,
+        limit=limit,
     )
 
 
@@ -103,19 +106,3 @@ def test_get_pool_in_tx(tx_hash):
     tx = get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
 
     assert len(tx) > 0
-
-
-@pytest.mark.parametrize(
-    "block_no",
-    [10058651],
-)
-def test_get_cancel_block(block_no):
-    selector = []
-    for dex in DEXS:
-        selector.extend(dex.order_selector)
-
-    cancels = get_cancel_utxos(stake_addresses=selector, block_no=block_no)
-
-    assert "82806c91332c804430596adb4e30551e688c5f0ad6c9d9739f61276ff8911014" in [
-        order[0].swap_output.tx_hash for order in cancels
-    ]

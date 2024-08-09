@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from pycardano import Address
 
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateList
 from charli3_dendrite.dataclasses.models import ScriptReference
@@ -23,6 +24,7 @@ DBSYNC_USER = os.environ.get("DBSYNC_USER", None)
 DBSYNC_PASS = os.environ.get("DBSYNC_PASS", None)
 DBSYNC_HOST = os.environ.get("DBSYNC_HOST", None)
 DBSYNC_PORT = os.environ.get("DBSYNC_PORT", None)
+DBSYNC_DB_NAME = os.environ.get("DBSYNC_DB_NAME", None)
 
 
 def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
@@ -31,16 +33,16 @@ def get_dbsync_pool() -> psycopg_pool.ConnectionPool:
     with lock:
         if POOL is None:
             conninfo = (
-                f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname=cexplorer "
+                f"host={DBSYNC_HOST} port={DBSYNC_PORT} dbname={DBSYNC_DB_NAME} "
                 + f"user={DBSYNC_USER} password={DBSYNC_PASS}"
             )
             POOL = psycopg_pool.ConnectionPool(
                 conninfo=conninfo,
                 open=False,
                 min_size=1,
-                max_size=10,
+                max_size=30,
                 max_idle=10,
-                reconnect_timeout=10,
+                reconnect_timeout=30,
                 max_lifetime=60,
                 check=psycopg_pool.ConnectionPool.check_connection,
             )
@@ -260,6 +262,8 @@ def get_script_from_address(address: Address) -> ScriptReference:
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
 tx_out.address,
+ENCODE(datum.hash,'hex') as "datum_hash",
+ENCODE(datum.bytes,'hex') as "datum_cbor",
 COALESCE (
     json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
         SELECT json_agg(
@@ -278,10 +282,116 @@ ENCODE(s.bytes, 'hex') as "script"
 FROM script s
 LEFT JOIN tx_out ON s.id = tx_out.reference_script_id
 LEFT JOIN tx ON tx.id = tx_out.tx_id
+LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
+LEFT JOIN block on block.id = tx.block_id
 WHERE s.hash = %(address)b
+ORDER BY block.time DESC
 LIMIT 1
 """
     r = db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
+
+    if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
+        r[0]["assets"] = None
+
+    return ScriptReference.model_validate(r[0])
+
+
+def get_datum_from_address(address: Address) -> ScriptReference:
+    SCRIPT_SELECTOR = """
+SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
+tx_out.index as "tx_index",
+tx_out.address,
+ENCODE(datum.hash,'hex') as "datum_hash",
+ENCODE(datum.bytes,'hex') as "datum_cbor",
+COALESCE (
+    json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
+            )
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = tx_out.id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
+) AS "assets",
+ENCODE(s.bytes, 'hex') as "script"
+FROM tx_out
+LEFT JOIN tx ON tx.id = tx_out.tx_id
+LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
+LEFT JOIN block on block.id = tx.block_id
+LEFT JOIN script s ON s.id = tx_out.reference_script_id
+WHERE tx_out.payment_cred = %(address)b
+AND tx_out.inline_datum_id IS NOT NULL
+ORDER BY block.time DESC
+LIMIT 1
+"""
+    r = db_query(SCRIPT_SELECTOR, {"address": address.payment_part.payload})
+
+    if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
+        r[0]["assets"] = None
+
+    return ScriptReference.model_validate(r[0])
+
+
+def get_datum_from_address(
+    address: Address,
+    asset: str | None = None,
+) -> ScriptReference:
+    kwargs = {"address": address.payment_part.payload}
+
+    if asset is not None:
+        kwargs.update(
+            {
+                "policy": bytes.fromhex(asset[:56]),
+                "name": bytes.fromhex(asset[56:]),
+            },
+        )
+
+    SCRIPT_SELECTOR = """
+SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
+tx_out.index as "tx_index",
+tx_out.address,
+ENCODE(datum.hash,'hex') as "datum_hash",
+ENCODE(datum.bytes,'hex') as "datum_cbor",
+COALESCE (
+    json_build_object('lovelace',tx_out.value::TEXT)::jsonb || (
+        SELECT json_agg(
+            json_build_object(
+                CONCAT(encode(ma.policy, 'hex'), encode(ma.name, 'hex')),
+                mto.quantity::TEXT
+            )
+        )
+        FROM ma_tx_out mto
+        JOIN multi_asset ma ON (mto.ident = ma.id)
+        WHERE mto.tx_out_id = tx_out.id
+    )::jsonb,
+    jsonb_build_array(json_build_object('lovelace',tx_out.value::TEXT)::jsonb)
+) AS "assets",
+ENCODE(s.bytes, 'hex') as "script"
+FROM tx_out
+LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = tx_out.id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
+LEFT JOIN tx ON tx.id = tx_out.tx_id
+LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
+LEFT JOIN block on block.id = tx.block_id
+LEFT JOIN script s ON s.id = tx_out.reference_script_id
+LEFT JOIN tx_in txi ON tx_out.tx_id = txi.tx_out_id AND tx_out.index = txi.tx_out_index
+WHERE tx_out.payment_cred = %(address)b AND txi.tx_in_id IS NULL"""
+
+    if asset is not None:
+        SCRIPT_SELECTOR += """
+AND policy = %(policy)b AND name = %(name)b
+"""
+
+    SCRIPT_SELECTOR += """
+AND tx_out.inline_datum_id IS NOT NULL
+ORDER BY block.time DESC
+LIMIT 1
+"""
+    r = db_query(SCRIPT_SELECTOR, kwargs)
 
     if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
         r[0]["assets"] = None
@@ -424,6 +534,7 @@ OFFSET %(offset)s"""
 def get_order_utxos_by_block_or_tx(
     stake_addresses: list[str],
     out_tx_hash: list[str] | None = None,
+    in_tx_hash: list[str] | None = None,
     block_no: int | None = None,
     after_block: int | None = None,
     limit: int = 1000,
@@ -518,6 +629,9 @@ COALESCE(
     if out_tx_hash is not None:
         utxo_selector += """
 	AND tx_in_ref.hash = ANY(%(out_tx_hash)b)"""
+    elif in_tx_hash is not None:
+        utxo_selector += """
+	AND tx.hash = ANY(%(in_tx_hash)b)"""
 
     if block_no is not None:
         utxo_selector += """
@@ -568,6 +682,9 @@ OFFSET %(offset)s"""
             "out_tx_hash": None
             if out_tx_hash is None
             else [bytes.fromhex(h) for h in out_tx_hash],
+            "in_tx_hash": None
+            if in_tx_hash is None
+            else [bytes.fromhex(h) for h in in_tx_hash],
         },
     )
 
@@ -716,3 +833,45 @@ OFFSET %(offset)s"""
     )
 
     return SwapTransactionList.model_validate(r)
+
+
+def get_axo_target(assets: Assets, block_time: datetime | None = None) -> str | None:
+    SELECTOR = """
+SELECT DISTINCT txo.address, block.time
+FROM (
+	SELECT tx.id, tx.block_id
+	FROM tx_out txo
+	LEFT JOIN tx ON tx.id = txo.tx_id
+	WHERE txo.payment_cred = DECODE('55ff0e63efa0694e8065122c552e80c7b51768b7f20917af25752a7c', 'hex')
+) as tx
+LEFT JOIN block ON block.id = tx.block_id
+LEFT JOIN tx_out txo ON tx.id = txo.tx_id
+LEFT JOIN ma_tx_out mtxo on txo.id = mtxo.tx_out_id
+LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
+WHERE ma.policy = %(policy)b AND ma.name = %(name)b
+AND txo.payment_cred != DECODE('55ff0e63efa0694e8065122c552e80c7b51768b7f20917af25752a7c', 'hex')"""
+
+    if block_time is not None:
+        SELECTOR += """
+AND block.time <= %(block_time)s"""
+
+    SELECTOR += """
+ORDER BY block.time DESC"""
+
+    policy = bytes.fromhex(assets.unit()[:56])
+    name = bytes.fromhex(assets.unit()[56:])
+    r = db_query(
+        SELECTOR,
+        {
+            "policy": policy,
+            "name": name,
+            "block_time": None
+            if block_time is None
+            else block_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
+
+    if len(r) == 0:
+        return None
+
+    return r[0]["address"]
