@@ -1,17 +1,17 @@
 import pytest
 
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MinswapDJEDUSDMStableState
-from cardex import SundaeSwapV3CPPState
-from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.ob.ob_base import AbstractOrderBookState
-from cardex.dexs.core.errors import InvalidLPError
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
+from charli3_dendrite import MinswapDJEDiUSDStableState
+from charli3_dendrite import MinswapDJEDUSDCStableState
+from charli3_dendrite import MinswapDJEDUSDMStableState
+from charli3_dendrite import SundaeSwapV3CPPState
+from charli3_dendrite import WingRidersSSPState
+from charli3_dendrite.backend.dbsync import get_pool_utxos
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 MALFORMED_CBOR = {
     "fadbbeb0012ae3864927e523f73048b22fba71d8be6f6a1336561363d3ec0b71",

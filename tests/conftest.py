@@ -1,6 +1,6 @@
 import pytest
 
-from cardex.dexs.core.base import AbstractPairState
+from charli3_dendrite.dexs.core.base import AbstractPairState
 
 # This grabs all the DEXs
 subclass_walk = [AbstractPairState]

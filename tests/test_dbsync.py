@@ -1,19 +1,19 @@
 import pytest
 
-from cardex import MinswapCPPState
-from cardex import MinswapDJEDiUSDStableState
-from cardex import MinswapDJEDUSDCStableState
-from cardex import MinswapDJEDUSDMStableState
-from cardex import MinswapV2CPPState
-from cardex import SundaeSwapV3CPPState
-from cardex import WingRidersSSPState
-from cardex.backend.dbsync import get_cancel_utxos
-from cardex.backend.dbsync import get_historical_order_utxos
-from cardex.backend.dbsync import get_pool_in_tx
-from cardex.backend.dbsync import get_pool_utxos
-from cardex.backend.dbsync import last_block
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.ob.ob_base import AbstractOrderBookState
+from charli3_dendrite import MinswapCPPState
+from charli3_dendrite import MinswapDJEDiUSDStableState
+from charli3_dendrite import MinswapDJEDUSDCStableState
+from charli3_dendrite import MinswapDJEDUSDMStableState
+from charli3_dendrite import MinswapV2CPPState
+from charli3_dendrite import SundaeSwapV3CPPState
+from charli3_dendrite import WingRidersSSPState
+from charli3_dendrite.backend.dbsync import get_cancel_utxos
+from charli3_dendrite.backend.dbsync import get_historical_order_utxos
+from charli3_dendrite.backend.dbsync import get_pool_in_tx
+from charli3_dendrite.backend.dbsync import get_pool_utxos
+from charli3_dendrite.backend.dbsync import last_block
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 
 
 @pytest.mark.parametrize("n_blocks", range(1, 5))

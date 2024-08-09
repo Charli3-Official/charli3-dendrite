@@ -2,11 +2,11 @@ import pytest
 
 from pycardano import Address
 
-from cardex.backend.dbsync import get_historical_order_utxos
-from cardex.backend.dbsync import get_order_utxos_by_block_or_tx
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.models import SwapTransactionInfo
-from cardex.dexs.amm.amm_base import AbstractPairState
+from charli3_dendrite.backend.dbsync import get_historical_order_utxos
+from charli3_dendrite.backend.dbsync import get_order_utxos_by_block_or_tx
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.models import SwapTransactionInfo
+from charli3_dendrite.dexs.amm.amm_base import AbstractPairState
 
 
 def test_get_orders(dex: AbstractPairState, benchmark):
