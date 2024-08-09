@@ -17,12 +17,12 @@ from pycardano import UTxO
 from pycardano import Value
 from pycardano import VerificationKeyHash
 
-from charli3_dendrite.backend.dbsync import get_script_from_address
+from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.datums import PlutusPartAddress
 from charli3_dendrite.dataclasses.datums import PoolDatum
-from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
@@ -126,7 +126,7 @@ class SpectrumCancelRedeemer(PlutusData):
 class SpectrumCPPState(AbstractConstantProductPoolState):
     """The Spectrum DEX constant product pool state."""
 
-    fee: int
+    fee: int = 0
     _batcher = Assets(lovelace=1500000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
@@ -135,21 +135,17 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
     _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Spectrum"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="addresses",
-            selector=[
+            addresses=[
                 "addr1x8nz307k3sr60gu0e47cmajssy4fmld7u493a4xztjrll0aj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrswgxsta",
                 "addr1x94ec3t25egvhqy2n265xfhq882jxhkknurfe9ny4rl9k6dj764lvrxdayh2ux30fl0ktuh27csgmpevdu89jlxppvrst84slu",
             ],
@@ -160,13 +156,14 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return False
 
     @classmethod
-    @property
     def reference_utxo(cls) -> UTxO | None:
         if cls._reference_utxo is None:
-            script_bytes = bytes.fromhex(
-                get_script_from_address(cls._stake_address).script,
-            )
+            script_reference = get_backend().get_script_from_address(cls._stake_address)
 
+            if script_reference is None:
+                return None
+
+            script_bytes = bytes.fromhex(script_reference.script)
             script = cls.default_script_class()(script_bytes)
 
             cls._reference_utxo = UTxO(
@@ -194,7 +191,6 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[SpectrumOrderDatum]:
         return SpectrumOrderDatum
 
@@ -203,8 +199,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return PlutusV2Script
 
     @classmethod
-    @property
-    def pool_datum_class(self) -> type[SpectrumPoolDatum]:
+    def pool_datum_class(cls) -> type[SpectrumPoolDatum]:
         return SpectrumPoolDatum
 
     @property

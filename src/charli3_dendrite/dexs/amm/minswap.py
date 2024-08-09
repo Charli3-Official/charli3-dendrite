@@ -2,25 +2,24 @@
 
 from dataclasses import dataclass
 from hashlib import sha3_256
-from typing import Any
 from typing import ClassVar
 from typing import List
 from typing import Union
 
 from pycardano import Address
-from pycardano import VerificationKeyHash
+from pycardano import Datum
 from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
-from pycardano import RawPlutusData
+from pycardano import VerificationKeyHash
 
-from charli3_dendrite.dataclasses.datums import _PlutusConstrWrapper
 from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.datums import PlutusNone
-from charli3_dendrite.dataclasses.datums import ReceiverDatum
 from charli3_dendrite.dataclasses.datums import PoolDatum
-from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import ReceiverDatum
+from charli3_dendrite.dataclasses.datums import _PlutusConstrWrapper
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
@@ -257,15 +256,13 @@ class MinswapOrderDatum(OrderDatum):
         """The order type."""
         if isinstance(self.step, (SwapExactIn, SwapExactOut, StableSwapExactIn)):
             return OrderType.swap
-        elif isinstance(self.step, (Deposit, StableSwapDeposit)):
+        elif isinstance(self.step, (Deposit, StableSwapDeposit, ZapIn)):
             return OrderType.deposit
         elif isinstance(
             self.step,
             (Withdraw, StableSwapWithdraw, StableSwapWithdrawOneCoin),
         ):
             return OrderType.withdraw
-        elif isinstance(self.step, ZapIn):
-            return OrderType.zap_in
 
 
 @dataclass
@@ -367,7 +364,7 @@ class DepositV2(PlutusData):
     """DepositV2 order datum."""
 
     CONSTR_ID = 4
-    deposit_amount_option: RawPlutusData
+    deposit_amount_option: Datum
     minimum_lp: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -377,7 +374,7 @@ class WithdrawV2(PlutusData):
     """WithdrawV2 order datum."""
 
     CONSTR_ID = 5
-    withdrawal_amount_option: RawPlutusData
+    withdrawal_amount_option: Datum
     minimum_asset_a: int
     minimum_asset_b: int
     killable: Union[BoolTrue, BoolFalse]
@@ -389,7 +386,7 @@ class ZapOutV2(PlutusData):
 
     CONSTR_ID = 6
     a_to_b_direction: Union[BoolTrue, BoolFalse]
-    withdrawal_amount_option: RawPlutusData
+    withdrawal_amount_option: Datum
     minimum_receive: int
     killable: Union[BoolTrue, BoolFalse]
 
@@ -413,7 +410,7 @@ class WithdrawImbalanceV2(PlutusData):
     """WithdrawImbalanceV2 order datum."""
 
     CONSTR_ID = 8
-    withdrawal_amount_optino: RawPlutusData
+    withdrawal_amount_optino: Datum
     ratio_asset_a: int
     ratio_asset_b: int
     minimum_asset_a: int
@@ -425,7 +422,7 @@ class SwapMultiRoutingV2(PlutusData):
     """SwapMultiRoutingV2 order datum."""
 
     CONSTR_ID = 9
-    routings: List[RawPlutusData]
+    routings: List[Datum]
     swap_amount_option: Union[SAOSpecificAmount, SAOAll]
     minimum_receive: int
 
@@ -489,11 +486,15 @@ class MinswapV2OrderDatum(OrderDatum):
     owner: Union[OAMMint, OAMSignature, OAMSpend, OAMWithdraw]
     refund_address: PlutusFullAddress
     refund_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+        SundaeV3PlutusNone,
+        SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatum,
     ]
     receiver_address: PlutusFullAddress
     receiver_datum_hash: Union[
-        SundaeV3PlutusNone, SundaeV3ReceiverDatumHash, SundaeV3ReceiverInlineDatum
+        SundaeV3PlutusNone,
+        SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatum,
     ]
     lp_asset: AssetClass
     step: Union[
@@ -547,9 +548,9 @@ class MinswapV2OrderDatum(OrderDatum):
             Assets(
                 **{
                     "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"
-                    + pool_name: 0
-                }
-            )
+                    + pool_name: 0,
+                },
+            ),
         )
 
         return cls(
@@ -611,7 +612,7 @@ class MinswapV2OrderDatum(OrderDatum):
             ),
         ):
             return OrderType.swap
-        elif isinstance(self.step, DepositV2, DonationV2):
+        elif isinstance(self.step, (DepositV2, DonationV2)):
             return OrderType.deposit
         elif isinstance(self.step, (WithdrawV2, ZapOutV2, WithdrawImbalanceV2)):
             return OrderType.withdraw
@@ -804,21 +805,18 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "Minswap"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [s.encode() for s in self._stake_address]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1w8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxzgusf9xw"],
+            assets=[
                 "13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f4d494e53574150",
             ],
         )
@@ -832,17 +830,14 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         return self._stake_address[0]
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[MinswapOrderDatum]:
         return MinswapOrderDatum
 
     @classmethod
-    @property
     def script_class(self) -> type[MinswapOrderDatum]:
         return PlutusV1Script
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapPoolDatum]:
         return MinswapPoolDatum
 
@@ -870,17 +865,14 @@ class MinswapCPPState(AbstractConstantProductPoolState):
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return ["0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1"]
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str]:
         return ["e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return ["13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f"]
 
@@ -898,21 +890,18 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
     ]
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "MinswapV2"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [s.encode() for s in self._stake_address]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1w84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau6ca7j5v4"],
+            assets=[
                 "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350",
             ],
         )
@@ -926,17 +915,14 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         return self._stake_address[0]
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[MinswapV2OrderDatum]:
         return MinswapV2OrderDatum
 
     @classmethod
-    @property
     def script_class(self) -> type[PlutusV2Script]:
         return PlutusV2Script
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapV2PoolDatum]:
         return MinswapV2PoolDatum
 
@@ -963,18 +949,11 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
         """A unique identifier for the pool."""
         return self.lp_tokens.unit()
 
-    # @classmethod
-    # @property
-    # def pool_policy(cls) -> list[str]:
-    #     return ["0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1"]
-
     @classmethod
-    @property
     def lp_policy(cls) -> list[str]:
         return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str]:
         return ["f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350"]
 
@@ -1004,7 +983,6 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     ]
 
     @classmethod
-    @property
     def order_datum_class(cls) -> type[MinswapStableOrderDatum]:
         return MinswapStableOrderDatum
 
@@ -1044,7 +1022,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         super().post_init(values)
         assets = values["assets"]
 
-        datum = cls.pool_datum_class.from_cbor(values["datum_cbor"])
+        datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
 
         assets.root[assets.unit()] = datum.balances[0]
         assets.root[assets.unit(1)] = datum.balances[1]
@@ -1056,17 +1034,15 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         return self.pool_datum.amp
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wy7kkcpuf39tusnnyga5t2zcul65dwx9yqzg7sep3cjscesx2q5m5"],
+            assets=[
                 "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
             ],
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDiUSDStablePoolDatum]:
         return MinswapDJEDiUSDStablePoolDatum
 
@@ -1076,19 +1052,16 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
         return self.pool_nft.unit()
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "5d4b6afd3344adcf37ccef5558bb87f522874578c32f17160512e398444a45442d695553442d534c50",
         ]
 
     @classmethod
-    @property
     def lp_policy(cls) -> list[str] | None:
         return None
 
     @classmethod
-    @property
     def dex_policy(cls) -> list[str] | None:
         return None
 
@@ -1105,22 +1078,19 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wx8d45xlfrlxd7tctve8xgdtk59j849n00zz2pgyvv47t8sxa6t53"],
+            assets=[
                 "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
             ],
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDCStablePoolDatum]:
         return MinswapDJEDUSDCStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "d97fa91daaf63559a253970365fb219dc4364c028e5fe0606cdbfff9555344432d444a45442d534c50",
@@ -1135,22 +1105,19 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
     ]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=[
+            addresses=["addr1wxxdvtj6y4fut4tmu796qpvy2xujtd836yg69ahat3e6jjcelrf94"],
+            assets=[
                 "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",
             ],
         )
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[MinswapDJEDUSDMStablePoolDatum]:
         return MinswapDJEDUSDMStablePoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> list[str]:
         return [
             "07b0869ed7488657e24ac9b27b3f0fb4f76757f444197b2a38a15c3c444a45442d5553444d2d534c50",

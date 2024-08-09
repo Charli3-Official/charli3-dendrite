@@ -1,8 +1,15 @@
+"""Module providing types and state classes for AMM pools."""
+from typing import ClassVar
+
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 
+N_COINS = 2
+
 
 class AbstractConstantProductPoolState(AbstractPoolState):
+    """Represents the state of a constant product automated market maker (AMM) pool."""
+
     def get_amount_out(
         self,
         asset: Assets,
@@ -11,17 +18,21 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         """Get the output asset amount given an input asset amount.
 
         Args:
-            asset: An asset with a defined quantity.
+            asset (Assets): An asset with a defined quantity.
+            precise (bool): Whether to return precise calculations.
 
         Returns:
             A tuple where the first value is the estimated asset returned from the swap
                 and the second value is the price impact ratio.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            error_msg = "Asset should only have one token."
+            raise ValueError(error_msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            error_msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(error_msg)
 
         if asset.unit() == self.unit_a:
             reserve_in, reserve_out = self.reserve_a, self.reserve_b
@@ -31,12 +42,13 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             unit_out = self.unit_a
 
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, int):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         # Calculate the amount out
         fee_modifier = 10000 - volume_fee
@@ -44,7 +56,7 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         denominator: int = asset.quantity() * fee_modifier + reserve_in * 10000
         amount_out = Assets(**{unit_out: numerator // denominator})
         if not precise:
-            amount_out.root[unit_out] = numerator / denominator
+            amount_out.root[unit_out] = numerator // denominator
 
         if amount_out.quantity() == 0:
             return amount_out, 0
@@ -67,16 +79,21 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         """Get the input asset amount given a desired output asset amount.
 
         Args:
-            asset: An asset with a defined quantity.
+            asset (Assets): An asset with a defined quantity.
+            precise (bool): Whether to return precise calculations.
 
         Returns:
             The estimated asset needed for input in the swap.
         """
-        assert len(asset) == 1, "Asset should only have one token."
-        assert asset.unit() in [
-            self.unit_a,
-            self.unit_b,
-        ], f"Asset {asset.unit} is invalid for pool {self.unit_a}-{self.unit_b}"
+        if len(asset) != 1:
+            error_msg = "Asset should only have one token."
+            raise ValueError(error_msg)
+        if asset.unit() not in [self.unit_a, self.unit_b]:
+            error_msg = (
+                f"Asset {asset.unit()} is invalid for pool {self.unit_a}-{self.unit_b}"
+            )
+            raise ValueError(error_msg)
+
         if asset.unit() == self.unit_b:
             reserve_in, reserve_out = self.reserve_a, self.reserve_b
             unit_out = self.unit_a
@@ -85,12 +102,13 @@ class AbstractConstantProductPoolState(AbstractPoolState):
             unit_out = self.unit_b
 
         volume_fee: int = 0
-        if isinstance(self.volume_fee, int):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_b:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, int):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_b:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         # Estimate the required input
         fee_modifier = 10000 - volume_fee
@@ -98,7 +116,7 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         denominator: int = (reserve_out - asset.quantity()) * fee_modifier
         amount_in = Assets(**{unit_out: numerator // denominator})
         if not precise:
-            amount_in.root[unit_out] = numerator / denominator
+            amount_in.root[unit_out] = numerator // denominator
 
         # Estimate the price impact
         price_numerator: int = (
@@ -112,7 +130,9 @@ class AbstractConstantProductPoolState(AbstractPoolState):
 
 
 class AbstractStableSwapPoolState(AbstractPoolState):
-    asset_mulitipliers: list[int] = [1, 1]
+    """Represents the state of a stable swap automated market maker (AMM) pool."""
+
+    asset_mulitipliers: ClassVar[list[int]] = [1, 1]
 
     @property
     def reserve_a(self) -> int:
@@ -125,10 +145,11 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         return self.assets.quantity(1) * self.asset_mulitipliers[1]
 
     @property
-    def amp(self) -> Assets:
+    def amp(self) -> int:
+        """Amplification coefficient used in the stable swap algorithm."""
         return 75
 
-    def _get_ann(self):
+    def _get_ann(self) -> int:
         """The modified amp value.
 
         This is the derived amp value (ann) from the original stableswap paper. This is
@@ -136,54 +157,51 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         exponent. The alternative version is provided in the
         AbstractCommonStableSwapPoolState class. WingRiders uses this version.
         """
-        N_COINS = 2
         return self.amp * N_COINS**N_COINS
 
-    def _get_D(self) -> float:
+    def _get_d(self) -> float:
         """Regression to learn the stability constant."""
         # TODO: Expand this to operate on pools with more than one stable
-        N_COINS = 2
-        Ann = self._get_ann()
-        S = self.reserve_a + self.reserve_b
-        if S == 0:
+        ann = self._get_ann()
+        s = self.reserve_a + self.reserve_b
+        if s == 0:
             return 0
 
         # Iterate until the change in value is <1 unit.
-        D = S
-        for i in range(256):
-            D_P = D**3 / (N_COINS**N_COINS * self.reserve_a * self.reserve_b)
-            D_prev = D
-            D = D * (Ann * S + D_P * N_COINS) / ((Ann - 1) * D + (N_COINS + 1) * D_P)
+        d = s
+        for _ in range(256):
+            d_p = d**3 / (N_COINS**N_COINS * self.reserve_a * self.reserve_b)
+            d_prev = d
+            d = d * (ann * s + d_p * N_COINS) / ((ann - 1) * d + (N_COINS + 1) * d_p)
 
-            if abs(D - D_prev) < 1:
+            if abs(d - d_prev) < 1:
                 break
 
-        return D
+        return d
 
     def _get_y(
         self,
         in_assets: Assets,
         out_unit: str,
         precise: bool = True,
-        get_input=False,
-    ):
+        get_input: bool = False,
+    ) -> Assets:
         """Calculate the output amount using a regression."""
-        N_COINS = 2
-        Ann = self._get_ann()
-        D = self._get_D()
+        ann = self._get_ann()
+        d = self._get_d()
 
-        if get_input:
-            subtract = -1
-        else:
-            subtract = 1
+        subtract = -1 if get_input else 1
 
         # Make sure only one input supplied
         if len(in_assets) > 1:
-            raise ValueError("Only one input asset allowed.")
-        elif in_assets.unit() not in [self.unit_a, self.unit_b]:
-            raise ValueError("Invalid input token.")
-        elif out_unit not in [self.unit_a, self.unit_b]:
-            raise ValueError("Invalid output token.")
+            error_msg = "Only one input asset allowed."
+            raise ValueError(error_msg)
+        if in_assets.unit() not in [self.unit_a, self.unit_b]:
+            error_msg = "Invalid input token."
+            raise ValueError(error_msg)
+        if out_unit not in [self.unit_a, self.unit_b]:
+            error_msg = "Invalid output token."
+            raise ValueError(error_msg)
 
         in_quantity = in_assets.quantity()
         if in_assets.unit() == self.unit_a:
@@ -197,15 +215,15 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             )
             out_multiplier = self.asset_mulitipliers[0]
 
-        S = in_reserve
-        c = D**3 / (N_COINS**2 * Ann * in_reserve)
-        b = S + D / Ann
+        s = in_reserve
+        c = d**3 / (N_COINS**2 * ann * in_reserve)
+        b = s + d / ann
         out_prev = 0
-        out = D
+        out = d
 
-        for i in range(256):
-            out_prev = out
-            out = (out**2 + c) / (2 * out + b - D)
+        for _ in range(256):
+            out_prev = int(out)
+            out = (out**2 + c) / (2 * out + b - d)
 
             if abs(out - out_prev) < 1:
                 break
@@ -213,7 +231,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out /= out_multiplier
         out_assets = Assets(**{out_unit: int(out)})
         if not precise:
-            out_assets.root[out_unit] = out
+            out_assets.root[out_unit] = int(out)
 
         return out_assets
 
@@ -221,15 +239,37 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         self,
         asset: Assets,
         precise: bool = True,
-        fee_on_input=True,
+        fee_on_input: bool = True,
     ) -> tuple[Assets, float]:
+        """Calculate the amount of assets received when swapping a given input amount.
+
+        This function computes the output amount for a swap operation in the
+        stable swap pool, taking into account the volume fee and precision settings.
+
+        Args:
+            asset (Assets): The input asset amount for the swap.
+            precise (bool): If True, returns precise integer output. Default True.
+            fee_on_input (bool): If True, applies the fee to the input amount.
+                                        If False, applies the fee to the output amount.
+                                        Defaults to True.
+
+        Returns:
+            tuple[Assets, float]: A tuple containing:
+                - The output asset amount after the swap.
+                - A float value (always 0 in this implementation).
+
+        Raises:
+            ValueError: If the input asset is invalid or if multiple input
+              assets are provided.
+        """
         volume_fee: int = 0
-        if isinstance(self.volume_fee, (int, float)):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, (int, float)):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         if fee_on_input:
             in_asset = Assets(
@@ -249,7 +289,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             else self.reserve_a / self.asset_mulitipliers[0]
         )
 
-        out_asset.root[out_asset.unit()] = out_reserve - out_asset.quantity()
+        out_asset.root[out_asset.unit()] = int(out_reserve - out_asset.quantity())
         if not fee_on_input:
             out_asset.root[out_asset.unit()] = int(
                 out_asset.quantity() * (10000 - volume_fee) / 10000,
@@ -263,15 +303,38 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         self,
         asset: Assets,
         precise: bool = True,
-        fee_on_input=True,
+        fee_on_input: bool = True,
     ) -> tuple[Assets, float]:
+        """Calculate the amount of assets required as input to receive a given output.
+
+        This function computes the input amount needed for a swap operation in the
+        stable swap pool to achieve a desired output, taking into account the
+        volume fee and precision settings.
+
+        Args:
+            asset (Assets): The desired output asset amount for the swap.
+            precise (bool): If True, returns precise integer input. Defaults to True.
+            fee_on_input (bool): If True, applies the fee to the calculated input.
+                                        If False, applies the fee to the given output.
+                                        Defaults to True.
+
+        Returns:
+            tuple[Assets, float]: A tuple containing:
+                - The input asset amount required for the swap.
+                - A float value (always 0 in this implementation).
+
+        Raises:
+            ValueError: If the output asset is invalid or if multiple output
+            assets are provided.
+        """
         volume_fee: int = 0
-        if isinstance(self.volume_fee, (int, float)):
-            volume_fee = self.volume_fee
-        elif asset.unit() == self.unit_a:
-            volume_fee = self.volume_fee[0]
-        else:
-            volume_fee = self.volume_fee[1]
+        if self.volume_fee is not None:
+            if isinstance(self.volume_fee, (int, float)):
+                volume_fee = self.volume_fee
+            elif asset.unit() == self.unit_a:
+                volume_fee = self.volume_fee[0]
+            else:
+                volume_fee = self.volume_fee[1]
 
         if not fee_on_input:
             out_asset = Assets(
@@ -290,7 +353,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             if in_unit == self.unit_b
             else (self.reserve_a / self.asset_mulitipliers[0])
         )
-        in_asset.root[in_asset.unit()] = in_asset.quantity() - in_reserve
+        in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
         if fee_on_input:
             in_asset.root[in_asset.unit()] = int(
                 in_asset.quantity() * 10000 / (10000 - volume_fee),
@@ -307,20 +370,57 @@ class AbstractCommonStableSwapPoolState(AbstractStableSwapPoolState):
     difference is the
     """
 
-    def _get_ann(self):
+    def _get_ann(self) -> int:
         """The modified amp value.
 
         This is the ann value in the common stableswap variant.
         """
-        N_COINS = 2
         return self.amp * N_COINS
 
 
 class AbstractConstantLiquidityPoolState(AbstractPoolState):
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
-        raise NotImplementedError("CLPP amount out is not yet implemented.")
-        return out_asset, 0
+    """Represents the state of a constant liquidity pool automated market maker (AMM).
 
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
-        raise NotImplementedError("CLPP amount out is not yet implemented.")
-        return out_asset, 0
+    This class serves as a base for constant liquidity pool implementations, providing
+    methods to calculate the input and output asset amounts for swaps.
+    """
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Calculate the output amount for a given input in a constant liquidity pool.
+
+        Args:
+            asset (Assets): The input asset amount for the swap.
+            precise (bool): If True: the output rounded to the nearest integer.
+
+        Returns:
+            tuple[Assets, float]: Tuple containing the output asset and float value.
+
+        Raises:
+            NotImplementedError: This method is not implemented in the base class.
+        """
+        error_msg = "CLPP amount out is not yet implemented."
+        raise NotImplementedError(error_msg)
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Calculate input amount needed for desired output in constant liquidity pool.
+
+        Args:
+            asset (Assets): The desired output asset amount for the swap.
+            precise (bool): If True: the output rounded to the nearest integer.
+
+        Returns:
+            tuple[Assets, float]: Tuple containing required input asset and float value.
+
+        Raises:
+            NotImplementedError: This method is not implemented in the base class.
+        """
+        error_msg = "CLPP amount in is not yet implemented."
+        raise NotImplementedError(error_msg)

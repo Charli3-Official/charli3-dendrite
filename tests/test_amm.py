@@ -1,11 +1,14 @@
+import time
+
 import pytest
 
+from charli3_dendrite.backend import get_backend, set_backend
 from charli3_dendrite import MinswapDJEDiUSDStableState
 from charli3_dendrite import MinswapDJEDUSDCStableState
 from charli3_dendrite import MinswapDJEDUSDMStableState
+from charli3_dendrite import MinswapV2CPPState
 from charli3_dendrite import SundaeSwapV3CPPState
 from charli3_dendrite import WingRidersSSPState
-from charli3_dendrite.backend.dbsync import get_pool_utxos
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from charli3_dendrite.dexs.core.errors import InvalidLPError
@@ -24,31 +27,39 @@ MALFORMED_CBOR = {
 }
 
 
-def test_pools_script_version(dex: AbstractPoolState, subtests):
+def test_get_pool_script_version(dex: AbstractPoolState, benchmark, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
-    result = get_pool_utxos(limit=1, historical=False, **selector.to_dict())
+    selector = dex.pool_selector()
+    result = benchmark(
+        backend.get_pool_utxos,
+        limit=1,
+        historical=False,
+        **selector.model_dump(),
+    )
+    if dex.dex() in ["Spectrum"] or dex in [
+        MinswapDJEDiUSDStableState,
+        MinswapDJEDUSDCStableState,
+        MinswapDJEDUSDMStableState,
+        SundaeSwapV3CPPState,
+        MinswapV2CPPState,
+    ]:
+        assert result[0].plutus_v2
+    else:
+        assert not result[0].plutus_v2
 
-    counts = 0
-    for pool in result:
-        try:
-            dex.model_validate(pool.model_dump())
-            counts += 1
-        except (InvalidLPError, NoAssetsError, InvalidPoolError):
-            pass
-        except:
-            raise
 
-
-def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests):
+def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests, backend):
     if issubclass(dex, AbstractOrderBookState):
         return
 
-    selector = dex.pool_selector
+    set_backend(backend)
+    selector = dex.pool_selector()
     limit = 20000 if run_slow else 100
-    result = get_pool_utxos(limit=limit, historical=False, **selector.to_dict())
+    result = get_backend().get_pool_utxos(
+        limit=limit, historical=False, **selector.model_dump()
+    )
 
     counts = 0
     for pool in result:

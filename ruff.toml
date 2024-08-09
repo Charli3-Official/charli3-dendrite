@@ -14,7 +14,6 @@ select = [
     "A",   # flake8-builtins
     "COM", # flake8-commas
     "C4",  # flake8-comprehensions
-    "EM",  # flake8-errmsg
     "INP", # flake8-no-pep420
     "T20", # flake8-print
     "PYI", # flake8-pyi, type-hinting stub files
@@ -30,7 +29,7 @@ select = [
     "NPY", # NumPy-specific rules
     "RUF", # Ruff-specific rules
 ]
-ignore = ["ANN101", "ANN102", "UP006"]
+ignore = ["ANN101", "ANN102", "UP006", "ARG002"]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 target-version = "py39" # Assume Python 3.9.
 extend-exclude = ["tests", "examples"]

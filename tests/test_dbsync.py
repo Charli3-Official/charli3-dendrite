@@ -1,25 +1,25 @@
 import pytest
-
-from charli3_dendrite import MinswapCPPState
-from charli3_dendrite import MinswapDJEDiUSDStableState
-from charli3_dendrite import MinswapDJEDUSDCStableState
-from charli3_dendrite import MinswapDJEDUSDMStableState
-from charli3_dendrite import MinswapV2CPPState
-from charli3_dendrite import SundaeSwapV3CPPState
-from charli3_dendrite import WingRidersSSPState
-from charli3_dendrite.backend.dbsync import get_cancel_utxos
-from charli3_dendrite.backend.dbsync import get_historical_order_utxos
-from charli3_dendrite.backend.dbsync import get_pool_in_tx
-from charli3_dendrite.backend.dbsync import get_pool_utxos
-from charli3_dendrite.backend.dbsync import last_block
+from charli3_dendrite.backend import set_backend, get_backend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite import (
+    MinswapCPPState,
+    MinswapDJEDiUSDStableState,
+    MinswapDJEDUSDCStableState,
+    MinswapDJEDUSDMStableState,
+    MinswapV2CPPState,
+    SundaeSwapV3CPPState,
+    WingRidersSSPState,
+)
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
+
+# Set up the backend for all tests
+set_backend(DbsyncBackend())
 
 
 @pytest.mark.parametrize("n_blocks", range(1, 5))
 def test_last_blocks(n_blocks: int):
-    result = last_block(n_blocks)
-
+    result = get_backend().last_block(n_blocks)
     assert len(result) == n_blocks
 
 
@@ -28,81 +28,5 @@ def test_last_blocks(n_blocks: int):
     range(1, 14, 2),
     ids=[f"blocks={2**n}" for n in range(1, 14, 2)],
 )
-def test_last_blocks(n_blocks: int, benchmark):
-    result = benchmark(last_block, 2**n_blocks)
-
-
-def test_get_pool_utxos(dex: AbstractPoolState, run_slow: bool, benchmark):
-    if issubclass(dex, AbstractOrderBookState):
-        return
-
-    selector = dex.pool_selector
-    limit = 20000 if run_slow else 100
-    result = benchmark(
-        get_pool_utxos,
-        limit=limit,
-        historical=False,
-        **selector.to_dict(),
-    )
-
-    assert len(result) < 20000
-    if dex in [
-        MinswapDJEDiUSDStableState,
-        MinswapDJEDUSDCStableState,
-        MinswapDJEDUSDMStableState,
-    ]:
-        assert len(result) == 1
-    elif dex == WingRidersSSPState:
-        assert len(result) == 3
-    elif dex == SundaeSwapV3CPPState:
-        assert len(result) > 35
-    else:
-        assert len(result) > 40
-
-
-def test_get_pool_script_version(dex: AbstractPoolState, benchmark):
-    if issubclass(dex, AbstractOrderBookState):
-        return
-
-    selector = dex.pool_selector
-    result = benchmark(
-        get_pool_utxos,
-        limit=1,
-        historical=False,
-        **selector.to_dict(),
-    )
-    if dex.dex in ["Spectrum"] or dex in [
-        MinswapDJEDiUSDStableState,
-        MinswapDJEDUSDCStableState,
-        MinswapDJEDUSDMStableState,
-        SundaeSwapV3CPPState,
-        MinswapV2CPPState,
-    ]:
-        assert result[0].plutus_v2
-    else:
-        assert not result[0].plutus_v2
-
-
-def test_get_orders(dex: AbstractPoolState, run_slow: bool, benchmark):
-    if issubclass(dex, AbstractOrderBookState):
-        return
-
-    limit = 10 if run_slow else 1000
-
-    order_selector = dex.order_selector
-    result = benchmark(
-        get_historical_order_utxos,
-        stake_addresses=order_selector,
-        limit=limit,
-    )
-
-
-@pytest.mark.parametrize(
-    "tx_hash",
-    ["ec77a0fcbbe03e3ab04f609dc95eb731334c8508a2c03b00c31c8de89688e04b"],
-)
-def test_get_pool_in_tx(tx_hash):
-    selector = MinswapCPPState.pool_selector
-    tx = get_pool_in_tx(tx_hash=tx_hash, **selector.to_dict())
-
-    assert len(tx) > 0
+def test_last_blocks_benchmark(n_blocks: int, benchmark):
+    result = benchmark(get_backend().last_block, 2**n_blocks)

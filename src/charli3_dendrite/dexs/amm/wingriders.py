@@ -10,8 +10,8 @@ from pycardano import Address
 from pycardano import PlutusData
 
 from charli3_dendrite.dataclasses.datums import AssetClass
-from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.datums import PoolDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
@@ -281,21 +281,21 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     )
 
     @classmethod
-    @property
     def dex(cls) -> str:
         return "WingRiders"
 
     @classmethod
-    @property
     def order_selector(self) -> list[str]:
         return [self._stake_address.encode()]
 
     @classmethod
-    @property
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            selector_type="assets",
-            selector=cls.dex_policy,
+            addresses=[
+                "addr1w8nvjzjeydcn4atcd93aac8allvrpjn7pjr2qsweukpnayghhwcpj",
+                "addr1wxvx34v0hlxzk9x0clv7as9hvhn7dlzwj5xfcf6g4n5uucg4tkd7w",
+            ],
+            assets=cls.dex_policy(),
         )
 
     @property
@@ -307,22 +307,18 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         return self._stake_address
 
     @classmethod
-    @property
     def order_datum_class(self) -> type[WingRidersOrderDatum]:
         return WingRidersOrderDatum
 
     @classmethod
-    @property
     def pool_datum_class(self) -> type[WingRidersPoolDatum]:
         return WingRidersPoolDatum
 
     @classmethod
-    @property
     def pool_policy(cls) -> str:
         return ["026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a570"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> str:
         return ["026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a5704c"]
 
@@ -402,11 +398,9 @@ class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):
     )
 
     @classmethod
-    @property
     def pool_policy(cls) -> str:
         return ["980e8c567670d34d4ec13a0c3b6de6199f260ae5dc9dc9e867bc5c93"]
 
     @classmethod
-    @property
     def dex_policy(cls) -> str:
         return ["980e8c567670d34d4ec13a0c3b6de6199f260ae5dc9dc9e867bc5c934c"]
