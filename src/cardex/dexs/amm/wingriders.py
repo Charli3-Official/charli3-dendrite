@@ -330,7 +330,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     @classmethod
     def skip_init(cls, values) -> bool:
         if "pool_nft" in values and "dex_nft" in values:
-            if cls.dex_policy[0] not in values["dex_nft"]:
+            if cls.dex_policy()[0] not in values["dex_nft"]:
                 raise NotAPoolError("Invalid DEX NFT")
             if len(values["assets"]) == 3:
                 # Send the ADA token to the end
