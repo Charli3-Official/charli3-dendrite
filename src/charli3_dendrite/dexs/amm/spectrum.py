@@ -17,18 +17,18 @@ from pycardano import UTxO
 from pycardano import Value
 from pycardano import VerificationKeyHash
 
-from cardex.backend import get_backend
-from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.datums import PlutusPartAddress
-from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.core.errors import InvalidLPError
-from cardex.dexs.core.errors import NotAPoolError
+from charli3_dendrite.backend import get_backend
+from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.datums import PlutusPartAddress
+from charli3_dendrite.dataclasses.datums import PoolDatum
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 
 @dataclass

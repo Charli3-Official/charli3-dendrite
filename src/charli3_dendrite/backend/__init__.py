@@ -1,7 +1,7 @@
-"""Backend Management Module for Cardex.
+"""Backend Management Module for Charli3 Dendrite.
 
 This module provides a centralized system for managing the backend used throughout
-the Cardex application. It includes functions to get and set the global backend,
+the Charli3 Dendrite application. It includes functions to get and set the global backend,
 as well as to set a default backend based on environment variables.
 
 The module uses a global variable to store the current backend instance, which
@@ -10,8 +10,8 @@ for easy switching between different backend implementations and provides a
 convenient way to set up a default backend.
 
 Typical usage:
-    from cardex.backends import get_backend, set_backend
-    from cardex.backend.custom_backend import CustomBackend
+    from charli3_dendrite.backends import get_backend, set_backend
+    from charli3_dendrite.backend.custom_backend import CustomBackend
 
     # Get the current backend (initializes a default if not set)
     backend = get_backend()
@@ -28,8 +28,8 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from cardex.backend.backend_base import AbstractBackend
-from cardex.backend.dbsync import DbsyncBackend
+from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
 
 # Load environment variables from .env file
 load_dotenv()

@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 from pycardano import Value
 
-from cardex.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import Assets
 
 ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 

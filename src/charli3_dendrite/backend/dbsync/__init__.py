@@ -12,15 +12,15 @@ from psycopg.rows import dict_row
 from psycopg_pool import PoolTimeout
 from pycardano import Address
 
-from cardex.backend.backend_base import AbstractBackend
-from cardex.backend.dbsync.models import OrderSelector
-from cardex.backend.dbsync.models import PoolSelector
-from cardex.backend.dbsync.models import UTxOSelector
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import BlockList
-from cardex.dataclasses.models import PoolStateList
-from cardex.dataclasses.models import ScriptReference
-from cardex.dataclasses.models import SwapTransactionList
+from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.dbsync.models import OrderSelector
+from charli3_dendrite.backend.dbsync.models import PoolSelector
+from charli3_dendrite.backend.dbsync.models import UTxOSelector
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import BlockList
+from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import ScriptReference
+from charli3_dendrite.dataclasses.models import SwapTransactionList
 
 load_dotenv()
 

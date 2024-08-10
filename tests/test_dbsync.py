@@ -1,7 +1,7 @@
 import pytest
-from cardex.backend import set_backend, get_backend
-from cardex.backend.dbsync import DbsyncBackend
-from cardex import (
+from charli3_dendrite.backend import set_backend, get_backend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite import (
     MinswapCPPState,
     MinswapDJEDiUSDStableState,
     MinswapDJEDUSDCStableState,
@@ -10,8 +10,8 @@ from cardex import (
     SundaeSwapV3CPPState,
     WingRidersSSPState,
 )
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.ob.ob_base import AbstractOrderBookState
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 
 # Set up the backend for all tests
 set_backend(DbsyncBackend())

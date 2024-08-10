@@ -2,7 +2,7 @@
 
 import requests
 
-from cardex.dataclasses.models import TokenInfo
+from charli3_dendrite.dataclasses.models import TokenInfo
 
 
 def get_token_from_registry(asset: str) -> TokenInfo | None:

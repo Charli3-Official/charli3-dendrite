@@ -11,13 +11,13 @@ from pycardano import Redeemer
 from pycardano import TransactionOutput
 from pycardano import UTxO
 
-from cardex.dataclasses.datums import CancelRedeemer
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dataclasses.models import PoolSelector
+from charli3_dendrite.dataclasses.datums import CancelRedeemer
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import PoolSelector
 
 
-class AbstractPairState(CardexBaseModel, ABC):
+class AbstractPairState(DendriteBaseModel, ABC):
     """Abstract base class representing the state of a pair."""
 
     assets: Assets

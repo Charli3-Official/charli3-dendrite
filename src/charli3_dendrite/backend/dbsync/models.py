@@ -1,10 +1,10 @@
 from abc import ABC
 from abc import abstractclassmethod
 
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dataclasses.models import PoolStateList
-from cardex.dataclasses.models import ScriptReference
-from cardex.dataclasses.models import SwapTransactionList
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import ScriptReference
+from charli3_dendrite.dataclasses.models import SwapTransactionList
 
 
 class AbstractDBSyncStructure(ABC):
@@ -14,7 +14,7 @@ class AbstractDBSyncStructure(ABC):
         raise NotImplementedError
 
     @abstractclassmethod
-    def parse(cls, data: dict) -> CardexBaseModel:
+    def parse(cls, data: dict) -> DendriteBaseModel:
         """Parse data returned from a dbsync query."""
         raise NotImplementedError
 
