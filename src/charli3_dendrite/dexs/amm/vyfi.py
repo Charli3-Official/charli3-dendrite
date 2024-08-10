@@ -28,9 +28,9 @@ from charli3_dendrite.utility import Assets
 class VyFiPoolDatum(PoolDatum):
     """TODO: Figure out what each of these numbers mean."""
 
-    a: int
-    b: int
-    c: int
+    token_a_fees: int
+    token_b_fees: int
+    lp_tokens: int
 
     def pool_pair(self) -> Assets | None:
         return None
@@ -328,3 +328,13 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         values["bar_fee"] = cls.pools[pool_nft.unit()].json_.feesSettings.barFee
 
         return pool_nft
+
+    @classmethod
+    def post_init(cls, values):
+        super().post_init(values)
+
+        assets = values["assets"]
+        datum = VyFiPoolDatum.from_cbor(values["datum_cbor"])
+
+        assets.root[assets.unit(0)] -= datum.token_a_fees
+        assets.root[assets.unit(1)] -= datum.token_b_fees
