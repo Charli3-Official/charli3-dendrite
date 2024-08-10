@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "cardex"
+name = "charli3_dendrite"
 version = "0.2.0-dev108"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
-packages = [{include = "cardex", from = "src"}]
+packages = [{include = "charli3_dendrite", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"

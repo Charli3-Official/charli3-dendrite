@@ -13,21 +13,21 @@ from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import VerificationKeyHash
 
-from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.datums import PlutusFullAddress
-from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import ReceiverDatum
-from cardex.dataclasses.datums import _PlutusConstrWrapper
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.amm.sundae import SundaeV3PlutusNone
-from cardex.dexs.amm.sundae import SundaeV3ReceiverDatumHash
-from cardex.dexs.amm.sundae import SundaeV3ReceiverInlineDatum
-from cardex.utility import Assets
+from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PlutusFullAddress
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.datums import PoolDatum
+from charli3_dendrite.dataclasses.datums import ReceiverDatum
+from charli3_dendrite.dataclasses.datums import _PlutusConstrWrapper
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractCommonStableSwapPoolState
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.amm.sundae import SundaeV3PlutusNone
+from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverDatumHash
+from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverInlineDatum
+from charli3_dendrite.utility import Assets
 
 
 @dataclass

@@ -9,13 +9,13 @@ from pycardano import PlutusData
 from pycardano import TransactionOutput
 from pydantic import model_validator
 
-from cardex.dataclasses.models import Assets
-from cardex.dexs.core.base import AbstractPairState
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import asset_to_value
-from cardex.utility import naturalize_assets
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dexs.core.base import AbstractPairState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.utility import asset_to_value
+from charli3_dendrite.utility import naturalize_assets
 
 ASSET_COUNT_ONE = 1
 ASSET_COUNT_TWO = 2

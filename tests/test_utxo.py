@@ -3,19 +3,19 @@ import time
 
 import pytest
 
-from cardex.backend import get_backend, set_backend
-from cardex import MinswapCPPState
-from cardex import MuesliSwapCPPState
-from cardex import SpectrumCPPState
-from cardex import WingRidersCPPState
+from charli3_dendrite.backend import get_backend, set_backend
+from charli3_dendrite import MinswapCPPState
+from charli3_dendrite import MuesliSwapCPPState
+from charli3_dendrite import SpectrumCPPState
+from charli3_dendrite import WingRidersCPPState
 
-from cardex.dataclasses.models import Assets
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.core.errors import InvalidLPError
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
-from cardex.dexs.ob.ob_base import AbstractOrderBookState
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from dotenv import load_dotenv
 from pycardano import Address
 from pycardano import BlockFrostChainContext

@@ -1,8 +1,8 @@
 import pytest
 
-from cardex.backend.backend_base import AbstractBackend
-from cardex.backend.dbsync import DbsyncBackend
-from cardex.dexs.core.base import AbstractPairState
+from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite.dexs.core.base import AbstractPairState
 
 # This grabs all the DEXs
 subclass_walk = [AbstractPairState]

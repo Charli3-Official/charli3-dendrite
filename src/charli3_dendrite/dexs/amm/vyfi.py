@@ -14,14 +14,14 @@ from pycardano import VerificationKeyHash
 from pydantic import BaseModel
 from pydantic import Field
 
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
-from cardex.utility import Assets
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PoolDatum
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.utility import Assets
 
 
 @dataclass

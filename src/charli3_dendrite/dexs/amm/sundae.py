@@ -13,22 +13,22 @@ from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import VerificationKeyHash
 
-from cardex.backend import get_backend
-from cardex.dataclasses.datums import AssetClass
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.datums import PlutusFullAddress
-from cardex.dataclasses.datums import PlutusNone
-from cardex.dataclasses.datums import PlutusPartAddress
-from cardex.dataclasses.datums import PlutusScriptAddress
-from cardex.dataclasses.datums import PoolDatum
-from cardex.dataclasses.datums import ReceiverDatum
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import OrderType
-from cardex.dataclasses.models import PoolSelector
-from cardex.dexs.amm.amm_types import AbstractConstantProductPoolState
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
+from charli3_dendrite.backend import get_backend
+from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PlutusFullAddress
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.datums import PlutusPartAddress
+from charli3_dendrite.dataclasses.datums import PlutusScriptAddress
+from charli3_dendrite.dataclasses.datums import PoolDatum
+from charli3_dendrite.dataclasses.datums import ReceiverDatum
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 
 @dataclass

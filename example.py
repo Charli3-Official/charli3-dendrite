@@ -7,15 +7,15 @@ from datetime import timedelta
 from typing import Any
 from typing import Dict
 
-from cardex import MinswapV2CPPState
-from cardex import SundaeSwapCPPState
-from cardex.backend import get_backend
-from cardex.backend import set_backend
-from cardex.backend.dbsync import DbsyncBackend
-from cardex.dexs.amm.amm_base import AbstractPoolState
-from cardex.dexs.core.errors import InvalidLPError
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
+from charli3_dendrite import MinswapV2CPPState
+from charli3_dendrite import SundaeSwapCPPState
+from charli3_dendrite.backend import get_backend
+from charli3_dendrite.backend import set_backend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.core.errors import InvalidLPError
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
 from pycardano import Address
 
 logging.basicConfig(
@@ -23,7 +23,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
 )
-logger = logging.getLogger("cardex")
+logger = logging.getLogger("charli3_dendrite")
 
 DEXS: list[type[AbstractPoolState]] = [
     SundaeSwapCPPState,

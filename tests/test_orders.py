@@ -3,10 +3,10 @@ import pytest
 from pycardano import Address
 from pycardano import DeserializeException
 
-from cardex.backend import get_backend, set_backend
-from cardex.dataclasses.datums import OrderDatum
-from cardex.dataclasses.models import SwapTransactionInfo
-from cardex.dexs.amm.amm_base import AbstractPairState
+from charli3_dendrite.backend import get_backend, set_backend
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.models import SwapTransactionInfo
+from charli3_dendrite.dexs.amm.amm_base import AbstractPairState
 
 
 def test_get_orders(dex: AbstractPairState, benchmark, backend):

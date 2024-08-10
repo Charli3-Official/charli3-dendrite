@@ -1,4 +1,5 @@
-"""Dataclasses for the different datums used in the Cardex project."""
+# noqa
+"""Dataclasses for the different datums used in the Charli3 Dendrite project."""
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -9,8 +10,8 @@ from pycardano import DatumHash
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
 
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import OrderType
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import OrderType
 
 
 @dataclass

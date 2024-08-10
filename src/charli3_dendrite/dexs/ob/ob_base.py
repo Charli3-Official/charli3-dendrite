@@ -9,13 +9,13 @@ from pycardano import PlutusData
 from pycardano import UTxO
 from pydantic import model_validator
 
-from cardex.dataclasses.models import Assets
-from cardex.dataclasses.models import BaseList
-from cardex.dataclasses.models import CardexBaseModel
-from cardex.dexs.core.base import AbstractPairState
-from cardex.dexs.core.errors import InvalidPoolError
-from cardex.dexs.core.errors import NoAssetsError
-from cardex.dexs.core.errors import NotAPoolError
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import BaseList
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dexs.core.base import AbstractPairState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NoAssetsError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 ASSET_COUNT_ONE = 1
 ASSET_COUNT_TWO = 2
@@ -295,7 +295,7 @@ class AbstractOrderState(AbstractPairState):
         return values
 
 
-class OrderBookOrder(CardexBaseModel):
+class OrderBookOrder(DendriteBaseModel):
     """Represents an order in the order book."""
 
     price: float
