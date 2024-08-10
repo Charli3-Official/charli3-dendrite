@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "charli3_dendrite"
-version = "0.2.0-dev116"
+version = "0.2.0-dev117"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
