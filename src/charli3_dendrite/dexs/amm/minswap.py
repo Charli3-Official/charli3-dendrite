@@ -252,17 +252,20 @@ class MinswapOrderDatum(OrderDatum):
         elif isinstance(self.step, ZapIn):
             return Assets({self.step.desired_coin.assets.unit(): self.step.minimum_lp})
 
-    def order_type(self) -> OrderType:
+    def order_type(self) -> OrderType | None:
         """The order type."""
+        order_type = None
         if isinstance(self.step, (SwapExactIn, SwapExactOut, StableSwapExactIn)):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.step, (Deposit, StableSwapDeposit, ZapIn)):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(
             self.step,
             (Withdraw, StableSwapWithdraw, StableSwapWithdrawOneCoin),
         ):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 @dataclass
@@ -598,8 +601,9 @@ class MinswapV2OrderDatum(OrderDatum):
         else:
             return Assets({})
 
-    def order_type(self) -> OrderType:
+    def order_type(self) -> OrderType | None:
         """The order type."""
+        order_type = None
         if isinstance(
             self.step,
             (
@@ -611,11 +615,13 @@ class MinswapV2OrderDatum(OrderDatum):
                 SwapMultiRoutingV2,
             ),
         ):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.step, (DepositV2, DonationV2)):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.step, (WithdrawV2, ZapOutV2, WithdrawImbalanceV2)):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 @dataclass

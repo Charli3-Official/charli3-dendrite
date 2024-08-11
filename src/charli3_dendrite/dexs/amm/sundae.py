@@ -218,14 +218,17 @@ class SundaeOrderDatum(OrderDatum):
         else:
             return Assets({})
 
-    def order_type(self) -> OrderType:
+    def order_type(self) -> OrderType | None:
         """Get the order type."""
+        order_type = None
         if isinstance(self.swap, SwapConfig):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.swap, DepositConfig):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.swap, WithdrawConfig):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 @dataclass
@@ -361,12 +364,15 @@ class SundaeV3OrderDatum(OrderDatum):
             return Assets({})
 
     def order_type(self) -> OrderType:
+        order_type = None
         if isinstance(self.swap, SwapV3Config):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.swap, DepositV3Config):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.swap, WithdrawV3Config):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 @dataclass

@@ -120,8 +120,14 @@ class GeniusYieldOrder(OrderDatum):
         asset = self.offered_asset.assets
         return asset
 
-    def order_type(self) -> OrderType:
-        return OrderType.swap
+    def order_type(self) -> OrderType | None:
+        order_type = None
+        if self.offered_original_amount == self.offered_amount:
+            order_type = OrderType.deposit
+        else:
+            order_type = OrderType.swap
+
+        return order_type
 
 
 @dataclass

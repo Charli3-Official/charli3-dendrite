@@ -167,13 +167,16 @@ class VyFiOrderDatum(OrderDatum):
                 },
             )
 
-    def order_type(self) -> OrderType:
+    def order_type(self) -> OrderType | None:
+        order_type = None
         if isinstance(self.order, (BtoA, AtoB, ZapInA, ZapInB)):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.order, Deposit):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.order, Withdraw):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 class VyFiTokenDefinition(BaseModel):
