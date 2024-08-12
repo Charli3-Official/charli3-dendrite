@@ -126,7 +126,7 @@ class AbstractPairState(DendriteBaseModel, ABC):
             return PlutusV2Script
         return PlutusV1Script
 
-    def swap_datum(  # noqa: PLR0913
+    def swap_datum(
         self,
         address_source: Address,
         in_assets: Assets,
@@ -139,7 +139,7 @@ class AbstractPairState(DendriteBaseModel, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def swap_utxo(  # noqa: PLR0913
+    def swap_utxo(
         self,
         address_source: Address,
         in_assets: Assets,
@@ -152,7 +152,7 @@ class AbstractPairState(DendriteBaseModel, ABC):
         raise NotImplementedError
 
     @property
-    def volume_fee(self) -> int | list[int] | None:
+    def volume_fee(self) -> int | float | list[int] | list[float] | None:
         """Swap fee of swap in basis points."""
         return self.fee
 

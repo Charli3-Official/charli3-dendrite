@@ -228,15 +228,16 @@ class WingRidersOrderDatum(OrderDatum):
         elif isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
             return Assets({})
 
-    def order_type(self) -> OrderType:
+    def order_type(self) -> OrderType | None:
+        order_type = None
         if isinstance(self.detail, WingRidersOrderDetail):
-            return OrderType.swap
+            order_type = OrderType.swap
         elif isinstance(self.detail, WingRidersDepositDetail):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.detail, WingRidersWithdrawDetail):
-            return OrderType.withdraw
-        if isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
-            return OrderType.withdraw
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 @dataclass
@@ -330,7 +331,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     @classmethod
     def skip_init(cls, values) -> bool:
         if "pool_nft" in values and "dex_nft" in values:
-            if cls.dex_policy[0] not in values["dex_nft"]:
+            if cls.dex_policy()[0] not in values["dex_nft"]:
                 raise NotAPoolError("Invalid DEX NFT")
             if len(values["assets"]) == 3:
                 # Send the ADA token to the end

@@ -82,7 +82,7 @@ def test_build_utxo(dex: AbstractPoolState, subtests, backend):
                     LQ_ASSETS if pool.unit_b == LQ_ASSETS.unit() else IUSD_ASSETS
                 )
 
-                if dex.dex not in ["GeniusYield"]:
+                if dex.dex() not in ["GeniusYield"]:
                     pool.swap_utxo(
                         address_source=ADDRESS,
                         in_assets=Assets(root={"lovelace": 1000000}),

@@ -28,9 +28,9 @@ from charli3_dendrite.utility import Assets
 class VyFiPoolDatum(PoolDatum):
     """TODO: Figure out what each of these numbers mean."""
 
-    a: int
-    b: int
-    c: int
+    token_a_fees: int
+    token_b_fees: int
+    lp_tokens: int
 
     def pool_pair(self) -> Assets | None:
         return None
@@ -167,15 +167,16 @@ class VyFiOrderDatum(OrderDatum):
                 },
             )
 
-    def order_type(self) -> OrderType:
-        if isinstance(self.order, (BtoA, AtoB)):
-            return OrderType.swap
+    def order_type(self) -> OrderType | None:
+        order_type = None
+        if isinstance(self.order, (BtoA, AtoB, ZapInA, ZapInB)):
+            order_type = OrderType.swap
         elif isinstance(self.order, Deposit):
-            return OrderType.deposit
+            order_type = OrderType.deposit
         elif isinstance(self.order, Withdraw):
-            return OrderType.withdraw
-        elif isinstance(self.order, (ZapInA, ZapInB)):
-            return OrderType.zap_in
+            order_type = OrderType.withdraw
+
+        return order_type
 
 
 class VyFiTokenDefinition(BaseModel):
@@ -330,3 +331,13 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         values["bar_fee"] = cls.pools[pool_nft.unit()].json_.feesSettings.barFee
 
         return pool_nft
+
+    @classmethod
+    def post_init(cls, values):
+        super().post_init(values)
+
+        assets = values["assets"]
+        datum = VyFiPoolDatum.from_cbor(values["datum_cbor"])
+
+        assets.root[assets.unit(0)] -= datum.token_a_fees
+        assets.root[assets.unit(1)] -= datum.token_b_fees
