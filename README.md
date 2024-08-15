@@ -22,9 +22,7 @@ Charli3 Dendrite is a powerful Python SDK designed for seamless interaction with
 - 🛠 Extensible Architecture: Easily add support for new DEXs and features
 
 
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
 # Using pip
@@ -46,38 +44,21 @@ Charli3 Dendrite currently supports the following Cardano DEXs:
 - GeniusYield
 - Axo
 
-## Upcoming DEXs
+### Not Yet Implemented
 
 - CardanoSwaps
 - Metadex
 - CSwap
-
-## Not Supported
-
 - TeddySwap
 - Cerra
 - SaturnSwap
 - Splash
 
 Each DEX is implemented as a separate module within the `charli3 dendrite.dexs.amm` package.
-## Core Components
-### AbstractPoolState
-The `AbstractPoolState` class in `amm_base.py` provides the base implementation for AMM (Automated Market Maker) pool states. It includes methods for:
 
-- Extracting pool information
-- Handling swap operations
-- Calculating prices and TVL (Total Value Locked)
 
-### AbstractPairState
-The `AbstractPairState` class in `base.py` defines the interface for all pair states (both AMM and orderbook-based). It includes abstract methods that must be implemented by specific DEX classes.
-### Assets
-The `Assets` class in `models.py` represents a collection of assets (tokens) and their quantities. It provides utility methods for working with asset collections, including addition and subtraction operations.
 ## Configuration
 Charli3 Dendrite can be configured using environment variables or a `.env` file. See `sample.env` for an example of the configuration options.
-
-### Data Provider Configuration
-
-Charli3 Dendrite supports multiple data providers to fetch on-chain data. Currently, it supports Blockfrost and DBSync, with plans to add Ogmios and Kupo in the future.
 
 #### Blockfrost Configuration
 
@@ -86,6 +67,7 @@ Blockfrost is the default data provider for Charli3 Dendrite. To use Blockfrost,
 PROJECT_ID="your-blockfrost-project-id"
 NETWORK="mainnet"  # or "testnet" for the Cardano testnet
 ```
+
 #### DBSync Configuration
 Charli3 Dendrite also supports using a DBSync instance as a data provider. To configure DBSync, set the following environment variables:
 ```bash
@@ -98,10 +80,57 @@ DBSYNC_PASS="your-dbsync-password"
 #### Future Plans: Ogmios and Kupo
 We are planning to add support for Ogmios and Kupo as additional data providers in future releases. These will offer alternative ways to interact with the Cardano blockchain and may provide performance improvements or additional features.
 Stay tuned for updates on the integration of these providers. Once implemented, they will be configurable in a similar manner to the existing providers.
-### Wallet Configuration
-Charli3 Dendrite supports wallet integration for performing transactions. You can configure a wallet using a mnemonic phrase:
-```bash
-WALLET_MNEMONIC="your wallet mnemonic phrase"
+
+## Use Cases 
+### Retrieving Orders and Pool Data on VyFi
+To retrieve all orders from the VyFi DEX, the global backend must first be configured. This configuration is achieved by invoking the `set_backend` function, which sets up the `AbstractBackend` class. The `AbstractBackend` interface enables seamless interaction with various Cardano blockchain connections, including db-sync, Ogmios/Kupo, and Blockfrost. If no backend is explicitly specified, the function defaults to configurations based on environment variables to select the appropriate backend.
+```
+set_backend(backend)                   # Set the current backend according to environment variables.
+backend: DbsyncBackend = get_backend() # Retrieve the current backend instance.
+```
+The `DbsyncBackend` class offers specialized queries for interacting with the underlying PostgreSQL database, which stores blockchain blocks and transactions. To retrieve all orders, one can utilize the `pool_selector` method to request pool information from the VyFi API. After acquiring the relevant pool data and configuring the backend, the `backend.get_pool_utxos()` method can be employed to query the latest UTxOs associated with the selected pool.
+```python
+selector = VyFiCPPState.pool_selector()
+result = backend.get_pool_utxos( 
+    limit=100000, 
+    historical=False, 
+    **selector.model_dump(),
+)
+```
+To process and parse the retrieved results (`list[PoolStateInfo]`), the following approach can be utilized:
+```python
+pool_data = {}
+total_tvl = 0
+for pool in result:
+    d = dex.model_validate(pool.model_dump())
+    try:
+        logger.info("Get TVL %s", d.tvl)
+        logger.info("Price %s", d.price)
+        logger.info("Token name of asset A: %s", d.unit_a)
+        logger.info("Token name of asset B: %s", d.unit_b)
+    except NoAssetsError:
+        pass
+    except InvalidLPError:
+        pass
+    except InvalidPoolError:
+        pass
+    except Exception as e:
+        logger.debug(f"{dex.__name__}: {e}")
+```
+This approach is applicable across all supported DEXs. For example, the following list of AbstractPoolState subclasses can be defined to support various DEX states: 
+```
+DEXS: list[AbstractPoolState] = [
+    GeniusYieldOrderState,
+    MinswapCPPState,
+    MinswapV2CPPState,
+    MuesliSwapCPPState,
+    SpectrumCPPState,
+    SundaeSwapCPPState,
+    SundaeSwapV3CPPState,
+    VyFiCPPState,
+    WingRidersCPPState,
+    WingRidersSSPState,
+]
 ```
 ## Development
 To set up the development environment:
@@ -114,9 +143,6 @@ To set up the development environment:
 ```bash
 poetry run pytest --benchmark-disable -v --slow -n auto
 ```
-For parallel test execution:
-```bash
-poetry run pytest -n auto
-```
+
 ## Contributing
 Contributions to Charli3 Dendrite are welcome! Please refer to the `CONTRIBUTING.md` file for guidelines on how to contribute to the project.
