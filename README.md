@@ -64,7 +64,7 @@ Charli3 Dendrite can be configured using environment variables or a `.env` file.
 
 Blockfrost is required for the test suite. To use Blockfrost, you must configure your API key by setting it in your environment variables or in a `.env` file:
 
-```
+```bash
 PROJECT_ID="your-blockfrost-project-id"
 NETWORK="mainnet"  # or "testnet" for the Cardano testnet
 ```
@@ -88,7 +88,7 @@ Please stay informed about upcoming updates regarding the integration of these p
 ### Retrieving Orders and Pool Data on VyFi
 
 To retrieve all orders from the VyFi DEX, the global backend must first be configured. This configuration is achieved by invoking the `set_backend` function, which sets up the `AbstractBackend` class. The `AbstractBackend` interface enables seamless interaction with various Cardano blockchain connections, including db-sync, and Ogmios/Kupo. If no backend is explicitly specified, the function defaults to configurations based on environment variables to select the appropriate backend.
-```
+```python
 set_backend(backend)                   # Set the current backend according to environment variables.
 backend: DbsyncBackend = get_backend() # Retrieve the current backend instance.
 ```
