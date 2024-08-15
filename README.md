@@ -84,7 +84,7 @@ We plan to extend support for additional data providers, specifically Ogmios/Kup
 
 Please stay informed about upcoming updates regarding the integration of these providers. Once implemented, they will be configurable in a manner consistent with the existing providers.
 
-## Use Cases 
+## Use Cases
 ### Retrieving Orders and Pool Data on VyFi
 
 To retrieve all orders from the VyFi DEX, the global backend must first be configured. This configuration is achieved by invoking the `set_backend` function, which sets up the `AbstractBackend` class. The `AbstractBackend` interface enables seamless interaction with various Cardano blockchain connections, including db-sync, and Ogmios/Kupo. If no backend is explicitly specified, the function defaults to configurations based on environment variables to select the appropriate backend.
@@ -95,9 +95,9 @@ backend: DbsyncBackend = get_backend() # Retrieve the current backend instance.
 The `DbsyncBackend` class offers specialized queries for interacting with the underlying PostgreSQL database, which stores blockchain blocks and transactions. To retrieve all orders, one can utilize the `pool_selector` method to request pool information from the VyFi API. After acquiring the relevant pool data and configuring the backend, the `backend.get_pool_utxos()` method can be employed to query the latest UTxOs associated with the selected pool.
 ```python
 selector = VyFiCPPState.pool_selector()
-result = backend.get_pool_utxos( 
-    limit=100000, 
-    historical=False, 
+result = backend.get_pool_utxos(
+    limit=100000,
+    historical=False,
     **selector.model_dump(),
 )
 ```
@@ -121,7 +121,7 @@ for pool in result:
     except Exception as e:
         logger.debug(f"{dex.__name__}: {e}")
 ```
-This approach is applicable across all supported DEXs. For example, the following list of AbstractPoolState subclasses can be defined to support various DEX states: 
+This approach is applicable across all supported DEXs. For example, the following list of AbstractPoolState subclasses can be defined to support various DEX states:
 ```
 DEXS: list[AbstractPoolState] = [
     GeniusYieldOrderState,
