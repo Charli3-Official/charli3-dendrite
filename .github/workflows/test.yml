@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+      # - dev
+  pull_request:
+    branches:
+      - main
+      # - dev
+
+jobs:
+  unit_tests:
+    name: unit-tests ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"] # Versions specified in noxfile.py file.
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install nox
+        run: |
+          pipx install nox
+
+      - name: Run tests with nox
+        env:
+          DBSYNC_USER: ${{ secrets.DBSYNC_USER }}
+          DBSYNC_PASS: ${{ secrets.DBSYNC_PASS }}
+          DBSYNC_HOST: ${{ secrets.DBSYNC_HOST }}
+          DBSYNC_PORT: ${{ secrets.DBSYNC_PORT }}
+          DBSYNC_DB_NAME: ${{ secrets.DBSYNC_DB_NAME }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          NETWORK: ${{ secrets.NETWORK }}
+          WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
+          AXO_API_KEY: ${{ secrets.AXO_API_KEY }}
+        run: |
+          nox --reuse-venv=yes --session tests --python ${{ matrix.python-version }}

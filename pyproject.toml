@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "charli3_dendrite"
+version = "1.0.0-dev1"
+description = ""
+authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
+readme = "README.md"
+packages = [{include = "charli3_dendrite", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31.0"
+pydantic = "^2.5.2"
+psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
+python-dotenv = "0.21.1"
+pycardano = "0.11.1"
+blockfrost-python = "^0.5.3"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.11.0"
+ruff = "^0.1.6"
+pre-commit = "^3.5.0"
+bump2version = "^1.0.1"
+isort = "^5.13.2"
+flake8 = "^6.1.0"
+mypy = "^1.7.1"
+pytest = "^7.4.3"
+pytest-benchmark = "^4.0.0"
+pytest-dependency = "^0.5.1"
+pytest-xdist = "^3.6.1"
+
+
+[tool.poetry.group.devs.dependencies]
+pytest-subtests = "^0.11.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
