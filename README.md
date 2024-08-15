@@ -122,7 +122,7 @@ for pool in result:
         logger.debug(f"{dex.__name__}: {e}")
 ```
 This approach is applicable across all supported DEXs. For example, the following list of AbstractPoolState subclasses can be defined to support various DEX states:
-```
+```python
 DEXS: list[AbstractPoolState] = [
     GeniusYieldOrderState,
     MinswapCPPState,
