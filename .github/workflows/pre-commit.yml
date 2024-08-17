@@ -11,43 +11,13 @@ on:
       - dev
 
 jobs:
-  pre-commit:
+  lint:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Install poetry
-        run: pipx install poetry
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
         with:
-          python-version: "3.10"
-          cache: "poetry"
-
-      - name: Configure Poetry
-        run: |
-          poetry config virtualenvs.create false
-
-      - name: Install dependencies
-        run: poetry install
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Cache the pre-commit environment
-        uses: actions/cache@v3
+          fetch-depth: 0
+      - uses: actions/setup-python@v3
+      - uses: pre-commit/action@v3.0.0
         with:
-          path: |
-            ~/.cache/pre-commit
-            ~/.cache/pypoetry
-          key: ${{ runner.os }}-precommit-${{ hashFiles('**/.pre-commit-config.yaml', '**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-precommit-
-            ${{ runner.os }}-precommit-${{ hashFiles('**/.pre-commit-config.yaml') }}-
-            ${{ runner.os }}-precommit-${{ hashFiles('**/poetry.lock') }}-
-
-      - name: Run pre-commit
-        run: pre-commit run --all-files
+          extra_args: --color=always --from-ref ${{ github.event.pull_request.base.sha }} --to-ref ${{ github.event.pull_request.head.sha }}
