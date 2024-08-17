@@ -11,14 +11,14 @@ from charli3_dendrite.dataclasses.models import SwapTransactionList
 class AbstractDBSyncStructure(ABC):
     """Abstract class with required methods for SQL queries."""
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def select(cls) -> str:
         """The selectin part of a DBSync query."""
         raise NotImplementedError
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def parse(cls, data: dict | list[dict]) -> DendriteBaseModel:
         """Parse data returned from a dbsync query."""
         raise NotImplementedError
