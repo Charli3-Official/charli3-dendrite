@@ -642,7 +642,7 @@ COALESCE(
     block.block_no,
     tx.block_index AS "block_index",
     tx_in.tx_id as "tx_out_id",
-    tx_in.index as "tx_index",
+    tx_in.index as "tx_out_index",
     txo.inline_datum_id,
     txo.reference_script_id,
     txo.address,
