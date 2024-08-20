@@ -47,5 +47,6 @@ repos:
             tests|
             examples
           )
+        args: ["--follow-imports=skip"]
         disable_error_codes: ["attr-defined"]
         additional_dependencies: [types-requests==2.31.0.1]
