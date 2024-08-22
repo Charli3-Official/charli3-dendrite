@@ -32,9 +32,6 @@ jobs:
       run: |
         poetry run mkdocs build
 
-    - name: Ensure .nojekyll exists
-      run: touch site/.nojekyll
-
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
