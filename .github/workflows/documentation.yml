@@ -1,7 +1,11 @@
 name: Deploy MkDocs site to GitHub Pages
 
+# Trigger the workflow on push or pull request to the feature/mk-docs branch
 on:
   push:
+    branches:
+      - feature/mk-docs  # This is your working branch
+  pull_request:
     branches:
       - feature/mk-docs
 
@@ -16,7 +20,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.10'  # Adjust based on your requirements
 
     - name: Install dependencies
       run: |
@@ -24,7 +28,7 @@ jobs:
         pip install poetry
         poetry install
 
-    - name: Build the site
+    - name: Build the MkDocs site
       run: |
         poetry run mkdocs build
 
@@ -34,5 +38,6 @@ jobs:
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
-        github_token: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./site
+        destination_branch: gh-pages  # Specify the branch to deploy to

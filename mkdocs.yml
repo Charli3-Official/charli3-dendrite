@@ -7,7 +7,7 @@ repo_name: 'Charli3-Official/charli3-dendrite'
 edit_uri: https://github.com/Charli3-Official/charli3-dendrite/edit/master/docs/
 
 theme:
-  name: material
+  name: mkdocs
   palette:
     primary: 'red'
     accent: 'pink'
@@ -54,15 +54,15 @@ nav:
 
 plugins:
   - search
-  - mkdocstrings:
-      default_handler: python
-      handlers:
-        python:
-          setup_commands:
-            - "import sys; sys.path.insert(0, 'src')"
-          rendering:
-            show_source: true
-            show_root_toc_entry: false
+  # - mkdocstrings:
+  #     default_handler: python
+  #     handlers:
+  #       python:
+  #         setup_commands:
+  #           - "import sys; sys.path.insert(0, 'src')"
+  #         rendering:
+  #           show_source: true
+  #           show_root_toc_entry: false
 
 watch:
   - src
