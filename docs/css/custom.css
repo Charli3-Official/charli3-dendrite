@@ -1,0 +1,41 @@
+/* Increase specificity or use !important */
+section h1 {
+    margin-bottom: 2em !important;  /* !important overrides other styles */
+}
+
+/* Increase spacing between sections */
+section {
+    margin-bottom: 2em;
+}
+
+/* Style the class name */
+h2 .codehilite {
+    font-weight: bold;
+    font-size: 1.5em;
+}
+
+/* Base classes styling */
+.bases {
+    font-weight: bold;
+    color: #4CAF50; /* Green color for base classes */
+}
+
+/* Method arguments styling */
+.method-signature .argument {
+    color: #FF5722; /* Accent color for method arguments */
+    font-weight: bold;
+}
+
+/* Source code link block customization */
+.block-source {
+    background-color: #f5f5f5; /* Lighter background */
+    border-left: 4px solid #2196F3; /* Blue border */
+    padding: 0.5em 1em;
+    font-size: 0.9em;
+}
+
+/* Consistent styling for method signatures */
+.method-signature {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.1em;
+}
