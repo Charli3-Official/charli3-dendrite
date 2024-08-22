@@ -1,4 +1,5 @@
-"""AMM base module."""
+"""Module providing base classes for AMM pools."""
+
 from abc import abstractmethod
 from decimal import Decimal
 from typing import Any

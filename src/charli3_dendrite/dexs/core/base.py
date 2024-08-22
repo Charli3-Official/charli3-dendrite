@@ -1,4 +1,5 @@
 """Abstract base class and common functions for handling token pairs."""
+
 from abc import ABC
 from abc import abstractmethod
 from decimal import Decimal

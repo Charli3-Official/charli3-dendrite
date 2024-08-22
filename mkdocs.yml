@@ -1,0 +1,73 @@
+# Site Information
+site_name: Charli3 Dendrite
+site_url: https://charli3.io/
+site_description: "Documentation for the Charli3 Dendrite project."
+repo_url: https://github.com/Charli3-Official/charli3-dendrite
+repo_name: 'Charli3-Official/charli3-dendrite'
+edit_uri: https://github.com/Charli3-Official/charli3-dendrite/edit/master/docs/
+
+theme:
+  name: material
+  locale: en
+  include_sidebar: true
+  shortcuts:
+    help: 191    # ?
+    next: 78     # n
+    previous: 80 # p
+    search: 83   # s
+
+nav:
+  - Home: index.md
+  - DEXs:
+      - Automated Market Maker:
+          - amm_base.md
+          - types.md
+          - Modules:
+              - Vyfi: vyfi.md
+              - Minswap: minswap.md
+              - Muesliswap: muesliswap.md
+              - Spectrum: spectrum.md
+              - Sundae: sundae.md
+              - Wingriders: wingriders.md
+      - Order Book:
+          - order_book_base.md
+          - Modules:
+              - Axo: axo.md
+              - Genius Yield: geniusyield.md
+      - Core:
+          - core_base.md
+          - errors.md
+  - Backend:
+      - Backend Base: backend_base.md
+      - Utils: utils.md
+      - DBsync:
+          - Models: dbsync_models.md
+  - Data Classes:
+      - Datums: datums.md
+      - Models: models.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          setup_commands:
+            - "import sys; sys.path.insert(0, 'src')"
+          rendering:
+            show_source: true
+            show_root_toc_entry: false
+
+theme:
+  name: material
+  palette:
+    primary: 'red'
+    accent: 'pink'
+  font:
+    text: 'Roboto'
+    code: 'Roboto Mono'
+
+watch:
+  - src
+extra:
+  version: 1.0
