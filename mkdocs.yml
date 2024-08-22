@@ -8,6 +8,12 @@ edit_uri: https://github.com/Charli3-Official/charli3-dendrite/edit/master/docs/
 
 theme:
   name: material
+  palette:
+    primary: 'red'
+    accent: 'pink'
+  font:
+    text: 'Roboto'
+    code: 'Roboto Mono'
   locale: en
   include_sidebar: true
   shortcuts:
@@ -57,15 +63,6 @@ plugins:
           rendering:
             show_source: true
             show_root_toc_entry: false
-
-theme:
-  name: material
-  palette:
-    primary: 'red'
-    accent: 'pink'
-  font:
-    text: 'Roboto'
-    code: 'Roboto Mono'
 
 watch:
   - src
