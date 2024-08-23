@@ -1,0 +1,9 @@
+/* docs/stylesheets/extra.css */
+:root {
+  --md-primary-fg-color:        #fe0343;  /* Torch Red */
+  --md-accent-fg-color:         #00ffff;  /* Bright Cyan */
+
+  /* Optional: Define light and dark variants for primary color */
+  --md-primary-fg-color--light: #ff5f7f;  /* A lighter shade of Torch Red */
+  --md-primary-fg-color--dark:  #b8002e;  /* A darker shade of Torch Red */
+}
