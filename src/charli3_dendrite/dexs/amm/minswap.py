@@ -1,4 +1,4 @@
-"""Minswap AMM module."""
+"""Minswap DEX Module."""
 
 from dataclasses import dataclass
 from hashlib import sha3_256

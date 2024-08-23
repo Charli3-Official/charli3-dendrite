@@ -1,3 +1,5 @@
+"""Geniues Yield Order Book Module."""
+
 import time
 from dataclasses import dataclass
 from dataclasses import field

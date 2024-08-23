@@ -1,4 +1,4 @@
-"""MuesliSwap DEX implementation."""
+"""MuesliSwap DEX Module."""
 
 from dataclasses import dataclass
 from typing import Any

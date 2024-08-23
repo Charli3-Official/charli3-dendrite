@@ -1,4 +1,4 @@
-"""Spectrum DEX module."""
+"""Spectrum DEX Module."""
 
 from dataclasses import dataclass
 from typing import ClassVar
