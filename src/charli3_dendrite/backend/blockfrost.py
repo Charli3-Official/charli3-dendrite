@@ -29,7 +29,8 @@ class BlockFrostBackend(AbstractBackend):
             project_id (str): The BlockFrost project ID.
         """
         self.chain_context = BlockFrostChainContext(
-            project_id, base_url=ApiUrls.mainnet.value,
+            project_id,
+            base_url=ApiUrls.mainnet.value,
         )
         self.api = self.chain_context.api
         self._block_cache: dict = {}
@@ -246,7 +247,9 @@ class BlockFrostBackend(AbstractBackend):
         )
 
     def get_datum_from_address(
-        self, address: str, asset: Optional[str] = None,
+        self,
+        address: str,
+        asset: Optional[str] = None,
     ) -> Optional[ScriptReference]:
         """Get datum from a given address.
 

@@ -47,7 +47,9 @@ class OgmiosKupoBackend(AbstractBackend):
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
         self.ogmios_context = OgmiosChainContext(
-            host=self.ws_url, port=int(self.port), network=network,
+            host=self.ws_url,
+            port=int(self.port),
+            network=network,
         )
         self.kupo_url = kupo_url
 
@@ -211,7 +213,9 @@ class OgmiosKupoBackend(AbstractBackend):
             block_data[header_hash]["tx_hashes"].add(tx_hash)
 
         sorted_blocks = sorted(
-            block_data.items(), key=lambda x: x[1]["slot_no"], reverse=True,
+            block_data.items(),
+            key=lambda x: x[1]["slot_no"],
+            reverse=True,
         )[:last_n_blocks]
 
         blocks = []
@@ -391,7 +395,9 @@ class OgmiosKupoBackend(AbstractBackend):
         )
 
     def get_datum_from_address(
-        self, address: str, asset: Optional[str] = None,
+        self,
+        address: str,
+        asset: Optional[str] = None,
     ) -> Optional[ScriptReference]:
         """Get datum from a given address.
 
