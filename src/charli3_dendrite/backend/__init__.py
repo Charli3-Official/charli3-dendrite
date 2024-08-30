@@ -95,7 +95,7 @@ def set_default_backend() -> None:
         set_backend(
             BlockFrostBackend(
                 project_id=os.environ["BLOCKFROST_PROJECT_ID"],
-            )
+            ),
         )
         return
 
@@ -116,7 +116,7 @@ def set_default_backend() -> None:
                 ogmios_url=os.environ["OGMIOS_URL"],
                 kupo_url=os.environ["KUPO_URL"],
                 network=network,
-            )
+            ),
         )
         return
 

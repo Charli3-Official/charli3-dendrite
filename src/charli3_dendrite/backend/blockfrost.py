@@ -1,21 +1,22 @@
 """BlockFrostBackend class for interacting with the BlockFrost API."""
 
-from typing import List, Optional, Union
 import functools
 from datetime import datetime
+from typing import List
+from typing import Optional
+from typing import Union
 
-from pycardano import Address, BlockFrostChainContext
 from blockfrost import ApiUrls
+from pycardano import Address
+from pycardano import BlockFrostChainContext
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
-from charli3_dendrite.dataclasses.models import (
-    Assets,
-    BlockList,
-    PoolStateInfo,
-    PoolStateList,
-    ScriptReference,
-    SwapTransactionList,
-)
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import BlockList
+from charli3_dendrite.dataclasses.models import PoolStateInfo
+from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import ScriptReference
+from charli3_dendrite.dataclasses.models import SwapTransactionList
 
 
 class BlockFrostBackend(AbstractBackend):
@@ -28,7 +29,7 @@ class BlockFrostBackend(AbstractBackend):
             project_id (str): The BlockFrost project ID.
         """
         self.chain_context = BlockFrostChainContext(
-            project_id, base_url=ApiUrls.mainnet.value
+            project_id, base_url=ApiUrls.mainnet.value,
         )
         self.api = self.chain_context.api
         self._block_cache: dict = {}
@@ -80,7 +81,7 @@ class BlockFrostBackend(AbstractBackend):
                 utxos = []
                 for asset in assets:
                     utxos.extend(
-                        self.api.address_utxos_asset(address, asset, gather_pages=True)
+                        self.api.address_utxos_asset(address, asset, gather_pages=True),
                     )
             else:
                 utxos = self.api.address_utxos(address, gather_pages=True)
@@ -143,7 +144,7 @@ class BlockFrostBackend(AbstractBackend):
                     "block_no": block.height,
                     "tx_count": block.tx_count,
                     "block_time": block.time,
-                }
+                },
             )
         return BlockList(root=blocks)
 
@@ -201,7 +202,7 @@ class BlockFrostBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability"
+            "This method is not supported due to limited data availability",
         )
 
     def get_order_utxos_by_block_or_tx(
@@ -222,7 +223,7 @@ class BlockFrostBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability"
+            "This method is not supported due to limited data availability",
         )
 
     def get_cancel_utxos(
@@ -241,11 +242,11 @@ class BlockFrostBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability"
+            "This method is not supported due to limited data availability",
         )
 
     def get_datum_from_address(
-        self, address: str, asset: Optional[str] = None
+        self, address: str, asset: Optional[str] = None,
     ) -> Optional[ScriptReference]:
         """Get datum from a given address.
 
@@ -289,7 +290,7 @@ class BlockFrostBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability"
+            "This method is not supported due to limited data availability",
         )
 
     def _utxo_to_pool_state(self, utxo, tx_hash: Optional[str] = None) -> PoolStateInfo:

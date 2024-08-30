@@ -8,18 +8,17 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from pycardano import Address, Network
 
 from charli3_dendrite import SundaeSwapCPPState
+from charli3_dendrite.backend import DbsyncBackend
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.backend import set_backend
-from charli3_dendrite.backend import DbsyncBackend, OgmiosKupoBackend, BlockFrostBackend
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
-from charli3_dendrite.dataclasses.models import Assets
-
+from pycardano import Address
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -46,7 +45,7 @@ def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json") -
 
 
 def test_get_pool_utxos(
-    backend: DbsyncBackend, dex: type[AbstractPoolState]
+    backend: DbsyncBackend, dex: type[AbstractPoolState],
 ) -> Dict[str, Any]:
     """Test get_pool_utxos function."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
@@ -65,7 +64,7 @@ def test_get_pool_utxos(
     assets = existing_assets + [specific_asset]
 
     result = backend.get_pool_utxos(
-        limit=10000, historical=False, assets=assets, **selector_dict
+        limit=10000, historical=False, assets=assets, **selector_dict,
     )
 
     pool_data = {}
@@ -183,7 +182,7 @@ def test_get_cancel_utxos(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     ]
     after_time = datetime.now() - timedelta(hours=1)  # Look at last hour
     result = backend.get_cancel_utxos(
-        stake_addresses, after_time=after_time, limit=1000
+        stake_addresses, after_time=after_time, limit=1000,
     )
     logger.info("Found %d cancel UTXOs", len(result))
     return [utxo.model_dump() for utxo in result]
@@ -193,7 +192,7 @@ def test_get_axo_target(backend: DbsyncBackend) -> Optional[str]:
     """Test get_axo_target function for both backends."""
     logger.info("Testing get_axo_target...")
     assets = Assets(
-        root={"f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45": 1}
+        root={"f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45": 1},
     )
     result = backend.get_axo_target(assets)
     logger.info("found at %s", result)
@@ -247,7 +246,7 @@ def main() -> None:
         all_data["axo_target"] = test_get_axo_target(backend)
     except NotImplementedError as e:
         logger.warning(
-            "Some methods are not implemented for the current backend: %s", e
+            "Some methods are not implemented for the current backend: %s", e,
         )
 
     # Save all collected data to a file

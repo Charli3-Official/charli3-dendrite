@@ -1,16 +1,16 @@
 """Backend that uses Ogmios for chain context and Kupo for pool state information."""
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Any
 from typing import List
 from typing import Optional
 from typing import Union
 
 import requests
+from ogmios import OgmiosChainContext
 from pycardano import Address
 from pycardano import Network
-from ogmios import OgmiosChainContext
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
 from charli3_dendrite.dataclasses.models import Assets
@@ -47,7 +47,7 @@ class OgmiosKupoBackend(AbstractBackend):
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
         self.ogmios_context = OgmiosChainContext(
-            host=self.ws_url, port=int(self.port), network=network
+            host=self.ws_url, port=int(self.port), network=network,
         )
         self.kupo_url = kupo_url
 
@@ -211,7 +211,7 @@ class OgmiosKupoBackend(AbstractBackend):
             block_data[header_hash]["tx_hashes"].add(tx_hash)
 
         sorted_blocks = sorted(
-            block_data.items(), key=lambda x: x[1]["slot_no"], reverse=True
+            block_data.items(), key=lambda x: x[1]["slot_no"], reverse=True,
         )[:last_n_blocks]
 
         blocks = []
@@ -230,7 +230,7 @@ class OgmiosKupoBackend(AbstractBackend):
                     block_no=current_block_no,
                     tx_count=len(block_info["tx_hashes"]),
                     block_time=block_time,
-                )
+                ),
             )
 
         return BlockList(root=blocks)
@@ -347,7 +347,7 @@ class OgmiosKupoBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability in Kupo"
+            "This method is not supported due to limited data availability in Kupo",
         )
 
     def get_order_utxos_by_block_or_tx(
@@ -368,7 +368,7 @@ class OgmiosKupoBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability in Kupo"
+            "This method is not supported due to limited data availability in Kupo",
         )
 
     def get_cancel_utxos(
@@ -387,11 +387,11 @@ class OgmiosKupoBackend(AbstractBackend):
             NotImplementedError: This method is not implemented.
         """
         raise NotImplementedError(
-            "This method is not supported due to limited data availability in Kupo"
+            "This method is not supported due to limited data availability in Kupo",
         )
 
     def get_datum_from_address(
-        self, address: str, asset: Optional[str] = None
+        self, address: str, asset: Optional[str] = None,
     ) -> Optional[ScriptReference]:
         """Get datum from a given address.
 
