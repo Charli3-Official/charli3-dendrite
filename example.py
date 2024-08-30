@@ -6,36 +6,39 @@ from datetime import datetime
 from datetime import timedelta
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Optional
+from pycardano import Address, Network
 
-from charli3_dendrite import MinswapV2CPPState
 from charli3_dendrite import SundaeSwapCPPState
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.backend import set_backend
-from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite.backend import DbsyncBackend, OgmiosKupoBackend, BlockFrostBackend
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
-from pycardano import Address
+from charli3_dendrite.dataclasses.models import Assets
+
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
 logger = logging.getLogger("charli3_dendrite")
 
-DEXS: list[type[AbstractPoolState]] = [
+DEXS: List[type[AbstractPoolState]] = [
     SundaeSwapCPPState,
-    MinswapV2CPPState,
+    # MinswapV2CPPState,
     # Add other DEX states here
 ]
 
 
-def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json"):
+def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json") -> None:
     """Save the blockchain data to a local file."""
     try:
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         logger.info("Data successfully saved to %s", filename)
     except Exception as e:
@@ -43,16 +46,26 @@ def save_to_file(data: Dict[str, Any], filename: str = "blockchain_data.json"):
 
 
 def test_get_pool_utxos(
-    backend: DbsyncBackend,
-    dex: type[AbstractPoolState],
+    backend: DbsyncBackend, dex: type[AbstractPoolState]
 ) -> Dict[str, Any]:
     """Test get_pool_utxos function."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
     selector = dex.pool_selector()
+    selector_dict = selector.model_dump()
+
+    existing_assets = selector_dict.pop("assets", [])
+    if existing_assets is None:
+        existing_assets = []
+    elif not isinstance(existing_assets, list):
+        existing_assets = [existing_assets]
+
+    specific_asset = (
+        "8e51398904a5d3fc129fbf4f1589701de23c7824d5c90fdb9490e15a434841524c4933"
+    )
+    assets = existing_assets + [specific_asset]
+
     result = backend.get_pool_utxos(
-        limit=100000,
-        historical=False,
-        **selector.model_dump(),
+        limit=10000, historical=False, assets=assets, **selector_dict
     )
 
     pool_data = {}
@@ -73,7 +86,7 @@ def test_get_pool_utxos(
     return pool_data
 
 
-def test_get_pool_in_tx(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_get_pool_in_tx(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test get_pool_in_tx function."""
     logger.info("Testing get_pool_in_tx...")
     tx_hash = "14e59f304767ea9a659fe3dce74c1ea3837652b5008fab0bd6c56b023ad3f227"
@@ -83,7 +96,7 @@ def test_get_pool_in_tx(backend: DbsyncBackend) -> list[Dict[str, Any]]:
     return [pool.model_dump() for pool in result]
 
 
-def test_last_block(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_last_block(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test last_block function."""
     logger.info("Testing last_block...")
     blocks = backend.last_block(last_n_blocks=2)
@@ -92,7 +105,7 @@ def test_last_block(backend: DbsyncBackend) -> list[Dict[str, Any]]:
     return block_data
 
 
-def test_get_pool_utxos_in_block(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_get_pool_utxos_in_block(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test get_pool_utxos_in_block function."""
     logger.info("Testing get_pool_utxos_in_block...")
     blocks = backend.last_block(last_n_blocks=1)
@@ -114,7 +127,7 @@ def test_get_script_from_address(backend: DbsyncBackend) -> Dict[str, Any]:
     return result.model_dump()
 
 
-def test_get_datum_from_address(backend: DbsyncBackend) -> Dict[str, Any] | None:
+def test_get_datum_from_address(backend: DbsyncBackend) -> Optional[Dict[str, Any]]:
     """Test get_datum_from_address function."""
     logger.info("Testing get_datum_from_address...")
     address = Address.from_primitive(
@@ -128,23 +141,23 @@ def test_get_datum_from_address(backend: DbsyncBackend) -> Dict[str, Any] | None
     return None
 
 
-def test_get_historical_order_utxos(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_get_historical_order_utxos(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test get_historical_order_utxos function."""
     logger.info("Testing get_historical_order_utxos...")
     stake_addresses = [
         "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     ]
-    after_time = datetime.now() - timedelta(days=1)  # Look at last 24 hours
+    after_time = datetime.now() - timedelta(hours=24)  # Look at last 24 hours
+    after_time_unix = int(after_time.timestamp())  # Convert to Unix time
     result = backend.get_historical_order_utxos(
         stake_addresses,
-        after_time=after_time,
-        limit=10,
+        after_time=after_time_unix,
+        limit=1000,
     )
-    logger.info("Found %d historical order UTXOs", len(result))
     return [utxo.model_dump() for utxo in result]
 
 
-def test_get_order_utxos_by_block_or_tx(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_get_order_utxos_by_block_or_tx(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test get_order_utxos_by_block_or_tx function."""
     logger.info("Testing get_order_utxos_by_block_or_tx...")
     stake_addresses = [
@@ -162,23 +175,56 @@ def test_get_order_utxos_by_block_or_tx(backend: DbsyncBackend) -> list[Dict[str
     return [utxo.model_dump() for utxo in result]
 
 
-def test_get_cancel_utxos(backend: DbsyncBackend) -> list[Dict[str, Any]]:
+def test_get_cancel_utxos(backend: DbsyncBackend) -> List[Dict[str, Any]]:
     """Test get_cancel_utxos function."""
     logger.info("Testing get_cancel_utxos...")
     stake_addresses = [
         "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     ]
-    after_time = datetime.now() - timedelta(days=1)  # Look at last 24 hours
-    result = backend.get_cancel_utxos(stake_addresses, after_time=after_time, limit=10)
+    after_time = datetime.now() - timedelta(hours=1)  # Look at last hour
+    result = backend.get_cancel_utxos(
+        stake_addresses, after_time=after_time, limit=1000
+    )
     logger.info("Found %d cancel UTXOs", len(result))
     return [utxo.model_dump() for utxo in result]
 
 
-def main():
+def test_get_axo_target(backend: DbsyncBackend) -> Optional[str]:
+    """Test get_axo_target function for both backends."""
+    logger.info("Testing get_axo_target...")
+    assets = Assets(
+        root={"f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45": 1}
+    )
+    result = backend.get_axo_target(assets)
+    logger.info("found at %s", result)
+    return result
+
+
+def main() -> None:
     """Main function to run all tests."""
+    # Choose one of the following backends:
+
+    # 1. DbsyncBackend (full functionality)
     set_backend(DbsyncBackend())
+
+    # 2. OgmiosKupoBackend (some methods may not be implemented)
+    # set_backend(
+    #     OgmiosKupoBackend(
+    #         ogmios_url="ws://ogmios-url-here",
+    #         kupo_url="http://kupo-url-here",
+    #         network=Network.MAINNET,
+    #     )
+    # )
+
+    # 3. BlockFrostBackend (some methods may not be implemented)
+    # set_backend(BlockFrostBackend("your-project-id-here"))
+
+    # Note: BlockFrost and Ogmios-Kupo backends may raise NotImplementedError
+    # for methods like get_historical_order_utxos, get_order_utxos_by_block_or_tx,
+    # and get_cancel_utxos due to limitations in their respective APIs.
+
     backend = get_backend()
-    all_data = {}
+    all_data: Dict[str, Any] = {}
 
     # Test get_pool_utxos for each DEX
     for dex in DEXS:
@@ -192,9 +238,15 @@ def main():
     datum_result = test_get_datum_from_address(backend)
     if datum_result is not None:
         all_data["datum_from_address"] = datum_result
-    all_data["historical_order_utxos"] = test_get_historical_order_utxos(backend)
-    all_data["order_utxos_by_block"] = test_get_order_utxos_by_block_or_tx(backend)
-    all_data["cancel_utxos"] = test_get_cancel_utxos(backend)
+
+    # The following methods may raise NotImplementedError for BlockFrost and Ogmios-Kupo backends
+    try:
+        all_data["historical_order_utxos"] = test_get_historical_order_utxos(backend)
+        all_data["order_utxos_by_block"] = test_get_order_utxos_by_block_or_tx(backend)
+        all_data["cancel_utxos"] = test_get_cancel_utxos(backend)
+        all_data["axo_target"] = test_get_axo_target(backend)
+    except NotImplementedError as e:
+        logger.warning("Some methods are not implemented for the current backend: %s", e)
 
     # Save all collected data to a file
     save_to_file(all_data)

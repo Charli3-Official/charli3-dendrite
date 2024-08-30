@@ -23,13 +23,17 @@ Note: This module relies on environment variables for setting up the default bac
 Ensure that the necessary environment variables are set before using this module.
 """
 
+import logging
 import os
 from typing import Optional
 
 from dotenv import load_dotenv
+from pycardano import Network
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.blockfrost import BlockFrostBackend
 from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite.backend.ogmios_kupo import OgmiosKupoBackend
 
 # Load environment variables from .env file
 load_dotenv()
@@ -71,9 +75,8 @@ def set_default_backend() -> None:
     """Attempt to set a default backend based on environment variables.
 
     This function checks for the presence of specific environment variables
-    to determine which backend to use as the default. Currently, it only
-    checks for DBSync-related variables, but can be extended to support
-    other backend types in the future.
+    to determine which backend to use as the default. It checks for DBSync-related
+    variables first, then for Blockfrost, and finally for Ogmios and Kupo variables.
     """
     # Check for DBSync environment variables
     dbsync_vars = [
@@ -85,13 +88,41 @@ def set_default_backend() -> None:
     ]
     if all(env_var in os.environ for env_var in dbsync_vars):
         set_backend(DbsyncBackend())
+        return
 
-    """ TODO: Add checks for other backend types here as needed
-    For example:
-    elif all(env_var in os.environ for env_var in other_backend_vars):
-        set_backend(OtherBackend())
-    """
+    # Check for Blockfrost environment variables
+    if "BLOCKFROST_PROJECT_ID" in os.environ:
+        set_backend(
+            BlockFrostBackend(
+                project_id=os.environ["BLOCKFROST_PROJECT_ID"],
+            )
+        )
+        return
+
+    # Check for Ogmios and Kupo environment variables
+    ogmios_kupo_vars = [
+        "OGMIOS_URL",
+        "KUPO_URL",
+        "CARDANO_NETWORK",
+    ]
+    if all(env_var in os.environ for env_var in ogmios_kupo_vars):
+        network = (
+            Network.MAINNET
+            if os.environ["CARDANO_NETWORK"].upper() == "MAINNET"
+            else Network.TESTNET
+        )
+        set_backend(
+            OgmiosKupoBackend(
+                ogmios_url=os.environ["OGMIOS_URL"],
+                kupo_url=os.environ["KUPO_URL"],
+                network=network,
+            )
+        )
+        return
+
+    # If no backend can be set, log a warning
+    logging.warning("No default backend could be set. Please set a backend manually.")
 
 
-# Optional: Initialize the backend when the module is imported
+# Initialize the backend when the module is imported
 set_default_backend()
