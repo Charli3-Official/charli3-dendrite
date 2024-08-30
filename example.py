@@ -246,7 +246,9 @@ def main() -> None:
         all_data["cancel_utxos"] = test_get_cancel_utxos(backend)
         all_data["axo_target"] = test_get_axo_target(backend)
     except NotImplementedError as e:
-        logger.warning("Some methods are not implemented for the current backend: %s", e)
+        logger.warning(
+            "Some methods are not implemented for the current backend: %s", e
+        )
 
     # Save all collected data to a file
     save_to_file(all_data)
