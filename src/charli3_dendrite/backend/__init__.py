@@ -1,8 +1,8 @@
 """Backend Management Module for Charli3 Dendrite.
 
 This module provides a centralized system for managing the backend used throughout
-the Charli3 Dendrite application. It includes functions to get and set the global backend,
-as well as to set a default backend based on environment variables.
+the Charli3 Dendrite application. It includes functions to get and set the global
+backend, as well as to set a default backend based on environment variables.
 
 The module uses a global variable to store the current backend instance, which
 can be accessed and modified using the provided functions. This approach allows
@@ -27,8 +27,8 @@ import logging
 import os
 from typing import Optional
 
-from dotenv import load_dotenv
-from pycardano import Network
+from dotenv import load_dotenv  # type: ignore
+from pycardano import Network  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
 from charli3_dendrite.backend.blockfrost import BlockFrostBackend

@@ -2,15 +2,18 @@
 
 import functools
 from datetime import datetime
-from typing import List
 from typing import Optional
 from typing import Union
 
-from blockfrost import ApiUrls
-from pycardano import Address
-from pycardano import BlockFrostChainContext
+from blockfrost import ApiUrls  # type: ignore
+from pycardano import Address  # type: ignore
+from pycardano import BlockFrostChainContext  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.blockfrost.models import AssetAmount
+from charli3_dendrite.backend.blockfrost.models import BlockFrostBlockInfo
+from charli3_dendrite.backend.blockfrost.models import TransactionInfo
+from charli3_dendrite.backend.blockfrost.models import UTxO
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
@@ -35,8 +38,8 @@ class BlockFrostBackend(AbstractBackend):
         self.api = self.chain_context.api
         self._block_cache: dict = {}
 
-    @functools.lru_cache(maxsize=100)
-    def _get_block_info(self, block_hash: str) -> dict:
+    @functools.lru_cache(maxsize=100)  # noqa: B019
+    def _get_block_info(self, block_hash: str) -> BlockFrostBlockInfo:
         """Get block information from cache or API.
 
         Args:
@@ -47,16 +50,16 @@ class BlockFrostBackend(AbstractBackend):
         """
         if block_hash not in self._block_cache:
             block_info = self.api.block(block_hash)
-            self._block_cache[block_hash] = {
-                "time": block_info.time,
-                "height": block_info.height,
-            }
+            self._block_cache[block_hash] = BlockFrostBlockInfo(
+                time=block_info.time,
+                height=block_info.height,
+            )
         return self._block_cache[block_hash]
 
     def get_pool_utxos(
         self,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: Optional[list[str]] = None,
+        addresses: Optional[list[str]] = None,
         limit: int = 1000,
         page: int = 100,
         historical: bool = True,
@@ -64,14 +67,14 @@ class BlockFrostBackend(AbstractBackend):
         """Get pool UTXOs based on assets and addresses.
 
         Args:
-            assets (Optional[List[str]]): List of asset IDs.
-            addresses (Optional[List[str]]): List of addresses.
+            assets (Optional[list[str]]): list of asset IDs.
+            addresses (Optional[list[str]]): list of addresses.
             limit (int): Maximum number of UTXOs to return.
             page (int): Page number for pagination.
             historical (bool): Include historical data.
 
         Returns:
-            PoolStateList: List of pool states.
+            PoolStateList: list of pool states.
         """
         pool_states = []
         if addresses is None:
@@ -100,18 +103,18 @@ class BlockFrostBackend(AbstractBackend):
     def get_pool_in_tx(
         self,
         tx_hash: str,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: Optional[list[str]] = None,
+        addresses: Optional[list[str]] = None,
     ) -> PoolStateList:
         """Get pool states for a specific transaction.
 
         Args:
             tx_hash (str): Transaction hash.
-            assets (Optional[List[str]]): List of asset IDs.
-            addresses (Optional[List[str]]): List of addresses.
+            assets (Optional[list[str]]): list of asset IDs.
+            addresses (Optional[list[str]]): list of addresses.
 
         Returns:
-            PoolStateList: List of pool states.
+            PoolStateList: list of pool states.
         """
         pool_states = []
         tx_utxos = self.api.transaction_utxos(tx_hash)
@@ -133,7 +136,7 @@ class BlockFrostBackend(AbstractBackend):
             last_n_blocks (int): Number of recent blocks to retrieve.
 
         Returns:
-            BlockList: List of recent block information.
+            BlockList: list of recent block information.
         """
         blocks = []
         latest_block = self.api.block_latest()
@@ -156,7 +159,7 @@ class BlockFrostBackend(AbstractBackend):
             block_no (int): Block number.
 
         Returns:
-            PoolStateList: List of pool states.
+            PoolStateList: list of pool states.
         """
         tx_hashes = self.api.block_transactions(block_no)
         pool_states = []
@@ -190,7 +193,7 @@ class BlockFrostBackend(AbstractBackend):
 
     def get_historical_order_utxos(
         self,
-        stake_addresses: List[str],
+        stake_addresses: list[str],
         after_time: Optional[Union[datetime, int]] = None,
         limit: int = 1000,
         page: int = 0,
@@ -208,9 +211,9 @@ class BlockFrostBackend(AbstractBackend):
 
     def get_order_utxos_by_block_or_tx(
         self,
-        stake_addresses: List[str],
-        out_tx_hash: Optional[List[str]] = None,
-        in_tx_hash: Optional[List[str]] = None,
+        stake_addresses: list[str],
+        out_tx_hash: Optional[list[str]] = None,
+        in_tx_hash: Optional[list[str]] = None,
         block_no: Optional[int] = None,
         after_block: Optional[int] = None,
         limit: int = 1000,
@@ -229,7 +232,7 @@ class BlockFrostBackend(AbstractBackend):
 
     def get_cancel_utxos(
         self,
-        stake_addresses: List[str],
+        stake_addresses: list[str],
         block_no: Optional[int] = None,
         after_time: Optional[Union[datetime, int]] = None,
         limit: int = 1000,
@@ -296,7 +299,11 @@ class BlockFrostBackend(AbstractBackend):
             "This method is not supported due to limited data availability",
         )
 
-    def _utxo_to_pool_state(self, utxo, tx_hash: Optional[str] = None) -> PoolStateInfo:
+    def _utxo_to_pool_state(
+        self,
+        utxo: UTxO,
+        tx_hash: Optional[str] = None,
+    ) -> PoolStateInfo:
         """Convert UTXO to PoolStateInfo.
 
         Args:
@@ -315,17 +322,21 @@ class BlockFrostBackend(AbstractBackend):
             block_time=tx_info.block_time if tx_hash else 0,
             block_index=tx_info.index if tx_hash else 0,
             block_hash=tx_info.block if tx_hash else utxo.block,
-            datum_hash=utxo.data_hash,
+            datum_hash=utxo.data_hash or "",
             datum_cbor=(
                 utxo.inline_datum
                 if utxo.inline_datum
-                else self._get_datum_from_datum_hash(utxo.data_hash)
+                else (
+                    self._get_datum_from_datum_hash(utxo.data_hash)
+                    if utxo.data_hash
+                    else ""
+                )
             ),
             assets=self._format_assets(utxo.amount),
             plutus_v2=utxo.reference_script_hash is not None,
         )
 
-    def _format_assets(self, amount) -> Assets:
+    def _format_assets(self, amount: list[AssetAmount]) -> Assets:
         """Format assets from BlockFrost format to Assets model.
 
         Args:
@@ -344,7 +355,8 @@ class BlockFrostBackend(AbstractBackend):
 
     def _get_block_time(self, block_hash: str) -> int:
         """Get block time from block hash.
-        You might want to cache this information to avoid repeated API calls
+
+        You might want to cache this information to avoid repeated API calls.
 
         Args:
             block_hash (str): Block hash.
@@ -357,7 +369,8 @@ class BlockFrostBackend(AbstractBackend):
 
     def _get_block_index(self, block_hash: str) -> int:
         """Get block index from block hash.
-        You might want to cache this information to avoid repeated API calls
+
+        You might want to cache this information to avoid repeated API calls.
 
         Args:
             block_hash (str): Block hash.

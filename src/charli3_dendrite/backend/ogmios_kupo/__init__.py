@@ -2,17 +2,18 @@
 
 import logging
 from datetime import datetime
-from typing import Any
-from typing import List
 from typing import Optional
 from typing import Union
 
 import requests
-from ogmios import OgmiosChainContext
-from pycardano import Address
-from pycardano import Network
+from ogmios import OgmiosChainContext  # type: ignore
+from pycardano import Address  # type: ignore
+from pycardano import Network  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
+from charli3_dendrite.backend.ogmios_kupo.models import AssetValue
+from charli3_dendrite.backend.ogmios_kupo.models import KupoResponse
+from charli3_dendrite.backend.ogmios_kupo.models import KupoResponseList
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
@@ -24,12 +25,14 @@ from charli3_dendrite.dataclasses.models import SwapTransactionList
 SHELLEY_START = 1596491091
 SLOT_LENGTH = 1
 SHELLEY_SLOT_OFFSET = 4924800
+POLICY_ID_LENGTH: int = 56
+AXO_PAYMENT_CREDENTIAL = "55ff0e63efa0694e8065122c552e80c7b51768b7f20917af25752a7c"
 
 logger = logging.getLogger(__name__)
 
 
 class OgmiosKupoBackend(AbstractBackend):
-    """Backend that uses Ogmios for chain context and Kupo for pool state information."""
+    """Backend class for fetching pool state information from Ogmios and Kupo."""
 
     def __init__(
         self,
@@ -53,7 +56,11 @@ class OgmiosKupoBackend(AbstractBackend):
         )
         self.kupo_url = kupo_url
 
-    def _kupo_request(self, endpoint: str, params: Optional[dict] = None) -> Any:
+    def _kupo_request(
+        self,
+        endpoint: str,
+        params: Optional[dict] = None,
+    ) -> KupoResponseList:
         """Make a request to the Kupo API.
 
         Args:
@@ -61,7 +68,7 @@ class OgmiosKupoBackend(AbstractBackend):
             params (Optional[dict]): Query parameters for the request.
 
         Returns:
-            Any: The JSON response from the API.
+            KupoResponseList: The JSON response from the API.
 
         Raises:
             requests.exceptions.RequestException: If the request fails.
@@ -69,42 +76,43 @@ class OgmiosKupoBackend(AbstractBackend):
         url = f"{self.kupo_url}/{endpoint}"
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
-        return response.json()
+        return KupoResponseList.model_validate(response.json())
 
-    def _pool_state_from_kupo(self, match_data: dict) -> PoolStateInfo:
+    def _pool_state_from_kupo(self, match_data: KupoResponse) -> PoolStateInfo:
         """Convert Kupo match data to PoolStateInfo.
 
         Args:
-            match_data (dict): The match data from Kupo.
+            match_data (KupoResponse): The Kupo match data.
 
         Returns:
             PoolStateInfo: The converted pool state information.
         """
-        assets = self._format_assets(match_data["value"])
+        assets = self._format_assets(match_data.value)
 
-        current_slot = match_data["created_at"]["slot_no"]
-        block_time = SHELLEY_START + current_slot - 4924800
+        current_slot = match_data.created_at.slot_no
+        block_time = SHELLEY_START + current_slot - SHELLEY_SLOT_OFFSET
 
-        datum_hash = match_data.get("datum_hash")
-        datum_cbor = self._get_datum_cbor(datum_hash) if datum_hash else ""
+        datum_cbor = (
+            self._get_datum_cbor(match_data.datum_hash) if match_data.datum_hash else ""
+        )
 
         return PoolStateInfo(
-            address=match_data["address"],
-            tx_hash=match_data["transaction_id"],
-            tx_index=match_data["output_index"],
+            address=match_data.address,
+            tx_hash=match_data.transaction_id,
+            tx_index=match_data.output_index,
             block_time=block_time,
-            block_index=match_data["transaction_index"],
-            block_hash=match_data["created_at"]["header_hash"],
-            datum_hash=datum_hash,
+            block_index=match_data.transaction_index,
+            block_hash=match_data.created_at.header_hash,
+            datum_hash=match_data.datum_hash,
             datum_cbor=datum_cbor,
             assets=assets,
-            plutus_v2=match_data.get("script_hash") is not None,
+            plutus_v2=match_data.script_hash is not None,
         )
 
     def get_pool_utxos(
         self,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: Optional[list[str]] = None,
+        addresses: Optional[list[str]] = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
@@ -112,8 +120,8 @@ class OgmiosKupoBackend(AbstractBackend):
         """Get pool UTXOs based on assets and addresses.
 
         Args:
-            assets (Optional[List[str]]): List of asset IDs to filter by.
-            addresses (Optional[List[str]]): List of addresses to query.
+            assets (Optional[list[str]]): List of asset IDs to filter by.
+            addresses (Optional[list[str]]): List of addresses to query.
             limit (int): Maximum number of UTXOs to return.
             page (int): Page number for pagination.
             historical (bool): Whether to include historical data.
@@ -126,13 +134,17 @@ class OgmiosKupoBackend(AbstractBackend):
             return PoolStateList(root=[])
 
         for address in addresses:
-            params = {
+            params: dict[str, Union[int, str, None]] = {
                 "limit": limit,
                 "offset": page * limit,
             }
             if assets:
-                params["policy_id"] = assets[0][:56]
-                params["asset_name"] = assets[0][56:] if len(assets[0]) > 56 else None
+                params["policy_id"] = assets[0][:POLICY_ID_LENGTH]
+                params["asset_name"] = (
+                    assets[0][POLICY_ID_LENGTH:]
+                    if len(assets[0]) > POLICY_ID_LENGTH
+                    else None
+                )
 
             matches = self._kupo_request(f"matches/{address}?unspent", params=params)
 
@@ -145,15 +157,15 @@ class OgmiosKupoBackend(AbstractBackend):
     def get_pool_in_tx(
         self,
         tx_hash: str,
-        assets: Optional[List[str]] = None,
-        addresses: Optional[List[str]] = None,
+        assets: Optional[list[str]] = None,
+        addresses: Optional[list[str]] = None,
     ) -> PoolStateList:
         """Get pool states for a specific transaction.
 
         Args:
             tx_hash (str): The transaction hash to query.
-            assets (Optional[List[str]]): List of asset IDs to filter by.
-            addresses (Optional[List[str]]): List of addresses to query.
+            assets (Optional[list[str]]): List of asset IDs to filter by.
+            addresses (Optional[list[str]]): List of addresses to query.
 
         Returns:
             PoolStateList: List of pool states for the transaction.
@@ -163,10 +175,17 @@ class OgmiosKupoBackend(AbstractBackend):
             return PoolStateList(root=[])
 
         for address in addresses:
-            params = {"transaction_id": tx_hash, "order": "most_recent_first"}
+            params: dict[str, Union[int, str, None]] = {
+                "transaction_id": tx_hash,
+                "order": "most_recent_first",
+            }
             if assets:
-                params["policy_id"] = assets[0][:56]
-                params["asset_name"] = assets[0][56:] if len(assets[0]) > 56 else None
+                params["policy_id"] = assets[0][:POLICY_ID_LENGTH]
+                params["asset_name"] = (
+                    assets[0][POLICY_ID_LENGTH:]
+                    if len(assets[0]) > POLICY_ID_LENGTH
+                    else None
+                )
 
             matches = self._kupo_request(f"matches/{address}", params=params)
 
@@ -204,10 +223,10 @@ class OgmiosKupoBackend(AbstractBackend):
         )
 
         block_data = {}
-        for match in kupo_matches:
-            header_hash = match["created_at"]["header_hash"]
-            slot_no = match["created_at"]["slot_no"]
-            tx_hash = match["transaction_id"]
+        for match in kupo_matches.root:
+            header_hash = match.created_at.header_hash
+            slot_no = match.created_at.slot_no
+            tx_hash = match.transaction_id
             if header_hash not in block_data:
                 block_data[header_hash] = {"slot_no": slot_no, "tx_hashes": set()}
             block_data[header_hash]["tx_hashes"].add(tx_hash)
@@ -219,14 +238,14 @@ class OgmiosKupoBackend(AbstractBackend):
         )[:last_n_blocks]
 
         blocks = []
-        for i, (header_hash, block_info) in enumerate(sorted_blocks):
+        for i, (_, block_info) in enumerate(sorted_blocks):
             current_slot = block_info["slot_no"]
             current_block_no = latest_block_no - i
 
             slot_diff = latest_slot - current_slot
             epoch_slot = (current_epoch_slot - slot_diff) % 432000
 
-            block_time = SHELLEY_START + current_slot - 4924800
+            block_time = SHELLEY_START + current_slot - SHELLEY_SLOT_OFFSET
 
             blocks.append(
                 BlockInfo(
@@ -338,7 +357,7 @@ class OgmiosKupoBackend(AbstractBackend):
 
     def get_historical_order_utxos(
         self,
-        stake_addresses: List[str],
+        stake_addresses: list[str],
         after_time: Optional[Union[datetime, int]] = None,
         limit: int = 1000,
         page: int = 0,
@@ -356,9 +375,9 @@ class OgmiosKupoBackend(AbstractBackend):
 
     def get_order_utxos_by_block_or_tx(
         self,
-        stake_addresses: List[str],
-        out_tx_hash: Optional[List[str]] = None,
-        in_tx_hash: Optional[List[str]] = None,
+        stake_addresses: list[str],
+        out_tx_hash: Optional[list[str]] = None,
+        in_tx_hash: Optional[list[str]] = None,
         block_no: Optional[int] = None,
         after_block: Optional[int] = None,
         limit: int = 1000,
@@ -377,7 +396,7 @@ class OgmiosKupoBackend(AbstractBackend):
 
     def get_cancel_utxos(
         self,
-        stake_addresses: List[str],
+        stake_addresses: list[str],
         block_no: Optional[int] = None,
         after_time: Optional[Union[datetime, int]] = None,
         limit: int = 1000,
@@ -410,8 +429,10 @@ class OgmiosKupoBackend(AbstractBackend):
         """
         params = {"unspent": None, "order": "most_recent_first"}
         if asset:
-            params["policy_id"] = asset[:56]
-            params["asset_name"] = asset[56:] if len(asset) > 56 else None
+            params["policy_id"] = asset[:POLICY_ID_LENGTH]
+            params["asset_name"] = (
+                asset[POLICY_ID_LENGTH:] if len(asset) > POLICY_ID_LENGTH else None
+            )
 
         matches = self._kupo_request(f"matches/{address}", params=params)
         if matches:
@@ -438,12 +459,12 @@ class OgmiosKupoBackend(AbstractBackend):
     ) -> Optional[str]:
         """Get the target address for the given asset."""
         # Extract policy and name from assets
-        policy = assets.unit()[:56]
-        name = assets.unit()[56:]
+        policy = assets.unit()[:POLICY_ID_LENGTH]
+        name = assets.unit()[POLICY_ID_LENGTH:]
         asset_id = f"{policy}.{name}"
 
         # Prepare parameters for Kupo request
-        params = {
+        params: dict[str, Union[str, int, None]] = {
             "policy_id": policy,
             "asset_name": name if name else None,
             "order": "most_recent_first",
@@ -455,48 +476,42 @@ class OgmiosKupoBackend(AbstractBackend):
         try:
             # Query Kupo for matches
             matches = self._kupo_request(
-                "matches/55ff0e63efa0694e8065122c552e80c7b51768b7f20917af25752a7c/*",
+                "matches/{AXO_PAYMENT_CREDENTIAL}/*",
                 params=params,
             )
 
             # Filter and process matches
-            for match in matches:
+            for match in matches.root:
                 # Query all outputs for the transaction
-                tx_outputs = self._kupo_request(f"matches/*@{match['transaction_id']}")
+                tx_outputs = self._kupo_request(f"matches/*@{match.transaction_id}")
 
-                # Find the first output that contains the asset and is not an AXO address
-                for output in tx_outputs:
-                    output_payment_cred = self.get_payment_credential(output["address"])
+                # Find the first output that contains the asset and is not an AXO addr
+                for output in tx_outputs.root:
+                    output_payment_cred = self.get_payment_credential(output.address)
                     if (
-                        asset_id in output["value"].get("assets", {})
-                        and output_payment_cred
-                        != "55ff0e63efa0694e8065122c552e80c7b51768b7f20917af25752a7c"
+                        asset_id in output.value.assets
+                        and output_payment_cred != AXO_PAYMENT_CREDENTIAL
                     ):
-                        return output["address"]
+                        return output.address
 
             # If no suitable address found
             return None
 
-        except Exception as e:
+        except requests.RequestException as e:
             logger.error("Error in get_axo_target: %s", e)
             return None
 
-    def _format_assets(self, value: dict) -> Assets:
+    def _format_assets(self, value: AssetValue) -> Assets:
         """Format assets from Kupo format to Assets model.
 
         Args:
-            value (dict): Asset value from Kupo.
+            value (AssetValue): The asset value.
 
         Returns:
             Assets: Formatted assets.
         """
-        formatted_assets = {"lovelace": value["coins"]}
-        for asset_id, amount in value.get("assets", {}).items():
-            policy_id, asset_name = (
-                asset_id.split(".", 1) if "." in asset_id else (asset_id, "")
-            )
-            formatted_asset_id = f"{policy_id}{asset_name}"
-            formatted_assets[formatted_asset_id] = amount
+        formatted_assets = {"lovelace": value.coins}
+        formatted_assets.update(value.assets)
         return Assets(root=formatted_assets)
 
     def _get_datum_cbor(self, datum_hash: Optional[str]) -> Optional[str]:
@@ -512,7 +527,7 @@ class OgmiosKupoBackend(AbstractBackend):
             try:
                 datum_data = self._kupo_request(f"datums/{datum_hash}")
                 return datum_data["datum"]
-            except Exception as e:
+            except requests.RequestException as e:
                 logger.error("Error fetching datum CBOR: %s", e)
         return None
 
