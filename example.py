@@ -218,8 +218,8 @@ def main() -> None:
     # ruff: noqa: ERA001
     set_backend(
         OgmiosKupoBackend(
-            ogmios_url="ws://35.247.13.90:1337",
-            kupo_url="http://35.247.13.90:1442",
+            ogmios_url="ws://ogmios-url:1337",
+            kupo_url="http://kupo-url:1442",
             network=Network.MAINNET,
         ),
     )

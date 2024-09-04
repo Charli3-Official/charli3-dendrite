@@ -227,7 +227,7 @@ class OgmiosKupoBackend(AbstractBackend):
             },
         )
 
-        block_data = {}
+        block_data = {}  # type: ignore
         for match in kupo_matches.root:
             header_hash = match.created_at.header_hash
             slot_no = match.created_at.slot_no
@@ -439,22 +439,28 @@ class OgmiosKupoBackend(AbstractBackend):
                 asset[POLICY_ID_LENGTH:] if len(asset) > POLICY_ID_LENGTH else None
             )
 
-        matches = self._kupo_request(f"matches/{address}", params=params)
-        if matches:
-            match = matches.root[0]
+        matches: KupoGenericResponse = self._kupo_request(
+            f"matches/{address}",
+            params=params,
+        )
+        if isinstance(matches.root, list) and matches.root:
+            match: KupoResponse = matches.root[0]
             datum_hash = match.datum_hash
             if datum_hash:
-                datum = self._kupo_request(f"datums/{datum_hash}")
-                assets = self._format_assets(match.value)
-                return ScriptReference(
-                    tx_hash=match.transaction_id,
-                    tx_index=match.output_index,
-                    address=address.encode(),
-                    assets=assets,
-                    datum_hash=datum_hash,
-                    datum_cbor=datum.root.datum,
-                    script=None,
+                datum_response: KupoGenericResponse = self._kupo_request(
+                    f"datums/{datum_hash}",
                 )
+                if isinstance(datum_response.root, KupoDatumResponse):
+                    assets = self._format_assets(match.value)
+                    return ScriptReference(
+                        tx_hash=match.transaction_id,
+                        tx_index=match.output_index,
+                        address=address.encode(),
+                        assets=assets,
+                        datum_hash=datum_hash,
+                        datum_cbor=datum_response.root.datum,
+                        script=None,
+                    )
         return None
 
     def get_axo_target(
