@@ -12,8 +12,11 @@ from pycardano import Network  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
 from charli3_dendrite.backend.ogmios_kupo.models import AssetValue
+from charli3_dendrite.backend.ogmios_kupo.models import KupoDatumResponse
+from charli3_dendrite.backend.ogmios_kupo.models import KupoGenericResponse
 from charli3_dendrite.backend.ogmios_kupo.models import KupoResponse
 from charli3_dendrite.backend.ogmios_kupo.models import KupoResponseList
+from charli3_dendrite.backend.ogmios_kupo.models import KupoScriptResponse
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
@@ -60,7 +63,7 @@ class OgmiosKupoBackend(AbstractBackend):
         self,
         endpoint: str,
         params: Optional[dict] = None,
-    ) -> KupoResponseList:
+    ) -> KupoGenericResponse:
         """Make a request to the Kupo API.
 
         Args:
@@ -68,7 +71,7 @@ class OgmiosKupoBackend(AbstractBackend):
             params (Optional[dict]): Query parameters for the request.
 
         Returns:
-            KupoResponseList: The JSON response from the API.
+            KupoGenericResponse: The JSON response from the API.
 
         Raises:
             requests.exceptions.RequestException: If the request fails.
@@ -76,7 +79,7 @@ class OgmiosKupoBackend(AbstractBackend):
         url = f"{self.kupo_url}/{endpoint}"
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
-        return KupoResponseList.model_validate(response.json())
+        return KupoGenericResponse.model_validate(response.json())
 
     def _pool_state_from_kupo(self, match_data: KupoResponse) -> PoolStateInfo:
         """Convert Kupo match data to PoolStateInfo.
@@ -95,7 +98,6 @@ class OgmiosKupoBackend(AbstractBackend):
         datum_cbor = (
             self._get_datum_cbor(match_data.datum_hash) if match_data.datum_hash else ""
         )
-
         return PoolStateInfo(
             address=match_data.address,
             tx_hash=match_data.transaction_id,
@@ -147,10 +149,10 @@ class OgmiosKupoBackend(AbstractBackend):
                 )
 
             matches = self._kupo_request(f"matches/{address}?unspent", params=params)
-
-            for match in matches:
-                pool_state = self._pool_state_from_kupo(match)
-                pool_states.append(pool_state)
+            if isinstance(matches.root, list):
+                for match in matches.root:
+                    pool_state = self._pool_state_from_kupo(match)
+                    pool_states.append(pool_state)
 
         return PoolStateList(root=pool_states)
 
@@ -188,10 +190,13 @@ class OgmiosKupoBackend(AbstractBackend):
                 )
 
             matches = self._kupo_request(f"matches/{address}", params=params)
-
-            for match in matches:
-                pool_state = self._pool_state_from_kupo(match)
-                pool_states.append(pool_state)
+            if isinstance(matches.root, list):
+                if matches.root:
+                    for match in matches:
+                        pool_state = self._pool_state_from_kupo(match)
+                        pool_states.append(pool_state)
+                else:
+                    return PoolStateList(root=[])
 
         return PoolStateList(root=pool_states)
 
@@ -305,27 +310,27 @@ class OgmiosKupoBackend(AbstractBackend):
             ScriptReference: Script reference for the address.
         """
         script_hash = address.payment_part.payload.hex()
-        script_data = self._kupo_request(f"scripts/{script_hash}")
+        response = self._kupo_request(f"scripts/{script_hash}")
 
-        if script_data is None:
+        if isinstance(response.root, KupoScriptResponse):
             return ScriptReference(
                 tx_hash=None,
                 tx_index=None,
-                address=None,
+                address=str(address),
                 assets=None,
                 datum_hash=None,
                 datum_cbor=None,
-                script=None,
+                script=response.root.script,
             )
 
         return ScriptReference(
             tx_hash=None,
             tx_index=None,
-            address=None,
+            address=str(address),
             assets=None,
             datum_hash=None,
             datum_cbor=None,
-            script=script_data["script"],
+            script=None,
         )
 
     def _time_to_slot(self, time_value: Union[int, datetime]) -> int:
@@ -436,18 +441,18 @@ class OgmiosKupoBackend(AbstractBackend):
 
         matches = self._kupo_request(f"matches/{address}", params=params)
         if matches:
-            match = matches[0]
-            datum_hash = match.get("datum_hash")
+            match = matches.root[0]
+            datum_hash = match.datum_hash
             if datum_hash:
                 datum = self._kupo_request(f"datums/{datum_hash}")
-                assets = self._format_assets(match["value"])
+                assets = self._format_assets(match.value)
                 return ScriptReference(
-                    tx_hash=match["transaction_id"],
-                    tx_index=match["output_index"],
+                    tx_hash=match.transaction_id,
+                    tx_index=match.output_index,
                     address=address.encode(),
                     assets=assets,
                     datum_hash=datum_hash,
-                    datum_cbor=datum["datum"],
+                    datum_cbor=datum.root.datum,
                     script=None,
                 )
         return None
@@ -476,7 +481,7 @@ class OgmiosKupoBackend(AbstractBackend):
         try:
             # Query Kupo for matches
             matches = self._kupo_request(
-                "matches/{AXO_PAYMENT_CREDENTIAL}/*",
+                f"matches/{AXO_PAYMENT_CREDENTIAL}/*",
                 params=params,
             )
 
@@ -511,7 +516,12 @@ class OgmiosKupoBackend(AbstractBackend):
             Assets: Formatted assets.
         """
         formatted_assets = {"lovelace": value.coins}
-        formatted_assets.update(value.assets)
+        for asset_id, amount in value.assets.items():
+            policy_id, asset_name = (
+                asset_id.split(".", 1) if "." in asset_id else (asset_id, "")
+            )
+            formatted_asset_id = f"{policy_id}{asset_name}"
+            formatted_assets[formatted_asset_id] = amount
         return Assets(root=formatted_assets)
 
     def _get_datum_cbor(self, datum_hash: Optional[str]) -> Optional[str]:
@@ -526,7 +536,8 @@ class OgmiosKupoBackend(AbstractBackend):
         if datum_hash:
             try:
                 datum_data = self._kupo_request(f"datums/{datum_hash}")
-                return datum_data["datum"]
+                if isinstance(datum_data.root, KupoDatumResponse):
+                    return datum_data.root.datum
             except requests.RequestException as e:
                 logger.error("Error fetching datum CBOR: %s", e)
         return None

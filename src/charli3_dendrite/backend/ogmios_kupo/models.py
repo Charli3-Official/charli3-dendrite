@@ -2,11 +2,11 @@
 
 from enum import Enum
 from typing import Optional
+from typing import Union
 
 from pydantic import Field  # type: ignore
 from pydantic import RootModel
 
-from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
 
 
@@ -52,16 +52,33 @@ class KupoResponseList(RootModel):
     root: list[KupoResponse]
 
 
-class PoolStateInfo(DendriteBaseModel):
-    """Pool state info for Kupo response."""
+class KupoDatumResponse(DendriteBaseModel):
+    """Kupo response for datum requests."""
 
-    address: str
-    tx_hash: str
-    tx_index: int
-    block_time: int
-    block_index: int
-    block_hash: str
-    datum_hash: Optional[str] = None
-    datum_cbor: str = ""
-    assets: Assets
-    plutus_v2: bool
+    datum: str
+
+
+class KupoScriptResponse(DendriteBaseModel):
+    """Kupo response for script requests."""
+
+    script: str
+    language: Optional[str] = None
+
+
+class KupoGenericResponse(RootModel):
+    """Root model for generic Kupo response."""
+
+    root: Union[list[KupoResponse], KupoDatumResponse, KupoScriptResponse, dict]
+
+    @classmethod
+    def model_validate(cls: type, obj: Union[list, dict]) -> "KupoGenericResponse":
+        """Validate the input object and return the appropriate model."""
+        if isinstance(obj, list):
+            return cls(root=obj)
+        if isinstance(obj, dict):
+            if "datum" in obj:
+                return cls(root=KupoDatumResponse(**obj))
+            if "script" in obj:
+                return cls(root=KupoScriptResponse(**obj))
+
+        return cls(root=obj)
