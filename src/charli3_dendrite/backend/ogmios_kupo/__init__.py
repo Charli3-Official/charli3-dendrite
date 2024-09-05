@@ -172,7 +172,7 @@ class OgmiosKupoBackend(AbstractBackend):
         Returns:
             PoolStateList: List of pool states for the transaction.
         """
-        pool_states = []
+        pool_states: list[PoolStateInfo] = []
         if addresses is None:
             return PoolStateList(root=[])
 
@@ -191,8 +191,9 @@ class OgmiosKupoBackend(AbstractBackend):
 
             matches = self._kupo_request(f"matches/{address}", params=params)
             if isinstance(matches.root, list):
+                pool_states = []
                 if matches.root:
-                    for match in matches:
+                    for match in matches.root:
                         pool_state = self._pool_state_from_kupo(match)
                         pool_states.append(pool_state)
                 else:
@@ -293,11 +294,12 @@ class OgmiosKupoBackend(AbstractBackend):
         block_slot = block_time - SHELLEY_START + 4924800
         params = {"created_after": block_slot, "order": "most_recent_first"}
         matches = self._kupo_request("matches", params=params)
-        pool_states = [
-            self._pool_state_from_kupo(match)
-            for match in matches
-            if match.get("datum_hash")
-        ]
+        pool_states = []
+        if isinstance(matches.root, list):
+            for match in matches.root:
+                if isinstance(match, KupoResponse) and match.datum_hash:
+                    pool_state = self._pool_state_from_kupo(match)
+                    pool_states.append(pool_state)
         return PoolStateList(root=pool_states)
 
     def get_script_from_address(self, address: Address) -> ScriptReference:
