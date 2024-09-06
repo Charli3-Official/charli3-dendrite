@@ -49,4 +49,4 @@ plugins = [ "pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["pycardano","pycardano.*", "dotenv", "nox"]
-ignore_missing_imports = true 
+ignore_missing_imports = true
