@@ -22,8 +22,8 @@ class AbstractBackend(ABC):
     @abstractmethod
     def get_pool_utxos(
         self,
+        addresses: list[str],
         assets: list[str] | None = None,
-        addresses: list[str] | None = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
