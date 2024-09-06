@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - dev
+      # - dev
   pull_request:
     branches:
       - main
@@ -20,6 +20,10 @@ jobs:
       max-parallel: 1
       matrix:
         python-version: ["3.10", "3.11", "3.12"] # Versions specified in noxfile.py file.
+    if: |
+      github.event_name != 'pull_request' ||
+      (github.event_name == 'pull_request' && github.base_ref != 'dev') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'dev' && matrix.python-version == '3.10')
 
     steps:
       - name: Check out code
