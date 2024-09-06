@@ -1,11 +1,10 @@
-# noqa
 """Dataclasses for the different datums used in the Charli3 Dendrite project."""
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Union
 
-from pycardano import Address
+from pycardano import Address  # type: ignore
 from pycardano import DatumHash
 from pycardano import PlutusData
 from pycardano import VerificationKeyHash
@@ -66,14 +65,14 @@ class PlutusFullAddress(PlutusData):
         error_msg = "Only addresses with staking and payment parts are accepted."
         if None in [address.staking_part, address.payment_part]:
             raise ValueError(error_msg)
+        stake: _PlutusConstrWrapper | PlutusNone = PlutusNone()
         if address.staking_part is not None:
             stake = _PlutusConstrWrapper(
                 _PlutusConstrWrapper(
                     PlutusPartAddress(bytes.fromhex(str(address.staking_part))),
                 ),
             )
-        else:
-            stake = PlutusNone
+
         return PlutusFullAddress(
             PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
             stake=stake,
@@ -82,7 +81,7 @@ class PlutusFullAddress(PlutusData):
     def to_address(self) -> Address:
         """Convert back to an address."""
         payment_part = VerificationKeyHash(self.payment.address[:28])
-        if isinstance(self.stake, PlutusNone):
+        if isinstance(self.stake, PlutusNone) or self.stake is None:
             stake_part = None
         else:
             stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address[:28])
