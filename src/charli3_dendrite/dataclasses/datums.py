@@ -1,4 +1,5 @@
 """Dataclasses for the different datums used in the Charli3 Dendrite project."""
+
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass

@@ -46,8 +46,8 @@ class AbstractBackend(ABC):
     def get_pool_in_tx(
         self,
         tx_hash: str,
+        addresses: list[str],
         assets: list[str] | None = None,
-        addresses: list[str] | None = None,
     ) -> PoolStateList:
         """Get pool state for a specific transaction.
 

@@ -239,17 +239,17 @@ class MinswapOrderDatum(OrderDatum):
             return Assets(
                 {self.step.desired_coin.assets.unit(): self.step.minimum_receive},
             )
-        elif isinstance(self.step, SwapExactOut):
+        if isinstance(self.step, SwapExactOut):
             return Assets(
                 {self.step.desired_coin.assets.unit(): self.step.expected_receive},
             )
-        elif isinstance(self.step, Deposit):
+        if isinstance(self.step, Deposit):
             return Assets({"lp": self.step.minimum_lp})
-        elif isinstance(self.step, Withdraw):
+        if isinstance(self.step, Withdraw):
             return Assets(
                 {"asset_a": self.step.min_asset_a, "asset_b": self.step.min_asset_a},
             )
-        elif isinstance(self.step, ZapIn):
+        if isinstance(self.step, ZapIn):
             return Assets({self.step.desired_coin.assets.unit(): self.step.minimum_lp})
 
     def order_type(self) -> OrderType | None:
@@ -582,24 +582,21 @@ class MinswapV2OrderDatum(OrderDatum):
         if isinstance(self.step, SwapExactInV2):
             if isinstance(self.step.a_to_b_direction, BoolTrue):
                 return Assets({"asset_a": self.step.minimum_receive})
-            else:
-                return Assets({"asset_b": self.step.minimum_receive})
-        elif isinstance(self.step, SwapExactOutV2):
+            return Assets({"asset_b": self.step.minimum_receive})
+        if isinstance(self.step, SwapExactOutV2):
             if isinstance(self.step.a_to_b_direction, BoolTrue):
                 return Assets({"asset_a": self.step.expected_receive})
-            else:
-                return Assets({"asset_b": self.step.expected_receive})
-        elif isinstance(self.step, DepositV2):
+            return Assets({"asset_b": self.step.expected_receive})
+        if isinstance(self.step, DepositV2):
             return Assets({"lp": self.step.minimum_lp})
-        elif isinstance(self.step, WithdrawV2):
+        if isinstance(self.step, WithdrawV2):
             return Assets(
                 {
                     "asset_a": self.step.minimum_asset_a,
                     "asset_b": self.step.minimum_asset_b,
                 },
             )
-        else:
-            return Assets({})
+        return Assets({})
 
     def order_type(self) -> OrderType | None:
         """The order type."""

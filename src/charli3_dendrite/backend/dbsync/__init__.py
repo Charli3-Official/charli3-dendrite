@@ -1,4 +1,5 @@
 """Concrete implementation of AbstractBackend for db-sync."""
+
 import logging
 import os
 from datetime import datetime

@@ -57,8 +57,7 @@ class GeniusUTxORef(PlutusData):
     def __eq__(self, other):
         if isinstance(other, GeniusUTxORef):
             return self.hash() == other.hash()
-        else:
-            return False
+        return False
 
 
 @dataclass
@@ -441,8 +440,7 @@ class GeniusYieldOrderState(AbstractOrderState):
                 datum_hash=fee_datum.hash(),
             )
             min_ada = min_lovelace(tx_builder.context, output=fee_txo)
-            if fee_txo.amount.coin < min_ada:
-                fee_txo.amount.coin = min_ada
+            fee_txo.amount.coin = max(fee_txo.amount.coin, min_ada)
 
             txo = fee_txo
             order_datum = fee_datum

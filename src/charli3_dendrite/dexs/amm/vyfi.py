@@ -1,4 +1,5 @@
 """VyFi DEX Module."""
+
 import json
 import time
 from dataclasses import dataclass
@@ -155,11 +156,11 @@ class VyFiOrderDatum(OrderDatum):
     def requested_amount(self) -> Assets:
         if isinstance(self.order, BtoA):
             return Assets({"asset_a": self.order.min_receive})
-        elif isinstance(self.order, AtoB):
+        if isinstance(self.order, AtoB):
             return Assets({"asset_b": self.order.min_receive})
-        elif isinstance(self.order, (ZapInA, ZapInB, Deposit)):
+        if isinstance(self.order, (ZapInA, ZapInB, Deposit)):
             return Assets({"lp": self.order.min_lp_receive})
-        elif isinstance(self.order, Withdraw):
+        if isinstance(self.order, Withdraw):
             return Assets(
                 {
                     "asset_a": self.order.min_lp_receive.min_amount_a,
@@ -240,9 +241,9 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             cls._pools = {}
             for p in requests.get("https://api.vyfi.io/lp?networkId=1&v2=true").json():
                 p["json"] = json.loads(p["json"])
-                cls._pools[
-                    p["json"]["mainNFT"]["currencySymbol"]
-                ] = VyFiPoolDefinition.model_validate(p)
+                cls._pools[p["json"]["mainNFT"]["currencySymbol"]] = (
+                    VyFiPoolDefinition.model_validate(p)
+                )
             cls._pools_refresh = time.time()
 
         return cls._pools
@@ -320,10 +321,9 @@ class VyFiCPPState(AbstractConstantProductPoolState):
                     raise NoAssetsError(
                         f"{cls.__name__}: No assets supplied.",
                     )
-                else:
-                    raise NotAPoolError(
-                        f"{cls.__name__}: Pool must have one DEX NFT token.",
-                    )
+                raise NotAPoolError(
+                    f"{cls.__name__}: Pool must have one DEX NFT token.",
+                )
             pool_nft = Assets(**{nfts[0]: assets.root.pop(nfts[0])})
             values["pool_nft"] = pool_nft
 

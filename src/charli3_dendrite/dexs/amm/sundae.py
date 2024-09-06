@@ -213,10 +213,8 @@ class SundaeOrderDatum(OrderDatum):
         if isinstance(self.swap, SwapConfig):
             if isinstance(self.swap.direction, AtoB):
                 return Assets({"asset_b": self.swap.amount_out.min_receive})
-            else:
-                return Assets({"asset_a": self.swap.amount_out.min_receive})
-        else:
-            return Assets({})
+            return Assets({"asset_a": self.swap.amount_out.min_receive})
+        return Assets({})
 
     def order_type(self) -> OrderType | None:
         """Get the order type."""
@@ -360,8 +358,7 @@ class SundaeV3OrderDatum(OrderDatum):
                     ).hex(): self.swap.out_value[2],
                 },
             )
-        else:
-            return Assets({})
+        return Assets({})
 
     def order_type(self) -> OrderType:
         order_type = None
@@ -514,8 +511,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
                     values["assets"]["lovelace"] = values["assets"].pop("lovelace")
             values["assets"] = Assets.model_validate(values["assets"])
             return True
-        else:
-            return False
+        return False
 
     @classmethod
     def extract_pool_nft(cls, values) -> Assets:
@@ -525,8 +521,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         except InvalidPoolError:
             if len(values["assets"]) == 0:
                 raise NoAssetsError
-            else:
-                raise NotAPoolError("No pool NFT found.")
+            raise NotAPoolError("No pool NFT found.")
 
     @classmethod
     def pool_policy(cls) -> list[str]:
@@ -655,8 +650,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
             cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
             return True
-        else:
-            return False
+        return False
 
     @classmethod
     def extract_pool_nft(cls, values) -> Assets:
@@ -665,8 +659,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         except InvalidPoolError:
             if len(values["assets"]) == 0:
                 raise NoAssetsError
-            else:
-                raise NotAPoolError("No pool NFT found.")
+            raise NotAPoolError("No pool NFT found.")
 
     @classmethod
     def post_init(cls, values):

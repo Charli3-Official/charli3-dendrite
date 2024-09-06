@@ -160,9 +160,9 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     fee: int = 30
     _batcher = Assets(lovelace=950000)
     _deposit = Assets(lovelace=1700000)
-    _test_pool: ClassVar[
-        str
-    ] = "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"
+    _test_pool: ClassVar[str] = (
+        "a8512101cb1163cc218e616bb4d4070349a1c9395313f1323cc583634d7565736c695377617054657374506f6f6c"
+    )
     _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1zyq0kyrml023kwjk8zr86d5gaxrt5w8lxnah8r6m6s4jp4g3r6dxnzml343sx8jweqn4vn3fz2kj8kgu9czghx0jrsyqqktyhv",
     )

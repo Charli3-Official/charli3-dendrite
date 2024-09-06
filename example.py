@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from typing import Optional
 
+from pycardano import Address  # type: ignore
+
 from charli3_dendrite import SundaeSwapCPPState  # type: ignore
 from charli3_dendrite.backend import DbsyncBackend  # type: ignore
 from charli3_dendrite.backend import Network  # type: ignore
@@ -19,7 +21,6 @@ from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState  # type: ignore
 from charli3_dendrite.dexs.core.errors import InvalidLPError  # type: ignore
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
-from pycardano import Address  # type: ignore
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

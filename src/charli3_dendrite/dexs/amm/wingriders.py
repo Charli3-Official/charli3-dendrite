@@ -39,11 +39,10 @@ class WingriderAssetClass(PlutusData):
                 asset_a=AssetClass.from_assets(in_assets),
                 asset_b=AssetClass.from_assets(out_assets),
             )
-        else:
-            return cls(
-                asset_a=AssetClass.from_assets(out_assets),
-                asset_b=AssetClass.from_assets(in_assets),
-            )
+        return cls(
+            asset_a=AssetClass.from_assets(out_assets),
+            asset_b=AssetClass.from_assets(in_assets),
+        )
 
 
 @dataclass
@@ -126,8 +125,7 @@ class WingRidersOrderDetail(PlutusData):
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             return cls(direction=AtoB(), min_receive=out_assets.quantity())
-        else:
-            return cls(direction=BtoA(), min_receive=out_assets.quantity())
+        return cls(direction=BtoA(), min_receive=out_assets.quantity())
 
 
 @dataclass
@@ -209,23 +207,22 @@ class WingRidersOrderDatum(OrderDatum):
     def requested_amount(self) -> Assets:
         if isinstance(self.detail, WingRidersDepositDetail):
             return Assets({"lp": self.detail.min_lp_receive})
-        elif isinstance(self.detail, WingRidersOrderDetail):
+        if isinstance(self.detail, WingRidersOrderDetail):
             if isinstance(self.detail.direction, BtoA):
                 return Assets(
                     {self.config.assets.asset_a.assets.unit(): self.detail.min_receive},
                 )
-            else:
-                return Assets(
-                    {self.config.assets.asset_b.assets.unit(): self.detail.min_receive},
-                )
-        elif isinstance(self.detail, WingRidersWithdrawDetail):
+            return Assets(
+                {self.config.assets.asset_b.assets.unit(): self.detail.min_receive},
+            )
+        if isinstance(self.detail, WingRidersWithdrawDetail):
             return Assets(
                 {
                     self.config.assets.asset_a.assets.unit(): self.detail.min_amount_a,
                     self.config.assets.asset_b.assets.unit(): self.detail.min_amount_b,
                 },
             )
-        elif isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
+        if isinstance(self.detail, WingRidersMaybeFeeClaimDetail):
             return Assets({})
 
     def order_type(self) -> OrderType | None:
@@ -343,8 +340,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
                     values["assets"]["lovelace"] = values["assets"].pop("lovelace")
             values["assets"] = Assets.model_validate(values["assets"])
             return True
-        else:
-            return False
+        return False
 
     @classmethod
     def post_init(cls, values):
@@ -370,8 +366,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
                 in_assets=in_assets,
                 out_assets=out_assets,
             )
-        else:
-            return self._deposit
+        return self._deposit
 
     def batcher_fee(
         self,
@@ -383,7 +378,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
         if "lovelace" in merged_assets:
             if merged_assets["lovelace"] <= 250000000:
                 return Assets(lovelace=850000)
-            elif merged_assets["lovelace"] <= 500000000:
+            if merged_assets["lovelace"] <= 500000000:
                 return Assets(lovelace=1500000)
         return self._batcher
 

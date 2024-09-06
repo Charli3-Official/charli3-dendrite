@@ -1,4 +1,5 @@
 """Methods for abstracting SQL selections and parsing results."""
+
 from abc import ABC
 from abc import abstractmethod
 

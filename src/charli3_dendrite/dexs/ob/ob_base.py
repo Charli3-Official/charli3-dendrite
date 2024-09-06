@@ -178,15 +178,14 @@ class AbstractOrderState(AbstractPairState):
             # Send the ADA token to the end
             values["assets"].root["lovelace"] = values["assets"].root.pop("lovelace")
 
+        elif len(assets) == 1 and "lovelace" in assets:
+            raise NoAssetsError(
+                f"Invalid pool, only contains lovelace: assets={assets}",
+            )
         else:
-            if len(assets) == 1 and "lovelace" in assets:
-                raise NoAssetsError(
-                    f"Invalid pool, only contains lovelace: assets={assets}",
-                )
-            else:
-                raise InvalidPoolError(
-                    f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}",
-                )
+            raise InvalidPoolError(
+                f"Pool must have 2 or 3 assets except factor, NFT, and LP tokens: assets={assets}",
+            )
         return values
 
     @model_validator(mode="before")
@@ -202,7 +201,7 @@ class AbstractOrderState(AbstractPairState):
         if "assets" in values:
             if values["assets"] is None:
                 raise NoAssetsError("No assets in the pool.")
-            elif not isinstance(values["assets"], Assets):
+            if not isinstance(values["assets"], Assets):
                 values["assets"] = Assets(**values["assets"])
 
         if cls.skip_init(values):
