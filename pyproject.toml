@@ -14,7 +14,7 @@ psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
 python-dotenv = "0.21.1"
 pycardano = "0.11.1"
 blockfrost-python = "^0.5.3"
-ogmios = "^1.1.1"
+ogmios = "1.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
