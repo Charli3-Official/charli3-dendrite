@@ -4,7 +4,7 @@ from abc import ABC
 from abc import abstractmethod
 from datetime import datetime
 
-from pycardano import Address
+from pycardano import Address  # type: ignore
 
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateList
@@ -20,7 +20,7 @@ class AbstractBackend(ABC):
     """
 
     @abstractmethod
-    def get_pool_utxos(  # noqa: PLR0913
+    def get_pool_utxos(
         self,
         assets: list[str] | None = None,
         addresses: list[str] | None = None,
@@ -119,7 +119,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_order_utxos_by_block_or_tx(  # noqa: PLR0913
+    def get_order_utxos_by_block_or_tx(
         self,
         stake_addresses: list[str],
         out_tx_hash: list[str] | None = None,
@@ -146,7 +146,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_cancel_utxos(  # noqa: PLR0913
+    def get_cancel_utxos(
         self,
         stake_addresses: list[str],
         block_no: int | None = None,
