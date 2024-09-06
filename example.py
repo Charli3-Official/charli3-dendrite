@@ -226,7 +226,7 @@ def main() -> None:
 
     # 3. BlockFrostBackend (some methods may not be implemented)
     # ruff: noqa: ERA001
-    # set_backend(BlockFrostBackend("mainnetVs1Kwtk4Iz04ll4zSBINbLHeT7up0tHN"))
+    # set_backend(BlockFrostBackend("blockfrost-api-key"))
 
     # Note: BlockFrost and Ogmios-Kupo backends may raise NotImplementedError
     # for methods like get_historical_order_utxos, get_order_utxos_by_block_or_tx,
