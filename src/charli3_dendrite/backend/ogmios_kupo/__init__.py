@@ -113,8 +113,8 @@ class OgmiosKupoBackend(AbstractBackend):
 
     def get_pool_utxos(
         self,
+        addresses: list[str],
         assets: Optional[list[str]] = None,
-        addresses: Optional[list[str]] = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
@@ -159,8 +159,8 @@ class OgmiosKupoBackend(AbstractBackend):
     def get_pool_in_tx(
         self,
         tx_hash: str,
+        addresses: list[str],
         assets: Optional[list[str]] = None,
-        addresses: Optional[list[str]] = None,
     ) -> PoolStateList:
         """Get pool states for a specific transaction.
 
@@ -281,7 +281,7 @@ class OgmiosKupoBackend(AbstractBackend):
         response.raise_for_status()
         return response.json()
 
-    def get_pool_utxos_in_block(self, block_no: int, block_time: int) -> PoolStateList:
+    def get_pool_utxos_in_block(self, block_no: int, block_time: int) -> PoolStateList:  # type: ignore
         """Get pool UTXOs created in a specific block.
 
         Args:
@@ -290,6 +290,8 @@ class OgmiosKupoBackend(AbstractBackend):
 
         Returns:
             PoolStateList: List of pool state objects for the block.
+
+        Note: This method only works with blocktime as input, not block number.
         """
         block_slot = block_time - SHELLEY_START + 4924800
         params = {"created_after": block_slot, "order": "most_recent_first"}

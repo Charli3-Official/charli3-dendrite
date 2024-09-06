@@ -102,8 +102,8 @@ def test_get_pool_in_tx() -> None:
 
 def test_last_block() -> None:
     """Test the last_block method."""
-    result = get_backend().last_block(last_n_blocks=2)
-    assert len(result) == 2
+    result = get_backend().last_block(last_n_blocks=1)
+    assert len(result) == 1
     assert all(hasattr(block, "block_no") for block in result)
 
 

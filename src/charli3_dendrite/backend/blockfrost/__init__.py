@@ -58,10 +58,10 @@ class BlockFrostBackend(AbstractBackend):
 
     def get_pool_utxos(
         self,
+        addresses: list[str],
         assets: Optional[list[str]] = None,
-        addresses: Optional[list[str]] = None,
         limit: int = 1000,
-        page: int = 100,
+        page: int = 0,
         historical: bool = True,
     ) -> PoolStateList:
         """Get pool UTXOs based on assets and addresses.
@@ -103,8 +103,8 @@ class BlockFrostBackend(AbstractBackend):
     def get_pool_in_tx(
         self,
         tx_hash: str,
+        addresses: list[str],
         assets: Optional[list[str]] = None,
-        addresses: Optional[list[str]] = None,
     ) -> PoolStateList:
         """Get pool states for a specific transaction.
 
