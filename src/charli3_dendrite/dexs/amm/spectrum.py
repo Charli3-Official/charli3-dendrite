@@ -349,10 +349,8 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         assets = values["assets"]
 
         quantity = (
-    assets.quantity()
-    if len(assets) == cls.LEN_ASSETS
-    else assets.quantity(1)
-)
+            assets.quantity() if len(assets) == cls.LEN_ASSETS else assets.quantity(1)
+        )
 
         if 2 * quantity <= datum.lq_bound:
             values["inactive"] = True
