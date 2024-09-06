@@ -1,4 +1,5 @@
 """Module providing types and state classes for AMM pools."""
+
 from typing import ClassVar
 
 from charli3_dendrite.dataclasses.models import Assets

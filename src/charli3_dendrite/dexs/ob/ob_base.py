@@ -1,3 +1,5 @@
+"""Module providing base classes for OB pools."""
+
 from abc import abstractmethod
 from decimal import Decimal
 from math import ceil

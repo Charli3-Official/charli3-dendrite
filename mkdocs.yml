@@ -1,0 +1,101 @@
+# Site Information
+site_name: Charli3 Dendrite
+site_url: https://charli3-official.github.io/charli3-dendrite/
+site_description: "Documentation for the Charli3 Dendrite project."
+repo_url: https://github.com/Charli3-Official/charli3-dendrite
+repo_name: 'Charli3-Official/charli3-dendrite'
+edit_uri: https://github.com/Charli3-Official/charli3-dendrite/edit/main/docs/
+
+theme:
+  name: material
+  palette:
+
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      primary: custom
+      accent: custom
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: custom
+      accent: custom
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  font:
+    text: 'Bai Jamjuree'
+    code: 'Fira Code'
+  locale: en
+  include_sidebar: true
+  shortcuts:
+    help: 191    # ?
+    next: 78     # n
+    previous: 80 # p
+    search: 83   # s
+
+nav:
+  - Home: index.md
+  - DEXs:
+      - Automated Market Maker:
+          - Vyfi: vyfi.md
+          - Minswap: minswap.md
+          - Muesliswap: muesliswap.md
+          - Spectrum: spectrum.md
+          - Sundae: sundae.md
+          - Wingriders: wingriders.md
+      - Order Book:
+          - Axo: axo.md
+          - Genius Yield: geniusyield.md
+      - Core:
+          - core_base.md
+          - errors.md
+  - Abstract Classes:
+      - Datums: datums.md
+      - Models: models.md
+      - Automated Market Maker Base: amm_base.md
+      - Automated Market Marke Types: types.md
+      - Order Book Base: order_book_base.md
+  - Backend:
+      - Backend Base: backend_base.md
+      - Utils: utils.md
+      - DBsync:
+          - Models: dbsync_models.md
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          rendering:
+            show_source: true
+            show_root_toc_entry: false
+            separate_members: true
+            group_by_type: true
+            shorten_signatures: true
+          options:
+            docstring_style: google  # Choose a consistent docstring style.
+            class_attributes_style: italic  # Make class attributes italic for emphasis.
+            bases_style: bold  # Make base class names bold.
+            show_signature_annotations: true  # Display type annotations in signatures.
+            show_if_empty: true  # Always show class/method even if docstring is empty.
+watch:
+  - src
+extra:
+  version: 1.0
+extra_css:
+  - css/custom.css
+  - stylesheets/extra.css

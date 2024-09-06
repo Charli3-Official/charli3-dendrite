@@ -1,4 +1,4 @@
-"""VyFi DEX implementation."""
+"""VyFi DEX Module."""
 import json
 import time
 from dataclasses import dataclass
