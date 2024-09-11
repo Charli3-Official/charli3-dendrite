@@ -1,5 +1,6 @@
+"""Methods for abstracting SQL selections and parsing results."""
 from abc import ABC
-from abc import abstractclassmethod
+from abc import abstractmethod
 
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
 from charli3_dendrite.dataclasses.models import PoolStateList
@@ -8,20 +9,27 @@ from charli3_dendrite.dataclasses.models import SwapTransactionList
 
 
 class AbstractDBSyncStructure(ABC):
-    @abstractclassmethod
+    """Abstract class with required methods for SQL queries."""
+
+    @classmethod
+    @abstractmethod
     def select(cls) -> str:
         """The selectin part of a DBSync query."""
         raise NotImplementedError
 
-    @abstractclassmethod
-    def parse(cls, data: dict) -> DendriteBaseModel:
+    @classmethod
+    @abstractmethod
+    def parse(cls, data: dict | list[dict]) -> DendriteBaseModel:
         """Parse data returned from a dbsync query."""
         raise NotImplementedError
 
 
 class PoolSelector(AbstractDBSyncStructure):
+    """Query selections and parsing classes for AMM pools."""
+
     @classmethod
     def select(cls) -> str:
+        """Select SQL query for swap pools."""
         return """
 SELECT txo.address,
 ENCODE(tx.hash, 'hex') as "tx_hash",
@@ -52,13 +60,17 @@ COALESCE (
 """
 
     @classmethod
-    def parse(cls, data: dict) -> PoolStateList:
+    def parse(cls, data: dict | list[dict]) -> PoolStateList:
+        """Parse pools from a query."""
         return PoolStateList.model_validate(data)
 
 
 class UTxOSelector(AbstractDBSyncStructure):
+    """Selection queries and parsing classes for reference scripts and datums."""
+
     @classmethod
     def select(cls) -> str:
+        """Selection SQL query for reference scripts and datums."""
         return """
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
@@ -82,19 +94,22 @@ COALESCE (
 ENCODE(s.bytes, 'hex') as "script" """
 
     @classmethod
-    def parse(cls, data: dict) -> ScriptReference:
+    def parse(cls, data: dict | list[dict]) -> ScriptReference:
+        """Parsing class for UTxOs containing a reference script or datum."""
         return ScriptReference.model_validate(data)
 
 
 class OrderSelector(AbstractDBSyncStructure):
+    """SQL query for orders and the associated pydantic parsing class."""
+
     @classmethod
     def select(cls) -> str:
+        """The SQL select statement for orders."""
         return """
 SELECT (
 	SELECT array_agg(DISTINCT txo.address)
 	FROM tx_out txo
-	LEFT JOIN tx_in txi ON txo.tx_id = txi.tx_out_id AND txo.index = txi.tx_out_index
-	WHERE txi.tx_in_id = txo_stake.tx_id
+	WHERE txo.consumed_by_tx_id = txo_stake.tx_id
 ) AS "submit_address_inputs",
 txo_stake.address as "submit_address_stake",
 ENCODE(tx.hash, 'hex') as "submit_tx_hash",
@@ -151,9 +166,12 @@ COALESCE(
 	)::jsonb,
 	jsonb_build_array(json_build_object('lovelace',txo_output.value::TEXT)::jsonb)
 ) AS "assets",
-(txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL) as "plutus_v2"
+(
+    txo_output.inline_datum_id IS NOT NULL OR txo_output.reference_script_id IS NOT NULL
+) as "plutus_v2"
 """
 
     @classmethod
-    def parse(cls, data: dict) -> SwapTransactionList:
+    def parse(cls, data: dict | list[dict]) -> SwapTransactionList:
+        """Parse and validate orders."""
         return SwapTransactionList.model_validate(data)

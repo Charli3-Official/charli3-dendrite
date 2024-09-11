@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "charli3_dendrite"
-version = "1.0.0"
+version = "1.1.0-dev1"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
@@ -14,6 +14,7 @@ psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
 python-dotenv = "0.21.1"
 pycardano = "0.11.1"
 blockfrost-python = "^0.5.3"
+ogmios = "1.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -42,3 +43,10 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.isort]
 profile = "black"
+
+[tool.mypy]
+plugins = [ "pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pycardano","pycardano.*", "dotenv", "nox"]
+ignore_missing_imports = true

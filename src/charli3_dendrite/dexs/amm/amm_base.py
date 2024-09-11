@@ -4,11 +4,11 @@ from abc import abstractmethod
 from decimal import Decimal
 from typing import Any
 
-from pycardano import Address
+from pycardano import Address  # type: ignore
 from pycardano import DeserializeException
 from pycardano import PlutusData
 from pycardano import TransactionOutput
-from pydantic import model_validator
+from pydantic import model_validator  # type: ignore
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.core.base import AbstractPairState
@@ -69,7 +69,7 @@ class AbstractPoolState(AbstractPairState):
         """The pool state datum."""
         return self.pool_datum_class().from_cbor(self.datum_cbor)
 
-    def swap_datum(  # noqa: PLR0913
+    def swap_datum(
         self,
         address_source: Address,
         in_assets: Assets,
@@ -116,7 +116,7 @@ class AbstractPoolState(AbstractPairState):
             datum_target=datum_target,
         )
 
-    def swap_utxo(  # noqa: PLR0913
+    def swap_utxo(
         self,
         address_source: Address,
         in_assets: Assets,
@@ -427,7 +427,7 @@ class AbstractPoolState(AbstractPairState):
         return values
 
     @model_validator(mode="before")
-    def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:
+    def translate_address(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: N805
         """The main validation function called when initialized.
 
         Args:

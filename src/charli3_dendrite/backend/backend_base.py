@@ -3,9 +3,11 @@
 from abc import ABC
 from abc import abstractmethod
 from datetime import datetime
+from typing import Optional
 
-from pycardano import Address
+from pycardano import Address  # type: ignore
 
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateList
 from charli3_dendrite.dataclasses.models import ScriptReference
@@ -20,10 +22,10 @@ class AbstractBackend(ABC):
     """
 
     @abstractmethod
-    def get_pool_utxos(  # noqa: PLR0913
+    def get_pool_utxos(
         self,
+        addresses: list[str],
         assets: list[str] | None = None,
-        addresses: list[str] | None = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
@@ -46,8 +48,8 @@ class AbstractBackend(ABC):
     def get_pool_in_tx(
         self,
         tx_hash: str,
+        addresses: list[str],
         assets: list[str] | None = None,
-        addresses: list[str] | None = None,
     ) -> PoolStateList:
         """Get pool state for a specific transaction.
 
@@ -119,7 +121,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_order_utxos_by_block_or_tx(  # noqa: PLR0913
+    def get_order_utxos_by_block_or_tx(
         self,
         stake_addresses: list[str],
         out_tx_hash: list[str] | None = None,
@@ -146,7 +148,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def get_cancel_utxos(  # noqa: PLR0913
+    def get_cancel_utxos(
         self,
         stake_addresses: list[str],
         block_no: int | None = None,
@@ -173,7 +175,7 @@ class AbstractBackend(ABC):
         self,
         address: str,
         asset: str | None = None,
-    ) -> str | None:
+    ) -> Optional[ScriptReference]:
         """Get datum from a given address.
 
         Args:
@@ -182,5 +184,22 @@ class AbstractBackend(ABC):
 
         Returns:
             The datum associated with the address, if any.
+        """
+        pass
+
+    @abstractmethod
+    def get_axo_target(
+        self,
+        assets: Assets,
+        block_time: datetime | None = None,
+    ) -> str | None:
+        """Get the target address for the given assets.
+
+        Args:
+            assets: The assets to query.
+            block_time: The block time to query.
+
+        Returns:
+            The target address for the assets, if any.
         """
         pass

@@ -18,7 +18,7 @@ Charli3 Dendrite is a powerful Python SDK designed for seamless interaction with
 - 💧 Liquidity Pool Data: Fetch and analyze pool information across different DEXs
 - 💱 Swap Operations: Execute token swaps with ease
 - 🧩 Flexible Asset Handling: Manage various asset types and pool states efficiently
-- 🔗 On-chain Data Integration: Connect with DB-sync
+- 🔗 On-chain Data Integration: Connect with DB-sync, BlockFrost, and Ogmios/Kupo
 - 🛠 Extensible Architecture: Easily add support for new DEXs and features
 
 
@@ -54,23 +54,18 @@ Charli3 Dendrite currently supports the following Cardano DEXs:
 - SaturnSwap
 - Splash
 
-Each DEX is implemented as a separate module within the `charli3 dendrite.dexs.amm` package.
-
+Each DEX is implemented as a separate module within the `charli3_dendrite.dexs.amm` package.
 
 ## Configuration
 Charli3 Dendrite can be configured using environment variables or a `.env` file. See `sample.env` for an example of the configuration options.
 
-#### Blockfrost Configuration
+### Backend Configuration
 
-Blockfrost is required for the test suite. To use Blockfrost, you must configure your API key by setting it in your environment variables or in a `.env` file:
-
-```bash
-PROJECT_ID="your-blockfrost-project-id"
-NETWORK="mainnet"  # or "testnet" for the Cardano testnet
-```
+Charli3 Dendrite supports multiple backend options for interacting with the Cardano blockchain:
 
 #### DBSync Configuration
-Charli3 Dendrite supports using a DBSync instance as a blockchain connection. To configure DBSync, set the following environment variables:
+
+To use a DBSync instance as the blockchain connection, set the following environment variables:
 
 ```bash
 DBSYNC_HOST="your-dbsync-host"
@@ -79,21 +74,73 @@ DBSYNC_DB_NAME="your-dbsync-database-name"
 DBSYNC_USER="your-dbsync-username"
 DBSYNC_PASS="your-dbsync-password"
 ```
-#### Future Plans: Ogmios and Kupo
-We plan to extend support for additional data providers, specifically Ogmios/Kupo and Blockfrost, in future releases. These providers will offer alternative methods for interacting with the Cardano blockchain and may deliver performance enhancements or additional features.
 
-Please stay informed about upcoming updates regarding the integration of these providers. Once implemented, they will be configurable in a manner consistent with the existing providers.
+#### BlockFrost Configuration
 
-## Use Cases
-### Retrieving Orders and Pool Data on VyFi
+To use BlockFrost as the backend, set the following environment variables:
 
-To retrieve all orders from the VyFi DEX, the global backend must first be configured. This configuration is achieved by invoking the `set_backend` function, which sets up the `AbstractBackend` class. The `AbstractBackend` interface enables seamless interaction with various Cardano blockchain connections, including db-sync, and Ogmios/Kupo. If no backend is explicitly specified, the function defaults to configurations based on environment variables to select the appropriate backend.
-```python
-set_backend(backend)                   # Set the current backend according to environment variables.
-backend: DbsyncBackend = get_backend() # Retrieve the current backend instance.
+```bash
+BLOCKFROST_PROJECT_ID="your-blockfrost-project-id"
+CARDANO_NETWORK="mainnet"  # or "testnet" for the Cardano testnet
 ```
-The `DbsyncBackend` class offers specialized queries for interacting with the underlying PostgreSQL database, which stores blockchain blocks and transactions. To retrieve all orders, one can utilize the `pool_selector` method to request pool information from the VyFi API. After acquiring the relevant pool data and configuring the backend, the `backend.get_pool_utxos()` method can be employed to query the latest UTxOs associated with the selected pool.
+
+#### Ogmios/Kupo Configuration
+
+To use Ogmios and Kupo as the backend, set the following environment variables:
+
+```bash
+OGMIOS_URL="ws://your-ogmios-url:port"
+KUPO_URL="http://your-kupo-url:port"
+CARDANO_NETWORK="mainnet"  # or "testnet" for the Cardano testnet
+```
+
+The backend will be automatically selected based on the available environment variables. If multiple backend configurations are present, the priority order is: DBSync, BlockFrost, Ogmios/Kupo.
+
+### Backend Limitations
+
+While Charli3 Dendrite supports multiple backends, it's important to note that the BlockFrost and Ogmios/Kupo backends have some limitations compared to the DBSync backend:
+
+- **BlockFrost Backend**: Due to limitations in the BlockFrost API, the following methods are not implemented:
+  - `get_historical_order_utxos`
+  - `get_order_utxos_by_block_or_tx`
+  - `get_cancel_utxos`
+  - `get_axo_target`
+
+- **Ogmios/Kupo Backend**: The Ogmios/Kupo backend also has limitations due to the nature of these services:
+  - `get_historical_order_utxos`
+  - `get_order_utxos_by_block_or_tx`
+  - `get_cancel_utxos`
+
+These methods will raise a `NotImplementedError` when called using the BlockFrost or Ogmios/Kupo backends. If your application requires these functionalities, consider using the DBSync backend.
+
+## Usage
+
+### Retrieving Orders and Pool Data
+
+To retrieve orders and pool data, first configure the global backend:
+
 ```python
+from charli3_dendrite.backend import set_backend, get_backend
+from charli3_dendrite.backend.dbsync import DbsyncBackend
+from charli3_dendrite.backend.blockfrost import BlockFrostBackend
+from charli3_dendrite.backend.ogmios_kupo import OgmiosKupoBackend
+from pycardano import Network
+
+# Choose one of the following backends:
+# set_backend(DbsyncBackend())
+# set_backend(BlockFrostBackend("your-project-id"))
+set_backend(OgmiosKupoBackend("ws://ogmios-url:port", "http://kupo-url:port", Network.MAINNET))
+
+backend = get_backend()
+```
+
+The `AbstractBackend` interface offers methods for interacting with the Cardano blockchain, regardless of the underlying data source. This abstraction allows seamless switching between different backends without changing your application code.
+
+To retrieve pool information, use the `pool_selector` method provided by each DEX's state class:
+
+```python
+from charli3_dendrite import VyFiCPPState
+
 selector = VyFiCPPState.pool_selector()
 result = backend.get_pool_utxos(
     limit=100000,
