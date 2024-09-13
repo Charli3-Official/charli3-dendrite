@@ -12,9 +12,8 @@ requests = "^2.31.0"
 pydantic = "^2.5.2"
 psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
 python-dotenv = "0.21.1"
-pycardano = "0.11.1"
-blockfrost-python = "^0.5.3"
-ogmios = "1.1.1"
+pycardano = { git = "https://github.com/xxAVOGADROxx/pycardano.git", branch = "chang-fixes"}
+blockfrost-python = "^0.6.0"
 
 
 [tool.poetry.group.dev.dependencies]

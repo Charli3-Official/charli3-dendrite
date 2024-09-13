@@ -6,8 +6,8 @@ from typing import Optional
 from typing import Union
 
 import requests
-from ogmios import OgmiosChainContext  # type: ignore
 from pycardano import Address  # type: ignore
+from pycardano import KupoOgmiosV6ChainContext
 from pycardano import Network  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -52,12 +52,14 @@ class OgmiosKupoBackend(AbstractBackend):
         """
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
-        self.ogmios_context = OgmiosChainContext(
+        self.ogmios_context = KupoOgmiosV6ChainContext(
             host=self.ws_url,
             port=int(self.port),
+            secure=False,
+            refetch_chain_tip_interval=None,
             network=network,
+            kupo_url=kupo_url,
         )
-        self.kupo_url = kupo_url
 
     def _kupo_request(
         self,
@@ -76,7 +78,7 @@ class OgmiosKupoBackend(AbstractBackend):
         Raises:
             requests.exceptions.RequestException: If the request fails.
         """
-        url = f"{self.kupo_url}/{endpoint}"
+        url = f"{self.ogmios_context._kupo_url}/{endpoint}"
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         return KupoGenericResponse.model_validate(response.json())
