@@ -583,6 +583,15 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     )
 
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
+    ) -> Assets:
+        # return self.__class__._batcher_fee
+        return Assets(lovelace=1280000)
+
     @classmethod
     def dex(cls) -> str:
         return "SundaeSwapV3"
@@ -687,6 +696,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         )
 
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
+        print(datum.simple_fee, datum.base_fee)
         cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
 
     def swap_datum(
