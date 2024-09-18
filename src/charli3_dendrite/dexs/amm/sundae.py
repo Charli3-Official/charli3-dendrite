@@ -589,8 +589,8 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ) -> Assets:
-        # return self.__class__._batcher_fee
-        return Assets(lovelace=1280000)
+        return self.__class__._batcher_fee
+        # return Assets(lovelace=1280000)
 
     @classmethod
     def dex(cls) -> str:
@@ -656,9 +656,10 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             values["assets"] = Assets.model_validate(values["assets"])
 
             settings = get_backend().get_datum_from_address(
-                Address.decode(
-                    "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
+                address=Address.decode(
+                    "addr1w9ke67k2ckdyg60v22ajqugxze79e0ax3yqgl7nway4vc5q84hpqs",
                 ),
+                asset="6d9d7acac59a4469ec52bb207106167c5cbfa689008ffa6ee92acc5073657474696e6773",
             )
 
             datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
@@ -690,9 +691,10 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
         settings = get_backend().get_datum_from_address(
-            Address.decode(
-                "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
+            address=Address.decode(
+                "addr1w9ke67k2ckdyg60v22ajqugxze79e0ax3yqgl7nway4vc5q84hpqs",
             ),
+            asset="6d9d7acac59a4469ec52bb207106167c5cbfa689008ffa6ee92acc5073657474696e6773",
         )
 
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
