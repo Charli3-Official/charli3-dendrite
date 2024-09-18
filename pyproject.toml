@@ -12,7 +12,7 @@ requests = "^2.31.0"
 pydantic = "^2.5.2"
 psycopg = { extras = ["binary", "pool"], version = "^3.1.13" }
 python-dotenv = "0.21.1"
-pycardano = { git = "https://github.com/Charli3-Official/pycardano.git", branch = "chang" }
+pycardano = "0.11.1"
 blockfrost-python = "^0.6.0"
 
 
