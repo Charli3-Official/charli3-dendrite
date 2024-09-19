@@ -698,7 +698,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         )
 
         datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
-        print(datum.simple_fee, datum.base_fee)
         cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
 
     def swap_datum(
