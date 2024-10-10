@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 from typing import Optional
 
+from charli3_dendrite import MinswapCPPState  # type: ignore
+from charli3_dendrite import MinswapV2CPPState  # type: ignore
+from charli3_dendrite import MuesliSwapCPPState  # type: ignore
+from charli3_dendrite import SpectrumCPPState  # type: ignore
 from charli3_dendrite import SundaeSwapCPPState  # type: ignore
+from charli3_dendrite import SundaeSwapV3CPPState  # type: ignore
+from charli3_dendrite import VyFiCPPState  # type: ignore
+from charli3_dendrite import WingRidersCPPState  # type: ignore
 from charli3_dendrite.backend import AbstractBackend  # type: ignore
 from charli3_dendrite.backend import DbsyncBackend  # type: ignore
 from charli3_dendrite.backend import get_backend
@@ -29,7 +36,13 @@ logger = logging.getLogger("charli3_dendrite")
 
 DEXS: list[type[AbstractPoolState]] = [
     SundaeSwapCPPState,
-    # MinswapV2CPPState,
+    MinswapV2CPPState,
+    MinswapCPPState,
+    WingRidersCPPState,
+    VyFiCPPState,
+    SpectrumCPPState,
+    MuesliSwapCPPState,
+    SundaeSwapV3CPPState,
     # Add other DEX states here
 ]
 
@@ -44,32 +57,56 @@ def save_to_file(data: dict[str, Any], filename: str = "blockchain_data.json") -
         logger.error("Error saving data to file: %s", e)
 
 
-def test_get_pool_utxos(
+def test_get_pool_utxos(  # noqa: PLR0912
     backend: AbstractBackend,
     dex: type[AbstractPoolState],
 ) -> dict[str, Any]:
-    """Test get_pool_utxos function."""
+    """Test get_pool_utxos function for various DEX implementations."""
     logger.info("Testing get_pool_utxos for %s...", dex.__name__)
-    selector = dex.pool_selector()
-    selector_dict = selector.model_dump()
-
-    existing_assets = selector_dict.pop("assets", [])
-    if existing_assets is None:
-        existing_assets = []
-    elif not isinstance(existing_assets, list):
-        existing_assets = [existing_assets]
 
     specific_asset = (
         "8e51398904a5d3fc129fbf4f1589701de23c7824d5c90fdb9490e15a434841524c4933"
     )
-    assets = [*existing_assets, specific_asset]
 
-    result = backend.get_pool_utxos(
-        limit=10000,
-        historical=False,
-        assets=assets,
-        **selector_dict,
-    )
+    # Check if the DEX supports asset-based pool selection
+    if (
+        hasattr(dex, "pool_selector")
+        and "assets" in dex.pool_selector.__code__.co_varnames
+    ):
+        try:
+            selector = dex.pool_selector(assets=[specific_asset])
+            logger.info("Using asset-based pool selection for %s", dex.__name__)
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.error("Error in asset-based pool_selector: %s", str(e))
+            return {}
+    else:
+        # Fallback to standard pool selection
+        selector = dex.pool_selector()
+        logger.info("Using standard pool selection for %s", dex.__name__)
+
+    selector_dict = selector.model_dump()
+
+    # Handle assets for get_pool_utxos
+    assets = selector_dict.pop("assets", [])
+    if assets is None:
+        assets = []
+    elif not isinstance(assets, list):
+        assets = [assets]
+
+    # Add the specific asset if it's not already included
+    if specific_asset not in assets:
+        assets.append(specific_asset)
+
+    try:
+        result = backend.get_pool_utxos(
+            limit=10000,
+            historical=False,
+            assets=assets,
+            **selector_dict,
+        )
+    except (ConnectionError, TimeoutError, ValueError) as e:
+        logger.error("Error in get_pool_utxos: %s", str(e))
+        return {}
 
     pool_data = {}
     for pool in result:
@@ -82,6 +119,8 @@ def test_get_pool_utxos(
             }
         except (NoAssetsError, InvalidLPError, InvalidPoolError) as e:
             logger.warning("Invalid pool data found: %s", e)
+        except (TypeError, ValueError, KeyError) as e:
+            logger.error("Unexpected error processing pool data: %s", str(e))
 
     logger.info("Found %d pools for %s", len(pool_data), dex.__name__)
     return pool_data

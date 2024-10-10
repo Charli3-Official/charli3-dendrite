@@ -6,8 +6,8 @@ from typing import Optional
 from typing import Union
 
 import requests
-from ogmios import OgmiosChainContext  # type: ignore
 from pycardano import Address  # type: ignore
+from pycardano import KupoOgmiosV6ChainContext
 from pycardano import Network  # type: ignore
 
 from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -52,12 +52,14 @@ class OgmiosKupoBackend(AbstractBackend):
         """
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
-        self.ogmios_context = OgmiosChainContext(
+        self.ogmios_context = KupoOgmiosV6ChainContext(
             host=self.ws_url,
             port=int(self.port),
+            secure=False,
+            refetch_chain_tip_interval=None,
             network=network,
+            kupo_url=kupo_url,
         )
-        self.kupo_url = kupo_url
 
     def _kupo_request(
         self,
@@ -76,7 +78,7 @@ class OgmiosKupoBackend(AbstractBackend):
         Raises:
             requests.exceptions.RequestException: If the request fails.
         """
-        url = f"{self.kupo_url}/{endpoint}"
+        url = f"{self.ogmios_context._kupo_url}/{endpoint}"
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         return KupoGenericResponse.model_validate(response.json())
@@ -122,8 +124,8 @@ class OgmiosKupoBackend(AbstractBackend):
         """Get pool UTXOs based on assets and addresses.
 
         Args:
+            addresses (list[str]): List of addresses to query.
             assets (Optional[list[str]]): List of asset IDs to filter by.
-            addresses (Optional[list[str]]): List of addresses to query.
             limit (int): Maximum number of UTXOs to return.
             page (int): Page number for pagination.
             historical (bool): Whether to include historical data.
@@ -132,7 +134,7 @@ class OgmiosKupoBackend(AbstractBackend):
             PoolStateList: List of pool states.
         """
         pool_states = []
-        if addresses is None:
+        if not addresses:
             return PoolStateList(root=[])
 
         for address in addresses:
@@ -140,15 +142,20 @@ class OgmiosKupoBackend(AbstractBackend):
                 "limit": limit,
                 "offset": page * limit,
             }
+            payment_cred = self.get_payment_credential(address)
             if assets:
-                params["policy_id"] = assets[0][:POLICY_ID_LENGTH]
+                last_asset = assets[-1]
+                params["policy_id"] = last_asset[:POLICY_ID_LENGTH]
                 params["asset_name"] = (
-                    assets[0][POLICY_ID_LENGTH:]
-                    if len(assets[0]) > POLICY_ID_LENGTH
+                    last_asset[POLICY_ID_LENGTH:]
+                    if len(last_asset) > POLICY_ID_LENGTH
                     else None
                 )
 
-            matches = self._kupo_request(f"matches/{address}?unspent", params=params)
+            matches = self._kupo_request(
+                f"matches/{payment_cred}/*?unspent",
+                params=params,
+            )
             if isinstance(matches.root, list):
                 for match in matches.root:
                     pool_state = self._pool_state_from_kupo(match)
@@ -181,15 +188,17 @@ class OgmiosKupoBackend(AbstractBackend):
                 "transaction_id": tx_hash,
                 "order": "most_recent_first",
             }
+            payment_cred = self.get_payment_credential(address)
             if assets:
-                params["policy_id"] = assets[0][:POLICY_ID_LENGTH]
+                last_asset = assets[-1]
+                params["policy_id"] = last_asset[:POLICY_ID_LENGTH]
                 params["asset_name"] = (
-                    assets[0][POLICY_ID_LENGTH:]
-                    if len(assets[0]) > POLICY_ID_LENGTH
+                    last_asset[POLICY_ID_LENGTH:]
+                    if len(last_asset) > POLICY_ID_LENGTH
                     else None
                 )
 
-            matches = self._kupo_request(f"matches/{address}", params=params)
+            matches = self._kupo_request(f"matches/{payment_cred}/*", params=params)
             if isinstance(matches.root, list):
                 pool_states = []
                 if matches.root:
