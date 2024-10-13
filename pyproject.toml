@@ -1,20 +1,19 @@
 [tool.poetry]
 name = "charli3_dendrite"
-version = "1.1.0-dev1"
+version = "1.1.1-dev8"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
-packages = [{include = "charli3_dendrite", from = "src"}]
+packages = [{ include = "charli3_dendrite", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 requests = "^2.31.0"
 pydantic = "^2.5.2"
-psycopg = {extras = ["binary", "pool"], version = "^3.1.13"}
+psycopg = { extras = ["binary", "pool"], version = "^3.1.13" }
 python-dotenv = "0.21.1"
 pycardano = "0.11.1"
-blockfrost-python = "^0.5.3"
-ogmios = "1.1.1"
+blockfrost-python = "^0.6.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -31,7 +30,7 @@ pytest-dependency = "^0.5.1"
 pytest-xdist = "^3.6.1"
 mkdocs = "^1.6.0"
 mkdocs-material = "^9.5.32"
-mkdocstrings = {extras = ["python"], version = "^0.25.2"}
+mkdocstrings = { extras = ["python"], version = "^0.25.2" }
 
 
 [tool.poetry.group.devs.dependencies]
@@ -45,8 +44,8 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 
 [tool.mypy]
-plugins = [ "pydantic.mypy"]
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pycardano","pycardano.*", "dotenv", "nox"]
+module = ["pycardano", "pycardano.*", "dotenv", "nox"]
 ignore_missing_imports = true

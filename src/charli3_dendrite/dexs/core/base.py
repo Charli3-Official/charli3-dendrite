@@ -120,7 +120,6 @@ class AbstractPairState(DendriteBaseModel, ABC):
         """
         return PlutusV1Script
 
-    @property
     def script_class(self) -> type[PlutusV1Script] | type[PlutusV2Script]:
         """Returns the script class based on the Plutus version being used."""
         if self.plutus_v2:
