@@ -1,4 +1,6 @@
 """Concrete implementation of AbstractBackend for db-sync."""
+
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -33,7 +35,10 @@ class DbsyncBackend(AbstractBackend):
     def __init__(self) -> None:
         """Initialize the DbsyncBackend with database connection details."""
         self.lock = Lock()
+        self.async_lock = asyncio.Lock()
+
         self.POOL = None
+        self.ASYNC_POOL = None
         self.DBSYNC_USER = os.environ.get("DBSYNC_USER", None)
         self.DBSYNC_PASS = os.environ.get("DBSYNC_PASS", None)
         self.DBSYNC_HOST = os.environ.get("DBSYNC_HOST", None)
@@ -86,6 +91,54 @@ class DbsyncBackend(AbstractBackend):
                     raise
         return self.POOL
 
+    async def get_dbsync_pool_async(self) -> psycopg_pool.AsyncConnectionPool:
+        """Get or create a connection pool for the db-sync database.
+
+        Returns:
+            psycopg_pool.ConnectionPool: A connection pool for database operations.
+        """
+        async with self.async_lock:
+            if self.ASYNC_POOL is None:
+                conninfo = (
+                    f"host={self.DBSYNC_HOST} "
+                    + f"port={self.DBSYNC_PORT} "
+                    + f"dbname={self.DBSYNC_DB_NAME} "
+                    + f"user={self.DBSYNC_USER} "
+                    + f"password={self.DBSYNC_PASS}"
+                )
+                self.ASYNC_POOL = psycopg_pool.AsyncConnectionPool(
+                    conninfo=conninfo,
+                    open=False,
+                    min_size=1,
+                    max_size=10,
+                    max_idle=10,
+                    reconnect_timeout=30,  # Increased from 10 to 30
+                    max_lifetime=60,
+                    check=psycopg_pool.AsyncConnectionPool.check_connection,
+                )
+                try:
+                    if self.ASYNC_POOL is None:
+                        raise ValueError("Connection pool has not been initialized.")
+
+                    await self.ASYNC_POOL.open()
+                    await self.ASYNC_POOL.wait(
+                        timeout=60.0,
+                    )  # Increased from 30 to 60 seconds
+                except PoolTimeout as e:
+                    logging.error(
+                        f"Database connection pool initialization timed out: {e}",
+                    )
+                    logging.error(
+                        f"Connection info: host={self.DBSYNC_HOST}, "
+                        + f"port={self.DBSYNC_PORT}, "
+                        + f"user={self.DBSYNC_USER}",
+                    )
+                    raise
+                except Exception as e:
+                    logging.error(f"Error initializing database connection pool: {e}")
+                    raise
+        return self.ASYNC_POOL
+
     def db_query(self, query: str, args: dict | None = None) -> list[dict]:
         """Execute a database query using the connection pool.
 
@@ -102,34 +155,41 @@ class DbsyncBackend(AbstractBackend):
             cursor.execute(query, args)
             return cursor.fetchall()
 
-    def get_pool_utxos(
+    async def db_query_async(self, query: str, args: dict | None = None) -> list[dict]:
+        """Execute a database query using the connection pool.
+
+        Args:
+            query (str): The SQL query to execute.
+            args (Optional[tuple]): Arguments to be used with the query.
+
+        Returns:
+            List[tuple]: The query results.
+        """
+        async with (
+            await self.get_dbsync_pool_async()
+        ).connection() as conn, conn.cursor(
+            row_factory=dict_row,
+        ) as cursor:
+            await cursor.execute(query, args)
+            return await cursor.fetchall()
+
+    def _get_pool_utxos(
         self,
         addresses: list[str],
         assets: list[str] | None = None,
         limit: int = 1000,
         page: int = 0,
         historical: bool = True,
-    ) -> PoolStateList:
-        """Get transactions by policy or address.
-
-        Args:
-            addresses: A list of addresses for pool or order contracts
-            assets: A list of assets used to filter utxos. Defaults to None.
-            limit: Number of values to return. Defaults to 1000.
-            page: Page of pools to return. Defaults to 0.
-            historical: If False, returns current pool states. Defaults to True.
-
-        Returns:
-            A list of pool states.
-        """
+    ) -> tuple[str, dict[str, object]]:
         # Use the pool selector to format the output
         datum_selector = PoolSelector.select()
 
         # Get txo from pool script address
         datum_selector += """FROM (
-    SELECT *
+    SELECT tx_out.*, address.address, address.payment_cred
     FROM tx_out
-    WHERE tx_out.payment_cred = ANY(%(addresses)b)
+    LEFT JOIN address ON tx_out.address_id = address.id
+    WHERE address.payment_cred = ANY(%(addresses)b)
 ) as txo"""
 
         # If assets are specified, select assets
@@ -165,24 +225,87 @@ OFFSET %(offset)s"""
             values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
             values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
+        return datum_selector, values
+
+    def get_pool_utxos(
+        self,
+        addresses: list[str],
+        assets: list[str] | None = None,
+        limit: int = 1000,
+        page: int = 0,
+        historical: bool = True,
+    ) -> PoolStateList:
+        """Get transactions by policy or address.
+
+        Args:
+            addresses: A list of addresses for pool or order contracts
+            assets: A list of assets used to filter utxos. Defaults to None.
+            limit: Number of values to return. Defaults to 1000.
+            page: Page of pools to return. Defaults to 0.
+            historical: If False, returns current pool states. Defaults to True.
+
+        Returns:
+            A list of pool states.
+        """
+        datum_selector, values = self._get_pool_utxos(
+            addresses=addresses,
+            assets=assets,
+            limit=limit,
+            page=page,
+            historical=historical,
+        )
+
         r = self.db_query(datum_selector, values)
 
         return PoolSelector.parse(r)
 
-    def get_pool_in_tx(
+    async def get_pool_utxos_async(
+        self,
+        addresses: list[str],
+        assets: list[str] | None = None,
+        limit: int = 1000,
+        page: int = 0,
+        historical: bool = True,
+    ) -> PoolStateList:
+        """Get transactions by policy or address.
+
+        Args:
+            addresses: A list of addresses for pool or order contracts
+            assets: A list of assets used to filter utxos. Defaults to None.
+            limit: Number of values to return. Defaults to 1000.
+            page: Page of pools to return. Defaults to 0.
+            historical: If False, returns current pool states. Defaults to True.
+
+        Returns:
+            A list of pool states.
+        """
+        datum_selector, values = self._get_pool_utxos(
+            addresses=addresses,
+            assets=assets,
+            limit=limit,
+            page=page,
+            historical=historical,
+        )
+
+        r = await self.db_query_async(datum_selector, values)
+
+        return PoolSelector.parse(r)
+
+    def _get_pool_in_tx(
         self,
         tx_hash: str,
         addresses: list[str],
         assets: list[str] | None = None,
-    ) -> PoolStateList:
+    ) -> tuple[str, dict[str, list]]:
         """Get transactions by policy or address."""
         # Use the pool selector to format the output
         datum_selector = PoolSelector.select()
 
         datum_selector += """FROM (
-    SELECT *
+    SELECT tx_out.*, address.address, address.payment_cred
     FROM tx_out
-    WHERE tx_out.payment_cred = ANY(%(addresses)b)
+    LEFT JOIN address ON tx_out.address_id = address.id
+    WHERE address.payment_cred = ANY(%(addresses)b)
 ) as txo"""
 
         # If assets are specified, select assets
@@ -209,14 +332,44 @@ AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
             values.update({"policies": [bytes.fromhex(p[:56]) for p in assets]})
             values.update({"names": [bytes.fromhex(p[56:]) for p in assets]})
 
+        return datum_selector, values
+
+    def get_pool_in_tx(
+        self,
+        tx_hash: str,
+        addresses: list[str],
+        assets: list[str] | None = None,
+    ) -> PoolStateList:
+        """Get transactions by policy or address."""
+        datum_selector, values = self._get_pool_in_tx(
+            tx_hash=tx_hash,
+            addresses=addresses,
+            assets=assets,
+        )
+
         r = self.db_query(datum_selector, values)
 
         return PoolSelector.parse(r)
 
-    def last_block(self, last_n_blocks: int = 2) -> BlockList:
-        """Get the last n blocks."""
-        r = self.db_query(
-            """
+    async def get_pool_in_tx_async(
+        self,
+        tx_hash: str,
+        addresses: list[str],
+        assets: list[str] | None = None,
+    ) -> PoolStateList:
+        """Get transactions by policy or address."""
+        datum_selector, values = self._get_pool_in_tx(
+            tx_hash=tx_hash,
+            addresses=addresses,
+            assets=assets,
+        )
+
+        r = await self.db_query_async(datum_selector, values)
+
+        return PoolSelector.parse(r)
+
+    def _last_block(self, last_n_blocks: int = 2) -> tuple[str, dict]:
+        return """
     SELECT epoch_slot_no,
     block_no,
     tx_count,
@@ -227,54 +380,100 @@ AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
     FROM block
     WHERE block_no IS NOT null
     ORDER BY block_no DESC
-    LIMIT %(last_n_blocks)s""",
-            {"last_n_blocks": last_n_blocks},
-        )
+    LIMIT %(last_n_blocks)s""", {
+            "last_n_blocks": last_n_blocks,
+        }
+
+    def last_block(self, last_n_blocks: int = 2) -> BlockList:
+        """Get the last n blocks."""
+        datum_selector, values = self._last_block(last_n_blocks=last_n_blocks)
+        r = self.db_query(datum_selector, values)
         return BlockList.model_validate(r)
 
-    def get_pool_utxos_in_block(self, block_no: int) -> PoolStateList:
-        """Get pool utxos in block."""
+    async def last_block_async(self, last_n_blocks: int = 2) -> BlockList:
+        """Get the last n blocks."""
+        datum_selector, values = self._last_block(last_n_blocks=last_n_blocks)
+        r = await self.db_query_async(datum_selector, values)
+        return BlockList.model_validate(r)
+
+    def _get_pool_utxos_in_block(self, block_no: int) -> tuple[str, dict]:
         # Use this for gathering all assets for multiple addresses
         datum_selector = (
             PoolSelector.select()
             + """
-    FROM tx_out txo
+    FROM (
+        SELECT txo.*, address.address, address.payment_cred
+        FROM tx_out txo
+        LEFT JOIN address ON txo.address_id = address.id
+    ) AS txo
     LEFT JOIN tx ON txo.tx_id = tx.id
     LEFT JOIN datum ON txo.data_hash = datum.hash
     LEFT JOIN block ON tx.block_id = block.id
     WHERE block.block_no = %(block_no)s AND datum.hash IS NOT NULL
     """
         )
-        r = self.db_query(datum_selector, {"block_no": block_no})
+
+        return datum_selector, {"block_no": block_no}
+
+    def get_pool_utxos_in_block(self, block_no: int) -> PoolStateList:
+        """Get pool utxos in block."""
+        # Use this for gathering all assets for multiple addresses
+        datum_selector, values = self._get_pool_utxos_in_block(block_no=block_no)
+        r = self.db_query(datum_selector, values)
 
         return PoolSelector.parse(r)
 
-    def get_script_from_address(self, address: Address) -> ScriptReference:
-        """Get a reference script from an address."""
+    async def get_pool_utxos_in_block_async(self, block_no: int) -> PoolStateList:
+        """Get pool utxos in block."""
+        # Use this for gathering all assets for multiple addresses
+        datum_selector, values = self._get_pool_utxos_in_block(block_no=block_no)
+        r = await self.db_query_async(datum_selector, values)
+
+        return PoolSelector.parse(r)
+
+    def _get_script_from_address(self, address: Address) -> tuple[str, dict]:
         query = UTxOSelector.select()
 
         query += """
 FROM script s
 LEFT JOIN tx_out ON s.id = tx_out.reference_script_id
+LEFT JOIN address ON tx_out.address_id = address.id
 LEFT JOIN tx ON tx.id = tx_out.tx_id
 LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
 LEFT JOIN block on block.id = tx.block_id
 WHERE s.hash = %(address)b AND tx_out.consumed_by_tx_id IS NULL
 ORDER BY block.time DESC
-LIMIT 1
-"""
-        r = self.db_query(query, {"address": address.payment_part.payload})
+LIMIT 1"""
+
+        return query, {"address": address.payment_part.payload}
+
+    def get_script_from_address(self, address: Address) -> ScriptReference:
+        """Get a reference script from an address."""
+        datum_selector, values = self._get_script_from_address(address=address)
+
+        r = self.db_query(datum_selector, values)
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None
 
         return UTxOSelector.parse(r[0])
 
-    def get_datum_from_address(
+    async def get_script_from_address_async(self, address: Address) -> ScriptReference:
+        """Get a reference script from an address."""
+        datum_selector, values = self._get_script_from_address(address=address)
+
+        r = await self.db_query_async(datum_selector, values)
+
+        if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
+            r[0]["assets"] = None
+
+        return UTxOSelector.parse(r[0])
+
+    def _get_datum_from_address(
         self,
         address: Address,
         asset: str | None = None,
-    ) -> ScriptReference | None:
+    ) -> tuple[str, dict]:
         """Get a reference datum from an address."""
         kwargs = {"address": address.payment_part.payload}
 
@@ -290,13 +489,14 @@ LIMIT 1
 
         query += """
 FROM tx_out
+LEFT JOIN address ON tx_out.address_id = address.id
 LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = tx_out.id
 LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
 LEFT JOIN tx ON tx.id = tx_out.tx_id
 LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
 LEFT JOIN block on block.id = tx.block_id
 LEFT JOIN script s ON s.id = tx_out.reference_script_id
-WHERE tx_out.payment_cred = %(address)b AND tx_out.consumed_by_tx_id IS NULL"""
+WHERE address.payment_cred = %(address)b AND tx_out.consumed_by_tx_id IS NULL"""
 
         if asset is not None:
             query += """
@@ -308,6 +508,17 @@ AND tx_out.inline_datum_id IS NOT NULL
 ORDER BY block.time DESC
 LIMIT 1
 """
+
+        return query, kwargs
+
+    def get_datum_from_address(
+        self,
+        address: Address,
+        asset: str | None = None,
+    ) -> ScriptReference | None:
+        """Get a reference datum from an address."""
+        query, kwargs = self._get_datum_from_address(address=address, asset=asset)
+
         r = self.db_query(query, kwargs)
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
@@ -315,13 +526,28 @@ LIMIT 1
 
         return UTxOSelector.parse(r[0])
 
-    def get_historical_order_utxos(
+    async def get_datum_from_address_async(
+        self,
+        address: Address,
+        asset: str | None = None,
+    ) -> ScriptReference | None:
+        """Get a reference datum from an address."""
+        query, kwargs = self._get_datum_from_address(address=address, asset=asset)
+
+        r = await self.db_query_async(query, kwargs)
+
+        if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
+            r[0]["assets"] = None
+
+        return UTxOSelector.parse(r[0])
+
+    def _get_historical_order_utxos(
         self,
         stake_addresses: list[str],
         after_time: datetime | int | None = None,
         limit: int = 1000,
         page: int = 0,
-    ) -> SwapTransactionList:
+    ) -> tuple[str, dict]:
         """Get historical orders at an order submission address."""
         if isinstance(after_time, int):
             after_time = datetime.fromtimestamp(after_time)
@@ -331,9 +557,10 @@ LIMIT 1
         utxo_selector += """FROM (
     SELECT *
     FROM tx_out txo
-    WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL
+    WHERE address.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL
 ) txo_stake
 LEFT JOIN tx ON tx.id = txo_stake.tx_id
+LEFT JOIN address ON address.id = txo_stake.address_id
 LEFT JOIN block ON tx.block_id = block.id
 LEFT JOIN datum ON txo_stake.data_hash = datum.hash
 LEFT JOIN (
@@ -349,10 +576,11 @@ LEFT JOIN (
     tx_in.index as "tx_out_index",
     txo.inline_datum_id,
     txo.reference_script_id,
-    txo.address,
+    address.address,
     datum.hash as "datum_hash",
     datum.bytes as "datum_bytes"
     FROM tx_out tx_in
+    LEFT JOIN address on address.id = tx_in.address_id
     LEFT JOIN tx ON tx.id = tx_in.consumed_by_tx_id
     LEFT JOIN tx_out txo ON tx.id = txo.tx_id
     LEFT JOIN block ON tx.block_id = block.id
@@ -370,25 +598,58 @@ ORDER BY tx.id ASC
 LIMIT %(limit)s
 OFFSET %(offset)s"""
 
-        r = self.db_query(
-            utxo_selector,
-            {
-                "addresses": [
-                    Address.decode(a).payment_part.payload for a in stake_addresses
-                ],
-                "limit": limit,
-                "offset": page * limit,
-                "after_time": (
-                    None
-                    if after_time is None
-                    else after_time.strftime("%Y-%m-%d %H:%M:%S")
-                ),
-            },
+        values = {
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
+            "limit": limit,
+            "offset": page * limit,
+            "after_time": (
+                None if after_time is None else after_time.strftime("%Y-%m-%d %H:%M:%S")
+            ),
+        }
+
+        return utxo_selector, values
+
+    def get_historical_order_utxos(
+        self,
+        stake_addresses: list[str],
+        after_time: datetime | int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get historical orders at an order submission address."""
+        utxo_selector, values = self._get_historical_order_utxos(
+            stake_addresses=stake_addresses,
+            after_time=after_time,
+            limit=limit,
+            page=page,
         )
+
+        r = self.db_query(utxo_selector, values)
 
         return OrderSelector.parse(r)
 
-    def get_order_utxos_by_block_or_tx(
+    async def get_historical_order_utxos_async(
+        self,
+        stake_addresses: list[str],
+        after_time: datetime | int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get historical orders at an order submission address."""
+        utxo_selector, values = self._get_historical_order_utxos(
+            stake_addresses=stake_addresses,
+            after_time=after_time,
+            limit=limit,
+            page=page,
+        )
+
+        r = await self.db_query_async(utxo_selector, values)
+
+        return OrderSelector.parse(r)
+
+    def _get_order_utxos_by_block_or_tx(
         self,
         stake_addresses: list[str],
         out_tx_hash: list[str] | None = None,
@@ -397,12 +658,12 @@ OFFSET %(offset)s"""
         after_block: int | None = None,
         limit: int = 1000,
         page: int = 0,
-    ) -> SwapTransactionList:
-        """Get order UTxOs by either block number or tx hash."""
+    ) -> tuple[str, dict]:
         utxo_selector = """
     SELECT (
-        SELECT array_agg(DISTINCT txo.address)
+        SELECT array_agg(DISTINCT address.address)
         FROM tx_out txo
+        LEFT JOIN address ON txo.address_id = address.id
         WHERE txo.consumed_by_tx_id = txo_stake.tx_id
     ) AS "submit_address_inputs",
     txo_stake.address as "submit_address_stake",
@@ -472,7 +733,7 @@ OFFSET %(offset)s"""
         txo.index,
         txo.value,
         txo.data_hash,
-        txo.address,
+        address.address,
         tx.hash as "tx_hash",
         tx.block_index,
         block.hash as "block_hash",
@@ -480,11 +741,12 @@ OFFSET %(offset)s"""
         datum.hash as "datum_hash",
         datum.bytes as "datum_bytes"
         FROM tx_out txo
+        LEFT JOIN address ON txo.address_id = address.id
         LEFT JOIN tx ON tx.id = txo.tx_id
         LEFT JOIN block ON tx.block_id = block.id
         LEFT JOIN datum ON txo.data_hash = datum.hash
         LEFT JOIN tx tx_in_ref ON txo.consumed_by_tx_id = tx_in_ref.id
-        WHERE txo.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL"""
+        WHERE address.payment_cred = ANY(%(addresses)b) AND txo.data_hash IS NOT NULL"""
 
         if out_tx_hash is not None:
             utxo_selector += """
@@ -515,12 +777,13 @@ OFFSET %(offset)s"""
         tx_in.index as "tx_out_index",
         txo.inline_datum_id,
         txo.reference_script_id,
-        txo.address,
+        address.address,
         datum.hash as "datum_hash",
         datum.bytes as "datum_bytes"
         FROM tx_out tx_in
         LEFT JOIN tx ON tx.id = tx_in.consumed_by_tx_id
         LEFT JOIN tx_out txo ON tx.id = txo.tx_id
+        LEFT JOIN address on address.id = txo.address_id
         LEFT JOIN block ON tx.block_id = block.id
         LEFT JOIN datum ON txo.data_hash = datum.hash
     ) txo_output ON txo_output.tx_out_id = txo_stake.tx_id
@@ -530,39 +793,82 @@ OFFSET %(offset)s"""
     LIMIT %(limit)s
     OFFSET %(offset)s"""
 
-        r = self.db_query(
-            utxo_selector,
-            {
-                "addresses": [
-                    Address.decode(a).payment_part.payload for a in stake_addresses
-                ],
-                "limit": limit,
-                "offset": page * limit,
-                "block_no": block_no,
-                "after_block": after_block,
-                "out_tx_hash": (
-                    None
-                    if out_tx_hash is None
-                    else [bytes.fromhex(h) for h in out_tx_hash]
-                ),
-                "in_tx_hash": (
-                    None
-                    if in_tx_hash is None
-                    else [bytes.fromhex(h) for h in in_tx_hash]
-                ),
-            },
+        values = {
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
+            "limit": limit,
+            "offset": page * limit,
+            "block_no": block_no,
+            "after_block": after_block,
+            "out_tx_hash": (
+                None if out_tx_hash is None else [bytes.fromhex(h) for h in out_tx_hash]
+            ),
+            "in_tx_hash": (
+                None if in_tx_hash is None else [bytes.fromhex(h) for h in in_tx_hash]
+            ),
+        }
+
+        return utxo_selector, values
+
+    def get_order_utxos_by_block_or_tx(
+        self,
+        stake_addresses: list[str],
+        out_tx_hash: list[str] | None = None,
+        in_tx_hash: list[str] | None = None,
+        block_no: int | None = None,
+        after_block: int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get order UTxOs by either block number or tx hash."""
+        utxo_selector, values = self._get_order_utxos_by_block_or_tx(
+            stake_addresses=stake_addresses,
+            out_tx_hash=out_tx_hash,
+            in_tx_hash=in_tx_hash,
+            block_no=block_no,
+            after_block=after_block,
+            limit=limit,
+            page=page,
         )
+
+        r = self.db_query(utxo_selector, values)
 
         return OrderSelector.parse(r)
 
-    def get_cancel_utxos(
+    async def get_order_utxos_by_block_or_tx_async(
+        self,
+        stake_addresses: list[str],
+        out_tx_hash: list[str] | None = None,
+        in_tx_hash: list[str] | None = None,
+        block_no: int | None = None,
+        after_block: int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get order UTxOs by either block number or tx hash."""
+        utxo_selector, values = self._get_order_utxos_by_block_or_tx(
+            stake_addresses=stake_addresses,
+            out_tx_hash=out_tx_hash,
+            in_tx_hash=in_tx_hash,
+            block_no=block_no,
+            after_block=after_block,
+            limit=limit,
+            page=page,
+        )
+
+        r = await self.db_query_async(utxo_selector, values)
+
+        return OrderSelector.parse(r)
+
+    def _get_cancel_utxos(
         self,
         stake_addresses: list[str],
         block_no: int | None = None,
         after_time: datetime | int | None = None,
         limit: int = 1000,
         page: int = 0,
-    ) -> SwapTransactionList:
+    ) -> tuple[str, dict]:
         """Get order cancel UTxOs."""
         if isinstance(after_time, int):
             after_time = datetime.fromtimestamp(after_time)
@@ -645,12 +951,13 @@ COALESCE(
     tx_in.index as "tx_out_index",
     txo.inline_datum_id,
     txo.reference_script_id,
-    txo.address,
+    address.address,
     datum.hash as "datum_hash",
     datum.bytes as "datum_bytes"
     FROM tx_out tx_in
     LEFT JOIN tx ON tx.id = tx_in.tx_id
     LEFT JOIN tx_out txo ON tx.id = txo.tx_id
+    LEFT JOIN address on address.id = txo.address_id
     LEFT JOIN block ON tx.block_id = block.id
     LEFT JOIN datum ON txo.data_hash = datum.hash"""
 
@@ -669,7 +976,11 @@ COALESCE(
     txo.reference_script_id, txo.address, datum.hash, datum.bytes
     HAVING COUNT(DISTINCT txo.address) = 1
 ) txo_output
-LEFT JOIN tx_out txo ON txo.tx_id = txo_output.tx_out_id
+LEFT JOIN (
+    SELECT tx_out.*, address.address, address.payment_cred
+    FROM tx_out txo
+    LEFT JOIN address ON address.id = txo.address_id
+) txo ON txo.tx_id = txo_output.tx_out_id
     AND txo_output.tx_out_index = txo.index
     AND txo.payment_cred = ANY(%(addresses)b)
     AND txo.data_hash IS NOT NULL
@@ -682,33 +993,70 @@ ORDER BY txo.tx_id ASC
 LIMIT %(limit)s
 OFFSET %(offset)s"""
 
-        r = self.db_query(
-            utxo_selector,
-            {
-                "addresses": [
-                    Address.decode(a).payment_part.payload for a in stake_addresses
-                ],
-                "limit": limit,
-                "offset": page * limit,
-                "after_time": (
-                    None
-                    if after_time is None
-                    else after_time.strftime("%Y-%m-%d %H:%M:%S")
-                ),
-                "block_no": block_no,
-            },
+        values = {
+            "addresses": [
+                Address.decode(a).payment_part.payload for a in stake_addresses
+            ],
+            "limit": limit,
+            "offset": page * limit,
+            "after_time": (
+                None if after_time is None else after_time.strftime("%Y-%m-%d %H:%M:%S")
+            ),
+            "block_no": block_no,
+        }
+
+        return utxo_selector, values
+
+    def get_cancel_utxos(
+        self,
+        stake_addresses: list[str],
+        block_no: int | None = None,
+        after_time: datetime | int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get order cancel UTxOs."""
+        utxo_selector, values = self._get_cancel_utxos(
+            stake_addresses=stake_addresses,
+            block_no=block_no,
+            after_time=after_time,
+            limit=limit,
+            page=page,
         )
+
+        r = self.db_query(utxo_selector, values)
 
         return SwapTransactionList.model_validate(r)
 
-    def get_axo_target(
+    async def get_cancel_utxos_async(
+        self,
+        stake_addresses: list[str],
+        block_no: int | None = None,
+        after_time: datetime | int | None = None,
+        limit: int = 1000,
+        page: int = 0,
+    ) -> SwapTransactionList:
+        """Get order cancel UTxOs."""
+        utxo_selector, values = self._get_cancel_utxos(
+            stake_addresses=stake_addresses,
+            block_no=block_no,
+            after_time=after_time,
+            limit=limit,
+            page=page,
+        )
+
+        r = await self.db_query_async(utxo_selector, values)
+
+        return SwapTransactionList.model_validate(r)
+
+    def _get_axo_target(
         self,
         assets: Assets,
         block_time: datetime | None = None,
-    ) -> str | None:
+    ) -> tuple[str, dict]:
         """Get the target address for the given asset."""
         query = """
-    SELECT DISTINCT txo.address, block.time
+    SELECT DISTINCT address.address, block.time
     FROM (
         SELECT tx.id, tx.block_id
         FROM tx_out txo
@@ -719,6 +1067,7 @@ OFFSET %(offset)s"""
     ) as tx
     LEFT JOIN block ON block.id = tx.block_id
     LEFT JOIN tx_out txo ON tx.id = txo.tx_id
+    LEFT JOIN address ON txo.address_id = address.id
     LEFT JOIN ma_tx_out mtxo on txo.id = mtxo.tx_out_id
     LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
     WHERE ma.policy = %(policy)b AND ma.name = %(name)b
@@ -735,18 +1084,41 @@ OFFSET %(offset)s"""
 
         policy = bytes.fromhex(assets.unit()[:56])
         name = bytes.fromhex(assets.unit()[56:])
-        r = self.db_query(
-            query,
-            {
-                "policy": policy,
-                "name": name,
-                "block_time": (
-                    None
-                    if block_time is None
-                    else block_time.strftime("%Y-%m-%d %H:%M:%S")
-                ),
-            },
-        )
+
+        values = {
+            "policy": policy,
+            "name": name,
+            "block_time": (
+                None if block_time is None else block_time.strftime("%Y-%m-%d %H:%M:%S")
+            ),
+        }
+
+        return query, values
+
+    def get_axo_target(
+        self,
+        assets: Assets,
+        block_time: datetime | None = None,
+    ) -> str | None:
+        """Get the target address for the given asset."""
+        query, values = self._get_axo_target(assets=assets, block_time=block_time)
+
+        r = self.db_query(query, values)
+
+        if len(r) == 0:
+            return None
+
+        return r[0]["address"]
+
+    async def get_axo_target_target(
+        self,
+        assets: Assets,
+        block_time: datetime | None = None,
+    ) -> str | None:
+        """Get the target address for the given asset."""
+        query, values = self._get_axo_target(assets=assets, block_time=block_time)
+
+        r = await self.db_query_async(query, values)
 
         if len(r) == 0:
             return None

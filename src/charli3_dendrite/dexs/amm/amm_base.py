@@ -7,6 +7,7 @@ from typing import Any
 from pycardano import Address  # type: ignore
 from pycardano import DeserializeException
 from pycardano import PlutusData
+from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pydantic import model_validator  # type: ignore
 
@@ -121,10 +122,11 @@ class AbstractPoolState(AbstractPairState):
         address_source: Address,
         in_assets: Assets,
         out_assets: Assets,
+        tx_builder: TransactionBuilder | None = None,
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
-    ) -> TransactionOutput:
+    ) -> tuple[TransactionOutput | None, PlutusData]:
         """Create a swap UTXO for the pool.
 
         Args:

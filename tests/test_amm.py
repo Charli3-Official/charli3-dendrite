@@ -9,7 +9,9 @@ from charli3_dendrite import MinswapDJEDUSDMStableState
 from charli3_dendrite import MinswapV2CPPState
 from charli3_dendrite import SundaeSwapV3CPPState
 from charli3_dendrite import WingRidersSSPState
+from charli3_dendrite import WingRidersV2CPPState
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.amm.wingriders import WingRidersV2CPPState
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
@@ -44,6 +46,7 @@ def test_get_pool_script_version(dex: AbstractPoolState, benchmark, backend):
         MinswapDJEDUSDMStableState,
         SundaeSwapV3CPPState,
         MinswapV2CPPState,
+        WingRidersV2CPPState,
     ]:
         assert result[0].plutus_v2
     else:
@@ -74,7 +77,7 @@ def test_parse_pools(dex: AbstractPoolState, run_slow: bool, subtests, backend):
                 pass
             else:
                 raise
-        except:
+        except Exception:
             raise
 
     assert counts < 20000

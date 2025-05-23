@@ -1,6 +1,14 @@
 # noqa
 from enum import Enum
 
+from pycardano import Address
+from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
+from pycardano import TransactionId
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
+from pycardano import UTxO
+from pycardano import Value
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -128,6 +136,31 @@ class ScriptReference(DendriteBaseModel):
     datum_hash: str | None
     datum_cbor: str | None
     script: str | None
+
+    def to_utxo(self) -> UTxO | None:
+        if self.tx_hash is not None:
+            assert self.tx_index is not None
+            assert self.script is not None or self.datum_cbor is not None
+            assert self.assets is not None
+            assert self.address is not None
+            return UTxO(
+                input=TransactionInput(
+                    transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                    index=self.tx_index,
+                ),
+                output=TransactionOutput(
+                    address=Address.decode(self.address),
+                    amount=Value(coin=self.assets["lovelace"]),
+                    script=None
+                    if self.script is None
+                    else PlutusV2Script(bytes.fromhex(self.script)),
+                    datum=None
+                    if self.datum_cbor is None
+                    else RawPlutusData.from_cbor(self.datum_cbor),
+                ),
+            )
+        else:
+            return None
 
 
 class BlockInfo(DendriteBaseModel):

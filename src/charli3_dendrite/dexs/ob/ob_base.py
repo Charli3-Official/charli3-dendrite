@@ -3,6 +3,7 @@
 from abc import abstractmethod
 from decimal import Decimal
 from math import ceil
+from math import floor
 
 from pycardano import DeserializeException
 from pycardano import PlutusData
@@ -58,16 +59,14 @@ class AbstractOrderState(AbstractPairState):
 
         num, denom = self.price
         out_assets = Assets(**{self.out_unit: 0})
-        in_quantity = asset.quantity() - ceil(
-            asset.quantity() * self.volume_fee / 10000,
-        )
+        in_quantity = asset.quantity() - (asset.quantity() * self.volume_fee / 10000)
         out_assets.root[self.out_unit] = min(
-            ceil(in_quantity * denom / num),
+            in_quantity * denom / num,
             self.available.quantity(),
         )
 
         if precise:
-            out_assets.root[self.out_unit] = int(out_assets.quantity())
+            out_assets.root[self.out_unit] = floor(out_assets.quantity())
 
         return out_assets, 0
 
@@ -84,7 +83,7 @@ class AbstractOrderState(AbstractPairState):
         in_assets.root[self.in_unit] += fees
 
         if precise:
-            in_assets.root[self.in_unit] = int(in_assets.quantity())
+            in_assets.root[self.in_unit] = ceil(in_assets.quantity())
 
         return in_assets, 0
 

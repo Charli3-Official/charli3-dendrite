@@ -1,5 +1,5 @@
 """Module providing types and state classes for AMM pools."""
-
+import math
 from typing import ClassVar
 
 from charli3_dendrite.dataclasses.models import Assets
@@ -10,6 +10,8 @@ N_COINS = 2
 
 class AbstractConstantProductPoolState(AbstractPoolState):
     """Represents the state of a constant product automated market maker (AMM) pool."""
+
+    fee_basis: int = 10000
 
     def get_amount_out(
         self,
@@ -52,9 +54,9 @@ class AbstractConstantProductPoolState(AbstractPoolState):
                 volume_fee = self.volume_fee[1]
 
         # Calculate the amount out
-        fee_modifier = 10000 - volume_fee
+        fee_modifier = self.fee_basis - volume_fee
         numerator: int = asset.quantity() * fee_modifier * reserve_out
-        denominator: int = asset.quantity() * fee_modifier + reserve_in * 10000
+        denominator: int = asset.quantity() * fee_modifier + reserve_in * self.fee_basis
         amount_out = Assets(**{unit_out: numerator // denominator})
         if not precise:
             amount_out.root[unit_out] = numerator // denominator
@@ -65,9 +67,11 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         # Calculate the price impact
         price_numerator: int = (
             reserve_out * asset.quantity() * denominator * fee_modifier
-            - numerator * reserve_in * 10000
+            - numerator * reserve_in * self.fee_basis
         )
-        price_denominator: int = reserve_out * asset.quantity() * denominator * 10000
+        price_denominator: int = (
+            reserve_out * asset.quantity() * denominator * self.fee_basis
+        )
         price_impact: float = price_numerator / price_denominator
 
         return amount_out, price_impact
@@ -112,8 +116,8 @@ class AbstractConstantProductPoolState(AbstractPoolState):
                 volume_fee = self.volume_fee[1]
 
         # Estimate the required input
-        fee_modifier = 10000 - volume_fee
-        numerator: int = asset.quantity() * 10000 * reserve_in
+        fee_modifier = self.fee_basis - volume_fee
+        numerator: int = asset.quantity() * self.fee_basis * reserve_in
         denominator: int = (reserve_out - asset.quantity()) * fee_modifier
         amount_in = Assets(**{unit_out: numerator // denominator})
         if not precise:
@@ -122,9 +126,9 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         # Estimate the price impact
         price_numerator: int = (
             reserve_out * numerator * fee_modifier
-            - asset.quantity() * denominator * reserve_in * 10000
+            - asset.quantity() * denominator * reserve_in * self.fee_basis
         )
-        price_denominator: int = reserve_out * numerator * 10000
+        price_denominator: int = reserve_out * numerator * self.fee_basis
         price_impact: float = price_numerator / price_denominator
 
         return amount_in, price_impact
@@ -134,6 +138,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
     """Represents the state of a stable swap automated market maker (AMM) pool."""
 
     asset_mulitipliers: ClassVar[list[int]] = [1, 1]
+    fee_basis: int = 10000
 
     @property
     def reserve_a(self) -> int:
@@ -178,7 +183,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             if abs(d - d_prev) < 1:
                 break
 
-        return d
+        return math.ceil(d)
 
     def _get_y(
         self,
@@ -232,7 +237,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out /= out_multiplier
         out_assets = Assets(**{out_unit: int(out)})
         if not precise:
-            out_assets.root[out_unit] = int(out)
+            out_assets.root[out_unit] = out
 
         return out_assets
 
@@ -276,7 +281,9 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             in_asset = Assets(
                 **{
                     asset.unit(): int(
-                        asset.quantity() * (10000 - volume_fee) / 10000,
+                        asset.quantity()
+                        * (self.fee_basis - volume_fee)
+                        / self.fee_basis,
                     ),
                 },
             )
@@ -293,10 +300,10 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         out_asset.root[out_asset.unit()] = int(out_reserve - out_asset.quantity())
         if not fee_on_input:
             out_asset.root[out_asset.unit()] = int(
-                out_asset.quantity() * (10000 - volume_fee) / 10000,
+                out_asset.quantity() * (self.fee_basis - volume_fee) / self.fee_basis,
             )
         if precise:
-            out_asset.root[out_asset.unit()] = int(out_asset.quantity())
+            out_asset.root[out_asset.unit()] = out_asset.quantity()
 
         return out_asset, 0
 
@@ -341,7 +348,9 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             out_asset = Assets(
                 **{
                     asset.unit(): int(
-                        asset.quantity() * 10000 / (10000 - volume_fee),
+                        asset.quantity()
+                        * self.fee_basis
+                        / (self.fee_basis - volume_fee),
                     ),
                 },
             )
@@ -357,7 +366,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
         in_asset.root[in_asset.unit()] = int(in_asset.quantity() - in_reserve)
         if fee_on_input:
             in_asset.root[in_asset.unit()] = int(
-                in_asset.quantity() * 10000 / (10000 - volume_fee),
+                in_asset.quantity() * self.fee_basis / (self.fee_basis - volume_fee),
             )
         if precise:
             in_asset.root[in_asset.unit()] = int(in_asset.quantity())

@@ -1,6 +1,7 @@
 """SundaeSwap DEX module."""
-
+import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 from typing import ClassVar
 from typing import List
@@ -353,13 +354,10 @@ class SundaeV3OrderDatum(OrderDatum):
 
     def requested_amount(self) -> Assets:
         if isinstance(self.swap, SwapV3Config):
-            return Assets(
-                {
-                    (
-                        self.swap.out_value[0] + self.swap.out_value[1]
-                    ).hex(): self.swap.out_value[2],
-                },
-            )
+            asset = (self.swap.out_value[0] + self.swap.out_value[1]).hex()
+            if asset == "":
+                asset = "lovelace"
+            return Assets({asset: self.swap.out_value[2]})
         else:
             return Assets({})
 
@@ -577,11 +575,20 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
 
 class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     fee: int | list[int] = [30, 30]
-    _batcher = Assets(lovelace=1000000)
+    _batcher = Assets(lovelace=1280000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = Address.from_primitive(
         "addr1z8ax5k9mutg07p2ngscu3chsauktmstq92z9de938j8nqa7zcka2k2tsgmuedt4xl2j5awftvqzmmv3vs2yduzqxfcmsyun6n3",
     )
+
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
+    ) -> Assets:
+        return self.__class__._batcher_fee
+        # return Assets(lovelace=1280000)
 
     @classmethod
     def dex(cls) -> str:
@@ -627,6 +634,25 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         return self.pool_nft.unit()
 
     @classmethod
+    @lru_cache
+    def get_batcher_fee(cls, last_check: int = time.time() // 3600):
+        try:
+            settings = get_backend().get_datum_from_address(
+                address=Address.decode(
+                    "addr1w9ke67k2ckdyg60v22ajqugxze79e0ax3yqgl7nway4vc5q84hpqs",
+                ),
+                asset="6d9d7acac59a4469ec52bb207106167c5cbfa689008ffa6ee92acc5073657474696e6773",
+            )
+        except ValueError:
+            print(
+                "No settings found for SundaeSwapV3, likely because no backend is set.",
+            )
+            return
+
+        datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
+        cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
+
+    @classmethod
     def skip_init(cls, values) -> bool:
         if "pool_nft" in values:
             try:
@@ -646,14 +672,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             values["fee"] = datum.bid_fees_per_10_thousand
             values["assets"] = Assets.model_validate(values["assets"])
 
-            settings = get_backend().get_datum_from_address(
-                Address.decode(
-                    "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
-                ),
-            )
-
-            datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
-            cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
+            cls.get_batcher_fee()
             return True
         else:
             return False
@@ -680,14 +699,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
         values["fee"] = [datum.bid_fees_per_10_thousand, datum.ask_fees_per_10_thousand]
 
-        settings = get_backend().get_datum_from_address(
-            Address.decode(
-                "addr1w9680rk7hkue4e0zkayyh47rxqpg9gzx445mpha3twge75sku2mg0",
-            ),
-        )
-
-        datum = SundaeV3Settings.from_cbor(settings.datum_cbor)
-        cls._batcher_fee = Assets(lovelace=datum.simple_fee + datum.base_fee)
+        cls.get_batcher_fee()
 
     def swap_datum(
         self,

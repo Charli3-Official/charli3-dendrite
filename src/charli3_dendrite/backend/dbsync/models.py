@@ -1,4 +1,5 @@
 """Methods for abstracting SQL selections and parsing results."""
+
 from abc import ABC
 from abc import abstractmethod
 
@@ -74,7 +75,7 @@ class UTxOSelector(AbstractDBSyncStructure):
         return """
 SELECT ENCODE(tx.hash, 'hex') as "tx_hash",
 tx_out.index as "tx_index",
-tx_out.address,
+address.address,
 ENCODE(datum.hash,'hex') as "datum_hash",
 ENCODE(datum.bytes,'hex') as "datum_cbor",
 COALESCE (
@@ -107,11 +108,11 @@ class OrderSelector(AbstractDBSyncStructure):
         """The SQL select statement for orders."""
         return """
 SELECT (
-	SELECT array_agg(DISTINCT txo.address)
+	SELECT array_agg(DISTINCT address.address)
 	FROM tx_out txo
 	WHERE txo.consumed_by_tx_id = txo_stake.tx_id
 ) AS "submit_address_inputs",
-txo_stake.address as "submit_address_stake",
+address.address as "submit_address_stake",
 ENCODE(tx.hash, 'hex') as "submit_tx_hash",
 txo_stake.index as "submit_tx_index",
 ENCODE(block.hash,'hex') as "submit_block_hash",

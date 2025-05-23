@@ -352,7 +352,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             assets.quantity() if len(assets) == cls.LEN_ASSETS else assets.quantity(1)
         )
 
-        if 2 * quantity <= datum.lq_bound:
+        if 2 * quantity <= 1000000000:
             values["inactive"] = True
 
         values["fee"] = (1000 - datum.fee_mod) * 10
