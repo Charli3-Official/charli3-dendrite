@@ -29,7 +29,7 @@ select = [
     "NPY", # NumPy-specific rules
     "RUF", # Ruff-specific rules
 ]
-ignore = ["ANN101", "ANN102", "UP006", "ARG002", "PLR0913"]
+ignore = ["ANN101", "ANN102", "UP006", "UP007", "ARG002", "PLR0913"]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 target-version = "py39" # Assume Python 3.9.
 extend-exclude = ["tests", "examples"]
