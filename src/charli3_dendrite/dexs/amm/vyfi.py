@@ -263,28 +263,37 @@ class VyFiCPPState(AbstractConstantProductPoolState):
     @classmethod
     def pool_selector(cls, assets: Optional[list[str]] = None) -> PoolSelector:
         """Get a PoolSelector for VyFi pools, optionally filtered by assets."""
+        if not assets:
+            # If no assets specified, return all pool addresses
+            return PoolSelector(
+                addresses=[p.pool_validator_utxo_address for p in cls.pools().values()]
+            )
+
+        # Otherwise, filter pools based on assets
         asset_to_pool = cls._create_asset_to_pool_mapping()
         relevant_pools = cls._filter_relevant_pools(asset_to_pool, assets)
         addresses = [pool.pool_validator_utxo_address for pool in relevant_pools]
+
         return PoolSelector(addresses=addresses)
 
     @classmethod
     def _create_asset_to_pool_mapping(
         cls,
     ) -> defaultdict[str, list[VyFiPoolDefinition]]:
-        """Create a mapping of assets to pools."""
+        """Create a mapping of assets to pools using unitsPair."""
         asset_to_pool: defaultdict[str, list[VyFiPoolDefinition]] = defaultdict(list)
+
         for pool in cls.pools().values():
-            asset_a = cls._encode_asset(
-                pool.json_.a_asset.currency_symbol,
-                pool.json_.a_asset.token_name,
-            )
-            asset_b = cls._encode_asset(
-                pool.json_.b_asset.currency_symbol,
-                pool.json_.b_asset.token_name,
-            )
-            asset_to_pool[asset_a].append(pool)
-            asset_to_pool[asset_b].append(pool)
+            # Parse the unitsPair which is in format "asset1/asset2"
+            if "/" in pool.units_pair:
+                assets = pool.units_pair.split("/")
+                if len(assets) == 2:
+                    asset_a, asset_b = assets
+
+                    # Add both assets to the mapping
+                    asset_to_pool[asset_a].append(pool)
+                    asset_to_pool[asset_b].append(pool)
+
         return asset_to_pool
 
     @classmethod
@@ -294,33 +303,34 @@ class VyFiCPPState(AbstractConstantProductPoolState):
         assets: Optional[list[str]],
     ) -> set[VyFiPoolDefinition]:
         """Filter relevant pools based on assets."""
-        if assets:
-            relevant_pools = set()
-            for asset in assets:
-                relevant_pools.update(asset_to_pool.get(asset, []))
+        if not assets:
+            return set(cls.pools().values())
+
+        relevant_pools = set()
+
+        # If we're looking for a single asset
+        if len(assets) == 1:
+            asset = assets[0]
+            # Direct match with unitsPair asset
+            direct_matches = asset_to_pool.get(asset, [])
+            relevant_pools.update(direct_matches)
+
         else:
-            relevant_pools = set(cls.pools().values())
+            # For each pool, check if it contains both assets
+            for pool in cls.pools().values():
+                if "/" in pool.units_pair:
+                    pair_assets = pool.units_pair.split("/")
+
+                    # Check if the pool contains both assets
+                    asset_matches = 0
+                    for asset in assets:
+                        if asset in pair_assets:
+                            asset_matches += 1
+
+                    if asset_matches >= len(assets):
+                        relevant_pools.add(pool)
+
         return relevant_pools
-
-    @staticmethod
-    def _encode_asset(policy_id: str, asset_name: str) -> str:
-        """Encode an asset by combining policy ID and hex-encoded asset name."""
-        encoded_name = asset_name.encode("utf-8").hex()
-        return policy_id + encoded_name
-
-    @staticmethod
-    def _decode_asset(encoded_asset: str) -> tuple[str, str]:
-        """Decode an encoded asset into policy ID and asset name."""
-        policy_id = encoded_asset[:POLICY_ID_LENGTH]
-        asset_name = bytes.fromhex(encoded_asset[POLICY_ID_LENGTH:]).decode("utf-8")
-        return policy_id, asset_name
-
-    @staticmethod
-    def _split_asset(asset: str) -> tuple[str, str]:
-        """Split an asset string into policy ID and asset name."""
-        if len(asset) == POLICY_ID_LENGTH:  # Only policy ID
-            return asset, ""
-        return asset[:POLICY_ID_LENGTH], asset[POLICY_ID_LENGTH:]
 
     @classmethod
     def _refresh_pools(cls) -> None:
@@ -334,9 +344,9 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             cls._pools = {}
             for p in response.json():
                 p["json"] = json.loads(p["json"])
-                cls._pools[
-                    p["json"]["mainNFT"]["currencySymbol"]
-                ] = VyFiPoolDefinition.model_validate(p)
+                cls._pools[p["json"]["mainNFT"]["currencySymbol"]] = (
+                    VyFiPoolDefinition.model_validate(p)
+                )
             cls._pools_refresh = time.time()
         except requests.RequestException as e:
             # Log the error or handle it as appropriate for your application
