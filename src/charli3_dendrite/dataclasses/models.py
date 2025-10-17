@@ -181,7 +181,7 @@ class PoolStateInfo(DendriteBaseModel):
     block_time: int
     block_index: int
     block_hash: str
-    datum_hash: str
+    datum_hash: str | None = None
     datum_cbor: str
     assets: Assets
     plutus_v2: bool
