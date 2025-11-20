@@ -1,4 +1,5 @@
 """Utility functions for handling asset information."""
+
 import json
 from datetime import datetime
 from datetime import timedelta
@@ -15,7 +16,7 @@ ASSET_PATH = Path(__file__).parent.joinpath(".assets")
 ASSET_PATH.mkdir(parents=True, exist_ok=True)
 
 
-def asset_info(unit: str, update: bool = False) -> dict:  # noqa: ARG001
+def asset_info(unit: str, update: bool = False) -> dict:
     """Fetch and cache asset information.
 
     Args:
@@ -27,29 +28,37 @@ def asset_info(unit: str, update: bool = False) -> dict:  # noqa: ARG001
     """
     path = ASSET_PATH.joinpath(f"{unit}.json")
 
-    if path.exists():
+    # Return cached data if exists (removed expiration check)
+    if path.exists() and not update:
         with path.open() as fr:
-            parsed = json.load(fr)
-            if "timestamp" in parsed and (
-                datetime.now() - datetime.fromtimestamp(parsed["timestamp"])
-            ) < timedelta(days=1, minutes=0, seconds=0):
-                return parsed
+            return json.load(fr)
 
-    response = requests.get(
-        f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{unit}.json",
-        timeout=10,
-    )
+    # Try to fetch new data
+    try:
+        response = requests.get(
+            f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{unit}.json",
+            timeout=10,
+        )
 
-    if response.status_code != requests.codes.ok:
-        msg = f"Error fetching asset info, {unit}: {response.text}"
-        raise requests.HTTPError(msg)
+        if response.status_code != requests.codes.ok:
+            # Fallback to cache if fetch fails
+            if path.exists():
+                with path.open() as fr:
+                    return json.load(fr)
+            return {}
 
-    parsed = response.json()
-    parsed["timestamp"] = datetime.now().timestamp()
-    with path.open("w") as fw:
-        json.dump(response.json(), fw)
+        parsed = response.json()
+        parsed["timestamp"] = datetime.now().timestamp()
+        with path.open("w") as fw:
+            json.dump(parsed, fw)
+        return parsed
 
-    return response.json()
+    except Exception:
+        # Fallback to cache on any error
+        if path.exists():
+            with path.open() as fr:
+                return json.load(fr)
+        return {}
 
 
 def asset_decimals(unit: str) -> int:
