@@ -40,25 +40,21 @@ def asset_info(unit: str, update: bool = False) -> dict:
             timeout=10,
         )
 
-        if response.status_code != requests.codes.ok:
-            # Fallback to cache if fetch fails
-            if path.exists():
-                with path.open() as fr:
-                    return json.load(fr)
-            return {}
+        response.raise_for_status()
+        data = response.json()
+        data["timestamp"] = datetime.now().timestamp()
 
-        parsed = response.json()
-        parsed["timestamp"] = datetime.now().timestamp()
         with path.open("w") as fw:
-            json.dump(parsed, fw)
-        return parsed
+            json.dump(data, fw)
 
-    except Exception:
-        # Fallback to cache on any error
+        return data
+
+    except requests.RequestException:
+        # Network error - fall back to cache if exists
         if path.exists():
             with path.open() as fr:
                 return json.load(fr)
-        return {}
+        raise
 
 
 def asset_decimals(unit: str) -> int:
