@@ -6,6 +6,7 @@ from typing import Optional
 from typing import Union
 
 from blockfrost import ApiUrls  # type: ignore
+from blockfrost import ApiError  # type: ignore
 from pycardano import Address  # type: ignore
 from pycardano import BlockFrostChainContext  # type: ignore
 
@@ -81,23 +82,37 @@ class BlockFrostBackend(AbstractBackend):
             return PoolStateList(root=[])
 
         for address in addresses:
-            if assets:
-                utxos = []
-                for asset in assets:
-                    utxos.extend(
-                        self.api.address_utxos_asset(address, asset, gather_pages=True),
-                    )
-            else:
-                utxos = self.api.address_utxos(address, gather_pages=True)
+            try:
+                if assets:
+                    # Use address_utxos_asset for each asset to get UTXOs containing specific assets
+                    # This is more efficient than getting all UTXOs and filtering
+                    all_utxos = []
+                    seen_tx_hashes = set()  # Avoid duplicates
+                    
+                    for asset in assets:
+                        utxos = self.api.address_utxos_asset(
+                            address, asset, gather_pages=True
+                        )
+                        for utxo in utxos:
+                            # Avoid processing the same UTXO multiple times
+                            tx_key = (utxo.tx_hash, utxo.output_index)
+                            if tx_key not in seen_tx_hashes:
+                                seen_tx_hashes.add(tx_key)
+                                all_utxos.append(utxo)
+                else:
+                    utxos = self.api.address_utxos(address, gather_pages=True)
+                    all_utxos = list(utxos)
 
-            for utxo in utxos[:limit]:
-                if utxo.data_hash:
-                    pool_state = self._utxo_to_pool_state(utxo)
-                    if assets:
-                        if any(asset in pool_state.assets for asset in assets):
-                            pool_states.append(pool_state)
-                    else:
+                # Process UTXOs - only include those with datums
+                for utxo in all_utxos[:limit]:
+                    if utxo.data_hash or utxo.inline_datum:
+                        pool_state = self._utxo_to_pool_state(utxo)
                         pool_states.append(pool_state)
+                        
+            except ApiError:
+                # Address not found or no UTXOs, skip
+                continue
+
         return PoolStateList(root=pool_states)
 
     def get_pool_in_tx(
@@ -263,17 +278,32 @@ class BlockFrostBackend(AbstractBackend):
         Returns:
             Optional[ScriptReference]: The datum associated with the address, if any.
         """
-        utxos = self.api.address_utxos(address, gather_pages=True)
+        try:
+            if asset:
+                utxos = self.api.address_utxos_asset(address, asset, gather_pages=True)
+            else:
+                utxos = self.api.address_utxos(address, gather_pages=True)
+        except ApiError:
+            return None
+
         for utxo in utxos:
-            if asset and asset not in utxo.amount:
-                continue
-            if utxo.data_hash:
+            if asset:
+                # Check if asset is present in the UTXO amount list
+                has_asset = False
+                for amt in utxo.amount:
+                    if amt.unit == asset:
+                        has_asset = True
+                        break
+                if not has_asset:
+                    continue
+
+            if utxo.data_hash or utxo.inline_datum:
                 return ScriptReference(
                     tx_hash=utxo.tx_hash,
                     tx_index=utxo.output_index,
                     address=utxo.address,
                     assets=self._format_assets(utxo.amount),
-                    datum_hash=utxo.data_hash,
+                    datum_hash=utxo.data_hash or "",
                     datum_cbor=(
                         utxo.inline_datum
                         if utxo.inline_datum
@@ -314,24 +344,29 @@ class BlockFrostBackend(AbstractBackend):
             PoolStateInfo: Pool state information.
         """
         if tx_hash:
-            tx_info = self.api.transaction(tx_hash)
+            try:
+                tx_info = self.api.transaction(tx_hash)
+            except ApiError:
+                tx_info = None
+        else:
+            tx_info = None
+            
+        # Use inline_datum if available, otherwise try to get datum from hash
+        datum_cbor = ""
+        if utxo.inline_datum:
+            datum_cbor = utxo.inline_datum
+        elif utxo.data_hash:
+            datum_cbor = self._get_datum_from_datum_hash(utxo.data_hash)
+            
         return PoolStateInfo(
             address=utxo.address,
             tx_hash=tx_hash if tx_hash else utxo.tx_hash,
             tx_index=utxo.output_index,
-            block_time=tx_info.block_time if tx_hash else 0,
-            block_index=tx_info.index if tx_hash else 0,
-            block_hash=tx_info.block if tx_hash else utxo.block,
+            block_time=tx_info.block_time if tx_info else 0,
+            block_index=tx_info.index if tx_info else 0,
+            block_hash=tx_info.block if tx_info else utxo.block,
             datum_hash=utxo.data_hash or "",
-            datum_cbor=(
-                utxo.inline_datum
-                if utxo.inline_datum
-                else (
-                    self._get_datum_from_datum_hash(utxo.data_hash)
-                    if utxo.data_hash
-                    else ""
-                )
-            ),
+            datum_cbor=datum_cbor,
             assets=self._format_assets(utxo.amount),
             plutus_v2=utxo.reference_script_hash is not None,
         )
@@ -390,5 +425,8 @@ class BlockFrostBackend(AbstractBackend):
         Returns:
             str: Datum CBOR.
         """
-        datum = self.api.script_datum_cbor(datum_hash)
-        return datum.cbor
+        try:
+            datum = self.api.script_datum_cbor(datum_hash)
+            return datum.cbor
+        except ApiError:
+            return ""

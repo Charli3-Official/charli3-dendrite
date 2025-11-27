@@ -535,7 +535,7 @@ class WingRidersCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
             addresses=[
-                "addr1w8nvjzjeydcn4atcd93aac8allvrpjn7pjr2qsweukpnayghhwcpj",
+                "addr1z8nvjzjeydcn4atcd93aac8allvrpjn7pjr2qsweukpnay0juqg4tpvktqnle8j0ukcnww78l7ze4lrgunuwqnxtvjps8lclpw",
             ],
             assets=cls.dex_policy(),
         )
@@ -679,7 +679,9 @@ class WingRidersV2CPPState(AbstractConstantProductPoolState):
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            addresses=["addr1wxhew7fmsup08qvhdnkg8ccra88pw7q5trrncja3dlszhqczc0qfe"],
+            addresses=[
+                "addr1zxhew7fmsup08qvhdnkg8ccra88pw7q5trrncja3dlszhq64g5qf3q2sequspl6ymjdnes69upe4vmrplwydu8fm6jmqf345v4"
+            ],
             assets=cls.dex_policy(),
         )
 

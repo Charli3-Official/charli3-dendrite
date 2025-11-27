@@ -98,7 +98,13 @@ class OgmiosKupoBackend(AbstractBackend):
         block_time = SHELLEY_START + current_slot - SHELLEY_SLOT_OFFSET
 
         datum_cbor = (
-            self._get_datum_cbor(match_data.datum_hash) if match_data.datum_hash else ""
+            match_data.datum
+            if match_data.datum is not None
+            else (
+                self._get_datum_cbor(match_data.datum_hash)
+                if match_data.datum_hash
+                else ""
+            )
         )
         return PoolStateInfo(
             address=match_data.address,
@@ -153,7 +159,7 @@ class OgmiosKupoBackend(AbstractBackend):
                 )
 
             matches = self._kupo_request(
-                f"matches/{payment_cred}/*?unspent",
+                f"matches/{payment_cred}/*?unspent&resolve_hashes",
                 params=params,
             )
             if isinstance(matches.root, list):
@@ -198,7 +204,9 @@ class OgmiosKupoBackend(AbstractBackend):
                     else None
                 )
 
-            matches = self._kupo_request(f"matches/{payment_cred}/*", params=params)
+            matches = self._kupo_request(
+                f"matches/{payment_cred}/*&resolve_hashes", params=params
+            )
             if isinstance(matches.root, list):
                 pool_states = []
                 if matches.root:
@@ -230,7 +238,7 @@ class OgmiosKupoBackend(AbstractBackend):
 
         # Query Kupo for UTXOs created during the time period
         kupo_matches = self._kupo_request(
-            "matches",
+            "matches?resolve_hashes",
             params={
                 "created_after": created_after,
                 "created_before": created_before,
@@ -302,9 +310,8 @@ class OgmiosKupoBackend(AbstractBackend):
 
         Note: This method only works with blocktime as input, not block number.
         """
-        block_slot = block_time - SHELLEY_START + 4924800
         params = {"created_after": block_slot, "order": "most_recent_first"}
-        matches = self._kupo_request("matches", params=params)
+        matches = self._kupo_request("matches?resolve_hashes", params=params)
         pool_states = []
         if isinstance(matches.root, list):
             for match in matches.root:
@@ -453,27 +460,29 @@ class OgmiosKupoBackend(AbstractBackend):
             )
 
         matches: KupoGenericResponse = self._kupo_request(
-            f"matches/{address}",
+            f"matches/{address}?resolve_hashes",
             params=params,
         )
         if isinstance(matches.root, list) and matches.root:
             match: KupoResponse = matches.root[0]
-            datum_hash = match.datum_hash
-            if datum_hash:
-                datum_response: KupoGenericResponse = self._kupo_request(
-                    f"datums/{datum_hash}",
+            datum_cbor = (
+                match.datum
+                if match.datum
+                else (
+                    self._get_datum_cbor(match.datum_hash) if match.datum_hash else None
                 )
-                if isinstance(datum_response.root, KupoDatumResponse):
-                    assets = self._format_assets(match.value)
-                    return ScriptReference(
-                        tx_hash=match.transaction_id,
-                        tx_index=match.output_index,
-                        address=address.encode(),
-                        assets=assets,
-                        datum_hash=datum_hash,
-                        datum_cbor=datum_response.root.datum,
-                        script=None,
-                    )
+            )
+            if datum_cbor:
+                assets = self._format_assets(match.value)
+                return ScriptReference(
+                    tx_hash=match.transaction_id,
+                    tx_index=match.output_index,
+                    address=address.encode(),
+                    assets=assets,
+                    datum_hash=match.datum_hash,
+                    datum_cbor=datum_cbor,
+                    script=match.script,
+                )
         return None
 
     def get_axo_target(
@@ -500,14 +509,16 @@ class OgmiosKupoBackend(AbstractBackend):
         try:
             # Query Kupo for matches
             matches = self._kupo_request(
-                f"matches/{AXO_PAYMENT_CREDENTIAL}/*",
+                f"matches/{AXO_PAYMENT_CREDENTIAL}/*?resolve_hashes",
                 params=params,
             )
 
             # Filter and process matches
             for match in matches.root:
                 # Query all outputs for the transaction
-                tx_outputs = self._kupo_request(f"matches/*@{match.transaction_id}")
+                tx_outputs = self._kupo_request(
+                    f"matches/*@{match.transaction_id}?resolve_hashes"
+                )
 
                 # Find the first output that contains the asset and is not an AXO addr
                 for output in tx_outputs.root:

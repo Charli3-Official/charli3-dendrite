@@ -180,8 +180,8 @@ class MuesliSwapCPPState(AbstractConstantProductPoolState):
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
             addresses=[
-                "addr1w9cy2gmar6cpn8yymll93lnd7lw96f27kn2p3eq5d4tjr7qkh3tzd",
-                "addr1w85t4tvj3rwf40wqnx6x72kqq6c6stra7jvkupnlqrqyarg2m74rn",
+                "addr1z9cy2gmar6cpn8yymll93lnd7lw96f27kn2p3eq5d4tjr7rshnr04ple6jjfc0cvcmcpcxmsh576v7j2mjk8tw890vespzvgwd",
+                "addr1z85t4tvj3rwf40wqnx6x72kqq6c6stra7jvkupnlqrqyarthhd58w0qrqpyv4dc2c2mk98sduawl7l4gjuc9rafyv98sgylfw3",
                 "addr1w8djr38pct9dpewvv7k67xuh45xpj5f9hyzs3cp939j0csc6nhwme",
             ],
             assets=cls.dex_policy(),

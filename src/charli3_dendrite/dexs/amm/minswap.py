@@ -871,7 +871,11 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            addresses=["addr1w8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxzgusf9xw"],
+            addresses=[
+                "addr1z8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxz02znpd777wgl9wwpk0dvdzuxn93mqh82q7vv6s9jn25rws52z94g",
+                "addr1z8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxz0aeunnsvzxw507aj43nzlffjcc39x89hj993l7mcmxvrkq4umtun",
+                "addr1z8snz7c4974vzdpxu65ruphl3zjdvtxw8strf2c2tmqnxz2j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq0xmsha",
+            ],
             assets=[
                 "13aa2accf2e1561723aa26871e071fdf32c867cff7e7d50ad470d62f4d494e53574150",
             ],
@@ -957,7 +961,9 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            addresses=["addr1w84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau6ca7j5v4"],
+            addresses=[
+                "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a"
+            ],
             assets=[
                 "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c4d5350",
             ],

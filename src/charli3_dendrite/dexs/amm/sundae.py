@@ -605,7 +605,9 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            addresses=["addr1w8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz2cp9h6f8"],
+            addresses=[
+                "addr1z8srqftqemf0mjlukfszd97ljuxdp44r372txfcr75wrz2auzrlrz2kdd83wzt9u9n9qt2swgvhrmmn96k55nq6yuj4qw992w9"
+            ],
         )
 
     @classmethod
