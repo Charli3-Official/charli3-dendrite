@@ -40,8 +40,10 @@ class KupoResponse(DendriteBaseModel):
     address: str
     value: AssetValue
     datum_hash: Optional[str] = None
+    datum: Optional[str] = None
     datum_type: Optional[DatumType] = None
     script_hash: Optional[str] = None
+    script: Optional[str] = None
     created_at: CreatedAtSpentAt
     spent_at: Optional[CreatedAtSpentAt] = None
 
