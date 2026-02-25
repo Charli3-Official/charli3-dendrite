@@ -864,7 +864,7 @@ class MinswapCPPState(AbstractConstantProductPoolState):
     """Minswap Constant Product Pool State."""
 
     fee: int = 30
-    _batcher = Assets(lovelace=900000)
+    _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
@@ -952,7 +952,7 @@ class MinswapV2CPPState(AbstractConstantProductPoolState):
     """Minswap Constant Product Pool State."""
 
     fee: int | list[int] = [30, 30]
-    _batcher = Assets(lovelace=700000)
+    _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
@@ -1085,7 +1085,7 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     """Minswap DJED/iUSD Stable State."""
 
     fee: float = 1
-    _batcher = Assets(lovelace=600000)
+    _batcher = Assets(lovelace=2000000)
     _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
@@ -1181,6 +1181,8 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
     """Minswap DJED/USDC Stable State."""
 
     asset_mulitipliers: ClassVar[list[int]] = [1, 100]
+    _batcher = Assets(lovelace=2000000)
+    _deposit = Assets(lovelace=2000000)
 
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
@@ -1209,6 +1211,8 @@ class MinswapDJEDUSDCStableState(MinswapDJEDiUSDStableState):
 
 
 class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
+    _batcher = Assets(lovelace=2000000)
+    _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
             "addr1wxr9ppdymqgw6g0hvaaa7wc6j0smwh730ujx6lczgdynehsguav8d",
@@ -1236,6 +1240,8 @@ class MinswapDJEDUSDMStableState(MinswapDJEDiUSDStableState):
 
 
 class MinswapiUSDUSDMStableState(MinswapDJEDiUSDStableState):
+    _batcher = Assets(lovelace=2000000)
+    _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
             "addr1wxtv9k2lcum5pmcc4wu44a5tufulszahz84knff87wcawycez9lug",
@@ -1264,6 +1270,8 @@ class MinswapiUSDUSDMStableState(MinswapDJEDiUSDStableState):
 
 class MinswapUSDAUSDMStableState(MinswapDJEDiUSDStableState):
     fee: float = 5
+    _batcher = Assets(lovelace=2000000)
+    _deposit = Assets(lovelace=2000000)
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
             "addr1w8cafpjmeer4j8t8aseqayhwkf4ezuufue0clvfthxecsacv83rt0",
@@ -1293,6 +1301,8 @@ class MinswapUSDAUSDMStableState(MinswapDJEDiUSDStableState):
 class MinswapiUSDUSDCStableState(MinswapDJEDiUSDStableState):
     fee: float = 10
     asset_mulitipliers: ClassVar[list[int]] = [1, 100]
+    _batcher = Assets(lovelace=2000000)
+    _deposit = Assets(lovelace=2000000)
 
     _stake_address: ClassVar[Address] = [
         Address.from_primitive(
