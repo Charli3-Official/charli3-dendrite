@@ -1,5 +1,6 @@
 # noqa
 from charli3_dendrite.dexs.amm.cswap import CSwapCPPState
+from charli3_dendrite.dexs.amm.dano import DanoCLMMState
 from charli3_dendrite.dexs.amm.minswap import MinswapCPPState
 from charli3_dendrite.dexs.amm.minswap import MinswapDJEDiUSDStableState
 from charli3_dendrite.dexs.amm.minswap import MinswapDJEDUSDCStableState
