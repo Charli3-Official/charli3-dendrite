@@ -6,11 +6,6 @@ swaps directly against the pool with a custom redeemer rather than via a
 batcher/order-datum flow, so `swap_utxo` does not map cleanly onto the
 default `AbstractPoolState` contract.
 
-Reference SDK: D:/teko_source/CLMM/clmm-sdk-init-sdk/src/
-  - datum.ts            -> DanoPoolDatum
-  - utils.ts            -> get_amount_out / get_amount_in math
-  - constants.ts        -> pool script hash, protocol config out-ref
-  - concentratedPool.ts -> ConcentratedPool field layout
 """
 
 from dataclasses import dataclass
