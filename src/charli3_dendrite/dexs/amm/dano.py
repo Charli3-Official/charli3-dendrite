@@ -14,8 +14,6 @@ follows the direct-spend pattern established by `splash.py`:
     `tx_builder.reference_inputs` before calling `swap_utxo`. The method
     reads `platform_fee_rate` and `swap_fee` from its datum.
 
-Reference SDK: D:/teko_source/CLMM/clmm-sdk-init-sdk/src/
-Spec:          D:/teko_source/CLMM/00-biz-spec.md (§ Redeemer: Swap)
 """
 
 import time
