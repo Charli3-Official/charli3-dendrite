@@ -1,13 +1,24 @@
 """Dano Concentrated Liquidity (CLMM) DEX module.
 
-Skeleton port of the Dano CLMM SDK (TypeScript) to Dendrite. Off-chain
-swap construction is intentionally left unimplemented — Dano executes
-swaps directly against the pool with a custom redeemer rather than via a
-batcher/order-datum flow, so `swap_utxo` does not map cleanly onto the
-default `AbstractPoolState` contract.
+Port of the Dano CLMM SDK (TypeScript) to Dendrite. Dano executes swaps
+directly against the pool with a custom packed-bytes redeemer rather than
+via a batcher/order-datum flow, so the `swap_utxo` implementation here
+follows the direct-spend pattern established by `splash.py`:
 
+  * `swap_utxo` mutates the caller's `TransactionBuilder` to add the pool
+    spend input, the protocol-config reference input, and the withdraw-
+    zero-trick withdrawal. It returns the new pool output + its datum;
+    the caller is responsible for user-side funding inputs, receive
+    outputs, collateral, fees, and submission.
+  * The caller must add the protocol-config UTxO to
+    `tx_builder.reference_inputs` before calling `swap_utxo`. The method
+    reads `platform_fee_rate` and `swap_fee` from its datum.
+
+Reference SDK: D:/teko_source/CLMM/clmm-sdk-init-sdk/src/
+Spec:          D:/teko_source/CLMM/00-biz-spec.md (§ Redeemer: Swap)
 """
 
+import time
 from dataclasses import dataclass
 from dataclasses import replace
 from decimal import Decimal
@@ -17,19 +28,20 @@ from typing import ClassVar
 
 from pycardano import Address
 from pycardano import IndefiniteList
-from pycardano import MultiAsset
 from pycardano import PlutusData
 from pycardano import PlutusV2Script
 from pycardano import RawCBOR
+from pycardano import RawPlutusData
 from pycardano import Redeemer
-from pycardano import RedeemerTag
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
+from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
-from pycardano import Value
+from pycardano import Withdrawals
 
+from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import PoolDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolSelector
@@ -53,25 +65,61 @@ ADA_MIN_UTXO = 3_000_000
 
 SWAP_ACTION = 3  # see 01-validator.md section Redeemers
 
-# Pool script address on mainnet (addr1x8vtd…vrg4) — the payment part is
-# the pool validator and the staking part is a separate delegation script.
-DANO_POOL_ADDRESS_MAINNET = (
+# Pool addresses on mainnet. ADA pools have a staking part (addr1x…);
+# non-ADA pools do not (addr1w…). Both share the same payment script hash.
+DANO_POOL_ADDRESS_ADA_MAINNET = (
     "addr1x8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0w"
     "7dwgsd23ac468cjj8rcnyuc3s72rtupu6j9dw0xpw83exsufvrg4"
 )
+DANO_POOL_ADDRESS_NONADA_MAINNET = "addr1w8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wc7a283u"
 # Reward address used for the withdraw-zero trick. Its script hash equals
 # the pool payment-script hash, so the same reference script serves both
 # the spend and reward redeemer.
 DANO_POOL_REWARD_ADDRESS_MAINNET = (
     "stake178vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wczh2pdw"
 )
-# Reference UTxOs — mainnet (see CLMM/clmm-sdk-init-sdk/src/constants.ts)
+# Reference UTxO out-refs — mainnet (see CLMM/clmm-sdk-init-sdk/src/constants.ts)
 POOL_SCRIPT_OUT_REF_MAINNET = (
-    "64d111b957e7d7848ffdde5149aa77fa4090a7fa1ad0ac108067900614848501#0"
+    "64d111b957e7d7848ffdde5149aa77fa4090a7fa1ad0ac108067900614848501",
+    0,
 )
 PROTOCOL_CONFIG_OUT_REF_MAINNET = (
-    "2cafd7c92f7093e5229af274be83dea660b0590b4174bbed79ba662b44fbd1ee#0"
+    "2cafd7c92f7093e5229af274be83dea660b0590b4174bbed79ba662b44fbd1ee",
+    0,
 )
+
+# Cardano epoch derivation (spec § Common Temporary Variables > curEpoch)
+EPOCH_BOUNDARY_MS_MAINNET = 1_647_899_091_000
+EPOCH_LENGTH_MS_MAINNET = 432_000_000
+EPOCH_BOUNDARY_AS_EPOCH_MAINNET = 328
+
+
+def _parse_protocol_config_datum(datum_cbor: str) -> tuple[int, int]:
+    """Return ``(platform_fee_rate, swap_fee)`` from a protocol-config datum."""
+    raw = RawPlutusData.from_cbor(datum_cbor)
+    fields = raw.data.value
+    return int(fields[0]), int(fields[1])
+
+
+def _current_epoch_mainnet(now_ms: int | None = None) -> int:
+    t_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    return (
+        (t_ms - EPOCH_BOUNDARY_MS_MAINNET) // EPOCH_LENGTH_MS_MAINNET
+        + EPOCH_BOUNDARY_AS_EPOCH_MAINNET
+    )
+
+
+def _find_protocol_config(tx_builder: TransactionBuilder) -> UTxO | None:
+    """Scan ``tx_builder.reference_inputs`` for the protocol-config UTxO."""
+    wanted_tx, wanted_idx = PROTOCOL_CONFIG_OUT_REF_MAINNET
+    wanted_tx_bytes = bytes.fromhex(wanted_tx)
+    for utxo in tx_builder.reference_inputs:
+        if (
+            bytes(utxo.input.transaction_id) == wanted_tx_bytes
+            and utxo.input.index == wanted_idx
+        ):
+            return utxo
+    return None
 
 
 def _bigint_to_bytes_padded(n: int, length: int) -> bytes:
@@ -222,6 +270,7 @@ class DanoCLMMState(AbstractPoolState):
     _stake_address: ClassVar[Address] = Address(
         payment_part=ScriptHash(bytes.fromhex(DANO_POOL_SCRIPT_HASH_MAINNET)),
     )
+    _reference_utxo: ClassVar[UTxO | None] = None
 
     @classmethod
     def dex(cls) -> str:
@@ -235,9 +284,22 @@ class DanoCLMMState(AbstractPoolState):
     @classmethod
     def pool_selector(cls) -> PoolSelector:
         return PoolSelector(
-            addresses=[cls._stake_address.encode()],
+            addresses=[
+                DANO_POOL_ADDRESS_ADA_MAINNET,
+                DANO_POOL_ADDRESS_NONADA_MAINNET,
+            ],
             assets=cls.dex_policy(),
         )
+
+    @classmethod
+    def reference_utxo(cls) -> UTxO | None:
+        """Pool script reference UTxO (shared by spend + reward redeemers)."""
+        if cls._reference_utxo is None:
+            script_ref = get_backend().get_script_from_address(cls._stake_address)
+            if script_ref is None:
+                return None
+            cls._reference_utxo = script_ref.to_utxo()
+        return cls._reference_utxo
 
     @classmethod
     def dex_policy(cls) -> list[str] | None:
@@ -490,6 +552,39 @@ class DanoCLMMState(AbstractPoolState):
 
     # --- swap construction -------------------------------------------------
 
+    def _delta_from_in_assets(self, in_assets: Assets) -> int:
+        """Signed redeemer delta_amount from user's intended input."""
+        d = self._datum
+        if len(in_assets) != 1:
+            raise ValueError("in_assets must contain exactly one token")
+        unit = in_assets.unit()
+        qty = in_assets.quantity()
+        if unit == d.unit_x:
+            return qty
+        if unit == d.unit_y:
+            return -qty
+        raise ValueError(f"Asset {unit} does not belong to pool {d.unit_x}/{d.unit_y}")
+
+    def _new_pool_assets(
+        self,
+        pool_change_x: int,
+        pool_change_y: int,
+        swap_fee: int,
+    ) -> Assets:
+        d = self._datum
+        new = Assets(root=dict(self.assets.root))
+        if self.dex_nft is not None:
+            new.root[self.dex_nft.unit()] = 1
+        new.root[d.unit_x] = new.root.get(d.unit_x, 0) + pool_change_x
+        new.root[d.unit_y] = new.root.get(d.unit_y, 0) + pool_change_y
+        # swap_fee is always paid to the pool as lovelace (for ADA pools
+        # unit_x == lovelace so the same key is incremented twice — merge).
+        if d.unit_x == "lovelace":
+            new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee
+        else:
+            new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee
+        return new
+
     def swap_utxo(
         self,
         address_source: Address,
@@ -500,131 +595,155 @@ class DanoCLMMState(AbstractPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
-        raise NotImplementedError(
-            "Dano swaps are direct-spend; use build_swap_tx() instead of "
-            "the batcher-oriented swap_utxo() contract.",
-        )
+        """Wire a direct-spend Dano swap into ``tx_builder``.
 
-    def build_swap_tx(
-        self,
-        context: Any,  # pycardano ChainContext — type-loose to avoid import cycles
-        address_source: Address,
-        delta_amount: int,
-        swap_fee: int,
-        cur_epoch: int,
-        pool_utxo: UTxO,
-        pool_script_ref_utxo: UTxO,
-        protocol_config_utxo: UTxO,
-        user_inputs: list[UTxO],
-        collateral: UTxO,
-        staking_reward: int = 0,
-        min_out: int | None = None,
-    ):
-        """Build (but do not sign/submit) a Dano swap transaction.
+        Follows the Splash-style contract: this mutates ``tx_builder`` to
+        add the pool script input and the withdraw-zero-trick withdrawal,
+        then returns the new pool output + datum so the caller can add it
+        with ``tx_builder.add_output(...)``.
 
-        Returns the unsigned ``Transaction`` object. The caller is
-        responsible for signing and submitting.
+        Caller contract:
+          * Add user funding inputs to ``tx_builder`` FIRST.
+          * Add the protocol-config UTxO to
+            ``tx_builder.reference_inputs`` FIRST — it's used as a
+            reference input AND its datum is parsed here to derive
+            ``platform_fee_rate`` / ``swap_fee``.
+          * Call this method; add the returned output to the builder.
+          * Add the user's receive output + collateral, then build/sign.
+
+        ``in_assets`` must carry exactly one asset belonging to this pool
+        (either ``datum.unit_x`` or ``datum.unit_y``) with the user's
+        intended input quantity.
         """
-        from pycardano import Withdrawals  # local import — optional dep path
+        if tx_builder is None:
+            raise ValueError("tx_builder is required for Dano swap construction")
+        if self.tx_hash is None or self.tx_index is None:
+            raise ValueError("pool tx_hash/tx_index required (fetched from backend)")
+        if self.dex_nft is None:
+            raise InvalidPoolError("pool UTxO has no validity NFT")
 
-        pool_change_x, pool_change_y = self.compute_pool_change(
-            delta_amount, staking_reward
+        # Protocol config must be a reference input on tx_builder.
+        pc_utxo = _find_protocol_config(tx_builder)
+        if pc_utxo is None:
+            raise ValueError(
+                "Protocol-config UTxO must be added to tx_builder.reference_inputs "
+                "before calling swap_utxo (out-ref "
+                f"{PROTOCOL_CONFIG_OUT_REF_MAINNET[0]}#{PROTOCOL_CONFIG_OUT_REF_MAINNET[1]})",
+            )
+        pc_datum = (
+            pc_utxo.output.datum
+            if pc_utxo.output.datum is not None
+            else None
+        )
+        if pc_datum is None:
+            raise ValueError("Protocol-config UTxO is missing its inline datum")
+        self.platform_fee_rate, swap_fee = _parse_protocol_config_datum(
+            pc_datum.to_cbor_hex()
+            if hasattr(pc_datum, "to_cbor_hex")
+            else pc_datum.cbor.hex(),
         )
 
-        # Slippage check
-        if delta_amount > 0 and min_out is not None and -pool_change_y < min_out:
+        delta_amount = self._delta_from_in_assets(in_assets)
+        pool_change_x, pool_change_y = self.compute_pool_change(delta_amount)
+
+        # Slippage: out_assets.quantity() is caller's min_out.
+        computed_out = -pool_change_y if delta_amount > 0 else -pool_change_x
+        if out_assets is not None and out_assets.quantity() > computed_out:
             raise InvalidPoolError(
-                f"Slippage: out {-pool_change_y} < min_out {min_out}",
-            )
-        if delta_amount < 0 and min_out is not None and -pool_change_x < min_out:
-            raise InvalidPoolError(
-                f"Slippage: out {-pool_change_x} < min_out {min_out}",
+                f"Slippage: computed_out={computed_out} < requested "
+                f"min_out={out_assets.quantity()}",
             )
 
+        cur_epoch = _current_epoch_mainnet()
         new_datum = self.compute_new_datum(delta_amount, swap_fee, cur_epoch)
+        new_pool_assets = self._new_pool_assets(
+            pool_change_x, pool_change_y, swap_fee,
+        )
 
-        # New pool assets = old pool utxo assets + signed changes;
-        # when X is ADA the swap_fee is paid into lovelace as well.
-        new_pool_assets = Assets(root=dict(self.assets.root))
+        # Rebuild the pool input UTxO. Address is fetched from the pool
+        # tx so we pick up the correct form (addr1x… or addr1w…).
+        pool_in_assets = Assets(root=dict(self.assets.root))
         if self.dex_nft is not None:
-            new_pool_assets.root[self.dex_nft.unit()] = 1  # preserve validity NFT
-        lovelace_delta = pool_change_x if self.unit_a == "lovelace" else 0
-        if self.unit_a == "lovelace":
-            new_pool_assets.root["lovelace"] = (
-                new_pool_assets.root.get("lovelace", 0) + pool_change_x + swap_fee
-            )
-            new_pool_assets.root[self.unit_b] = (
-                new_pool_assets.root.get(self.unit_b, 0) + pool_change_y
-            )
-        else:
-            new_pool_assets.root[self.unit_a] = (
-                new_pool_assets.root.get(self.unit_a, 0) + pool_change_x
-            )
-            new_pool_assets.root[self.unit_b] = (
-                new_pool_assets.root.get(self.unit_b, 0) + pool_change_y
-            )
-            # Non-ADA pools still accrue swap_fee as lovelace in the pool UTxO.
-            new_pool_assets.root["lovelace"] = (
-                new_pool_assets.root.get("lovelace", 0) + swap_fee
-            )
-        del lovelace_delta
+            pool_in_assets.root[self.dex_nft.unit()] = 1
+
+        order_info = get_backend().get_pool_in_tx(
+            self.tx_hash,
+            assets=[self.dex_nft.unit()],
+            addresses=self.pool_selector().addresses,
+        )
+        if not order_info:
+            raise InvalidPoolError("Could not re-fetch pool UTxO address via backend")
+        pool_address = order_info[0].address
+
+        input_utxo = UTxO(
+            input=TransactionInput(
+                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                index=self.tx_index,
+            ),
+            output=TransactionOutput(
+                address=Address.decode(pool_address),
+                amount=asset_to_value(pool_in_assets),
+                datum=self._datum,
+            ),
+        )
 
         new_pool_output = TransactionOutput(
-            address=Address.from_primitive(DANO_POOL_ADDRESS_MAINNET),
+            address=Address.decode(pool_address),
             amount=asset_to_value(new_pool_assets),
             datum=new_datum,
         )
 
-        # The tx is built, then we stamp redeemer bytes after input sorting
-        # (pycardano sorts canonically). We pre-compute the indices by
-        # sorting ourselves.
-        spend_inputs = sorted(
-            [pool_utxo, *user_inputs],
+        # Compute sorted indices. At this point the caller has already
+        # added their user inputs; we fold in the pool UTxO we're about
+        # to add via add_script_input and sort canonically.
+        current_inputs = [i.input for i in tx_builder.inputs]
+        current_inputs.append(input_utxo.input)
+        sorted_inputs = sorted(
+            current_inputs,
+            key=lambda ti: (bytes(ti.transaction_id), ti.index),
+        )
+        pool_in_idx = sorted_inputs.index(input_utxo.input)
+        pool_out_idx = len(tx_builder.outputs)  # we're about to append output 0 or later
+
+        ref_inputs_sorted = sorted(
+            list(tx_builder.reference_inputs),
             key=lambda u: (bytes(u.input.transaction_id), u.input.index),
         )
-        pool_in_idx = spend_inputs.index(pool_utxo)
-        pool_out_idx = 0  # the new pool output is always output 0
+        protocol_config_idx = ref_inputs_sorted.index(pc_utxo)
 
-        ref_inputs = sorted(
-            [protocol_config_utxo, pool_script_ref_utxo],
-            key=lambda u: (bytes(u.input.transaction_id), u.input.index),
-        )
-        protocol_config_idx = ref_inputs.index(protocol_config_utxo)
-
-        spend_redeemer_bytes = build_swap_redeemer_bytes(
+        spend_bytes = build_swap_redeemer_bytes(
             delta_amount=delta_amount,
             pool_in_idx=pool_in_idx,
             pool_out_idx=pool_out_idx,
             first_byte=pool_in_idx,
         )
-        withdraw_redeemer_bytes = build_swap_redeemer_bytes(
+        withdraw_bytes = build_swap_redeemer_bytes(
             delta_amount=delta_amount,
             pool_in_idx=pool_in_idx,
             pool_out_idx=pool_out_idx,
             first_byte=protocol_config_idx,
         )
 
-        tb = TransactionBuilder(context)
-        for u in user_inputs:
-            tb.add_input(u)
-        tb.add_script_input(
-            pool_utxo,
-            script=pool_script_ref_utxo,
-            redeemer=Redeemer(RawCBOR(spend_redeemer_bytes)),
-        )
-        tb.reference_inputs.add(protocol_config_utxo)
-        tb.collaterals.append(collateral)
-        tb.add_output(new_pool_output)
+        script_ref = self.reference_utxo()
+        if script_ref is None:
+            raise InvalidPoolError(
+                "Pool script reference UTxO unavailable from backend",
+            )
 
-        # Withdraw-zero trick on the pool reward address.
+        tx_builder.add_script_input(
+            utxo=input_utxo,
+            script=script_ref,
+            redeemer=Redeemer(RawCBOR(spend_bytes)),
+        )
+
         reward_addr = Address.from_primitive(DANO_POOL_REWARD_ADDRESS_MAINNET)
-        tb.withdrawals = Withdrawals({bytes(reward_addr): 0})
-        tb.add_withdrawal_script(
-            pool_script_ref_utxo,
-            Redeemer(RawCBOR(withdraw_redeemer_bytes)),
+        tx_builder.withdrawals = Withdrawals({bytes(reward_addr): 0})
+        tx_builder.add_withdrawal_script(
+            script_ref,
+            Redeemer(RawCBOR(withdraw_bytes)),
         )
 
-        return tb.build(change_address=address_source)
+        return new_pool_output, new_datum
 
     # --- post-init ---------------------------------------------------------
 
