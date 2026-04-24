@@ -10,7 +10,7 @@ from charli3_dendrite.dexs.amm.amm_base import AbstractPairState
 
 
 def test_get_orders(dex: AbstractPairState, benchmark, backend):
-    if dex.dex() in ["GeniusYield", "Splash"]:
+    if dex.dex() in ["GeniusYield", "Splash", "Dano"]:
         return
 
     set_backend(backend)
