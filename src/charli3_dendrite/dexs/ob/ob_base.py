@@ -361,7 +361,7 @@ class AbstractOrderBookState(AbstractPairState):
                 in_assets.root[unit_in] += out_quantity * book[index].price
                 out_quantity = 0
             else:
-                in_assets.root[unit_in] += book[index].quantity / book[index].price
+                in_assets.root[unit_in] += book[index].quantity * book[index].price
                 out_quantity -= book[index].quantity
             index += 1
 

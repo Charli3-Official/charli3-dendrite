@@ -1,5 +1,4 @@
 import os
-import time
 from typing import Type
 
 import pytest
@@ -16,6 +15,8 @@ from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.dexs.ob.djed import DjedOrderBook
+from charli3_dendrite.dexs.ob.djed import ShenOrderBook
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from dotenv import load_dotenv
 from pycardano import Address
@@ -241,3 +242,101 @@ def test_address_from_datum(dex: AbstractPoolState):
 )
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo() is not None
+
+
+@pytest.mark.parametrize(
+    "book_cls",
+    [
+        pytest.param(DjedOrderBook, marks=pytest.mark.djed),
+        pytest.param(ShenOrderBook, marks=pytest.mark.shen),
+    ],
+)
+@pytest.mark.parametrize("side", ["mint", "burn"])
+def test_build_djed_shen_utxo(book_cls, side, backend):
+    set_backend(backend)
+
+    book = book_cls.get_book()
+
+    if side == "mint":
+        out_assets = Assets({book.unit_b: 50_000_000})
+        in_assets, _ = book.get_amount_in(out_assets)
+    else:
+        in_assets = Assets({book.unit_b: 50_000_000})
+        out_assets, _ = book.get_amount_out(in_assets)
+
+    tx_builder = TransactionBuilder(context)
+    try:
+        order_output, order_datum = book.swap_utxo(
+            address_source=ADDRESS,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            tx_builder=tx_builder,
+        )
+    except ValueError as e:
+        if "reserve ratio" in str(e):
+            pytest.xfail(f"Reserve ratio out of range: {e}")
+        raise
+
+
+def test_orderbook_utxo(dex: Type[AbstractPoolState], backend):
+    if not issubclass(dex, AbstractOrderBookState):
+        return
+
+    if dex in [DjedOrderBook, ShenOrderBook]:
+        return
+
+    set_backend(backend)
+    selector = dex.pool_selector()
+    result = get_backend().get_pool_utxos(
+        limit=10,
+        historical=False,
+        **selector.model_dump(),
+    )
+
+    if not result:
+        pytest.skip(f"No orders found for {dex.__name__}")
+
+    # Use the first sampled non-ADA token and skip if it's not executable.
+    # Exclude beacon/NFT tokens whose policy matches the dex_policy.
+    dex_policies = dex.dex_policy() or []
+    token = None
+    for record in result:
+        assets = (
+            record.assets
+            if isinstance(record.assets, Assets)
+            else Assets.model_validate(record.assets)
+        )
+        token = next(
+            (
+                unit
+                for unit in assets
+                if unit != "lovelace"
+                and not any(unit.startswith(p) for p in dex_policies)
+            ),
+            None,
+        )
+        if token is not None:
+            break
+
+    if token is None:
+        pytest.skip(f"No non-ADA assets found in recent orders for {dex.__name__}")
+
+    pair_assets = Assets(lovelace=0) + Assets(**{token: 0})
+    book = dex.get_book(assets=pair_assets)
+    if len(book.sell_book_full) == 0 and len(book.buy_book_full) == 0:
+        pytest.skip(f"No executable liquidity for {token}/ADA in {dex.__name__}")
+
+    in_assets = Assets(root={"lovelace": 1_000_000})
+    out_assets, _ = book.get_amount_out(in_assets)
+    assert out_assets.quantity() > 0, f"Expected positive output for {dex.__name__}"
+
+    tx_builder = TransactionBuilder(context)
+    txo, datum = book.swap_utxo(
+        address_source=ADDRESS,
+        in_assets=in_assets,
+        out_assets=out_assets,
+        tx_builder=tx_builder,
+    )
+
+    assert txo is not None
+    assert datum is not None
