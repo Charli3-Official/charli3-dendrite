@@ -16,6 +16,8 @@ from charli3_dendrite.dexs.core.errors import InvalidLPError
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
+from charli3_dendrite.dexs.ob.djed import DjedOrderBook
+from charli3_dendrite.dexs.ob.djed import ShenOrderBook
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from dotenv import load_dotenv
 from pycardano import Address
@@ -241,3 +243,37 @@ def test_address_from_datum(dex: AbstractPoolState):
 )
 def test_reference_utxo(dex: AbstractPoolState):
     assert dex.reference_utxo() is not None
+
+
+@pytest.mark.parametrize(
+    "book_cls",
+    [
+        pytest.param(DjedOrderBook, marks=pytest.mark.djed),
+        pytest.param(ShenOrderBook, marks=pytest.mark.shen),
+    ],
+)
+@pytest.mark.parametrize("side", ["mint", "burn"])
+def test_build_djed_shen_utxo(book_cls, side, backend):
+    set_backend(backend)
+
+    book = book_cls.get_book()
+
+    if side == "mint":
+        out_assets = Assets({book.unit_b: 50_000_000})
+        in_assets, _ = book.get_amount_in(out_assets)
+    else:
+        in_assets = Assets({book.unit_b: 50_000_000})
+        out_assets, _ = book.get_amount_out(in_assets)
+
+    tx_builder = TransactionBuilder(context)
+    try:
+        order_output, order_datum = book.swap_utxo(
+            address_source=ADDRESS,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            tx_builder=tx_builder,
+        )
+    except ValueError as e:
+        if "reserve ratio" in str(e):
+            pytest.xfail(f"Reserve ratio out of range: {e}")
+        raise

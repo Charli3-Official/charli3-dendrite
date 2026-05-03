@@ -8,6 +8,7 @@ by the GeniusYield implementation.
 import math
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from fractions import Fraction
 from typing import Union
 
@@ -326,8 +327,8 @@ class DjedOrderDatum(OrderDatum):
             # Invert oracle rate (Djed/ADA -> ADA/Djed) and multiply
             ada_amount = (
                 self.action.djed_amount
-                * self.oracle_rate.denominator
-                // self.oracle_rate.numerator
+                * self._oracle_rate.denominator
+                // self._oracle_rate.numerator
             )
             return Assets(lovelace=ada_amount)
         if isinstance(self.action, ShenMintAction):
@@ -397,6 +398,13 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
     fee: int = 150  # 1.5% fee in basis points
     _deposit: Assets = Assets(lovelace=3_000_000)
 
+    # Snapshot state populated once during get_book()
+    _oracle_rate: DjedRational
+    _pool_datum: DjedPoolDatum
+    _oracle_utxo: UTxO
+    _pool_utxo: UTxO
+    _minting_policy_ref: UTxO
+
     @classmethod
     def order_selector(cls) -> list[str]:
         """Order contract address (shared)."""
@@ -427,16 +435,6 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
             addresses=["addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa"],
             assets=[oracle_nft],
         )
-
-    @classmethod
-    def djed_asset(cls) -> str:
-        """Return the DJED asset ID."""
-        return DJED_TOKEN
-
-    @classmethod
-    def shen_asset(cls) -> str:
-        """Return the SHEN asset ID."""
-        return SHEN_TOKEN
 
     @classmethod
     def _get_oracle_utxo_and_datum(cls) -> tuple[UTxO, DjedOracleDatum]:
@@ -519,110 +517,57 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
             ),
         )
 
-    @classmethod
     def batcher_fee(
-        cls,
+        self,
         in_assets: Assets,
         out_assets: Assets,
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
+        extra_assets: Assets | None = None,
         include_action_fee: bool = True,
     ) -> Assets:
         """Calculate total fee estimate for a mint or burn operation.
 
         Args:
             in_assets: Input assets (ADA for mints, tokens for burns)
-            out_assets: Output assets (DJED for mints, ADA for burns)
-            oracle_rate: Pre-fetched oracle rate (fetched if None)
-            pool_datum: Pre-fetched pool datum (fetched if None, needed for SHEN)
+            out_assets: Output assets (tokens for mints, ADA for burns)
+            extra_assets: Extra assets (unused, for interface compatibility)
             include_action_fee: If True, include action fee in the calculation
 
         Returns:
             Total fees in ADA (operator fee + action fee)
         """
-        if oracle_rate is None:
-            _oracle_utxo, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-
         if in_assets.unit() == "lovelace":
-            if out_assets.unit() == DJED_TOKEN:
-                base_ada = math.ceil(
-                    out_assets.quantity()
-                    * oracle_rate.denominator
-                    / oracle_rate.numerator,
-                )
-                ada_with_fee = math.ceil(
-                    out_assets.quantity()
-                    * oracle_rate.denominator
-                    * 1015
-                    / (oracle_rate.numerator * 1000),
-                )
-            elif out_assets.unit() == SHEN_TOKEN:
-                if pool_datum is None:
-                    _pool_utxo, pool_datum = cls._get_pool_utxo_and_datum()
-                fee_num, fee_den = ShenOrderBook.price_ratio(
-                    side="mint",
-                    oracle_rate=oracle_rate,
-                    pool_datum=pool_datum,
-                )
-                ada_with_fee = math.ceil(out_assets.quantity() * fee_num / fee_den)
-                base_ada = math.ceil(
-                    out_assets.quantity() * fee_num * 1000 / (fee_den * 1015),
-                )
-            else:
-                raise ValueError(f"Unsupported mint output asset: {out_assets.unit()}")
-
+            fee_num, fee_den = self.price_ratio(side="mint")
+            ada_with_fee = math.ceil(out_assets.quantity() * fee_num / fee_den)
+            base_ada = math.ceil(
+                out_assets.quantity() * fee_num * 1000 / (fee_den * 1015),
+            )
             operator_fee = _calculate_operator_fee(ada_with_fee)
             action_fee = max(0, ada_with_fee - base_ada)
             if include_action_fee:
                 return Assets(lovelace=operator_fee + action_fee)
             return Assets(lovelace=operator_fee)
 
-        if in_assets.unit() == DJED_TOKEN:
-            base_ada = (in_assets.quantity() * oracle_rate.denominator) // (
-                oracle_rate.numerator
-            )
-            ada_with_fee = (in_assets.quantity() * oracle_rate.denominator * 985) // (
-                oracle_rate.numerator * 1000
-            )
-        elif in_assets.unit() == SHEN_TOKEN:
-            if pool_datum is None:
-                _pool_utxo, pool_datum = cls._get_pool_utxo_and_datum()
-            fee_num, fee_den = ShenOrderBook.price_ratio(
-                side="burn",
-                oracle_rate=oracle_rate,
-                pool_datum=pool_datum,
-            )
+        if in_assets.unit() == self.unit_b:
+            fee_num, fee_den = self.price_ratio(side="burn")
             ada_with_fee = (in_assets.quantity() * fee_num) // fee_den
-            # Recover no-fee estimate from fee-applied ratio (x * 985 / 1000).
             base_ada = (in_assets.quantity() * fee_num * 1000) // (fee_den * 985)
-        else:
-            raise ValueError(f"Unsupported burn input asset: {in_assets.unit()}")
+            operator_fee = _calculate_operator_fee(ada_with_fee)
+            action_fee = max(0, base_ada - ada_with_fee)
+            if include_action_fee:
+                return Assets(lovelace=operator_fee + action_fee)
+            return Assets(lovelace=operator_fee)
 
-        operator_fee = _calculate_operator_fee(ada_with_fee)
-        action_fee = max(0, base_ada - ada_with_fee)
-        if include_action_fee:
-            return Assets(lovelace=operator_fee + action_fee)
-        return Assets(lovelace=operator_fee)
+        raise ValueError(f"Unsupported input asset: {in_assets.unit()}")
 
-    @classmethod
-    def get_reserve_ratio(
-        cls,
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
-    ) -> float:
+    def get_reserve_ratio(self) -> float:
         """Get current reserve ratio as a percentage."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        if pool_datum is None:
-            _, pool_datum = cls._get_pool_utxo_and_datum()
-
-        liabilities = pool_datum.djed_in_circulation * oracle_rate.denominator
+        liabilities = (
+            self._pool_datum.djed_in_circulation * self._oracle_rate.denominator
+        )
         if liabilities == 0:
             return float("inf")
 
-        assets = pool_datum.ada_in_reserve * oracle_rate.numerator
+        assets = self._pool_datum.ada_in_reserve * self._oracle_rate.numerator
         return (assets / liabilities) * 100
 
     @staticmethod
@@ -630,20 +575,12 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
         """Convert a rational to a non-negative floored integer."""
         return max(0, value.numerator // value.denominator)
 
-    @classmethod
-    def max_mintable_djed(
-        cls,
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
-    ) -> int:
+    def max_mintable_djed(self) -> int:
         """Maximum DJED mintable under min reserve ratio constraint."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        if pool_datum is None:
-            _, pool_datum = cls._get_pool_utxo_and_datum()
-
-        djed_ada_rate = Fraction(oracle_rate.denominator, oracle_rate.numerator)
+        djed_ada_rate = Fraction(
+            self._oracle_rate.denominator,
+            self._oracle_rate.numerator,
+        )
         mint_fee = Fraction(FEE_NUMERATOR, FEE_DENOMINATOR)
         min_reserve_ratio = Fraction(MIN_RESERVE_RATIO_PERCENT, 100)
         denominator_factor = min_reserve_ratio - 1 - mint_fee
@@ -651,31 +588,24 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
             return 0
 
         value = (
-            Fraction(pool_datum.ada_in_reserve)
-            - min_reserve_ratio * pool_datum.djed_in_circulation * djed_ada_rate
+            Fraction(self._pool_datum.ada_in_reserve)
+            - min_reserve_ratio * self._pool_datum.djed_in_circulation * djed_ada_rate
         ) / (djed_ada_rate * denominator_factor)
-        return cls._fraction_floor_non_negative(value)
+        return self._fraction_floor_non_negative(value)
 
-    @classmethod
-    def max_mintable_shen(
-        cls,
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
-    ) -> int:
+    def max_mintable_shen(self) -> int:
         """Maximum SHEN mintable under max reserve ratio constraint."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        if pool_datum is None:
-            _, pool_datum = cls._get_pool_utxo_and_datum()
-        if pool_datum.shen_in_circulation <= 0:
+        if self._pool_datum.shen_in_circulation <= 0:
             return 0
 
-        djed_ada_rate = Fraction(oracle_rate.denominator, oracle_rate.numerator)
+        djed_ada_rate = Fraction(
+            self._oracle_rate.denominator,
+            self._oracle_rate.numerator,
+        )
         shen_ada_rate = (
-            Fraction(pool_datum.ada_in_reserve)
-            - pool_datum.djed_in_circulation * djed_ada_rate
-        ) / pool_datum.shen_in_circulation
+            Fraction(self._pool_datum.ada_in_reserve)
+            - self._pool_datum.djed_in_circulation * djed_ada_rate
+        ) / self._pool_datum.shen_in_circulation
         if shen_ada_rate <= 0:
             return 0
 
@@ -683,35 +613,28 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
         max_reserve_ratio = Fraction(MAX_RESERVE_RATIO_PERCENT, 100)
         value = (
             (
-                max_reserve_ratio * pool_datum.djed_in_circulation * djed_ada_rate
-                - Fraction(pool_datum.ada_in_reserve)
+                max_reserve_ratio * self._pool_datum.djed_in_circulation * djed_ada_rate
+                - Fraction(self._pool_datum.ada_in_reserve)
             )
             / shen_ada_rate
             / (1 + mint_fee)
         )
 
-        return max(0, cls._fraction_floor_non_negative(value) - 1)
+        return max(0, self._fraction_floor_non_negative(value) - 1)
 
-    @classmethod
-    def max_burnable_shen(
-        cls,
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
-    ) -> int:
+    def max_burnable_shen(self) -> int:
         """Maximum SHEN burnable under min reserve ratio constraint."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        if pool_datum is None:
-            _, pool_datum = cls._get_pool_utxo_and_datum()
-        if pool_datum.shen_in_circulation <= 0:
+        if self._pool_datum.shen_in_circulation <= 0:
             return 0
 
-        djed_ada_rate = Fraction(oracle_rate.denominator, oracle_rate.numerator)
+        djed_ada_rate = Fraction(
+            self._oracle_rate.denominator,
+            self._oracle_rate.numerator,
+        )
         shen_ada_rate = (
-            Fraction(pool_datum.ada_in_reserve)
-            - pool_datum.djed_in_circulation * djed_ada_rate
-        ) / pool_datum.shen_in_circulation
+            Fraction(self._pool_datum.ada_in_reserve)
+            - self._pool_datum.djed_in_circulation * djed_ada_rate
+        ) / self._pool_datum.shen_in_circulation
         if shen_ada_rate <= 0:
             return 0
 
@@ -723,13 +646,15 @@ class DjedShenOrderBookBase(AbstractOrderBookState):
 
         value = (
             (
-                Fraction(pool_datum.ada_in_reserve)
-                - min_reserve_ratio * pool_datum.djed_in_circulation * djed_ada_rate
+                Fraction(self._pool_datum.ada_in_reserve)
+                - min_reserve_ratio
+                * self._pool_datum.djed_in_circulation
+                * djed_ada_rate
             )
             / shen_ada_rate
             / fee_factor
         )
-        return cls._fraction_floor_non_negative(value)
+        return self._fraction_floor_non_negative(value)
 
     @property
     def swap_forward(self) -> bool:
@@ -761,7 +686,7 @@ class DjedOrderBook(DjedShenOrderBookBase):
         assets: Assets | None = None,
         orders: list[OrderBookOrder] | None = None,
     ) -> "DjedOrderBook":
-        """Create a placeholder Djed order book for transaction building."""
+        """Create a Djed order book snapshot with current on-chain state."""
         if assets is None:
             assets = Assets({"lovelace": 0, DJED_TOKEN: 0})
         buy_orders = orders or []
@@ -775,6 +700,14 @@ class DjedOrderBook(DjedShenOrderBookBase):
             buy_book_full=BuyOrderBook(buy_orders),
         )
 
+        oracle_utxo, oracle_datum = cls._get_oracle_utxo_and_datum()
+        pool_utxo, pool_datum = cls._get_pool_utxo_and_datum()
+
+        ob._oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
+        ob._pool_datum = pool_datum
+        ob._oracle_utxo = oracle_utxo
+        ob._pool_utxo = pool_utxo
+        ob._minting_policy_ref = cls._get_minting_policy_ref_utxo()
         ob.buy_book_full = ob.buy_book_full[:3]
 
         return ob
@@ -789,37 +722,39 @@ class DjedOrderBook(DjedShenOrderBookBase):
         """A unique identifier for the pool or ob."""
         return "Djed"
 
-    @classmethod
-    def price_ratio(
-        cls,
-        side: str = "mint",
-        oracle_rate: "DjedRational | None" = None,
-    ) -> tuple[int, int]:
-        """Return ADA/DJED price as (numerator, denominator)."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
+    def price_ratio(self, side: str | None = None) -> tuple[int, int]:
+        """Return ADA/DJED price as (numerator, denominator).
 
-        num = oracle_rate.denominator
-        den = oracle_rate.numerator
-        if side == "mint":  # Add 1.5% fee
+        Args:
+            side: "mint" to add 1.5% fee, "burn" to deduct 1.5% fee,
+                  None for the raw oracle rate without fees.
+        """
+        num = self._oracle_rate.denominator
+        den = self._oracle_rate.numerator
+        if side == "mint":
             num *= 1015
             den *= 1000
-        elif side == "burn":  # Deduct 1.5% fee
+        elif side == "burn":
             num *= 985
             den *= 1000
-        else:
-            raise ValueError("side must be 'mint' or 'burn'")
+        elif side is not None:
+            raise ValueError("side must be 'mint', 'burn', or None")
         return num, den
 
     @property
-    def price(self) -> tuple[int, int]:
-        """Price for ADA/DJED (includes 1.5% action fee)."""
-        return self.price_ratio(side="mint")
+    def price(self) -> tuple[Decimal, Decimal]:
+        """Raw oracle price without fees.
 
-    @classmethod
+        Returns:
+            A `Tuple[Decimal, Decimal]` where the first `Decimal` is the cost
+                in ADA (lovelace) to purchase 1 DJED, and the second `Decimal`
+                is the cost in DJED to purchase 1 lovelace.
+        """
+        num, den = self.price_ratio()
+        return Decimal(num) / Decimal(den), Decimal(den) / Decimal(num)
+
     def get_amount_out(
-        cls,
+        self,
         asset: Assets,
     ) -> tuple[Assets, float]:
         """Calculate output for a given input for Djed mint/burn operations.
@@ -830,25 +765,16 @@ class DjedOrderBook(DjedShenOrderBookBase):
         Returns:
             Tuple of (output_assets, slippage). Includes 1.5% action fee.
         """
-        _, oracle_datum = cls._get_oracle_utxo_and_datum()
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
         if asset.unit() == "lovelace":
-            num, den = cls.price_ratio(
-                side="mint",
-                oracle_rate=oracle_rate,
-            )
-            djed_out = (asset.quantity() * den) // num
-            return Assets(**{DJED_TOKEN: djed_out}), 0
-        num, den = cls.price_ratio(
-            side="burn",
-            oracle_rate=oracle_rate,
-        )
+            num, den = self.price_ratio(side="mint")
+            token_out = (asset.quantity() * den) // num
+            return Assets(**{self.unit_b: token_out}), 0
+        num, den = self.price_ratio(side="burn")
         ada_out = (asset.quantity() * num) // den
         return Assets(lovelace=ada_out), 0
 
-    @classmethod
     def get_amount_in(
-        cls,
+        self,
         asset: Assets,
     ) -> tuple[Assets, float]:
         """Calculate required input for a desired output for Djed mint/burn operations.
@@ -859,19 +785,11 @@ class DjedOrderBook(DjedShenOrderBookBase):
         Returns:
             Tuple of (input_assets, slippage). Includes 1.5% action fee.
         """
-        _, oracle_datum = cls._get_oracle_utxo_and_datum()
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
         if asset.unit() == "lovelace":
-            num, den = cls.price_ratio(
-                side="burn",
-                oracle_rate=oracle_rate,
-            )
-            djed_in = math.ceil(asset.quantity() * den / num)
-            return Assets(**{DJED_TOKEN: djed_in}), 0
-        num, den = cls.price_ratio(
-            side="mint",
-            oracle_rate=oracle_rate,
-        )
+            num, den = self.price_ratio(side="burn")
+            token_in = math.ceil(asset.quantity() * den / num)
+            return Assets(**{self.unit_b: token_in}), 0
+        num, den = self.price_ratio(side="mint")
         ada_in = math.ceil(asset.quantity() * num / den)
         return Assets(lovelace=ada_in), 0
 
@@ -896,17 +814,19 @@ class DjedOrderBook(DjedShenOrderBookBase):
             is_mint = True
             if out_assets.quantity() < MIN_ORDER_AMOUNT:
                 raise ValueError(
-                    f"Minimum mint amount for DJED is {MIN_ORDER_AMOUNT}",
+                    f"Minimum mint amount for {self.dex()} is {MIN_ORDER_AMOUNT}",
                 )
-        elif in_assets.unit() == DJED_TOKEN:
+        elif in_assets.unit() == self.unit_b:
             amount = in_assets.quantity()
             is_mint = False
             if in_assets.quantity() < MIN_ORDER_AMOUNT:
                 raise ValueError(
-                    f"Minimum burn amount for DJED is {MIN_ORDER_AMOUNT}",
+                    f"Minimum burn amount for {self.dex()} is {MIN_ORDER_AMOUNT}",
                 )
         else:
-            raise ValueError(f"Unsupported input asset for Djed: {in_assets.unit()}")
+            raise ValueError(
+                f"Unsupported input asset for {self.dex()}: {in_assets.unit()}",
+            )
 
         now_slot = tx_builder.context.last_block_slot
         ttl_slot = now_slot + 180
@@ -914,12 +834,7 @@ class DjedOrderBook(DjedShenOrderBookBase):
         tx_builder.ttl = ttl_slot
         creation_time = _slot_to_posix_ms(ttl_slot)
 
-        oracle_utxo, oracle_datum = self._get_oracle_utxo_and_datum()
-        pool_utxo, pool_datum = self._get_pool_utxo_and_datum()
-        minting_policy_ref = self._get_minting_policy_ref_utxo()
-
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        reserve_ratio = self.get_reserve_ratio(oracle_rate, pool_datum)
+        reserve_ratio = self.get_reserve_ratio()
 
         if is_mint:
             if reserve_ratio <= MIN_RESERVE_RATIO_PERCENT:
@@ -928,41 +843,35 @@ class DjedOrderBook(DjedShenOrderBookBase):
                     f"{reserve_ratio:.2f}% must be > "
                     f"{MIN_RESERVE_RATIO_PERCENT}%",
                 )
-            num, den = self.price_ratio(
-                side="mint",
-                oracle_rate=oracle_rate,
-            )
+            num, den = self.price_ratio(side="mint")
             ada_amount = math.ceil(amount * num / den)
             operator_fee = _calculate_operator_fee(ada_amount)
-            total_ada = ada_amount + pool_datum.min_ada + operator_fee
+            total_ada = ada_amount + self._pool_datum.min_ada + operator_fee
             order_datum = DjedOrderDatum(
                 action=DjedMintAction(djed_amount=amount, ada_amount=ada_amount),
                 owner_address=PlutusFullAddress.from_address(target_address),
-                oracle_rate=oracle_rate,
+                oracle_rate=self._oracle_rate,
                 creation_time=creation_time,
                 order_nft=bytes.fromhex(ORDER_NFT_POLICY),
             )
             output_assets = Assets(lovelace=total_ada)
         else:
-            num, den = self.price_ratio(
-                side="burn",
-                oracle_rate=oracle_rate,
-            )
+            num, den = self.price_ratio(side="burn")
             ada_amount = (amount * num) // den
             operator_fee = _calculate_operator_fee(ada_amount)
-            total_ada = pool_datum.min_ada + operator_fee
+            total_ada = self._pool_datum.min_ada + operator_fee
             order_datum = DjedOrderDatum(
                 action=DjedBurnAction(djed_amount=amount),
                 owner_address=PlutusFullAddress.from_address(target_address),
-                oracle_rate=oracle_rate,
+                oracle_rate=self._oracle_rate,
                 creation_time=creation_time,
                 order_nft=bytes.fromhex(ORDER_NFT_POLICY),
             )
-            output_assets = Assets(**{DJED_TOKEN: amount, "lovelace": total_ada})
+            output_assets = Assets(**{self.unit_b: amount, "lovelace": total_ada})
 
-        tx_builder.reference_inputs.add(oracle_utxo)
-        tx_builder.reference_inputs.add(pool_utxo)
-        tx_builder.reference_inputs.add(minting_policy_ref)
+        tx_builder.reference_inputs.add(self._oracle_utxo)
+        tx_builder.reference_inputs.add(self._pool_utxo)
+        tx_builder.reference_inputs.add(self._minting_policy_ref)
 
         order_address = Address.decode(self.order_selector()[0])
         output_assets.root[ORDER_NFT_POLICY + ORDER_NFT_NAME_HEX] = 1
@@ -976,8 +885,8 @@ class DjedOrderBook(DjedShenOrderBookBase):
         _finalize_order_tx(
             tx_builder,
             target_address,
-            pool_datum,
-            minting_policy_ref,
+            self._pool_datum,
+            self._minting_policy_ref,
         )
 
         return order_output, order_datum
@@ -992,7 +901,7 @@ class ShenOrderBook(DjedShenOrderBookBase):
         assets: Assets | None = None,
         orders: list[OrderBookOrder] | None = None,
     ) -> "ShenOrderBook":
-        """Create a placeholder Shen order book for transaction building."""
+        """Create a Shen order book snapshot with current on-chain state."""
         if assets is None:
             assets = Assets({"lovelace": 0, SHEN_TOKEN: 0})
         buy_orders = orders or []
@@ -1006,6 +915,14 @@ class ShenOrderBook(DjedShenOrderBookBase):
             buy_book_full=BuyOrderBook(buy_orders),
         )
 
+        oracle_utxo, oracle_datum = cls._get_oracle_utxo_and_datum()
+        pool_utxo, pool_datum = cls._get_pool_utxo_and_datum()
+
+        ob._oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
+        ob._pool_datum = pool_datum
+        ob._oracle_utxo = oracle_utxo
+        ob._pool_utxo = pool_utxo
+        ob._minting_policy_ref = cls._get_minting_policy_ref_utxo()
         ob.buy_book_full = ob.buy_book_full[:3]
 
         return ob
@@ -1020,45 +937,44 @@ class ShenOrderBook(DjedShenOrderBookBase):
         """A unique identifier for the pool or ob."""
         return "Shen"
 
-    @classmethod
-    def price_ratio(
-        cls,
-        side: str = "mint",
-        oracle_rate: "DjedRational | None" = None,
-        pool_datum: "DjedPoolDatum | None" = None,
-    ) -> tuple[int, int]:
-        """Return ADA/SHEN price as (numerator, denominator)."""
-        if oracle_rate is None:
-            _, oracle_datum = cls._get_oracle_utxo_and_datum()
-            oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        if pool_datum is None:
-            _, pool_datum = cls._get_pool_utxo_and_datum()
+    def price_ratio(self, side: str | None = None) -> tuple[int, int]:
+        """Return ADA/SHEN price as (numerator, denominator).
 
+        Args:
+            side: "mint" to add 1.5% fee, "burn" to deduct 1.5% fee,
+                  None for the raw rate without fees.
+        """
         num = (
-            pool_datum.ada_in_reserve * oracle_rate.numerator
-            - pool_datum.djed_in_circulation * oracle_rate.denominator
+            self._pool_datum.ada_in_reserve * self._oracle_rate.numerator
+            - self._pool_datum.djed_in_circulation * self._oracle_rate.denominator
         )
-        den = pool_datum.shen_in_circulation * oracle_rate.numerator
+        den = self._pool_datum.shen_in_circulation * self._oracle_rate.numerator
 
-        if side == "mint":  # Add 1.5% fee
+        if side == "mint":
             num *= 1015
             den *= 1000
-        elif side == "burn":  # Deduct 1.5% fee
+        elif side == "burn":
             num *= 985
             den *= 1000
-        else:
-            raise ValueError("side must be 'mint' or 'burn'")
+        elif side is not None:
+            raise ValueError("side must be 'mint', 'burn', or None")
 
         return num, den
 
     @property
-    def price(self) -> tuple[int, int]:
-        """Price for ADA/SHEN (includes 1.5% action fee)."""
-        return self.price_ratio(side="mint")
+    def price(self) -> tuple[Decimal, Decimal]:
+        """Raw price without fees.
 
-    @classmethod
+        Returns:
+            A `Tuple[Decimal, Decimal]` where the first `Decimal` is the cost
+                in ADA (lovelace) to purchase 1 SHEN, and the second `Decimal`
+                is the cost in SHEN to purchase 1 lovelace.
+        """
+        num, den = self.price_ratio()
+        return Decimal(num) / Decimal(den), Decimal(den) / Decimal(num)
+
     def get_amount_out(
-        cls,
+        self,
         asset: Assets,
     ) -> tuple[Assets, float]:
         """Calculate output for a given input for Shen mint/burn operations.
@@ -1069,30 +985,23 @@ class ShenOrderBook(DjedShenOrderBookBase):
         Returns:
             Tuple of (output_assets, slippage). Includes 1.5% action fee.
         """
-        _, oracle_datum = cls._get_oracle_utxo_and_datum()
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        _, pool_datum = cls._get_pool_utxo_and_datum()
-        num, den = cls.price_ratio(
-            side="mint" if asset.unit() == "lovelace" else "burn",
-            oracle_rate=oracle_rate,
-            pool_datum=pool_datum,
-        )
+        side = "mint" if asset.unit() == "lovelace" else "burn"
+        num, den = self.price_ratio(side=side)
         if num <= 0 or den <= 0:
             return (
-                Assets(**{SHEN_TOKEN: 0})
+                Assets(**{self.unit_b: 0})
                 if asset.unit() == "lovelace"
                 else Assets(lovelace=0),
                 0,
             )
         if asset.unit() == "lovelace":
-            shen_out = (asset.quantity() * den) // num
-            return Assets(**{SHEN_TOKEN: shen_out}), 0
+            token_out = (asset.quantity() * den) // num
+            return Assets(**{self.unit_b: token_out}), 0
         ada_out = (asset.quantity() * num) // den
         return Assets(lovelace=ada_out), 0.0
 
-    @classmethod
     def get_amount_in(
-        cls,
+        self,
         asset: Assets,
     ) -> tuple[Assets, float]:
         """Calculate required input for a desired output for Shen mint/burn operations.
@@ -1103,24 +1012,13 @@ class ShenOrderBook(DjedShenOrderBookBase):
         Returns:
             Tuple of (input_assets, slippage). Includes 1.5% action fee.
         """
-        _, oracle_datum = cls._get_oracle_utxo_and_datum()
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        _, pool_datum = cls._get_pool_utxo_and_datum()
         if asset.unit() == "lovelace":
-            num, den = cls.price_ratio(
-                side="burn",
-                oracle_rate=oracle_rate,
-                pool_datum=pool_datum,
-            )
+            num, den = self.price_ratio(side="burn")
             if num <= 0 or den <= 0:
-                return Assets(**{SHEN_TOKEN: 0}), 0
-            shen_in = math.ceil(asset.quantity() * den / num)
-            return Assets(**{SHEN_TOKEN: shen_in}), 0
-        num, den = cls.price_ratio(
-            side="mint",
-            oracle_rate=oracle_rate,
-            pool_datum=pool_datum,
-        )
+                return Assets(**{self.unit_b: 0}), 0
+            token_in = math.ceil(asset.quantity() * den / num)
+            return Assets(**{self.unit_b: token_in}), 0
+        num, den = self.price_ratio(side="mint")
         if num <= 0 or den <= 0:
             return Assets(lovelace=0), 0
         ada_in = math.ceil(asset.quantity() * num / den)
@@ -1147,17 +1045,19 @@ class ShenOrderBook(DjedShenOrderBookBase):
             is_mint = True
             if out_assets.quantity() < MIN_ORDER_AMOUNT:
                 raise ValueError(
-                    f"Minimum mint amount for SHEN is {MIN_ORDER_AMOUNT}",
+                    f"Minimum mint amount for {self.dex()} is {MIN_ORDER_AMOUNT}",
                 )
-        elif in_assets.unit() == SHEN_TOKEN:
+        elif in_assets.unit() == self.unit_b:
             amount = in_assets.quantity()
             is_mint = False
             if in_assets.quantity() < MIN_ORDER_AMOUNT:
                 raise ValueError(
-                    f"Minimum burn amount for SHEN is {MIN_ORDER_AMOUNT}",
+                    f"Minimum burn amount for {self.dex()} is {MIN_ORDER_AMOUNT}",
                 )
         else:
-            raise ValueError(f"Unsupported input asset for Shen: {in_assets.unit()}")
+            raise ValueError(
+                f"Unsupported input asset for {self.dex()}: {in_assets.unit()}",
+            )
 
         now_slot = tx_builder.context.last_block_slot
         ttl_slot = now_slot + 180
@@ -1165,12 +1065,7 @@ class ShenOrderBook(DjedShenOrderBookBase):
         tx_builder.ttl = ttl_slot
         creation_time = _slot_to_posix_ms(ttl_slot)
 
-        oracle_utxo, oracle_datum = self._get_oracle_utxo_and_datum()
-        pool_utxo, pool_datum = self._get_pool_utxo_and_datum()
-        minting_policy_ref = self._get_minting_policy_ref_utxo()
-
-        oracle_rate = oracle_datum.oracle_fields.ada_usd_exchange_rate
-        reserve_ratio = self.get_reserve_ratio(oracle_rate, pool_datum)
+        reserve_ratio = self.get_reserve_ratio()
 
         if is_mint:
             if reserve_ratio >= MAX_RESERVE_RATIO_PERCENT:
@@ -1179,18 +1074,14 @@ class ShenOrderBook(DjedShenOrderBookBase):
                     f"{reserve_ratio:.2f}% must be < "
                     f"{MAX_RESERVE_RATIO_PERCENT}%",
                 )
-            num, den = self.price_ratio(
-                side="mint",
-                oracle_rate=oracle_rate,
-                pool_datum=pool_datum,
-            )
+            num, den = self.price_ratio(side="mint")
             ada_amount = math.ceil(amount * num / den)
             operator_fee = _calculate_operator_fee(ada_amount)
-            total_ada = ada_amount + pool_datum.min_ada + operator_fee
+            total_ada = ada_amount + self._pool_datum.min_ada + operator_fee
             order_datum = DjedOrderDatum(
                 action=ShenMintAction(shen_amount=amount, ada_amount=ada_amount),
                 owner_address=PlutusFullAddress.from_address(target_address),
-                oracle_rate=oracle_rate,
+                oracle_rate=self._oracle_rate,
                 creation_time=creation_time,
                 order_nft=bytes.fromhex(ORDER_NFT_POLICY),
             )
@@ -1202,27 +1093,22 @@ class ShenOrderBook(DjedShenOrderBookBase):
                     f"{reserve_ratio:.2f}% must be > "
                     f"{MIN_RESERVE_RATIO_PERCENT}%",
                 )
-            num, den = self.price_ratio(
-                side="burn",
-                oracle_rate=oracle_rate,
-                pool_datum=pool_datum,
-            )
-
+            num, den = self.price_ratio(side="burn")
             ada_amount = math.ceil(amount * num / den)
             operator_fee = _calculate_operator_fee(ada_amount)
-            total_ada = pool_datum.min_ada + operator_fee
+            total_ada = self._pool_datum.min_ada + operator_fee
             order_datum = DjedOrderDatum(
                 action=ShenBurnAction(shen_amount=amount),
                 owner_address=PlutusFullAddress.from_address(target_address),
-                oracle_rate=oracle_rate,
+                oracle_rate=self._oracle_rate,
                 creation_time=creation_time,
                 order_nft=bytes.fromhex(ORDER_NFT_POLICY),
             )
-            output_assets = Assets(**{SHEN_TOKEN: amount, "lovelace": total_ada})
+            output_assets = Assets(**{self.unit_b: amount, "lovelace": total_ada})
 
-        tx_builder.reference_inputs.add(oracle_utxo)
-        tx_builder.reference_inputs.add(pool_utxo)
-        tx_builder.reference_inputs.add(minting_policy_ref)
+        tx_builder.reference_inputs.add(self._oracle_utxo)
+        tx_builder.reference_inputs.add(self._pool_utxo)
+        tx_builder.reference_inputs.add(self._minting_policy_ref)
 
         order_address = Address.decode(self.order_selector()[0])
         output_assets.root[ORDER_NFT_POLICY + ORDER_NFT_NAME_HEX] = 1
@@ -1236,8 +1122,8 @@ class ShenOrderBook(DjedShenOrderBookBase):
         _finalize_order_tx(
             tx_builder,
             target_address,
-            pool_datum,
-            minting_policy_ref,
+            self._pool_datum,
+            self._minting_policy_ref,
         )
 
         return order_output, order_datum
