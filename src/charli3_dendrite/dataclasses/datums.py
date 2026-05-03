@@ -8,6 +8,7 @@ from typing import Union
 from pycardano import Address  # type: ignore
 from pycardano import DatumHash
 from pycardano import PlutusData
+from pycardano import ScriptHash
 from pycardano import VerificationKeyHash
 
 from charli3_dendrite.dataclasses.models import Assets
@@ -68,24 +69,40 @@ class PlutusFullAddress(PlutusData):
             raise ValueError(error_msg)
         stake: _PlutusConstrWrapper | PlutusNone = PlutusNone()
         if address.staking_part is not None:
-            stake = _PlutusConstrWrapper(
-                _PlutusConstrWrapper(
-                    PlutusPartAddress(bytes.fromhex(str(address.staking_part))),
-                ),
+            if isinstance(address.staking_part, ScriptHash):
+                stake_part = PlutusScriptPartAddress(
+                    bytes.fromhex(str(address.staking_part)),
+                )
+            else:
+                stake_part = PlutusPartAddress(bytes.fromhex(str(address.staking_part)))
+            stake = _PlutusConstrWrapper(_PlutusConstrWrapper(stake_part))
+
+        if isinstance(address.payment_part, ScriptHash):
+            payment_part = PlutusScriptPartAddress(
+                bytes.fromhex(str(address.payment_part)),
             )
+        else:
+            payment_part = PlutusPartAddress(bytes.fromhex(str(address.payment_part)))
 
         return PlutusFullAddress(
-            PlutusPartAddress(bytes.fromhex(str(address.payment_part))),
+            payment_part,
             stake=stake,
         )
 
     def to_address(self) -> Address:
         """Convert back to an address."""
-        payment_part = VerificationKeyHash(self.payment.address[:28])
+        if isinstance(self.payment, PlutusScriptPartAddress):
+            payment_part = ScriptHash(self.payment.address[:28])
+        else:
+            payment_part = VerificationKeyHash(self.payment.address[:28])
         if isinstance(self.stake, PlutusNone) or self.stake is None:
             stake_part = None
         else:
-            stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address[:28])
+            stake_cred = self.stake.wrapped.wrapped
+            if isinstance(stake_cred, PlutusScriptPartAddress):
+                stake_part = ScriptHash(stake_cred.address[:28])
+            else:
+                stake_part = VerificationKeyHash(stake_cred.address[:28])
         return Address(payment_part=payment_part, staking_part=stake_part)
 
 
