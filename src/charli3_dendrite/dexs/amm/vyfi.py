@@ -324,7 +324,26 @@ class VyFiCPPState(AbstractConstantProductPoolState):
 
     @staticmethod
     def _encode_asset(policy_id: str, asset_name: str) -> str:
-        """Encode an asset by combining policy ID and hex-encoded asset name."""
+        r"""Encode an asset by combining policy ID and the on-chain asset name.
+
+        VyFi's API returns ``token_name`` in two forms: a human-readable string
+        (e.g. ``"PUDGY"``), or the on-chain asset name *already hex-encoded* and
+        marked with a ``"0x"`` prefix, optionally preceded by a NUL byte
+        (e.g. ``"\x000x55534441"`` for ``"USDA"``). For the latter the hex is
+        the real on-chain asset name and must be used verbatim -- re-encoding it
+        as UTF-8 double-encodes the name and corrupts the unit, frequently
+        pushing it past the 32-byte asset-name limit (and mangling names with
+        non-UTF-8 bytes, e.g. ``"\x000xf6..."``).
+        """
+        marked = asset_name.lstrip("\x00")
+        if marked.startswith("0x"):
+            hex_name = marked[2:]
+            try:
+                bytes.fromhex(hex_name)
+            except ValueError:
+                pass
+            else:
+                return policy_id + hex_name.lower()
         encoded_name = asset_name.encode("utf-8").hex()
         return policy_id + encoded_name
 
