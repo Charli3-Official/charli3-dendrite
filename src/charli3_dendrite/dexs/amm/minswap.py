@@ -618,6 +618,41 @@ class MinswapV2OrderDatum(OrderDatum):
                 return Assets({"asset_b": self.step.minimum_receive})
             else:
                 return Assets({"asset_a": self.step.minimum_receive})
+        elif isinstance(self.step, StopLossV2):
+            if isinstance(self.step.a_to_b_direction, BoolTrue):
+                return Assets({"asset_b": self.step.stop_loss_receive})
+            else:
+                return Assets({"asset_a": self.step.stop_loss_receive})
+        elif isinstance(self.step, OCOV2):
+            # OCO carries a take-profit (minimum_receive) and a stop-loss
+            # (stop_loss_receive); report the take-profit limit as the requested
+            # amount, mirroring the minimum_receive used for SwapExactInV2.
+            if isinstance(self.step.a_to_b_direction, BoolTrue):
+                return Assets({"asset_b": self.step.minimum_receive})
+            else:
+                return Assets({"asset_a": self.step.minimum_receive})
+        elif isinstance(self.step, ZapOutV2):
+            if isinstance(self.step.a_to_b_direction, BoolTrue):
+                return Assets({"asset_b": self.step.minimum_receive})
+            else:
+                return Assets({"asset_a": self.step.minimum_receive})
+        elif isinstance(self.step, PartialSwapV2):
+            # PartialSwap has no minimum_receive field; io_ratio is the limit
+            # price, so the requested output is total_swap_amount scaled by
+            # io_ratio_numerator / io_ratio_denominator.
+            requested = (
+                self.step.total_swap_amount
+                * self.step.io_ratio_numerator
+                // self.step.io_ratio_denominator
+            )
+            if isinstance(self.step.a_to_b_direction, BoolTrue):
+                return Assets({"asset_b": requested})
+            else:
+                return Assets({"asset_a": requested})
+        elif isinstance(self.step, WithdrawImbalanceV2):
+            # Only asset_a carries a guaranteed minimum (minimum_asset_a); the
+            # asset_b amount is governed by the withdrawal ratio, not a floor.
+            return Assets({"asset_a": self.step.minimum_asset_a})
         else:
             return Assets({})
 
