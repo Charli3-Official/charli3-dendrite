@@ -269,6 +269,13 @@ class CPPoolRedeemer(PlutusData):
 class SplashBaseState(AbstractPairState):
     """Base state class for Splash DEX pools."""
 
+    # Off-chain executor fee a Splash ORDER must pay to be picked up:
+    # SplashOrderDatum.fee (2 ADA) + cost_per_ex_step (1 ADA) = 3 ADA. This is the
+    # order/executor fee (used for fillability), DISTINCT from _batcher/_deposit
+    # (=0) which the direct pool-spend swap path uses. Do NOT fold this into
+    # _batcher — downstream consumers read _batcher as the direct-swap cost.
+    _executor_fee = Assets(lovelace=3_000_000)
+
     @classmethod
     def dex(cls) -> str:
         """Return the name of the DEX."""

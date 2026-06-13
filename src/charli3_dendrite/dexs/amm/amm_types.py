@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
 
 N_COINS = 2
 
@@ -269,7 +270,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             ValueError: If the input asset is invalid or if multiple input
               assets are provided.
         """
-        volume_fee: int = 0
+        volume_fee: int | float = 0
         if self.volume_fee is not None:
             if isinstance(self.volume_fee, (int, float)):
                 volume_fee = self.volume_fee
@@ -336,7 +337,7 @@ class AbstractStableSwapPoolState(AbstractPoolState):
             ValueError: If the output asset is invalid or if multiple output
             assets are provided.
         """
-        volume_fee: int = 0
+        volume_fee: int | float = 0
         if self.volume_fee is not None:
             if isinstance(self.volume_fee, (int, float)):
                 volume_fee = self.volume_fee
@@ -390,48 +391,172 @@ class AbstractCommonStableSwapPoolState(AbstractStableSwapPoolState):
 
 
 class AbstractConstantLiquidityPoolState(AbstractPoolState):
-    """Represents the state of a constant liquidity pool automated market maker (AMM).
+    """State of a single-band concentrated-liquidity ("constant liquidity") AMM pool.
 
-    This class serves as a base for constant liquidity pool implementations, providing
-    methods to calculate the input and output asset amounts for swaps.
+    A concentrated-liquidity position holds liquidity only within one
+    ``[sqrt_lower, sqrt_upper]`` price band. Inside the band the curve is a constant
+    product on VIRTUAL reserves ``(a_v, b_v)`` extrapolated from the band bounds; a
+    swap large enough to push the price past the band is capped at the band's
+    available output (a single UTxO cannot fill beyond its range). This base
+    implements that math against the standard ``reserve_a``/``reserve_b``/``unit_a``/
+    ``unit_b``/``volume_fee`` interface — exactly as
+    :class:`AbstractConstantProductPoolState` does for plain CPP and
+    :class:`AbstractStableSwapPoolState` does for stable swaps. Concrete CLMM DEXs
+    (Dano, Sundae V4) supply only the per-band datum specifics via the two hooks
+    below (``_sqrt_price_bounds`` and, where they net fees/carve-outs, the
+    ``reserve_a``/``reserve_b`` overrides), mirroring how the stable base exposes
+    ``amp``/``_get_ann``.
     """
+
+    fee_basis: int = 10000
+
+    # ── per-DEX hooks (the analogue of the stable base's amp/_get_ann) ────────
+    def _sqrt_price_bounds(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Return ``((lower_num, lower_den), (upper_num, upper_den))``.
+
+        The square-root price band bounds as exact integer ratios, read from the
+        pool datum: ``lower`` is ``sqrt(P_a)``, ``upper`` is ``sqrt(P_b)``.
+        """
+        raise NotImplementedError
+
+    @property
+    def _lp_fee_rate(self) -> int:
+        """LP fee rate in ``fee_basis`` units — the only fee affecting swap output.
+
+        Defaults to ``volume_fee`` (which surfaces ``fee``); a concentrated-liquidity
+        position carries one symmetric LP fee. Override if a DEX encodes a per-side
+        fee list. Any platform/protocol fee skims the LP's cut, not the swapper's
+        output, so it is deliberately excluded here.
+        """
+        fee = self.volume_fee
+        if fee is None:
+            return 0
+        if isinstance(fee, (list, tuple)):
+            return int(fee[0])
+        return int(fee)
+
+    # ── generic single-band CLMM math ────────────────────────────────────────
+    def virtual_reserves(self) -> tuple[int, int]:
+        """Virtual reserves ``(a_v, b_v)`` of the active band (aligned to a, b).
+
+        The constant-product reserves the band's liquidity ``L`` is equivalent to
+        within ``[sqrt_lower, sqrt_upper]`` (the Uniswap-V3 single-band identity
+        ``a_v = a + L/sqrt(P_b)``, ``b_v = b + L*sqrt(P_a)``), solved in exact integer
+        arithmetic. The ``a_v / b_v`` ratio is the band's marginal price.
+        """
+        a, b = self.reserve_a, self.reserve_b
+        (pa_n, pa_d), (pb_n, pb_d) = self._sqrt_price_bounds()
+        den_ab = pa_d * pb_d
+        num_ab = pa_n * pb_n
+        diff = b * den_ab - a * num_ab
+        big = math.isqrt(diff * diff + 4 * a * b * pa_d * pa_d * pb_n * pb_n)
+        liq_num = b * den_ab + a * num_ab + big
+        liq_den = 2 * (pb_n * pa_d - pb_d * pa_n)
+        # ceilDiv for each virtual-reserve offset (``-(-n // d)``).
+        a_v = -(-(liq_num * pb_d) // (liq_den * pb_n)) + a
+        b_v = -(-(liq_num * pa_n) // (liq_den * pa_d)) + b
+        return a_v, b_v
 
     def get_amount_out(
         self,
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Calculate the output amount for a given input in a constant liquidity pool.
+        """Output amount + price impact for an input ``asset`` (capped at the band).
 
         Args:
             asset (Assets): The input asset amount for the swap.
-            precise (bool): If True: the output rounded to the nearest integer.
+            precise (bool): Accepted for interface parity; the output is always the
+                integer floor (a single band trades whole units).
 
         Returns:
-            tuple[Assets, float]: Tuple containing the output asset and float value.
-
-        Raises:
-            NotImplementedError: This method is not implemented in the base class.
+            tuple[Assets, float]: The output asset and the price-impact ratio.
         """
-        error_msg = "CLPP amount out is not yet implemented."
-        raise NotImplementedError(error_msg)
+        if len(asset) != 1 or asset.unit() not in (self.unit_a, self.unit_b):
+            error_msg = f"Invalid input asset for pool: {asset}"
+            raise ValueError(error_msg)
+
+        a_v, b_v = self.virtual_reserves()
+        if asset.unit() == self.unit_a:
+            in_v, out_v, out_real, out_unit = a_v, b_v, self.reserve_b, self.unit_b
+        else:
+            in_v, out_v, out_real, out_unit = b_v, a_v, self.reserve_a, self.unit_a
+
+        amount_in = asset.quantity()
+        off_fee = self.fee_basis - self._lp_fee_rate
+        denominator = in_v * self.fee_basis + amount_in * off_fee
+        if denominator <= 0:
+            # Degenerate band (virtual in-reserve 0) probed with zero input: no
+            # output, no division. Guarding above the floor-division lets a
+            # parked-band probe return (0, 0.0) rather than ZeroDivisionError.
+            return Assets(**{out_unit: 0}), 0.0
+        numerator = out_v * denominator - in_v * out_v * self.fee_basis
+        # Capacity cap: one band holds only ``out_real`` of the output token; a
+        # larger swap would push price past the band, which this UTxO cannot fill.
+        # Cap the fill (order-book convention) rather than raise — callers route
+        # the remainder to other bands. A band parked at its edge has
+        # ``out_real == 0`` and correctly yields zero output.
+        expected_out = min(numerator // denominator, out_real)
+        out_assets = Assets(**{out_unit: expected_out})
+        if not precise:
+            out_assets.root[out_unit] = expected_out
+
+        if amount_in == 0 or expected_out == 0:
+            return out_assets, 0.0
+        spot = out_v / in_v
+        effective = expected_out / amount_in
+        return out_assets, 1.0 - (effective / spot)
 
     def get_amount_in(
         self,
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Calculate input amount needed for desired output in constant liquidity pool.
+        """Minimum input + price impact to obtain a desired output ``asset``.
+
+        Algebraic inverse of :meth:`get_amount_out` in-band:
+        ``in_min = ceil(in_v * basis * out / ((out_v - out) * offFee))``.
 
         Args:
             asset (Assets): The desired output asset amount for the swap.
-            precise (bool): If True: the output rounded to the nearest integer.
+            precise (bool): Accepted for interface parity; the input is always the
+                integer ceiling (the minimal whole-unit input).
 
         Returns:
-            tuple[Assets, float]: Tuple containing required input asset and float value.
+            tuple[Assets, float]: The required input asset and the price-impact ratio.
 
         Raises:
-            NotImplementedError: This method is not implemented in the base class.
+            InvalidPoolError: If the desired output exceeds the band's available
+                reserve (it cannot be filled from this UTxO).
         """
-        error_msg = "CLPP amount in is not yet implemented."
-        raise NotImplementedError(error_msg)
+        if len(asset) != 1 or asset.unit() not in (self.unit_a, self.unit_b):
+            error_msg = f"Invalid output asset for pool: {asset}"
+            raise ValueError(error_msg)
+        desired_out = asset.quantity()
+        if desired_out <= 0:
+            error_msg = "desired output must be positive"
+            raise ValueError(error_msg)
+
+        a_v, b_v = self.virtual_reserves()
+        off_fee = self.fee_basis - self._lp_fee_rate
+        if asset.unit() == self.unit_b:
+            out_real, in_v, out_v, in_unit = self.reserve_b, a_v, b_v, self.unit_a
+        else:
+            out_real, in_v, out_v, in_unit = self.reserve_a, b_v, a_v, self.unit_b
+        if desired_out >= out_real:
+            error_msg = (
+                f"Desired output {desired_out} exceeds available reserve {out_real}"
+            )
+            raise InvalidPoolError(error_msg)
+        amount_in = -(
+            -(in_v * self.fee_basis * desired_out) // ((out_v - desired_out) * off_fee)
+        )
+        in_assets = Assets(**{in_unit: amount_in})
+        if not precise:
+            in_assets.root[in_unit] = amount_in
+
+        if amount_in == 0:
+            return in_assets, 0.0
+        spot = out_v / in_v
+        effective = desired_out / amount_in
+        return in_assets, 1.0 - (effective / spot)
