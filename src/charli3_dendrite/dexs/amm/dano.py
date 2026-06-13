@@ -45,7 +45,7 @@ from charli3_dendrite.dataclasses.datums import OrderType
 from charli3_dendrite.dataclasses.datums import PoolDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolSelector
-from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.utility import asset_to_value
 
@@ -361,8 +361,16 @@ class DanoOrderDatum(OrderDatum):
         raise NotImplementedError("Dano does not use order datums")
 
 
-class DanoCLMMState(AbstractPoolState):
-    """State of a single Dano concentrated-liquidity pool."""
+class DanoCLMMState(AbstractConstantLiquidityPoolState):
+    """State of a single Dano concentrated-liquidity pool.
+
+    The single-band CLMM math (``virtual_reserves`` + ``get_amount_out``/
+    ``get_amount_in`` + the capacity cap) is inherited from
+    :class:`AbstractConstantLiquidityPoolState`; this class supplies only the
+    Dano-specific datum parsing, active-reserve carve-outs, and direct-spend
+    tx-building. The LP fee is surfaced as ``fee`` in :meth:`post_init` so the
+    base reads it via ``volume_fee``/``_lp_fee_rate``.
+    """
 
     fee: int = 0  # populated from datum.lp_fee_rate in post_init
 
@@ -562,143 +570,22 @@ class DanoCLMMState(AbstractPoolState):
         """Active reserve of tokenY, net of platform fees."""
         return self.raw_y - self._datum.platform_fee_y
 
-    # --- math (port of utils.ts:calculateConcentratedPoolSwap) -------------
+    # --- math (single-band CLMM curve inherited from the base) -------------
+    # ``virtual_reserves()`` + ``get_amount_out()``/``get_amount_in()`` + the
+    # capacity cap live on ``AbstractConstantLiquidityPoolState``; Dano supplies
+    # only the band bounds below. ``unit_a``/``unit_b`` == tokenX/tokenY and
+    # ``reserve_a``/``reserve_b`` are the active (carve-out-netted) reserves, so
+    # the base reproduces the original utils.ts:calculateConcentratedPoolSwap
+    # port exactly. The tx-build path (``compute_pool_change``) keeps its own
+    # virtual-reserve computation because it must net an in-tx staking reward.
 
-    def _virtual_reserves(self) -> tuple[int, int]:
-        """Compute virtual reserves (xV, yV) used by the CLMM invariant.
-
-        Mirrors `calcLiquidity` + the xV/yV step in utils.ts.
-        """
+    def _sqrt_price_bounds(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Band sqrt-price bounds: ``((lower_n, lower_d), (upper_n, upper_d))``."""
         d = self._datum
-        x = self.reserve_a
-        y = self.reserve_b
-        pa_n, pa_d = d.sqrt_lower_price.numerator, d.sqrt_lower_price.denominator
-        pb_n, pb_d = d.sqrt_upper_price.numerator, d.sqrt_upper_price.denominator
-
-        den_a_den_b = pa_d * pb_d
-        num_a_num_b = pa_n * pb_n
-
-        diff = y * den_a_den_b - x * num_a_num_b
-        big = isqrt(diff * diff + 4 * x * y * pa_d * pa_d * pb_n * pb_n)
-
-        liq_num = y * den_a_den_b + x * num_a_num_b + big
-        liq_den = 2 * (pb_n * pa_d - pb_d * pa_n)
-
-        # ceilDiv equivalents
-        x_v = -(-(liq_num * pb_d) // (liq_den * pb_n)) + x
-        y_v = -(-(liq_num * pa_n) // (liq_den * pa_d)) + y
-        return x_v, y_v
-
-    def _swap_out(
-        self,
-        amount_in: int,
-        in_virtual: int,
-        out_virtual: int,
-        out_real: int,
-    ) -> tuple[int, int]:
-        """Port of utils.ts:getPoolChange. Returns (out_amount, platform_fee)."""
-        lp_fee = (amount_in * self._datum.lp_fee_rate) // FEE_BASIS
-        platform_fee = (lp_fee * self.platform_fee_rate) // FEE_BASIS
-        off_fee = FEE_BASIS - self._datum.lp_fee_rate
-
-        denominator = in_virtual * FEE_BASIS + amount_in * off_fee
-        numerator = out_virtual * denominator - in_virtual * out_virtual * FEE_BASIS
-        expected_out = numerator // denominator
-
-        # Concentrated-liquidity capacity cap. A single range holds only
-        # ``out_real`` of the output token; a larger swap would push the price
-        # past this range's ``[sqrt_lower, sqrt_upper]`` band, which this UTxO
-        # cannot fill. Return the capacity (the maximum obtainable output)
-        # rather than raising, mirroring the order-book convention
-        # (``ob_base`` get_amount_out caps the fill at ``available``). Callers
-        # route any remainder to other ranges, and recover the minimal input
-        # for this capped output via ``get_amount_in``. A range parked at its
-        # band edge has ``out_real == 0`` and correctly yields zero output.
-        expected_out = min(expected_out, out_real)
-
-        return expected_out, platform_fee
-
-    def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
-        """Return the output amount and price impact for a given input asset."""
-        d = self._datum
-        if len(asset) != 1 or asset.unit() not in (d.unit_x, d.unit_y):
-            raise ValueError(f"Invalid input asset for pool: {asset}")
-
-        x_v, y_v = self._virtual_reserves()
-        if asset.unit() == d.unit_x:
-            in_v, out_v, out_real, out_unit = x_v, y_v, self.reserve_b, d.unit_y
-        else:
-            in_v, out_v, out_real, out_unit = y_v, x_v, self.reserve_a, d.unit_x
-
-        out_qty, _ = self._swap_out(asset.quantity(), in_v, out_v, out_real)
-        out_assets = Assets(**{out_unit: out_qty})
-
-        # Price impact: 1 - (effective_price / spot_price)
-        # Approximated against virtual reserves.
-        if asset.quantity() == 0 or out_qty == 0:
-            return out_assets, 0.0
-        spot = out_v / in_v
-        effective = out_qty / asset.quantity()
-        price_impact = 1.0 - (effective / spot)
-        return out_assets, price_impact
-
-    def get_amount_in(self, asset: Assets) -> tuple[Assets, float]:
-        """Algebraic inverse of get_amount_out.
-
-        Given a desired output ``asset`` quantity, return the minimum input
-        amount required and the price-impact ratio.
-
-        Derivation (from spec § Redeemer: Swap, X→Y direction):
-            expected_out = Yv - floor(Xv*Yv*basis / (Xv*basis + dx*offFee))
-        Solving for ``dx`` such that expected_out >= desired_out and
-        rounding up gives:
-            dx_min = ceil(Xv*basis*desired_out / ((Yv - desired_out) * offFee))
-        The Y→X case is symmetric (swap the roles of Xv and Yv).
-        """
-        d = self._datum
-        if len(asset) != 1 or asset.unit() not in (d.unit_x, d.unit_y):
-            raise ValueError(f"Invalid output asset for pool: {asset}")
-        desired_out = asset.quantity()
-        if desired_out <= 0:
-            raise ValueError("desired output must be positive")
-
-        x_v, y_v = self._virtual_reserves()
-        pool_in_lp_x, pool_in_lp_y = self.active_liquidity()
-        off_fee = FEE_BASIS - d.lp_fee_rate
-
-        if asset.unit() == d.unit_y:
-            # User wants Y out, must pay X in.
-            if desired_out >= pool_in_lp_y:
-                raise InvalidPoolError(
-                    f"Desired Y output {desired_out} exceeds available "
-                    f"Y reserve {pool_in_lp_y}",
-                )
-            in_v, out_v = x_v, y_v
-            in_unit = d.unit_x
-            amount_in = -(
-                -(x_v * FEE_BASIS * desired_out) // ((y_v - desired_out) * off_fee)
-            )
-        else:
-            # User wants X out, must pay Y in.
-            if desired_out >= pool_in_lp_x:
-                raise InvalidPoolError(
-                    f"Desired X output {desired_out} exceeds available "
-                    f"X reserve {pool_in_lp_x}",
-                )
-            in_v, out_v = y_v, x_v
-            in_unit = d.unit_y
-            amount_in = -(
-                -(y_v * FEE_BASIS * desired_out) // ((x_v - desired_out) * off_fee)
-            )
-
-        in_assets = Assets(**{in_unit: amount_in})
-
-        if amount_in == 0:
-            return in_assets, 0.0
-        spot = out_v / in_v
-        effective = desired_out / amount_in
-        price_impact = 1.0 - (effective / spot)
-        return in_assets, price_impact
+        return (
+            (d.sqrt_lower_price.numerator, d.sqrt_lower_price.denominator),
+            (d.sqrt_upper_price.numerator, d.sqrt_upper_price.denominator),
+        )
 
     # --- spec-driven helpers ----------------------------------------------
 
