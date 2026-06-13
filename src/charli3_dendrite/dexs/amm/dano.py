@@ -26,8 +26,7 @@ from typing import ClassVar
 from pycardano import Address
 from pycardano import IndefiniteList
 from pycardano import PlutusData
-from pycardano import PlutusV2Script
-from pycardano import RawCBOR
+from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import ScriptHash
@@ -37,6 +36,8 @@ from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Withdrawals
+from pycardano import plutus_script_hash
+from pycardano.serialization import CBORSerializable
 
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import OrderDatum
@@ -47,7 +48,6 @@ from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_base import AbstractPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.utility import asset_to_value
-
 
 # Mainnet — see clmm-sdk-init-sdk/src/constants.ts
 DANO_POOL_SCRIPT_HASH_MAINNET = (
@@ -70,7 +70,9 @@ DANO_POOL_ADDRESS_ADA_MAINNET = (
     "addr1x8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0w"
     "7dwgsd23ac468cjj8rcnyuc3s72rtupu6j9dw0xpw83exsufvrg4"
 )
-DANO_POOL_ADDRESS_NONADA_MAINNET = "addr1w8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wc7a283u"
+DANO_POOL_ADDRESS_NONADA_MAINNET = (
+    "addr1w8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wc7a283u"
+)
 # Reward address used for the withdraw-zero trick. Its script hash equals
 # the pool payment-script hash, so the same reference script serves both
 # the spend and reward redeemer.
@@ -91,6 +93,11 @@ PROTOCOL_CONFIG_OUT_REF_MAINNET = (
 EPOCH_BOUNDARY_MS_MAINNET = 1_647_899_091_000
 EPOCH_LENGTH_MS_MAINNET = 432_000_000
 EPOCH_BOUNDARY_AS_EPOCH_MAINNET = 328
+# Slot at the same epoch-328 boundary (post-Shelley: 1 slot = 1 second).
+# Lets us derive the current slot from wall clock, consistent with the epoch
+# above, so the swap tx's validity range encodes the same epoch we write into
+# the pool datum (the withdraw validator cross-checks them).
+SLOT_AT_EPOCH_BOUNDARY_MAINNET = 56_332_800
 
 
 def _parse_protocol_config_datum(datum_cbor: str) -> tuple[int, int]:
@@ -103,9 +110,14 @@ def _parse_protocol_config_datum(datum_cbor: str) -> tuple[int, int]:
 def _current_epoch_mainnet(now_ms: int | None = None) -> int:
     t_ms = now_ms if now_ms is not None else int(time.time() * 1000)
     return (
-        (t_ms - EPOCH_BOUNDARY_MS_MAINNET) // EPOCH_LENGTH_MS_MAINNET
-        + EPOCH_BOUNDARY_AS_EPOCH_MAINNET
-    )
+        t_ms - EPOCH_BOUNDARY_MS_MAINNET
+    ) // EPOCH_LENGTH_MS_MAINNET + EPOCH_BOUNDARY_AS_EPOCH_MAINNET
+
+
+def _current_slot_mainnet(now_ms: int | None = None) -> int:
+    """Current mainnet slot from wall clock (post-Shelley: 1 slot/second)."""
+    t_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    return SLOT_AT_EPOCH_BOUNDARY_MAINNET + (t_ms - EPOCH_BOUNDARY_MS_MAINNET) // 1000
 
 
 def _find_protocol_config(tx_builder: TransactionBuilder) -> UTxO | None:
@@ -193,6 +205,77 @@ def parse_swap_redeemer_bytes(
 
 
 @dataclass
+class DanoSwapRedeemer(CBORSerializable):
+    """Single-pool Dano swap redeemer (Spend or Withdraw).
+
+    The on-chain redeemer Plutus Data is the raw swap payload serialized as a
+    CBOR *byte string* (``0x58<len><payload>``); :meth:`to_primitive` returns
+    the payload so it serializes that way. The pool input index and the first
+    byte (``pool_in_idx`` for Spend, the protocol-config reference index for
+    Withdraw) depend on the FINAL transaction ordering, so they are resolved
+    post-build by :meth:`set_idx`, which the tx builder calls after sorting and
+    indexing inputs (mirrors ``SSPoolRedeemer.set_idx`` and the clmm-sdk's
+    ``RedeemerArg`` callback). ``pool_out_idx`` is the pool's position in the
+    swap's batch vector — ``0`` for a single-pool swap — NOT a tx output index.
+    """
+
+    pool_input: TransactionInput
+    delta_amount: int
+    is_withdraw: bool
+    protocol_config_input: TransactionInput | None = None
+    pool_out_idx: int = 0
+    pool_in_idx: int = 0
+    first_byte: int = 0
+
+    @staticmethod
+    def _sorted_index(utxos: list, target: TransactionInput) -> int:
+        # Canonical order: matches the input ordering the builder applies
+        # before assigning redeemer indices (str(tx_id), index).
+        ordered = sorted(
+            utxos,
+            key=lambda u: (str(u.input.transaction_id), u.input.index),
+        )
+        for i, utxo in enumerate(ordered):
+            if utxo.input == target:
+                return i
+        raise InvalidPoolError("redeemer UTxO not found in transaction during set_idx")
+
+    def set_idx(self, tx_builder: TransactionBuilder) -> None:
+        """Resolve pool/config indices from the final (sorted) transaction."""
+        self.pool_in_idx = self._sorted_index(list(tx_builder.inputs), self.pool_input)
+        if self.is_withdraw:
+            if self.protocol_config_input is None:
+                raise InvalidPoolError(
+                    "withdraw redeemer missing protocol-config input",
+                )
+            self.first_byte = self._sorted_index(
+                list(tx_builder.reference_inputs),
+                self.protocol_config_input,
+            )
+        else:
+            self.first_byte = self.pool_in_idx
+
+    def to_primitive(self) -> bytes:
+        """Serialize the redeemer as the packed swap payload bytestring."""
+        return build_swap_redeemer_bytes(
+            delta_amount=self.delta_amount,
+            pool_in_idx=self.pool_in_idx,
+            pool_out_idx=self.pool_out_idx,
+            first_byte=self.first_byte,
+        )
+
+    @classmethod
+    def from_primitive(
+        cls,
+        value: object,  # noqa: ARG003
+        type_args: object = None,  # noqa: ARG003
+    ) -> "DanoSwapRedeemer":
+        """Raise: the redeemer is build-only and cannot be deserialized."""
+        msg = "DanoSwapRedeemer is build-only and cannot be deserialized"
+        raise NotImplementedError(msg)
+
+
+@dataclass
 class Ratio(PlutusData):
     """A rational number stored on-chain as (num, den)."""
 
@@ -239,13 +322,16 @@ class DanoPoolDatum(PoolDatum):
 
     @property
     def unit_x(self) -> str:
+        """Return tokenX as a Dendrite asset unit."""
         return _bytes_pair_to_unit(self.token_x)
 
     @property
     def unit_y(self) -> str:
+        """Return tokenY as a Dendrite asset unit."""
         return _bytes_pair_to_unit(self.token_y)
 
     def pool_pair(self) -> Assets | None:
+        """Return the pool's (tokenX, tokenY) asset pair."""
         return Assets(root={self.unit_x: 0, self.unit_y: 0})
 
 
@@ -263,12 +349,15 @@ class DanoOrderDatum(OrderDatum):
     CONSTR_ID = 255  # unused on-chain
 
     def address_source(self) -> Address:
+        """Raise: Dano uses direct-spend swaps, not order datums."""
         raise NotImplementedError("Dano does not use order datums")
 
     def requested_amount(self) -> Assets:
+        """Raise: Dano uses direct-spend swaps, not order datums."""
         raise NotImplementedError("Dano does not use order datums")
 
     def order_type(self) -> OrderType:
+        """Raise: Dano uses direct-spend swaps, not order datums."""
         raise NotImplementedError("Dano does not use order datums")
 
 
@@ -296,15 +385,18 @@ class DanoCLMMState(AbstractPoolState):
 
     @classmethod
     def dex(cls) -> str:
+        """Return the name of the DEX."""
         return "Dano"
 
     @classmethod
     def order_selector(cls) -> list[str]:
+        """Return the order selector addresses."""
         # No off-chain order address: swaps are direct.
         return [cls._stake_address.encode()]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
+        """Return the pool selector for this DEX."""
         return PoolSelector(
             addresses=[
                 DANO_POOL_ADDRESS_ADA_MAINNET,
@@ -315,16 +407,73 @@ class DanoCLMMState(AbstractPoolState):
 
     @classmethod
     def reference_utxo(cls) -> UTxO | None:
-        """Pool script reference UTxO (shared by spend + reward redeemers)."""
+        """Pool script reference UTxO (shared by spend + reward redeemers).
+
+        The Dano pool validator is a **PlutusV3** script (its v3 hash equals
+        the pool address payment credential). The shared
+        ``ScriptReference.to_utxo()`` hardcodes ``PlutusV2Script``, which would
+        yield the wrong script hash and make every swap tx invalid, so re-type
+        the reference script as ``PlutusV3Script`` here and assert it matches
+        the known pool script hash before caching it.
+        """
         if cls._reference_utxo is None:
             script_ref = get_backend().get_script_from_address(cls._stake_address)
-            if script_ref is None:
+            if script_ref is None or script_ref.script is None:
                 return None
-            cls._reference_utxo = script_ref.to_utxo()
+            utxo = script_ref.to_utxo()
+            if utxo is None:
+                return None
+            v3_script = PlutusV3Script(bytes.fromhex(script_ref.script))
+            if str(plutus_script_hash(v3_script)) != DANO_POOL_SCRIPT_HASH_MAINNET:
+                raise InvalidPoolError(
+                    "Dano reference script hash does not match the pool "
+                    f"validator ({DANO_POOL_SCRIPT_HASH_MAINNET})",
+                )
+            utxo.output.script = v3_script
+            cls._reference_utxo = utxo
         return cls._reference_utxo
+
+    def _staking_reference(self, pool_address: str) -> tuple[UTxO, Address]:
+        """Per-pool staking script reference UTxO + reward address.
+
+        ADA pools delegate their lovelace via a per-pool staking script whose
+        hash is the delegation part of the pool address (addr1x…). When the pool
+        is overdue the swap must withdraw that stake account's rewards, which
+        needs the staking script as a reference input. Like the pool script it
+        is deployed on-chain keyed by its hash, so resolve it via
+        ``get_script_from_address`` and re-type it as ``PlutusV3Script``.
+        """
+        addr = Address.decode(pool_address)
+        stake_cred = addr.staking_part
+        if not isinstance(stake_cred, ScriptHash):
+            raise InvalidPoolError(
+                "Overdue Dano ADA pool address has no script staking credential",
+            )
+        reward_addr = Address(staking_part=stake_cred, network=addr.network)
+        sref = get_backend().get_script_from_address(
+            Address(payment_part=stake_cred, network=addr.network),
+        )
+        if sref is None or sref.script is None:
+            raise InvalidPoolError(
+                "Dano staking script reference UTxO unavailable from backend",
+            )
+        utxo = sref.to_utxo()
+        if utxo is None:
+            raise InvalidPoolError(
+                "Dano staking script reference UTxO unavailable from backend",
+            )
+        v3_script = PlutusV3Script(bytes.fromhex(sref.script))
+        if bytes(plutus_script_hash(v3_script)) != bytes(stake_cred):
+            raise InvalidPoolError(
+                "Dano staking reference script hash does not match the pool "
+                "staking credential",
+            )
+        utxo.output.script = v3_script
+        return utxo, reward_addr
 
     @classmethod
     def dex_policy(cls) -> list[str] | None:
+        """Return the validity-NFT policy id (the pool script hash)."""
         # Dano mints the validity NFT from the pool validator itself,
         # so the policy id == pool script hash. The 32-byte asset name is
         # a per-pool unique identifier.
@@ -332,32 +481,41 @@ class DanoCLMMState(AbstractPoolState):
 
     @classmethod
     def pool_policy(cls) -> list[str] | None:
+        """Return None: Dano uses a single NFT already covered by dex_policy."""
         # The validity NFT is already extracted by dex_policy(); Dano
         # uses a single NFT for both roles, so don't double-count.
         return None
 
     @classmethod
-    def default_script_class(cls) -> type[PlutusV2Script]:
-        return PlutusV2Script
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """Return the default script class (PlutusV3) for Dano pools."""
+        # Dano pool validators are PlutusV3 (verified on-chain: the script's
+        # v3 hash equals the pool address payment credential).
+        return PlutusV3Script
 
     @property
     def swap_forward(self) -> bool:
+        """Return whether this DEX supports swap forwarding."""
         return False
 
     @property
     def stake_address(self) -> Address:
+        """Return the pool's stake address."""
         return self._stake_address
 
     @classmethod
     def pool_datum_class(cls) -> type[DanoPoolDatum]:
+        """Return the pool datum class for this DEX."""
         return DanoPoolDatum
 
     @classmethod
     def order_datum_class(cls) -> type[DanoOrderDatum]:
+        """Return the order datum class for this DEX."""
         return DanoOrderDatum
 
     @property
     def pool_id(self) -> str:
+        """A unique identifier for the pool."""
         if self.dex_nft is None:
             raise InvalidPoolError("Dano pool is missing its validity NFT.")
         return self.dex_nft.unit()
@@ -374,27 +532,29 @@ class DanoCLMMState(AbstractPoolState):
 
     @property
     def unit_a(self) -> str:
+        """Return tokenX's asset unit (the canonical a-side)."""
         return self._datum.unit_x
 
     @property
     def unit_b(self) -> str:
+        """Return tokenY's asset unit (the canonical b-side)."""
         return self._datum.unit_y
 
     @property
     def raw_x(self) -> int:
+        """Return the raw tokenX balance held in the pool UTxO."""
         return self.assets[self._datum.unit_x]
 
     @property
     def raw_y(self) -> int:
+        """Return the raw tokenY balance held in the pool UTxO."""
         return self.assets[self._datum.unit_y]
 
     @property
     def reserve_a(self) -> int:
         """Active reserve of tokenX, net of platform fees and ADA carve-out."""
         d = self._datum
-        excluded_ada = (
-            ADA_MIN_UTXO + d.total_swap_fee if d.unit_x == "lovelace" else 0
-        )
+        excluded_ada = ADA_MIN_UTXO + d.total_swap_fee if d.unit_x == "lovelace" else 0
         return self.raw_x - d.platform_fee_x - excluded_ada
 
     @property
@@ -429,8 +589,13 @@ class DanoCLMMState(AbstractPoolState):
         y_v = -(-(liq_num * pa_n) // (liq_den * pa_d)) + y
         return x_v, y_v
 
-    def _swap_out(self, amount_in: int, in_virtual: int, out_virtual: int,
-                  out_real: int) -> tuple[int, int]:
+    def _swap_out(
+        self,
+        amount_in: int,
+        in_virtual: int,
+        out_virtual: int,
+        out_real: int,
+    ) -> tuple[int, int]:
         """Port of utils.ts:getPoolChange. Returns (out_amount, platform_fee)."""
         lp_fee = (amount_in * self._datum.lp_fee_rate) // FEE_BASIS
         platform_fee = (lp_fee * self.platform_fee_rate) // FEE_BASIS
@@ -440,12 +605,21 @@ class DanoCLMMState(AbstractPoolState):
         numerator = out_virtual * denominator - in_virtual * out_virtual * FEE_BASIS
         expected_out = numerator // denominator
 
-        if expected_out > out_real:
-            raise InvalidPoolError("Swap exceeds available pool reserves.")
+        # Concentrated-liquidity capacity cap. A single range holds only
+        # ``out_real`` of the output token; a larger swap would push the price
+        # past this range's ``[sqrt_lower, sqrt_upper]`` band, which this UTxO
+        # cannot fill. Return the capacity (the maximum obtainable output)
+        # rather than raising, mirroring the order-book convention
+        # (``ob_base`` get_amount_out caps the fill at ``available``). Callers
+        # route any remainder to other ranges, and recover the minimal input
+        # for this capped output via ``get_amount_in``. A range parked at its
+        # band edge has ``out_real == 0`` and correctly yields zero output.
+        expected_out = min(expected_out, out_real)
 
         return expected_out, platform_fee
 
     def get_amount_out(self, asset: Assets) -> tuple[Assets, float]:
+        """Return the output amount and price impact for a given input asset."""
         d = self._datum
         if len(asset) != 1 or asset.unit() not in (d.unit_x, d.unit_y):
             raise ValueError(f"Invalid input asset for pool: {asset}")
@@ -539,9 +713,7 @@ class DanoCLMMState(AbstractPoolState):
         x_raw = self.raw_x + staking_reward
         y_raw = self.raw_y
         if d.unit_x == "lovelace":
-            pool_in_lp_x = (
-                x_raw - d.platform_fee_x - d.total_swap_fee - ADA_MIN_UTXO
-            )
+            pool_in_lp_x = x_raw - d.platform_fee_x - d.total_swap_fee - ADA_MIN_UTXO
         else:
             pool_in_lp_x = x_raw - d.platform_fee_x
         pool_in_lp_y = y_raw - d.platform_fee_y
@@ -568,7 +740,7 @@ class DanoCLMMState(AbstractPoolState):
 
         diff = pool_in_lp_y * den_ab - pool_in_lp_x * num_ab
         big = isqrt(
-            diff * diff + 4 * pool_in_lp_x * pool_in_lp_y * pa_d * pa_d * pb_n * pb_n
+            diff * diff + 4 * pool_in_lp_x * pool_in_lp_y * pa_d * pa_d * pb_n * pb_n,
         )
         liq_num = pool_in_lp_y * den_ab + pool_in_lp_x * num_ab + big
         liq_den = 2 * (pb_n * pa_d - pb_d * pa_n)
@@ -579,11 +751,12 @@ class DanoCLMMState(AbstractPoolState):
         off_fee = FEE_BASIS - d.lp_fee_rate  # basis minus fee rate
 
         if delta_amount > 0:
-            # poolChangeY = max(ceil(Xv*Yv / (Xv + poolChangeX*offFee) - Yv), -poolinLPY)
-            # rewritten in integer arithmetic
+            # poolChangeY is the new tokenY level ceil(Xv*Yv / (Xv +
+            # poolChangeX*offFee)) minus Yv, clamped below at -poolinLPY,
+            # rewritten here in exact integer arithmetic.
             numerator = x_v * y_v * FEE_BASIS
             denom = x_v * FEE_BASIS + delta_amount * off_fee
-            # ceil(numerator/denom) - y_v
+            # y_new_ceil is ceil(numerator/denom).
             y_new_ceil = -(-numerator // denom)
             pool_change_y = max(y_new_ceil - y_v, -pool_in_lp_y)
             return delta_amount, pool_change_y
@@ -650,6 +823,7 @@ class DanoCLMMState(AbstractPoolState):
         pool_change_x: int,
         pool_change_y: int,
         swap_fee: int,
+        staking_reward: int = 0,
     ) -> Assets:
         d = self._datum
         new = Assets(root=dict(self.assets.root))
@@ -657,15 +831,14 @@ class DanoCLMMState(AbstractPoolState):
             new.root[self.dex_nft.unit()] = 1
         new.root[d.unit_x] = new.root.get(d.unit_x, 0) + pool_change_x
         new.root[d.unit_y] = new.root.get(d.unit_y, 0) + pool_change_y
-        # swap_fee is always paid to the pool as lovelace (for ADA pools
-        # unit_x == lovelace so the same key is incremented twice — merge).
-        if d.unit_x == "lovelace":
-            new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee
-        else:
-            new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee
+        # swap_fee (always lovelace) plus any staking reward withdrawn into the
+        # pool stay in the pool's lovelace. The withdraw validator REQUIRES the
+        # reward to land in the pool output, not the user's change (verified on
+        # Ogmios: reward-to-change fails 3012, reward-in-pool passes).
+        new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee + staking_reward
         return new
 
-    def swap_utxo(
+    def swap_utxo(  # noqa: C901, PLR0912, PLR0915
         self,
         address_source: Address,
         in_assets: Assets,
@@ -674,6 +847,7 @@ class DanoCLMMState(AbstractPoolState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        staking_reward: int | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
         """Wire a direct-spend Dano swap into ``tx_builder``.
 
@@ -696,7 +870,9 @@ class DanoCLMMState(AbstractPoolState):
         intended input quantity.
         """
         if tx_builder is None:
-            raise NotImplementedError("tx_builder is required for Dano swap construction")
+            raise NotImplementedError(
+                "tx_builder is required for Dano swap construction",
+            )
         if self.tx_hash is None or self.tx_index is None:
             raise ValueError("pool tx_hash/tx_index required (fetched from backend)")
         if self.dex_nft is None:
@@ -710,11 +886,7 @@ class DanoCLMMState(AbstractPoolState):
                 "before calling swap_utxo (out-ref "
                 f"{PROTOCOL_CONFIG_OUT_REF_MAINNET[0]}#{PROTOCOL_CONFIG_OUT_REF_MAINNET[1]})",
             )
-        pc_datum = (
-            pc_utxo.output.datum
-            if pc_utxo.output.datum is not None
-            else None
-        )
+        pc_datum = pc_utxo.output.datum if pc_utxo.output.datum is not None else None
         if pc_datum is None:
             raise ValueError("Protocol-config UTxO is missing its inline datum")
         self.platform_fee_rate, swap_fee = _parse_protocol_config_datum(
@@ -723,25 +895,17 @@ class DanoCLMMState(AbstractPoolState):
             else pc_datum.cbor.hex(),
         )
 
+        # Derive epoch AND slot from a single wall-clock reading so the pool
+        # datum's last_withdraw_epoch and the tx validity range (set below)
+        # encode the same epoch — the withdraw validator cross-checks them.
+        now_ms = int(time.time() * 1000)
+        cur_epoch = _current_epoch_mainnet(now_ms)
+
         delta_amount = self._delta_from_in_assets(in_assets)
-        pool_change_x, pool_change_y = self.compute_pool_change(delta_amount)
 
-        # Slippage: out_assets.quantity() is caller's min_out.
-        computed_out = -pool_change_y if delta_amount > 0 else -pool_change_x
-        if out_assets is not None and out_assets.quantity() > computed_out:
-            raise InvalidPoolError(
-                f"Slippage: computed_out={computed_out} < requested "
-                f"min_out={out_assets.quantity()}",
-            )
-
-        cur_epoch = _current_epoch_mainnet()
-        new_datum = self.compute_new_datum(delta_amount, swap_fee, cur_epoch)
-        new_pool_assets = self._new_pool_assets(
-            pool_change_x, pool_change_y, swap_fee,
-        )
-
-        # Rebuild the pool input UTxO. Address is fetched from the pool
-        # tx so we pick up the correct form (addr1x… or addr1w…).
+        # Rebuild the pool input UTxO. Address is fetched from the pool tx so we
+        # pick up the correct form (addr1x… or addr1w…); the addr1x delegation
+        # part also carries the per-pool staking credential used below.
         pool_in_assets = Assets(root=dict(self.assets.root))
         if self.dex_nft is not None:
             pool_in_assets.root[self.dex_nft.unit()] = 1
@@ -754,6 +918,63 @@ class DanoCLMMState(AbstractPoolState):
         if not order_info:
             raise InvalidPoolError("Could not re-fetch pool UTxO address via backend")
         pool_address = order_info[0].address
+
+        # Overdue ADA pool: when curEpoch > last_withdraw_epoch the validator
+        # requires the pool's accrued staking rewards to be withdrawn from the
+        # per-pool stake credential in the SAME tx (a second withdrawal) and the
+        # reward folded into the pool's effective liquidity. The reward is often
+        # zero (registered but not yet matured), but the withdrawal must still
+        # be present for the validator to accept the last_withdraw_epoch bump.
+        # Token/token pools have no ADA stake and are unaffected.
+        is_overdue = (
+            self._datum.unit_x == "lovelace"
+            and cur_epoch > self._datum.last_withdraw_epoch
+        )
+        staking_ref_utxo: UTxO | None = None
+        staking_reward_addr: Address | None = None
+        if is_overdue:
+            staking_ref_utxo, staking_reward_addr = self._staking_reference(
+                pool_address,
+            )
+            if staking_reward is None:
+                staking_reward = get_backend().get_stake_rewards(staking_reward_addr)
+        reward = staking_reward or 0
+
+        pool_change_x, pool_change_y = self.compute_pool_change(delta_amount, reward)
+
+        # Capacity guard. compute_pool_change CLAMPS the output to the band
+        # reserve when a swap would drain the whole concentrated-liquidity band,
+        # but the validator REJECTS that clamped swap on-chain (verified via
+        # Ogmios: every clamped build fails, every strictly-in-range build —
+        # up to 99.99% of capacity — passes; the full reserve is unreachable
+        # with finite input, which is also why get_amount_in raises there).
+        # Refuse rather than emit a tx that cannot validate; callers size the
+        # input with get_amount_in to stay strictly in range.
+        lp_x, lp_y = self.active_liquidity(reward)
+        if (delta_amount > 0 and pool_change_y <= -lp_y) or (
+            delta_amount < 0 and pool_change_x <= -lp_x
+        ):
+            raise InvalidPoolError(
+                "Swap exceeds the pool's concentrated-liquidity band capacity; "
+                "the validator rejects a capacity-clamped swap. Size the input "
+                "with get_amount_in to stay strictly in range.",
+            )
+
+        # Slippage: out_assets.quantity() is caller's min_out.
+        computed_out = -pool_change_y if delta_amount > 0 else -pool_change_x
+        if out_assets is not None and out_assets.quantity() > computed_out:
+            raise InvalidPoolError(
+                f"Slippage: computed_out={computed_out} < requested "
+                f"min_out={out_assets.quantity()}",
+            )
+
+        new_datum = self.compute_new_datum(delta_amount, swap_fee, cur_epoch)
+        new_pool_assets = self._new_pool_assets(
+            pool_change_x,
+            pool_change_y,
+            swap_fee,
+            reward,
+        )
 
         input_utxo = UTxO(
             input=TransactionInput(
@@ -773,55 +994,75 @@ class DanoCLMMState(AbstractPoolState):
             datum=new_datum,
         )
 
-        # Compute sorted indices. At this point the caller has already
-        # added their user inputs; we fold in the pool UTxO we're about
-        # to add via add_script_input and sort canonically.
-        current_inputs = [i.input for i in tx_builder.inputs]
-        current_inputs.append(input_utxo.input)
-        sorted_inputs = sorted(
-            current_inputs,
-            key=lambda ti: (bytes(ti.transaction_id), ti.index),
-        )
-        pool_in_idx = sorted_inputs.index(input_utxo.input)
-        pool_out_idx = len(tx_builder.outputs)  # we're about to append output 0 or later
-
-        ref_inputs_sorted = sorted(
-            list(tx_builder.reference_inputs),
-            key=lambda u: (bytes(u.input.transaction_id), u.input.index),
-        )
-        protocol_config_idx = ref_inputs_sorted.index(pc_utxo)
-
-        spend_bytes = build_swap_redeemer_bytes(
-            delta_amount=delta_amount,
-            pool_in_idx=pool_in_idx,
-            pool_out_idx=pool_out_idx,
-            first_byte=pool_in_idx,
-        )
-        withdraw_bytes = build_swap_redeemer_bytes(
-            delta_amount=delta_amount,
-            pool_in_idx=pool_in_idx,
-            pool_out_idx=pool_out_idx,
-            first_byte=protocol_config_idx,
-        )
-
         script_ref = self.reference_utxo()
         if script_ref is None:
             raise InvalidPoolError(
                 "Pool script reference UTxO unavailable from backend",
             )
 
+        # The spend + withdraw redeemers encode the pool input index and the
+        # first byte (pool input index for Spend, protocol-config reference
+        # index for Withdraw), which depend on the FINAL sorted inputs /
+        # reference inputs. The builder may still trim or reorder inputs after
+        # this call, so the indices are resolved POST-BUILD by
+        # ``DanoSwapRedeemer.set_idx`` — the tx builder runs it after assigning
+        # redeemer indices (mirrors Splash's pool redeemer + the clmm-sdk's
+        # ``RedeemerArg`` callback). ``pool_out_idx`` is the single-pool batch
+        # position (0), not a tx output index.
+        spend_redeemer = DanoSwapRedeemer(
+            pool_input=input_utxo.input,
+            delta_amount=delta_amount,
+            is_withdraw=False,
+        )
+        withdraw_redeemer = DanoSwapRedeemer(
+            pool_input=input_utxo.input,
+            delta_amount=delta_amount,
+            is_withdraw=True,
+            protocol_config_input=pc_utxo.input,
+        )
+
         tx_builder.add_script_input(
             utxo=input_utxo,
             script=script_ref,
-            redeemer=Redeemer(RawCBOR(spend_bytes)),
+            redeemer=Redeemer(spend_redeemer),
         )
 
         reward_addr = Address.from_primitive(DANO_POOL_REWARD_ADDRESS_MAINNET)
-        tx_builder.withdrawals = Withdrawals({bytes(reward_addr): 0})
+        withdrawals: dict[bytes, int] = {bytes(reward_addr): 0}
+        if is_overdue and staking_reward_addr is not None:
+            withdrawals[bytes(staking_reward_addr)] = reward
+        tx_builder.withdrawals = Withdrawals(withdrawals)
         tx_builder.add_withdrawal_script(
             script_ref,
-            Redeemer(RawCBOR(withdraw_bytes)),
+            Redeemer(withdraw_redeemer),
         )
+        if is_overdue and staking_ref_utxo is not None:
+            # Per-pool staking-reward withdrawal. Its redeemer is pool-input
+            # indexed (like Spend, NOT the protocol-config-indexed withdraw-zero).
+            # add_withdrawal_script also registers the staking script reference
+            # input automatically.
+            staking_redeemer = DanoSwapRedeemer(
+                pool_input=input_utxo.input,
+                delta_amount=delta_amount,
+                is_withdraw=False,
+            )
+            tx_builder.add_withdrawal_script(
+                staking_ref_utxo,
+                Redeemer(staking_redeemer),
+            )
+
+        # The withdraw validator derives curEpoch from the tx validity range and
+        # requires it to match new_datum.last_withdraw_epoch. Without a validity
+        # range the script terminates. Mirror the clmm-sdk's
+        # setValidity(now-2min, now+4min), derived from the same now_ms used for
+        # cur_epoch so both encode the same epoch. (Edge case: a swap built in
+        # the first 2 min / last 4 min of an epoch can straddle the boundary —
+        # the clmm-sdk has the same exposure.)
+        cur_slot = _current_slot_mainnet(now_ms)
+        if tx_builder.validity_start is None:
+            tx_builder.validity_start = cur_slot - 120
+        if tx_builder.ttl is None:
+            tx_builder.ttl = cur_slot + 240
 
         return new_pool_output, new_datum
 
@@ -829,6 +1070,7 @@ class DanoCLMMState(AbstractPoolState):
 
     @classmethod
     def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Post-initialization processing: surface lp_fee_rate on the model."""
         values = super().post_init(values)
         # Surface lp_fee_rate on the model so `volume_fee` works out of the box.
         datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
@@ -837,6 +1079,7 @@ class DanoCLMMState(AbstractPoolState):
 
     @property
     def tvl(self) -> Decimal:
+        """Return the pool's total value locked, in ADA."""
         if self.unit_a != "lovelace":
             raise NotImplementedError("TVL only implemented for ADA pools.")
         return 2 * (Decimal(self.reserve_a) / Decimal(10**6)).quantize(

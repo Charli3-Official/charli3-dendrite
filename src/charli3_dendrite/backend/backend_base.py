@@ -99,6 +99,24 @@ class AbstractBackend(ABC):
         """
         pass
 
+    def get_stake_rewards(self, address: Address) -> int:
+        """Withdrawable staking-reward balance (lovelace) for a reward address.
+
+        Direct-spend DEXs whose pools stake their ADA (e.g. Dano) must withdraw
+        the pool's accrued rewards as part of a swap; the withdrawal amount must
+        equal the account's current withdrawable balance. Not every backend can
+        answer this — those raise ``NotImplementedError``.
+
+        Args:
+            address (Address): A stake/reward address (delegation part only).
+
+        Returns:
+            int: Withdrawable reward balance in lovelace (0 if none).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement get_stake_rewards",
+        )
+
     @abstractmethod
     def get_historical_order_utxos(
         self,

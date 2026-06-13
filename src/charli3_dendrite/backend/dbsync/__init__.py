@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import datetime
 from threading import Lock
+from typing import Any
 
 import psycopg_pool  # type: ignore
 from dotenv import load_dotenv  # type: ignore
@@ -296,7 +297,7 @@ OFFSET %(offset)s"""
         tx_hash: str,
         addresses: list[str],
         assets: list[str] | None = None,
-    ) -> tuple[str, dict[str, list]]:
+    ) -> tuple[str, dict[str, Any]]:
         """Get transactions by policy or address."""
         # Use the pool selector to format the output
         datum_selector = PoolSelector.select()
@@ -399,7 +400,7 @@ AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
     def _get_pool_utxos_in_block(self, block_no: int) -> tuple[str, dict]:
         # Use this for gathering all assets for multiple addresses
         datum_selector = (
-            PoolSelector.select()
+            PoolSelector.select()  # noqa: S608
             + """
     FROM (
         SELECT txo.*, address.address, address.payment_cred
@@ -468,6 +469,39 @@ LIMIT 1"""
             r[0]["assets"] = None
 
         return UTxOSelector.parse(r[0])
+
+    def _get_stake_rewards(self, address: Address) -> tuple[str, dict]:
+        # Withdrawable balance = spendable rewards (member/leader + treasury/
+        # reserves "rest") minus everything already withdrawn. spendable_epoch
+        # gates rewards by the ~2-epoch maturation delay.
+        query = """
+SELECT (
+    COALESCE((SELECT SUM(r.amount) FROM reward r
+              JOIN stake_address sa ON sa.id = r.addr_id
+              WHERE sa.hash_raw = %(raw)b
+                AND r.spendable_epoch <= (SELECT MAX(epoch_no) FROM block)), 0)
+  + COALESCE((SELECT SUM(rr.amount) FROM reward_rest rr
+              JOIN stake_address sa ON sa.id = rr.addr_id
+              WHERE sa.hash_raw = %(raw)b
+                AND rr.spendable_epoch <= (SELECT MAX(epoch_no) FROM block)), 0)
+  - COALESCE((SELECT SUM(w.amount) FROM withdrawal w
+              JOIN stake_address sa ON sa.id = w.addr_id
+              WHERE sa.hash_raw = %(raw)b), 0)
+) AS balance
+"""
+        return query, {"raw": bytes(address)}
+
+    def get_stake_rewards(self, address: Address) -> int:
+        """Withdrawable staking-reward balance (lovelace) for a reward address."""
+        query, values = self._get_stake_rewards(address)
+        r = self.db_query(query, values)
+        return int((r[0]["balance"] if r else 0) or 0)
+
+    async def get_stake_rewards_async(self, address: Address) -> int:
+        """Withdrawable staking-reward balance (lovelace) for a reward address."""
+        query, values = self._get_stake_rewards(address)
+        r = await self.db_query_async(query, values)
+        return int((r[0]["balance"] if r else 0) or 0)
 
     def _get_datum_from_address(
         self,
@@ -631,7 +665,7 @@ OFFSET %(offset)s"""
 
         import pprint
 
-        pprint.pprint(r, indent=4)
+        pprint.pprint(r, indent=4)  # noqa: T203
 
         return OrderSelector.parse(r)
 
