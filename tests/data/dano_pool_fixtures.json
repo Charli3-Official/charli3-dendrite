@@ -1,0 +1,40 @@
+{
+  "both_reserve": {
+    "row": {
+      "address": "addr1w8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wc7a283u",
+      "tx_hash": "cbbca32290adaf667c64422b5fe0a0f15fe05b3be91f718d9ec2875819f9ef99",
+      "tx_index": 0,
+      "block_time": 1780683798,
+      "block_index": 6,
+      "block_hash": "37af47f6f8c18a853f719b22af1f6d97d2b99420bacac71f4f3ef178fa35cb95",
+      "datum_hash": "efde0332c8c672fff901805a44d7e1f60fe7b9a48f875d1d9e261a3b01f561b6",
+      "datum_cbor": "d8799f9f581c29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6434d494eff9f581c0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa454e49474854ff181e000000d8799f1a002825a51a00989680ffd8799f1a0036b6121a00989680ff186418641a05f5e10019027bff",
+      "assets": {
+        "lovelace": 3000000,
+        "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854": 13139014,
+        "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e": 100000000,
+        "d8b69fc53637bcfadbc4469083f706bc293f4d9d2296646c5ca167bb5edd380dd6e1ae5469b984e6624beca0bc329964f7fcc55d5d55a22770198cf2": 1
+      },
+      "plutus_v2": true
+    }
+  },
+  "zero_reserve": {
+    "row": {
+      "address": "addr1w8vtd879xcmme7kmc3rfpqlhq67zj06dn53fvervtjsk0wc7a283u",
+      "tx_hash": "7ddef0a4618e03ab56dd5a1ed1bc29fdac26e73209cd25d13dedb57d8c5f7718",
+      "tx_index": 1,
+      "block_time": 1780435567,
+      "block_index": 9,
+      "block_hash": "9191cc92e7577a8ac7ba7b301cf2c2cf63d40ddb9441619f35741026f3aec2a7",
+      "datum_hash": "f6c22c224e03b0d3bff83e98e99d9dd984e8ba37b0d08632668f8b6456abd0bc",
+      "datum_cbor": "d8799f9f581c0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa454e49474854ff9f581c1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34455553444378ff181e1a1a6308d21a010054831a0243d580d8799f1a001e84801a00989680ffd8799f1b0008b3cc45ffe2ca1b002386f26fc10000ff1a00205a271a000186a01b0000004e5ec924d819027aff",
+      "assets": {
+        "lovelace": 41000000,
+        "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854": 599411329776,
+        "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": 16798851,
+        "d8b69fc53637bcfadbc4469083f706bc293f4d9d2296646c5ca167bb24d02ee9fd086a85946189232af0748c2cda616125da11679f1c2ef594966ad2": 1
+      },
+      "plutus_v2": true
+    }
+  }
+}

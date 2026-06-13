@@ -3,13 +3,17 @@
 This module handles the limit order path for SaturnSwap.
 """
 
+import os
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any
 from typing import Union
 
 from pycardano import Address
+from pycardano import PaymentSigningKey
+from pycardano import PaymentVerificationKey
 from pycardano import PlutusData
 from pycardano import PlutusV2Script
 from pycardano import Redeemer
@@ -18,6 +22,7 @@ from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import VerificationKeyHash
 from pycardano.utils import min_lovelace
 
 from charli3_dendrite.backend import get_backend
@@ -36,6 +41,48 @@ from charli3_dendrite.dexs.ob.ob_base import SellOrderBook
 from charli3_dendrite.utility import asset_to_value
 
 SATURNSWAP_TAKER_FEE_BPS = 400
+
+# SaturnSwap charges a 4% on-chain taker fee on every fill that is NOT co-signed
+# by its authorized hot-key; co-signed (protocol-routed) fills are exempt via the
+# validator's ``fees_paid_or_auth``. When the protocol shares that hot-key, set
+# this env var to the signing key and dendrite builds the fee-free authorized fill.
+SATURNSWAP_AUTHORIZE_KEY_ENV = "SATURNSWAP_AUTHORIZE_KEY"
+
+
+def _load_authorize_signing_key(raw: str) -> PaymentSigningKey:
+    """Load the authorize signing key from CBOR-hex or raw 32-byte hex."""
+    raw = raw.strip()
+    try:
+        return PaymentSigningKey.from_cbor(raw)
+    except (ValueError, TypeError, KeyError):
+        return PaymentSigningKey(bytes.fromhex(raw))
+
+
+def saturnswap_authorize_signing_key() -> PaymentSigningKey | None:
+    """Return the SaturnSwap authorize signing key from the environment.
+
+    Set ``SATURNSWAP_AUTHORIZE_KEY`` (the hot-key as ``sk.to_cbor_hex()`` or raw
+    32-byte hex) to build fee-free authorized fills. ``swap_utxo`` then drops the
+    4% fee output and adds the key's hash as a required signer. The CALLER must
+    add this key when signing the transaction (e.g. ``build_and_sign([…, key])``).
+    Returns ``None`` (default behaviour, 4% fee) when the env var is unset.
+    """
+    raw = os.environ.get(SATURNSWAP_AUTHORIZE_KEY_ENV)
+    return _load_authorize_signing_key(raw) if raw else None
+
+
+@lru_cache(maxsize=8)
+def _vkey_hash_for(raw: str) -> VerificationKeyHash:
+    """Verification-key hash for an authorize signing key (cached by value)."""
+    return PaymentVerificationKey.from_signing_key(
+        _load_authorize_signing_key(raw),
+    ).hash()
+
+
+def _authorize_vkey_hash() -> VerificationKeyHash | None:
+    """Verification-key hash of the configured authorize signing key (or None)."""
+    raw = os.environ.get(SATURNSWAP_AUTHORIZE_KEY_ENV)
+    return _vkey_hash_for(raw.strip()) if raw else None
 
 
 @dataclass
@@ -311,8 +358,13 @@ class SaturnSwapOrderState(AbstractOrderState):
 
     @property
     def volume_fee(self) -> int:
-        """Fee percentage in basis points."""
-        return SATURNSWAP_TAKER_FEE_BPS
+        """Taker fee in basis points (0 when the authorize hot-key co-signs).
+
+        SaturnSwap waives the 4% on-chain taker fee for fills co-signed by its
+        authorized hot-key, so the fee is 0 when ``SATURNSWAP_AUTHORIZE_KEY`` is
+        configured (see :func:`saturnswap_authorize_signing_key`).
+        """
+        return 0 if _authorize_vkey_hash() is not None else SATURNSWAP_TAKER_FEE_BPS
 
     @property
     def swap_forward(self) -> bool:
@@ -390,6 +442,45 @@ class SaturnSwapOrderState(AbstractOrderState):
             values["inactive"] = True
 
         return values
+
+    def _add_fee_or_authorize(
+        self,
+        tx_builder: TransactionBuilder,
+        sell_unit: str,
+        new_amount_sell: int,
+        payment_datum: "SaturnSwapPaymentDatum",
+    ) -> None:
+        """Add the 4% taker-fee output, or require the authorize hot-key signature.
+
+        SaturnSwap exempts fills co-signed by its authorized hot-key from the
+        on-chain fee (``fees_paid_or_auth``). When ``SATURNSWAP_AUTHORIZE_KEY`` is
+        set, drop the fee output and add the hot-key's hash as a required signer
+        so ``tx_signed_by_authority`` passes (the caller signs with the matching
+        key from :func:`saturnswap_authorize_signing_key`).
+        """
+        auth_vkey_hash = _authorize_vkey_hash()
+        if auth_vkey_hash is not None:
+            if tx_builder.required_signers is None:
+                tx_builder.required_signers = []
+            if auth_vkey_hash not in tx_builder.required_signers:
+                tx_builder.required_signers.append(auth_vkey_hash)
+            return
+        fee_address = Address.decode(
+            "addr1q8x4rlqhrq4rhqhnkamw3fdqmzqgum79yragg4gptcjpph"
+            "mrc2rpt0exfch4s47fu32amr45vh9wg053hmcx9k7kkcrq6kxftd",
+        )
+        fee_amount = (new_amount_sell * self.volume_fee) // 10_000
+        fee_assets = Assets(**{sell_unit: fee_amount})
+        fee_output = TransactionOutput(
+            address=fee_address,
+            amount=asset_to_value(fee_assets),
+            datum=payment_datum,
+        )
+        fee_output.amount.coin = max(
+            fee_output.amount.coin,
+            min_lovelace(tx_builder.context, output=fee_output),
+        )
+        tx_builder.add_output(fee_output)
 
     def swap_utxo(
         self,
@@ -475,23 +566,14 @@ class SaturnSwapOrderState(AbstractOrderState):
         )
         tx_builder.add_output(owner_output)
 
-        # Fee output (sell asset)
-        fee_address = Address.decode(
-            "addr1q8x4rlqhrq4rhqhnkamw3fdqmzqgum79yragg4gptcjpph"
-            "mrc2rpt0exfch4s47fu32amr45vh9wg053hmcx9k7kkcrq6kxftd",
+        # Fee output (4%) for unauthorized fills, or require the hot-key
+        # signature for authorized (fee-free) fills.
+        self._add_fee_or_authorize(
+            tx_builder,
+            sell_unit,
+            new_amount_sell,
+            payment_datum,
         )
-        fee_amount = (new_amount_sell * self.volume_fee) // 10_000
-        fee_assets = Assets(**{sell_unit: fee_amount})
-        fee_output = TransactionOutput(
-            address=fee_address,
-            amount=asset_to_value(fee_assets),
-            datum=payment_datum,
-        )
-        fee_output.amount.coin = max(
-            fee_output.amount.coin,
-            min_lovelace(tx_builder.context, output=fee_output),
-        )
-        tx_builder.add_output(fee_output)
 
         # Redeemer uses input and owner-output indices.
         action = SaturnSwapSwapAction(
