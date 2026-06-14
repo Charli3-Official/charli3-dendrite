@@ -549,26 +549,56 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         return self._datum.unit_y
 
     @property
+    def _x_carve(self) -> int:
+        """Carve netted off the gross tokenX balance to get the active reserve.
+
+        The platform fee, plus min-UTxO + swap-fee on the ADA (tokenX) side.
+        """
+        d = self._datum
+        excluded_ada = ADA_MIN_UTXO + d.total_swap_fee if d.unit_x == "lovelace" else 0
+        return d.platform_fee_x + excluded_ada
+
+    @property
     def raw_x(self) -> int:
-        """Return the raw tokenX balance held in the pool UTxO."""
-        return self.assets[self._datum.unit_x]
+        """Return the raw (gross) tokenX balance held in the pool UTxO.
+
+        ``assets`` stores the *active* (carve-netted) reserves — see
+        ``post_init``/``skip_init`` — so the gross balance is reconstructed by
+        adding the carve back. The tx-build path needs gross (platform fees +
+        min-ADA stay in the pool output).
+        """
+        return self.assets[self._datum.unit_x] + self._x_carve
 
     @property
     def raw_y(self) -> int:
-        """Return the raw tokenY balance held in the pool UTxO."""
-        return self.assets[self._datum.unit_y]
+        """Return the raw (gross) tokenY balance held in the pool UTxO."""
+        return self.assets[self._datum.unit_y] + self._datum.platform_fee_y
 
     @property
     def reserve_a(self) -> int:
-        """Active reserve of tokenX, net of platform fees and ADA carve-out."""
-        d = self._datum
-        excluded_ada = ADA_MIN_UTXO + d.total_swap_fee if d.unit_x == "lovelace" else 0
-        return self.raw_x - d.platform_fee_x - excluded_ada
+        """Active reserve of tokenX (read directly — ``assets`` is carve-netted).
+
+        See ``post_init`` / ``skip_init`` for the round-trip-safe representation.
+        """
+        return self.assets[self._datum.unit_x]
 
     @property
     def reserve_b(self) -> int:
-        """Active reserve of tokenY, net of platform fees."""
-        return self.raw_y - self._datum.platform_fee_y
+        """Active reserve of tokenY (``assets`` is carve-netted at parse time)."""
+        return self.assets[self._datum.unit_y]
+
+    def _gross_assets(self) -> Assets:
+        """The raw on-chain UTxO value bag (carve added back to the reserves).
+
+        ``assets`` stores the carve-netted reserves; the tx-build path needs the
+        true gross bag so the new pool output preserves the platform fees +
+        min-ADA that stay in the pool.
+        """
+        d = self._datum
+        g = Assets(root=dict(self.assets.root))
+        g.root[d.unit_x] = g.root.get(d.unit_x, 0) + self._x_carve
+        g.root[d.unit_y] = g.root.get(d.unit_y, 0) + d.platform_fee_y
+        return g
 
     # --- math (single-band CLMM curve inherited from the base) -------------
     # ``virtual_reserves()`` + ``get_amount_out()``/``get_amount_in()`` + the
@@ -596,15 +626,10 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         withdrawn into the pool as part of the same tx (see docs/05-04-swap.md
         "If token_x is ADA AND curEpoch > last_withdraw_epoch").
         """
-        d = self._datum
-        x_raw = self.raw_x + staking_reward
-        y_raw = self.raw_y
-        if d.unit_x == "lovelace":
-            pool_in_lp_x = x_raw - d.platform_fee_x - d.total_swap_fee - ADA_MIN_UTXO
-        else:
-            pool_in_lp_x = x_raw - d.platform_fee_x
-        pool_in_lp_y = y_raw - d.platform_fee_y
-        return pool_in_lp_x, pool_in_lp_y
+        # The active liquidity IS the carve-netted reserve (reserve_a/reserve_b),
+        # plus any in-tx ADA staking_reward withdrawn into the pool on the X side.
+        # Equivalent to the old gross-minus-carve form, expressed in net terms.
+        return self.reserve_a + staking_reward, self.reserve_b
 
     def compute_pool_change(
         self,
@@ -713,7 +738,9 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         staking_reward: int = 0,
     ) -> Assets:
         d = self._datum
-        new = Assets(root=dict(self.assets.root))
+        # Build the new output from the GROSS bag — the on-chain UTxO must keep
+        # the platform fees + min-ADA that ``assets`` (net) no longer carries.
+        new = self._gross_assets()
         if self.dex_nft is not None:
             new.root[self.dex_nft.unit()] = 1
         new.root[d.unit_x] = new.root.get(d.unit_x, 0) + pool_change_x
@@ -793,7 +820,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         # Rebuild the pool input UTxO. Address is fetched from the pool tx so we
         # pick up the correct form (addr1x… or addr1w…); the addr1x delegation
         # part also carries the per-pool staking credential used below.
-        pool_in_assets = Assets(root=dict(self.assets.root))
+        # The spent pool input value is the GROSS on-chain bag (assets is net).
+        pool_in_assets = self._gross_assets()
         if self.dex_nft is not None:
             pool_in_assets.root[self.dex_nft.unit()] = 1
 
@@ -956,12 +984,52 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
     # --- post-init ---------------------------------------------------------
 
     @classmethod
+    def skip_init(cls, values: dict[str, Any]) -> bool:
+        """Skip parsing when re-ingesting an already-parsed (dumped) pool.
+
+        A parsed Dano pool exposes its ``dex_nft`` as a separate field and stores
+        the *active* (carve-netted) reserves in ``assets`` (see ``post_init``). On
+        re-ingest the carve must NOT be applied again, so the presence of
+        ``dex_nft`` in the construction values is the "already parsed" signal:
+        surface the derived ``fee`` and skip ``post_init`` (which would re-net).
+        A fresh chain parse carries the dex NFT *inside* the assets bag (extracted
+        later), not as a ``dex_nft`` key, so it takes the full parse path. Mirrors
+        VyFi / WingRiders V2; makes the serialize→reingest round-trip idempotent
+        for both the dendrite model_dump form and steelswap's net silver.
+        """
+        if "dex_nft" in values:
+            if not isinstance(values["assets"], Assets):
+                values["assets"] = Assets.model_validate(values["assets"])
+            datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
+            values["fee"] = datum.lp_fee_rate
+            return True
+        return False
+
+    @classmethod
     def post_init(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Post-initialization processing: surface lp_fee_rate on the model."""
+        """Post-initialization: surface ``lp_fee_rate`` and carve-net the reserves.
+
+        Subtracts the platform fee (+ ADA min-utxo + swap-fee on the ADA side)
+        from ``assets`` so the stored balances are the *active* reserves
+        (``reserve_a``/``reserve_b`` read them directly). This is the derive-once
+        step that ``skip_init`` skips on re-ingest, so the round-trip is
+        idempotent; ``raw_x``/``_gross_assets`` add the carve back for tx-build.
+        """
         values = super().post_init(values)
         # Surface lp_fee_rate on the model so `volume_fee` works out of the box.
         datum = cls.pool_datum_class().from_cbor(values["datum_cbor"])
         values["fee"] = datum.lp_fee_rate
+        # Carve-net the reserves in place (skipped on re-ingest via skip_init).
+        assets = values["assets"]
+        excluded_ada = (
+            ADA_MIN_UTXO + datum.total_swap_fee if datum.unit_x == "lovelace" else 0
+        )
+        assets.root[datum.unit_x] = (
+            assets.root.get(datum.unit_x, 0) - datum.platform_fee_x - excluded_ada
+        )
+        assets.root[datum.unit_y] = (
+            assets.root.get(datum.unit_y, 0) - datum.platform_fee_y
+        )
         return values
 
     @property
