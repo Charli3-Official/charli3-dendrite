@@ -747,8 +747,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         new.root[d.unit_y] = new.root.get(d.unit_y, 0) + pool_change_y
         # swap_fee (always lovelace) plus any staking reward withdrawn into the
         # pool stay in the pool's lovelace. The withdraw validator REQUIRES the
-        # reward to land in the pool output, not the user's change (verified on
-        # Ogmios: reward-to-change fails 3012, reward-in-pool passes).
+        # reward to land in the pool output, not the user's change (a reward
+        # sent to change is rejected with error 3012).
         new.root["lovelace"] = new.root.get("lovelace", 0) + swap_fee + staking_reward
         return new
 
@@ -859,12 +859,11 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
 
         # Capacity guard. compute_pool_change CLAMPS the output to the band
         # reserve when a swap would drain the whole concentrated-liquidity band,
-        # but the validator REJECTS that clamped swap on-chain (verified via
-        # Ogmios: every clamped build fails, every strictly-in-range build —
-        # up to 99.99% of capacity — passes; the full reserve is unreachable
-        # with finite input, which is also why get_amount_in raises there).
-        # Refuse rather than emit a tx that cannot validate; callers size the
-        # input with get_amount_in to stay strictly in range.
+        # but the validator REJECTS a clamped swap on-chain: the full band
+        # reserve is unreachable with finite input (which is also why
+        # get_amount_in raises there). Refuse rather than emit a tx that cannot
+        # validate; callers size the input with get_amount_in to stay strictly
+        # in range.
         lp_x, lp_y = self.active_liquidity(reward)
         if (delta_amount > 0 and pool_change_y <= -lp_y) or (
             delta_amount < 0 and pool_change_x <= -lp_x
