@@ -546,11 +546,16 @@ class MinswapV2OrderDatum(OrderDatum):
         full_address_source = PlutusFullAddress.from_address(address_source)
         step = SwapExactInV2.from_assets(in_asset=in_assets, out_asset=out_assets)
 
+        # `datum_target` is the INNER next-hop order datum (consistent with
+        # Sundae / WingRiders); wrap it as the receiver's inline datum. No
+        # target (or no datum) -> no receiver datum.
         if address_target is None:
             address_target = address_source
-            datum_target = SundaeV3PlutusNone()
+            receiver_datum = SundaeV3PlutusNone()
         elif datum_target is None:
-            datum_target = SundaeV3PlutusNone()
+            receiver_datum = SundaeV3PlutusNone()
+        else:
+            receiver_datum = SundaeV3ReceiverInlineDatum(datum=datum_target)
 
         full_address_target = PlutusFullAddress.from_address(address_target)
 
@@ -574,9 +579,12 @@ class MinswapV2OrderDatum(OrderDatum):
         return cls(
             owner=OAMSignature(address_source.payment_part.payload),
             refund_address=full_address_source,
-            refund_datum_hash=datum_target,
+            # The refund goes back to the source wallet and carries NO datum —
+            # only the receiver (next hop) gets the forward datum, so
+            # refund_datum_hash is always PlutusNone.
+            refund_datum_hash=SundaeV3PlutusNone(),
             receiver_address=full_address_target,
-            receiver_datum_hash=datum_target,
+            receiver_datum_hash=receiver_datum,
             lp_asset=lp_asset,
             step=step,
             max_batcher_fee=batcher_fee.quantity(),

@@ -99,7 +99,7 @@ class AbstractPoolState(AbstractPairState):
         Raises:
             ValueError: If more than one asset is supplied as input or output.
         """
-        if self.swap_forward and address_target is not None:
+        if not self.swap_forward and address_target is not None:
             print(  # noqa: T201
                 f"{self.__class__.__name__} does not support swap forwarding.",
             )
