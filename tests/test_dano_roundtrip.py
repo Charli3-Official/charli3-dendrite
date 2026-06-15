@@ -1,4 +1,4 @@
-"""Dano serialize→re-ingest round-trip + carve byte-identity (STEEL-273).
+"""Dano serialize→re-ingest round-trip + carve byte-identity.
 
 A parsed Dano pool stores the *active* (carve-netted) reserves in ``assets``
 (``post_init`` subtracts the platform fee + ADA min-utxo/swap-fee). On re-ingest
@@ -49,7 +49,7 @@ def _net_reingest(p: DanoCLMMState) -> DanoCLMMState:
 
 
 def test_net_reingest_preserves_reserves() -> None:
-    """STEEL-273 gate: net re-ingest must NOT re-subtract the carve."""
+    """Net re-ingest must NOT re-subtract the carve."""
     # zero_reserve has a real non-zero carve (platform_fee_x = 442_697_938).
     p = _pool("zero_reserve")
     rt = _net_reingest(p)

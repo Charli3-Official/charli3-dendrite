@@ -11,6 +11,7 @@ from pycardano import PlutusData
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano.plutus import RawDatum
+from pycardano.plutus import RawPlutusData
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import OrderDatum
@@ -354,13 +355,45 @@ class WingRidersV2OrderDatum(OrderDatum):
             direction = BtoA()
 
         plutus_address = PlutusFullAddress.from_address(address_source)
+        # Swap forwarding: send the fill to the target (next order) address with
+        # an optional inline compensation datum so it can fund the next order in
+        # a cross-protocol chain; no target -> back to the owner.
+        if address_target is None:
+            beneficiary = plutus_address
+            compensation_datum = b""
+            compensation_datum_type = NoDatum()
+        elif datum_target is not None:
+            beneficiary = PlutusFullAddress.from_address(address_target)
+            # WR-V2 stores the inline compensation datum as the RAW datum
+            # structure (a CBORTag/PlutusData), not its CBOR bytes — storing
+            # datum_target directly serializes to the matching structure.
+            #
+            # The next-hop datum may be a typed OrderDatum (a PlutusData
+            # subclass) or a RawPlutusData wrapper (e.g. a multi-leg inner datum
+            # parsed from CBOR). WR's compensation_datum Union accepts PlutusData
+            # + raw CBOR primitives but NOT the RawPlutusData *class*, so it
+            # rejects RawPlutusData at serialization — unlike Sundae / Minswap,
+            # whose receiver field is a plain PlutusData and accepts either. To
+            # keep forwarding uniform across the three DEXes, unwrap RawPlutusData
+            # to its raw ``.data`` (a CBORTag for any order datum): byte-identical
+            # and Union-valid.
+            compensation_datum = (
+                datum_target.data
+                if isinstance(datum_target, RawPlutusData)
+                else datum_target
+            )
+            compensation_datum_type = InlineDatum()
+        else:
+            beneficiary = PlutusFullAddress.from_address(address_target)
+            compensation_datum = b""
+            compensation_datum_type = NoDatum()
 
         return WingRidersV2OrderDatum(
             oil=2000000,
-            beneficiary=plutus_address,
+            beneficiary=beneficiary,
             owner_address=plutus_address,
-            compensation_datum=b"",
-            compensation_datum_type=NoDatum(),
+            compensation_datum=compensation_datum,
+            compensation_datum_type=compensation_datum_type,
             deadline=timeout,
             asset_a_symbol=(
                 bytes.fromhex(merged.unit()[:56])
@@ -685,7 +718,7 @@ class WingRidersV2CPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
+        return True
 
     @property
     def pool_id(self) -> str:
