@@ -307,8 +307,25 @@ class SundaeV3OrderDatum(OrderDatum):
         in_assets: Assets,
         out_assets: Assets,
         fee: int,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
     ):
-        full_address = SundaeV3AddressWithDatum.from_address(address_source)
+        # Swap forwarding: when a target address is supplied the filled output
+        # is sent there with an optional inline receiver datum (so it can fund
+        # the next order in a cross-protocol chain) instead of returning to the
+        # source wallet. No target -> source, no inline datum.
+        if address_target is None:
+            full_address = SundaeV3AddressWithDatum.from_address(address_source)
+        else:
+            receiver_datum = (
+                SundaeV3ReceiverInlineDatum(datum=datum_target)
+                if datum_target is not None
+                else SundaeV3PlutusNone()
+            )
+            full_address = SundaeV3AddressWithDatum(
+                address=PlutusFullAddress.from_address(address_target),
+                datum=receiver_datum,
+            )
         merged = in_assets + out_assets
         if in_assets.unit() == merged.unit():
             direction = AtoB()
@@ -642,7 +659,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
+        return True
 
     @property
     def stake_address(self) -> Address:
@@ -738,9 +755,6 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> PlutusData:
-        if self.swap_forward and address_target is not None:
-            print(f"{self.__class__.__name__} does not support swap forwarding.")
-
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
         datum = SundaeV3OrderDatum.create_datum(
@@ -749,6 +763,8 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             in_assets=in_assets,
             out_assets=out_assets,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
+            address_target=address_target,
+            datum_target=datum_target,
         )
 
         return datum
@@ -801,7 +817,7 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
 
     @property
     def swap_forward(self) -> bool:
-        return False
+        return True
 
     @property
     def stake_address(self) -> Address:
@@ -917,9 +933,6 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
     ) -> PlutusData:
-        if self.swap_forward and address_target is not None:
-            print(f"{self.__class__.__name__} does not support swap forwarding.")
-
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
         datum = SundaeV3OrderDatum.create_datum(
@@ -928,6 +941,8 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
             in_assets=in_assets,
             out_assets=out_assets,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
+            address_target=address_target,
+            datum_target=datum_target,
         )
 
         return datum

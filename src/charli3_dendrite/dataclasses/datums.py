@@ -64,8 +64,13 @@ class PlutusFullAddress(PlutusData):
     @classmethod
     def from_address(cls, address: Address) -> "PlutusFullAddress":
         """Parse an Address object to a PlutusFullAddress."""
-        error_msg = "Only addresses with staking and payment parts are accepted."
-        if None in [address.staking_part, address.payment_part]:
+        # Enterprise (no-stake) addresses are valid — the staking part is
+        # encoded as PlutusNone below (Plutus `Nothing`). Swap-forwarding
+        # targets are sometimes enterprise script addresses (e.g. an order
+        # forwarding to a bare order script address), so only a payment part
+        # is required.
+        error_msg = "Only addresses with a payment part are accepted."
+        if address.payment_part is None:
             raise ValueError(error_msg)
         stake: _PlutusConstrWrapper | PlutusNone = PlutusNone()
         if address.staking_part is not None:
