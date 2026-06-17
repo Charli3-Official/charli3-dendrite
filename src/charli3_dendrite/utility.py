@@ -1,4 +1,4 @@
-"""Utility functions for handling asset information."""
+"""Utility functions for assets and Plutus scripts."""
 
 import json
 from datetime import datetime
@@ -168,3 +168,37 @@ def naturalize_assets(assets: Assets) -> dict[str, Decimal]:
             nat_assets[unit] = Decimal(quantity) / Decimal(10 ** asset_decimals(unit))
 
     return nat_assets
+
+
+def apply_params_to_script(script_cbor: bytes, *params: bytes | int) -> bytes:
+    """Apply Plutus ``Data`` parameters to a parameterized Plutus script.
+
+    A pure-Python equivalent of ``aiken blueprint apply`` (via the optional
+    ``uplc`` library, imported lazily): the script term is wrapped in an
+    ``Apply`` node per parameter and re-serialized, so a parameterized
+    validator's deployed script — and hence its on-chain script hash /
+    minting-policy id — can be derived without external tooling.
+
+    Parameters are applied left-to-right as ``Data`` constants (``bytes`` -> a
+    Data bytestring, ``int`` -> a Data integer). ``script_cbor`` and the return
+    value are the CBOR-wrapped flat encodings used by ``PlutusV2Script`` and
+    ``plutus.json`` ``compiledCode``.
+
+    Args:
+        script_cbor: The un-applied compiled script, CBOR-wrapped.
+        *params: The Data parameters to apply, in order.
+
+    Returns:
+        The parameter-applied compiled script, CBOR-wrapped.
+    """
+    from uplc.ast import PlutusByteString  # type: ignore[import-untyped]
+    from uplc.ast import PlutusInteger  # type: ignore[import-untyped]
+    from uplc.tools import apply  # type: ignore[import-untyped]
+    from uplc.tools import flatten  # type: ignore[import-untyped]
+    from uplc.tools import unflatten  # type: ignore[import-untyped]
+
+    constants = [
+        PlutusByteString(p) if isinstance(p, bytes) else PlutusInteger(p)
+        for p in params
+    ]
+    return flatten(apply(unflatten(script_cbor), *constants))
