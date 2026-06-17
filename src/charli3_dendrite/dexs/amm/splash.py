@@ -2,10 +2,13 @@
 
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
+from hashlib import blake2b
 from typing import Any
 from typing import List
 from typing import Union
 
+import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
 from pycardano import DeserializeException
 from pycardano import PlutusData
@@ -61,6 +64,21 @@ class Rationale(PlutusData):
     denominator: int
 
 
+def _canonical_plutus_cbor(data: PlutusData) -> bytes:
+    """Serialise Plutus data to canonical, definite-length CBOR.
+
+    pycardano encodes Plutus constructors with indefinite-length arrays. The
+    Splash order contract recomputes the order beacon over the canonical
+    (definite-length) encoding of the datum, so any hash that must agree with the
+    on-chain validator has to be taken over this form rather than pycardano's
+    default encoding.
+    """
+    raw = data.to_cbor()
+    if isinstance(raw, str):
+        raw = bytes.fromhex(raw)
+    return cbor2.dumps(cbor2.loads(raw), canonical=True)
+
+
 @dataclass
 class SplashOrderDatum(OrderDatum):
     """Order Datum."""
@@ -98,6 +116,57 @@ class SplashOrderDatum(OrderDatum):
     def order_type(self) -> OrderType:
         """This method should return the type of the order."""
         return OrderType.swap
+
+    def compute_beacon(
+        self,
+        seed_tx_hash: bytes | str,
+        seed_index: int,
+        order_index: int = 0,
+    ) -> bytes:
+        """Derive the 28-byte beacon that binds this order to its funding input.
+
+        The beacon commits to the seed UTxO that funds the order
+        (``seed_tx_hash`` at ``seed_index``), the order's position among the
+        orders created in the same transaction (``order_index``), and the rest of
+        the datum. The on-chain contract reproduces it as::
+
+            blake2b_224(
+                seed_tx_hash
+                + seed_index.to_bytes(8, "big")
+                + order_index.to_bytes(8, "big")
+                + blake2b_224(canonical_cbor(datum with beacon = 28 zero bytes))
+            )
+
+        The inner digest is taken with the ``beacon`` field zeroed and over the
+        canonical CBOR encoding, matching the validator.
+        """
+        if isinstance(seed_tx_hash, str):
+            seed_tx_hash = bytes.fromhex(seed_tx_hash)
+
+        placeholder = replace(self, beacon=bytes(28))
+        inner = blake2b(
+            _canonical_plutus_cbor(placeholder),
+            digest_size=28,
+        ).digest()
+        preimage = (
+            seed_tx_hash
+            + seed_index.to_bytes(8, "big")
+            + order_index.to_bytes(8, "big")
+            + inner
+        )
+        return blake2b(preimage, digest_size=28).digest()
+
+    def with_beacon(
+        self,
+        seed_tx_hash: bytes | str,
+        seed_index: int,
+        order_index: int = 0,
+    ) -> "SplashOrderDatum":
+        """Return a copy of this datum with the ``beacon`` field set correctly."""
+        return replace(
+            self,
+            beacon=self.compute_beacon(seed_tx_hash, seed_index, order_index),
+        )
 
 
 @dataclass
