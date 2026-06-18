@@ -19,6 +19,11 @@ from pycardano import Network
 from pycardano import PlutusV2Script
 from pycardano import ProtocolParameters
 from pycardano import TransactionBuilder
+from pycardano import TransactionId
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
+from pycardano import UTxO
+from pycardano import Value
 from pycardano import VerificationKeyHash
 from pycardano import plutus_script_hash
 from pycardano.backend.base import ChainContext
@@ -855,3 +860,144 @@ def test_beacon_minting_script_is_dapp_hash_applied_blueprint() -> None:
 
     assert applied.hex() == BEACON_POLICY_SCRIPT_HEX
     assert str(plutus_script_hash(PlutusV2Script(applied))) == BEACON_POLICY_ID
+
+
+# --- reference scripts -----------------------------------------------------
+
+
+def _ref_utxo(script: PlutusV2Script, *, index: int = 0) -> UTxO:
+    """A synthetic reference-script UTxO carrying ``script`` in its output."""
+    return UTxO(
+        TransactionInput(TransactionId(bytes.fromhex("ab" * 32)), index),
+        TransactionOutput(address=OWNER, amount=Value(coin=5_000_000), script=script),
+    )
+
+
+def test_build_create_references_beacon_when_supplied(tx_builder) -> None:
+    """CREATE references the beacon policy via a reference input when a ref UTxO is given."""
+    beacon_ref = _ref_utxo(CardanoSwapsOrderState._beacon_script())
+    CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={"lovelace": 10_000_000}),
+        ask=Assets(root={TOKEN_A_UNIT: 0}),
+        price=(2, 1),
+        tx_builder=tx_builder,
+        beacon_ref_utxo=beacon_ref,
+    )
+    # The policy is referenced (reference input), not inlined; mint is unchanged.
+    assert beacon_ref in tx_builder.reference_inputs
+    mint = _mint_dict(tx_builder)
+    assert len(mint) == 3
+    assert all(qty == 1 for qty in mint.values())
+
+
+def test_build_fill_references_swap_when_supplied(tx_builder) -> None:
+    """FILL references the swap validator via a reference input when a ref UTxO is given."""
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        2,
+        1,
+        10_000_000,
+    )
+    swap_ref = _ref_utxo(CardanoSwapsOrderState._swap_script())
+    state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_A_UNIT: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tx_builder,
+        owner_address=OWNER,
+        swap_ref_utxo=swap_ref,
+    )
+    assert swap_ref in tx_builder.reference_inputs
+    assert any(isinstance(r.data, Swap) for r in _redeemers(tx_builder))
+
+
+def test_build_close_references_both_when_supplied(tx_builder) -> None:
+    """CLOSE references both the swap validator and the beacon policy when refs are given."""
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        2,
+        1,
+        10_000_000,
+    )
+    swap_ref = _ref_utxo(CardanoSwapsOrderState._swap_script(), index=0)
+    beacon_ref = _ref_utxo(CardanoSwapsOrderState._beacon_script(), index=1)
+    state.build_close(
+        tx_builder=tx_builder,
+        owner_address=OWNER,
+        swap_ref_utxo=swap_ref,
+        beacon_ref_utxo=beacon_ref,
+    )
+    assert swap_ref in tx_builder.reference_inputs
+    assert beacon_ref in tx_builder.reference_inputs
+    mint = _mint_dict(tx_builder)
+    assert len(mint) == 3
+    assert all(qty == -1 for qty in mint.values())
+    assert any(isinstance(r.data, SpendWithMint) for r in _redeemers(tx_builder))
+
+
+def test_inline_is_default_no_reference_inputs() -> None:
+    """With no reference UTxO supplied, every builder inlines: no reference inputs."""
+    tb = TransactionBuilder(_OfflineContext())
+    CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={"lovelace": 10_000_000}),
+        ask=Assets(root={TOKEN_A_UNIT: 0}),
+        price=(2, 1),
+        tx_builder=tb,
+    )
+    assert tb.reference_inputs == set()
+
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        2,
+        1,
+        10_000_000,
+    )
+    tb = TransactionBuilder(_OfflineContext())
+    state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_A_UNIT: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        owner_address=OWNER,
+    )
+    assert tb.reference_inputs == set()
+
+    tb = TransactionBuilder(_OfflineContext())
+    state.build_close(tx_builder=tb, owner_address=OWNER)
+    assert tb.reference_inputs == set()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "wrong_script"),
+    [
+        ("_swap_script_arg", CardanoSwapsOrderState._beacon_script()),
+        ("_beacon_script_arg", CardanoSwapsOrderState._swap_script()),
+    ],
+)
+def test_ref_script_hash_guard_rejects_mismatch(method_name, wrong_script) -> None:
+    """A reference UTxO whose script hashes to the wrong policy/validator is rejected."""
+    wrong_ref = _ref_utxo(wrong_script)
+    with pytest.raises(ValueError, match="reference UTxO script hash"):
+        getattr(CardanoSwapsOrderState, method_name)(wrong_ref)
+
+
+@pytest.mark.parametrize("method_name", ["_swap_script_arg", "_beacon_script_arg"])
+def test_ref_script_guard_rejects_missing_script(method_name) -> None:
+    """A reference UTxO with no output script is rejected (both script args)."""
+    no_script = UTxO(
+        TransactionInput(TransactionId(bytes.fromhex("ab" * 32)), 0),
+        TransactionOutput(address=OWNER, amount=Value(coin=5_000_000)),
+    )
+    with pytest.raises(ValueError, match="no output script"):
+        getattr(CardanoSwapsOrderState, method_name)(no_script)
