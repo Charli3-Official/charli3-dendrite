@@ -585,10 +585,33 @@ class CardanoSwapsOrderState(AbstractOrderState):
             amount=asset_to_value(output_assets),
             datum=datum,
         )
-        txo.amount.coin = max(
-            txo.amount.coin,
-            min_lovelace(tx_builder.context, output=txo),
-        )
+        if offer_unit == "lovelace":
+            # ADA offer: the offered asset IS the UTxO's min-ADA, and the
+            # validator derives ``offer_taken = lovelace_in - lovelace_out``, so a
+            # taker can never draw the UTxO below its min-ADA floor — the tail of
+            # the stated offer would be un-fillable. Fund a SEPARATE carrier on
+            # top of the offer, sized to the FINAL full-fill state (3 beacons +
+            # the fully-accumulated ask asset + inline datum), so the entire
+            # offer is drawable while the UTxO stays at/above that floor. The
+            # maker reclaims the carrier (plus the accumulated ask) on CLOSE.
+            full_ask = -(-offer.quantity() * num // den)  # ceil(offer x price)
+            final_assets = cls._beacon_mint_assets(datum, 1) + Assets(
+                root={ask_unit: full_ask},
+            )
+            final_txo = TransactionOutput(
+                address=swap_address,
+                amount=asset_to_value(final_assets),
+                datum=datum,
+            )
+            carrier = min_lovelace(tx_builder.context, output=final_txo)
+            txo.amount.coin = offer.quantity() + carrier
+        else:
+            # Token offer: the offered token fully leaves on a fill and the
+            # min-ADA is a separate lovelace carrier (no phantom tail).
+            txo.amount.coin = max(
+                txo.amount.coin,
+                min_lovelace(tx_builder.context, output=txo),
+            )
         tx_builder.add_output(txo)
 
         return txo, datum
