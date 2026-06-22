@@ -648,15 +648,15 @@ def test_build_create_mints_three_beacons_and_datum(tx_builder) -> None:
     assert txo in tx_builder.outputs
 
 
-def test_build_create_ada_offer_funds_drawable_carrier(tx_builder) -> None:
-    """An ADA-offer CREATE funds offer + a carrier sized to the FINAL full-fill
-    state (3 beacons + fully-accumulated ask + datum), so the ENTIRE offered ADA
-    is drawable — no phantom, un-fillable min-ADA tail.
+def test_build_create_ada_offer_funds_fixed_deposit(tx_builder) -> None:
+    """An ADA-offer CREATE funds offer + a FIXED deposit (``ADA_OFFER_DEPOSIT``),
+    so the ENTIRE offered ADA is drawable AND the deposit is a known constant
+    downstream indexers can net out of the displayed offer.
 
     The validator derives ``offer_taken = lovelace_in - lovelace_out``, so the
-    resting UTxO can never be drawn below its (ask-laden) min-ADA floor; funding
-    that floor as a separate carrier on top of the offer makes the full offer
-    takeable.
+    resting UTxO can never be drawn below its (ask-laden) min-ADA floor; funding a
+    fixed deposit on top of the offer — comfortably above that floor — makes the
+    full offer takeable while keeping the carved-out amount predictable.
     """
     offer_qty = 10_000_000
     num, den = 2, 1
@@ -668,8 +668,16 @@ def test_build_create_ada_offer_funds_drawable_carrier(tx_builder) -> None:
         tx_builder=tx_builder,
     )
 
-    # Independently size the floor the continuation must hold at a FULL fill:
-    # 3 beacons + the fully-accumulated ask (offer × price) + the inline datum.
+    deposit = CardanoSwapsOrderState.ADA_OFFER_DEPOSIT
+    # Resting UTxO holds exactly offer + the fixed deposit; the whole offer is
+    # drawable (the deposit, not the offer, satisfies the continuation floor).
+    assert txo.amount.coin == offer_qty + deposit
+    assert txo.amount.coin - deposit == offer_qty
+
+    # Guard: the fixed deposit must still cover the FINAL full-fill min-ADA floor
+    # (3 beacons + fully-accumulated ask + datum), else the offer tail would be
+    # un-fillable. If a future protocol-param change pushes the floor above the
+    # constant, this fails loudly.
     full_ask = -(-offer_qty * num // den)
     final_assets = CardanoSwapsOrderState._beacon_mint_assets(datum, 1) + Assets(
         root={TOKEN_A_UNIT: full_ask},
@@ -679,11 +687,7 @@ def test_build_create_ada_offer_funds_drawable_carrier(tx_builder) -> None:
         amount=asset_to_value(final_assets),
         datum=datum,
     )
-    carrier = min_lovelace(tx_builder.context, output=final_txo)
-
-    # Resting UTxO holds exactly offer + carrier; the whole offer is drawable.
-    assert txo.amount.coin == offer_qty + carrier
-    assert txo.amount.coin - carrier == offer_qty
+    assert deposit >= min_lovelace(tx_builder.context, output=final_txo)
 
 
 def test_build_create_expiration_set(tx_builder) -> None:
