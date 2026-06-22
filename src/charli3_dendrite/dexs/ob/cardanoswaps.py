@@ -702,7 +702,10 @@ class CardanoSwapsOrderState(AbstractOrderState):
             script=self._swap_script_arg(swap_ref_utxo),
             redeemer=Redeemer(Swap()),
         )
-        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
 
         # The swap is a single accumulating UTxO: the taker removes the offer
         # they take and deposits the ask (at price or better) back into the SAME
@@ -780,7 +783,10 @@ class CardanoSwapsOrderState(AbstractOrderState):
             script=self._swap_script_arg(swap_ref_utxo),
             redeemer=Redeemer(SpendWithMint()),
         )
-        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
 
         # Burn the three beacons.
         tx_builder.add_minting_script(
