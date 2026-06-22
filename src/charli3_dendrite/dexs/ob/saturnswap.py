@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from functools import lru_cache
 from typing import Any
+from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
@@ -40,12 +41,31 @@ from charli3_dendrite.dexs.ob.ob_base import OrderBookOrder
 from charli3_dendrite.dexs.ob.ob_base import SellOrderBook
 from charli3_dendrite.utility import asset_to_value
 
-SATURNSWAP_TAKER_FEE_BPS = 400
+# SaturnSwap charges an on-chain taker fee on every fill that is NOT co-signed by
+# its authorized hot-key; co-signed (protocol-routed) fills are exempt via the
+# validator's ``fees_paid_or_auth``. In 2026-06 the protocol redeployed the swap
+# contract with the non-auth fee lowered 4% -> 1% (validator ``fee_percent``
+# 400 -> 100); only that integer changed, so the contract kept the same stake
+# credential but gained a new script hash/address. Dendrite tracks both the live
+# 1% contract and the legacy 4% contract so in-flight legacy orders still fill at
+# the correct rate (see SaturnSwapOrderState / SaturnSwapLegacyOrderState).
+SATURNSWAP_TAKER_FEE_BPS = 100
+SATURNSWAP_LEGACY_TAKER_FEE_BPS = 400
 
-# SaturnSwap charges a 4% on-chain taker fee on every fill that is NOT co-signed
-# by its authorized hot-key; co-signed (protocol-routed) fills are exempt via the
-# validator's ``fees_paid_or_auth``. When the protocol shares that hot-key, set
-# this env var to the signing key and dendrite builds the fee-free authorized fill.
+# Live 1% contract; script hash
+# 73990b71041ceade6f867617f6ce9f187ab710ea2bf1ff8db7d0292f.
+SATURNSWAP_ORDER_ADDRESS = (
+    "addr1z9eejzm3qsww4hn0semp0akwnuv84dcsag4lrludklgzjt"
+    "675jq4yvpskgayj55xegdp30g5rfynax66r8vgn9fldndsrfnae7"
+)
+# Legacy 4% contract (pre-2026-06 deployment).
+SATURNSWAP_LEGACY_ORDER_ADDRESS = (
+    "addr1zyd0sj57d9lpu7cy9g9qdurpazqc9l4eaxk6j59nd2gkh4"
+    "275jq4yvpskgayj55xegdp30g5rfynax66r8vgn9fldndsqzf5tn"
+)
+
+# When the protocol shares its authorize hot-key, set this env var to the signing
+# key and dendrite builds the fee-free authorized fill on either contract.
 SATURNSWAP_AUTHORIZE_KEY_ENV = "SATURNSWAP_AUTHORIZE_KEY"
 
 
@@ -63,9 +83,10 @@ def saturnswap_authorize_signing_key() -> PaymentSigningKey | None:
 
     Set ``SATURNSWAP_AUTHORIZE_KEY`` (the hot-key as ``sk.to_cbor_hex()`` or raw
     32-byte hex) to build fee-free authorized fills. ``swap_utxo`` then drops the
-    4% fee output and adds the key's hash as a required signer. The CALLER must
+    taker-fee output and adds the key's hash as a required signer. The CALLER must
     add this key when signing the transaction (e.g. ``build_and_sign([…, key])``).
-    Returns ``None`` (default behaviour, 4% fee) when the env var is unset.
+    Returns ``None`` (default behaviour, on-chain taker fee) when the env var is
+    unset.
     """
     raw = os.environ.get(SATURNSWAP_AUTHORIZE_KEY_ENV)
     return _load_authorize_signing_key(raw) if raw else None
@@ -253,8 +274,14 @@ class SaturnSwapCancelAction(PlutusData):
                 return
 
 
-class SaturnSwapOrderState(AbstractOrderState):
-    """SaturnSwap order state for individual orders."""
+class _SaturnSwapOrderStateBase(AbstractOrderState):
+    """Shared SaturnSwap order-state logic for both contract versions.
+
+    Concrete subclasses pin the contract-specific bits — the order script
+    ``order_selector()`` address and the non-auth ``TAKER_FEE_BPS`` — and supply
+    ``dex()``. The base intentionally leaves ``dex()`` unimplemented so the
+    subclass-discovery walk skips it and only registers the concrete leaves.
+    """
 
     tx_hash: str
     tx_index: int
@@ -262,28 +289,16 @@ class SaturnSwapOrderState(AbstractOrderState):
     datum_hash: str
     inactive: bool = False
 
+    # Non-auth taker fee in basis points; set by each concrete contract class.
+    TAKER_FEE_BPS: ClassVar[int]
+
     _batcher: Assets = Assets(lovelace=0)
     _datum_parsed: PlutusData | None = None
-
-    @classmethod
-    def dex(cls) -> str:
-        """Return the DEX name."""
-        return "SaturnSwap"
 
     @classmethod
     def dex_policy(cls) -> list[str] | None:
         """SaturnSwap uses parameterized scripts, no global dex NFT."""
         return None
-
-    @classmethod
-    def order_selector(cls) -> list[str]:
-        """Return order script addresses."""
-        return [
-            (
-                "addr1zyd0sj57d9lpu7cy9g9qdurpazqc9l4eaxk6j59nd2gkh4"
-                "275jq4yvpskgayj55xegdp30g5rfynax66r8vgn9fldndsqzf5tn"
-            ),
-        ]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
@@ -360,11 +375,12 @@ class SaturnSwapOrderState(AbstractOrderState):
     def volume_fee(self) -> int:
         """Taker fee in basis points (0 when the authorize hot-key co-signs).
 
-        SaturnSwap waives the 4% on-chain taker fee for fills co-signed by its
+        SaturnSwap waives the on-chain taker fee for fills co-signed by its
         authorized hot-key, so the fee is 0 when ``SATURNSWAP_AUTHORIZE_KEY`` is
-        configured (see :func:`saturnswap_authorize_signing_key`).
+        configured (see :func:`saturnswap_authorize_signing_key`); otherwise it
+        is the contract-specific ``TAKER_FEE_BPS``.
         """
-        return 0 if _authorize_vkey_hash() is not None else SATURNSWAP_TAKER_FEE_BPS
+        return 0 if _authorize_vkey_hash() is not None else self.TAKER_FEE_BPS
 
     @property
     def swap_forward(self) -> bool:
@@ -450,7 +466,7 @@ class SaturnSwapOrderState(AbstractOrderState):
         new_amount_sell: int,
         payment_datum: "SaturnSwapPaymentDatum",
     ) -> None:
-        """Add the 4% taker-fee output, or require the authorize hot-key signature.
+        """Add the taker-fee output, or require the authorize hot-key signature.
 
         SaturnSwap exempts fills co-signed by its authorized hot-key from the
         on-chain fee (``fees_paid_or_auth``). When ``SATURNSWAP_AUTHORIZE_KEY`` is
@@ -566,7 +582,7 @@ class SaturnSwapOrderState(AbstractOrderState):
         )
         tx_builder.add_output(owner_output)
 
-        # Fee output (4%) for unauthorized fills, or require the hot-key
+        # Taker-fee output for unauthorized fills, or require the hot-key
         # signature for authorized (fee-free) fills.
         self._add_fee_or_authorize(
             tx_builder,
@@ -643,8 +659,60 @@ class SaturnSwapOrderState(AbstractOrderState):
         return None, self.order_datum
 
 
+class SaturnSwapOrderState(_SaturnSwapOrderStateBase):
+    """Live SaturnSwap order state — current 1% taker-fee contract.
+
+    Orders resting at :data:`SATURNSWAP_ORDER_ADDRESS` (script hash
+    ``73990b71…``). New maker orders are created here.
+    """
+
+    TAKER_FEE_BPS: ClassVar[int] = SATURNSWAP_TAKER_FEE_BPS
+
+    @classmethod
+    def dex(cls) -> str:
+        """Return the DEX name."""
+        return "SaturnSwap"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Return order script addresses (live 1% contract)."""
+        return [SATURNSWAP_ORDER_ADDRESS]
+
+
+class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
+    """Legacy SaturnSwap order state — pre-2026-06 4% taker-fee contract.
+
+    Orders resting at :data:`SATURNSWAP_LEGACY_ORDER_ADDRESS`. Kept so in-flight
+    orders on the old contract still fill at their correct 4% fee.
+    """
+
+    TAKER_FEE_BPS: ClassVar[int] = SATURNSWAP_LEGACY_TAKER_FEE_BPS
+
+    @classmethod
+    def dex(cls) -> str:
+        """Return the DEX name."""
+        return "SaturnSwap"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Return order script addresses (legacy 4% contract)."""
+        return [SATURNSWAP_LEGACY_ORDER_ADDRESS]
+
+
+# Concrete SaturnSwap contracts, newest first. The order book walks all of these
+# so both the live 1% contract and the legacy 4% contract are aggregated.
+_SATURNSWAP_ORDER_STATE_CLASSES: list[type[_SaturnSwapOrderStateBase]] = [
+    SaturnSwapOrderState,
+    SaturnSwapLegacyOrderState,
+]
+
+
 class SaturnSwapOrderBook(AbstractOrderBookState):
-    """SaturnSwap order book aggregating individual orders."""
+    """SaturnSwap order book aggregating individual orders.
+
+    Aggregates orders from every contract version in
+    :data:`_SATURNSWAP_ORDER_STATE_CLASSES` (live 1% + legacy 4%).
+    """
 
     _deposit: Assets = Assets(lovelace=0)
 
@@ -652,25 +720,31 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
     def get_book(
         cls,
         assets: Assets,
-        orders: list[SaturnSwapOrderState] | None = None,
+        orders: list[_SaturnSwapOrderStateBase] | None = None,
     ) -> "SaturnSwapOrderBook":
-        """Build an order book from provided orders or backend UTxOs."""
+        """Build an order book from provided orders or backend UTxOs.
+
+        When ``orders`` is not supplied, UTxOs are fetched for every contract
+        version (live 1% + legacy 4%) and validated with the matching order-state
+        class so each order carries the correct taker fee.
+        """
         min_pair_assets = 2
         utxo_limit = 10_000
         if orders is None:
-            selector = SaturnSwapOrderState.pool_selector()
-            result = get_backend().get_pool_utxos(
-                limit=utxo_limit,
-                historical=False,
-                **selector.model_dump(),
-            )
             # Skip invalid/non-order datums that fail deserialization
             orders = []
-            for r in result:
-                try:
-                    orders.append(SaturnSwapOrderState.model_validate(r.model_dump()))
-                except NotAPoolError:
-                    continue
+            for state_cls in _SATURNSWAP_ORDER_STATE_CLASSES:
+                selector = state_cls.pool_selector()
+                result = get_backend().get_pool_utxos(
+                    limit=utxo_limit,
+                    historical=False,
+                    **selector.model_dump(),
+                )
+                for r in result:
+                    try:
+                        orders.append(state_cls.model_validate(r.model_dump()))
+                    except NotAPoolError:
+                        continue
 
         buy_orders: list[OrderBookOrder] = []
         sell_orders: list[OrderBookOrder] = []
@@ -724,13 +798,17 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
 
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses."""
-        return SaturnSwapOrderState.order_selector()
+        """Return order script addresses for all contract versions."""
+        return [
+            address
+            for state_cls in _SATURNSWAP_ORDER_STATE_CLASSES
+            for address in state_cls.order_selector()
+        ]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
-        """Return pool selector for order UTxOs."""
-        return SaturnSwapOrderState.pool_selector()
+        """Return pool selector for order UTxOs across all contract versions."""
+        return PoolSelector(addresses=cls.order_selector())
 
     @classmethod
     def default_script_class(cls) -> type[PlutusV2Script]:

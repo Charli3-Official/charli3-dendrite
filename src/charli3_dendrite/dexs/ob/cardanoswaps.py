@@ -585,10 +585,33 @@ class CardanoSwapsOrderState(AbstractOrderState):
             amount=asset_to_value(output_assets),
             datum=datum,
         )
-        txo.amount.coin = max(
-            txo.amount.coin,
-            min_lovelace(tx_builder.context, output=txo),
-        )
+        if offer_unit == "lovelace":
+            # ADA offer: the offered asset IS the UTxO's min-ADA, and the
+            # validator derives ``offer_taken = lovelace_in - lovelace_out``, so a
+            # taker can never draw the UTxO below its min-ADA floor — the tail of
+            # the stated offer would be un-fillable. Fund a SEPARATE carrier on
+            # top of the offer, sized to the FINAL full-fill state (3 beacons +
+            # the fully-accumulated ask asset + inline datum), so the entire
+            # offer is drawable while the UTxO stays at/above that floor. The
+            # maker reclaims the carrier (plus the accumulated ask) on CLOSE.
+            full_ask = -(-offer.quantity() * num // den)  # ceil(offer x price)
+            final_assets = cls._beacon_mint_assets(datum, 1) + Assets(
+                root={ask_unit: full_ask},
+            )
+            final_txo = TransactionOutput(
+                address=swap_address,
+                amount=asset_to_value(final_assets),
+                datum=datum,
+            )
+            carrier = min_lovelace(tx_builder.context, output=final_txo)
+            txo.amount.coin = offer.quantity() + carrier
+        else:
+            # Token offer: the offered token fully leaves on a fill and the
+            # min-ADA is a separate lovelace carrier (no phantom tail).
+            txo.amount.coin = max(
+                txo.amount.coin,
+                min_lovelace(tx_builder.context, output=txo),
+            )
         tx_builder.add_output(txo)
 
         return txo, datum
@@ -679,7 +702,10 @@ class CardanoSwapsOrderState(AbstractOrderState):
             script=self._swap_script_arg(swap_ref_utxo),
             redeemer=Redeemer(Swap()),
         )
-        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
 
         # The swap is a single accumulating UTxO: the taker removes the offer
         # they take and deposits the ask (at price or better) back into the SAME
@@ -757,7 +783,10 @@ class CardanoSwapsOrderState(AbstractOrderState):
             script=self._swap_script_arg(swap_ref_utxo),
             redeemer=Redeemer(SpendWithMint()),
         )
-        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
 
         # Burn the three beacons.
         tx_builder.add_minting_script(
