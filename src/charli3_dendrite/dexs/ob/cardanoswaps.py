@@ -14,7 +14,6 @@ are implemented separately.
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
@@ -263,14 +262,6 @@ class CardanoSwapsOrderState(AbstractOrderState):
     datum_hash: str
     inactive: bool = False
     fee: int = 0
-
-    # Fixed ADA deposit carved into an ADA-offer swap UTxO on CREATE, on top of
-    # the offer, so the FULL offer is drawable (the deposit — not the offer —
-    # satisfies the continuation's min-ADA floor) and the carved amount is a known
-    # constant downstream readers can net out of the displayed offer. 3 ADA sits
-    # comfortably above the ~1.5-2 ADA min-UTxO of a CS swap output (3 beacons +
-    # the accumulated ask). The maker reclaims it (plus the accumulated ask) on CLOSE.
-    ADA_OFFER_DEPOSIT: ClassVar[int] = 3_000_000
 
     _batcher: Assets = Assets(lovelace=0)
     _datum_parsed: PlutusData | None = None
@@ -598,14 +589,22 @@ class CardanoSwapsOrderState(AbstractOrderState):
             # ADA offer: the offered asset IS the UTxO's min-ADA, and the
             # validator derives ``offer_taken = lovelace_in - lovelace_out``, so a
             # taker can never draw the UTxO below its min-ADA floor — the tail of
-            # the stated offer would be un-fillable. Fund a SEPARATE, FIXED deposit
-            # (:attr:`ADA_OFFER_DEPOSIT`) on top of the offer, sized comfortably
-            # above the final full-fill floor (3 beacons + the accumulated ask +
-            # datum), so the entire offer is drawable while the UTxO stays above
-            # that floor — and the carved-out amount is a known constant a reader
-            # can net out of the displayed offer. The maker reclaims the deposit
-            # (plus the accumulated ask) on CLOSE.
-            txo.amount.coin = offer.quantity() + cls.ADA_OFFER_DEPOSIT
+            # the stated offer would be un-fillable. Fund a SEPARATE carrier on
+            # top of the offer, sized to the FINAL full-fill state (3 beacons +
+            # the fully-accumulated ask asset + inline datum), so the entire
+            # offer is drawable while the UTxO stays at/above that floor. The
+            # maker reclaims the carrier (plus the accumulated ask) on CLOSE.
+            full_ask = -(-offer.quantity() * num // den)  # ceil(offer x price)
+            final_assets = cls._beacon_mint_assets(datum, 1) + Assets(
+                root={ask_unit: full_ask},
+            )
+            final_txo = TransactionOutput(
+                address=swap_address,
+                amount=asset_to_value(final_assets),
+                datum=datum,
+            )
+            carrier = min_lovelace(tx_builder.context, output=final_txo)
+            txo.amount.coin = offer.quantity() + carrier
         else:
             # Token offer: the offered token fully leaves on a fill and the
             # min-ADA is a separate lovelace carrier (no phantom tail).
