@@ -39,14 +39,26 @@ Three distinct "tag" namespaces exist and are kept separate:
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import ClassVar
 from typing import Union
 
+from pycardano import Address
 from pycardano import IndefiniteList
+from pycardano import Network
 from pycardano import PlutusData
+from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
+from pycardano import ScriptHash
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
+from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
 
 # ---------------------------------------------------------------------------
 # Shared sub-types
@@ -517,3 +529,193 @@ class FeeSplitConfig(PlutusData):
 
     CONSTR_ID = 0
     protocol_share: Rational
+
+
+# ---------------------------------------------------------------------------
+# Per-invariant-module pricing classes (a PROJECTED 2-asset leg of a vault)
+#
+# A V4 pool UTxO is an N-asset vault; routing prices one 2-asset ``(i, j)`` leg
+# at a time. Each class below prices a single such leg with the standard
+# ``reserve_a``/``reserve_b``/``unit_a``/``unit_b`` interface its curve base
+# already drives. The pricing params (fee / prices / sqrt-band) are NOT in the
+# resting pool datum — they are committed as a hash and supplied off-datum in the
+# module's Operate redeemer — so they are carried here as explicit fields the
+# caller fills from the live module config.
+# ---------------------------------------------------------------------------
+
+# Applied (preview) validator script hashes; identify the validator family for
+# address/selector wiring. Parameterized validators differ per network.
+_PREVIEW_POOL_HASH = "214a9841042bcbfd10d1cd7cbeaba46a68df644dee665f581ec0cf02"
+_PREVIEW_ORDER_HASH = "9a25ecd03c3b290b741acdefa054923d3dd26623f14e57f44bf8da92"
+
+
+class _SundaeV4PricingMixin:
+    """Shared DEX-contract surface for the V4 projected-leg pricing classes.
+
+    Holds everything common to the constant-product / constant-sum /
+    concentrated-liquidity leg classes — name, selectors, datum classes, the
+    pool/order script addresses, and the projected-leg ``skip_init`` — so the
+    three curve classes carry only their curve-specific configuration and math.
+    """
+
+    if TYPE_CHECKING:
+        # Resolved from AbstractPoolState, which the concrete leg classes mix in
+        # alongside this mixin; declared for the type checker (used in pool_id).
+        pool_nft: Assets | None
+        unit_a: str
+        unit_b: str
+
+    _batcher: ClassVar[Assets] = Assets(lovelace=0)
+    _deposit: ClassVar[Assets] = Assets(lovelace=0)
+    _stake_address: ClassVar[Address] = Address(
+        payment_part=ScriptHash(bytes.fromhex(_PREVIEW_POOL_HASH)),
+        network=Network.TESTNET,
+    )
+    _order_address: ClassVar[Address] = Address(
+        payment_part=ScriptHash(bytes.fromhex(_PREVIEW_ORDER_HASH)),
+        network=Network.TESTNET,
+    )
+
+    @classmethod
+    def dex(cls) -> str:
+        """Get the DEX name."""
+        return "SundaeSwapV4"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Get the order selector addresses (the order validator address)."""
+        return [cls._order_address.encode()]
+
+    @classmethod
+    def pool_selector(cls) -> PoolSelector:
+        """Get the pool selector (the vault validator address)."""
+        return PoolSelector(addresses=[cls._stake_address.encode()])
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V4 validators are PlutusV3 scripts."""
+        return PlutusV3Script
+
+    @property
+    def swap_forward(self) -> bool:
+        """V4 order forwarding is not modelled by the pricing layer."""
+        return False
+
+    @property
+    def stake_address(self) -> Address:
+        """The vault script address."""
+        return self._stake_address
+
+    @classmethod
+    def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
+        """Get the pool datum class."""
+        return SundaeV4PoolDatum
+
+    @classmethod
+    def order_datum_class(cls) -> type[SundaeV4OrderDatum]:
+        """Get the order datum class."""
+        return SundaeV4OrderDatum
+
+    @property
+    def pool_id(self) -> str:
+        """A unique identifier for the projected leg."""
+        if self.pool_nft is not None:
+            return self.pool_nft.unit()
+        return f"{self.unit_a}.{self.unit_b}"
+
+    @classmethod
+    def skip_init(cls, values: dict[str, Any]) -> bool:  # noqa: ARG003
+        """Skip the N-asset vault datum parse; legs are constructed pre-projected.
+
+        The pricing layer is handed a ready 2-asset leg (reserves + the off-datum
+        module config), so the heavy vault datum parse is bypassed and the supplied
+        ``assets`` are used verbatim.
+        """
+        return True
+
+
+class _SundaeV4CPPState(_SundaeV4PricingMixin, AbstractConstantProductPoolState):
+    """SundaeSwap V4 constant-product module: a projected 2-asset leg.
+
+    Clean reuse of :class:`AbstractConstantProductPoolState` — the ``x*y=k`` swap
+    math is inherited unchanged. ``fee`` is the fee numerator on ``fee_basis`` (the
+    on-chain ``fee_num`` / ``fee_den``), surfaced to the base via
+    ``volume_fee`` / ``fee_basis``.
+    """
+
+    fee: int = 0
+    fee_basis: int = 10000
+
+
+class _SundaeV4CSState(_SundaeV4PricingMixin, AbstractConstantSumPoolState):
+    """SundaeSwap V4 constant-sum module: a projected 2-asset leg.
+
+    Prices on the new :class:`AbstractConstantSumPoolState` value-conservation base.
+    ``price_a`` / ``price_b`` are the integer price weights of this leg aligned to
+    ``(unit_a, unit_b)``; ``fee_numerator`` / ``fee_denominator`` are the on-chain
+    constant-sum ``fee_num`` / ``fee_den``. Both come from the off-datum
+    :class:`ConstantSumConfig`.
+    """
+
+    price_a: int = 1
+    price_b: int = 1
+    fee_numerator: int = 0
+    fee_denominator: int = 1000
+
+    def _cs_price_pair(self) -> tuple[int, int]:
+        """The leg's integer price weights aligned to ``(unit_a, unit_b)``."""
+        return (self.price_a, self.price_b)
+
+    def _cs_fee(self) -> tuple[int, int]:
+        """The on-chain constant-sum fee ``(fee_num, fee_den)``."""
+        return (self.fee_numerator, self.fee_denominator)
+
+
+class _SundaeV4CLState(_SundaeV4PricingMixin, AbstractConstantLiquidityPoolState):
+    """SundaeSwap V4 concentrated-liquidity module: a projected 2-asset leg.
+
+    Reuses the single-band CLMM math of
+    :class:`AbstractConstantLiquidityPoolState`, but OVERRIDES
+    :meth:`virtual_reserves` to consume V4's EXPLICIT on-chain liquidity ``L`` (the
+    LP-token count, :attr:`total_lp`) instead of reconstructing it from the reserves
+    and band. V4's ``cl_check`` invariant is a ``>=`` on virtual reserves built from
+    ``L`` directly, and fees grow ``L`` across a transcript, so a position need not
+    sit exactly on the canonical single-band curve that the base's geometric
+    reconstruction assumes — reconstructing ``L`` from off-curve reserves would
+    misprice the leg.
+
+    ``sqrt_price_a`` / ``sqrt_price_b`` are the band bounds as exact integer ratios
+    (numerator/denominator pairs); ``fee`` is the fee numerator on ``fee_basis``.
+    These come from the off-datum :class:`ConcentratedLiquidityConfig` and the pool
+    datum's ``total_lp``.
+    """
+
+    fee: int = 0
+    fee_basis: int = 10000
+    total_lp: int = 0
+    sqrt_price_a_num: int = 1
+    sqrt_price_a_den: int = 1
+    sqrt_price_b_num: int = 1
+    sqrt_price_b_den: int = 1
+
+    def _sqrt_price_bounds(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Band bounds ``((sqrt_Pa_num, sqrt_Pa_den), (sqrt_Pb_num, sqrt_Pb_den))``."""
+        return (
+            (self.sqrt_price_a_num, self.sqrt_price_a_den),
+            (self.sqrt_price_b_num, self.sqrt_price_b_den),
+        )
+
+    def virtual_reserves(self) -> tuple[int, int]:
+        """Virtual reserves from the EXPLICIT on-chain ``L`` (not reconstructed).
+
+        Uniswap-V3 single-band identity with ``L = total_lp`` supplied directly:
+        ``a_v = a + L / sqrt(P_b)``, ``b_v = b + L * sqrt(P_a)``, in exact integer
+        arithmetic (ceil-divided offsets, matching the base's convention).
+        """
+        a, b = self.reserve_a, self.reserve_b
+        (spa_n, spa_d), (spb_n, spb_d) = self._sqrt_price_bounds()
+        liq = self.total_lp
+        # Each offset is ceil-divided (``-(-num // den)``) to match the base.
+        a_v = a + -(-(liq * spb_d) // spb_n)
+        b_v = b + -(-(liq * spa_n) // spa_d)
+        return a_v, b_v
