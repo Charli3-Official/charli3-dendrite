@@ -447,6 +447,190 @@ class SwapConstraint(PlutusData):
 
 
 @dataclass
+class StrategyConstraint(PlutusData):
+    """The ``strategy``-role order constraint payload (constructor 0).
+
+    This is the payload carried by the ``strategyOrder`` entry of an order datum's
+    ``constraints`` list. Unlike a swap, a strategy order does not name a concrete
+    fill in its datum; it is a *signed delegation*. The on-chain
+    ``extract_strategy_constraints`` reads it by field position
+    (``unconstr_fields``), so field order is load-bearing.
+
+    Fields (deployed ``lib/types/strategy.ak`` ``StrategyConstraints``):
+
+    * ``auth`` — the :data:`MultisigScript` allowed to sign a
+      :class:`StrategyExecution` (the off-chain executor / delegate). At scoop time
+      the redeemer carries a :class:`SignedStrategyExecution` whose signatures must
+      satisfy this multisig.
+    * ``final_destinations`` — the candidate payout addresses a signed execution may
+      select between (by index, via ``StrategyExecution.final``). Modelled as an
+      :class:`~pycardano.IndefiniteList` of :class:`Destination` (an Aiken
+      ``List<Destination>``); on-chain the non-empty list is indefinite-length, so
+      this field round trips byte-exact only as an ``IndefiniteList``, not a plain
+      typed ``list`` (which pycardano would emit definite-length).
+    """
+
+    CONSTR_ID = 0
+    auth: MultisigScript
+    final_destinations: IndefiniteList
+
+
+@dataclass
+class BasicConstraint(PlutusData):
+    """The ``basic``-role order constraint payload (constructor 0).
+
+    This is the payload carried by the ``basicOrder`` entry of an order datum's
+    ``constraints`` list — a one-shot (non-partial) swap order. The order constraint
+    tag for a basic order is ``0`` (NOT ``2`` like :class:`SwapConstraint`); the
+    ``basic_order`` withdraw validator reads it by field position
+    (``unconstr_fields``), so field order is load-bearing.
+
+    Fields (deployed ``lib/constraints/basic.ak`` ``BasicFields``):
+
+    * ``offered`` — what the order is selling, an
+      :class:`~pycardano.IndefiniteList` of ``[AssetClass, amount]`` 2-element lists
+      (an Aiken ``List<(AssetClass, Int)>``). This is a *list*, not the single
+      :class:`AssetClass` of a swap order: a basic order can offer several assets at
+      once, and the ADA leg sets the fee allowance (``check_basic_consumption``).
+    * ``min_received`` — the per-asset fill floor, an
+      :class:`~pycardano.IndefiniteList` of ``[AssetClass, min_amount]`` 2-element
+      lists. Unlike a swap, the floor is absolute (``check_min_received_delta``),
+      with no partial-fill ratio.
+    """
+
+    CONSTR_ID = 0
+    offered: IndefiniteList
+    min_received: IndefiniteList
+
+
+# -- Strategy execution: the off-chain-signed fill a strategy order delegates ----
+#
+# A strategy order's datum (its StrategyConstraint) is only a delegation; the
+# actual fill is a StrategyExecution signed by the constraint's ``auth`` and
+# supplied, wrapped in a SignedStrategyExecution, in the scoop redeemer. These
+# types are modelled for parse-completeness — deciding and signing an execution is
+# off-chain executor territory, not built here.
+
+
+@dataclass
+class OptionSomeInt(PlutusData):
+    """Aiken ``Option<Int>`` ``Some(value)`` (constructor 0)."""
+
+    CONSTR_ID = 0
+    value: int
+
+
+@dataclass
+class OptionNone(PlutusData):
+    """Aiken ``Option<Int>`` ``None`` (constructor 1, no fields)."""
+
+    CONSTR_ID = 1
+
+
+OptionInt = Union[OptionSomeInt, OptionNone]
+
+
+@dataclass
+class IntervalBoundNegativeInfinity(PlutusData):
+    """An interval bound at negative infinity (constructor 0, no fields)."""
+
+    CONSTR_ID = 0
+
+
+@dataclass
+class IntervalBoundFinite(PlutusData):
+    """A finite interval bound at ``value`` (constructor 1)."""
+
+    CONSTR_ID = 1
+    value: int
+
+
+@dataclass
+class IntervalBoundPositiveInfinity(PlutusData):
+    """An interval bound at positive infinity (constructor 2, no fields)."""
+
+    CONSTR_ID = 2
+
+
+IntervalBoundType = Union[
+    IntervalBoundNegativeInfinity,
+    IntervalBoundFinite,
+    IntervalBoundPositiveInfinity,
+]
+
+
+@dataclass
+class IntervalBound(PlutusData):
+    """One end of a :class:`ValidityRange` (constructor 0).
+
+    ``bound_type`` is the :data:`IntervalBoundType` (negative-infinity / finite /
+    positive-infinity) and ``is_inclusive`` a :data:`Bool` flag.
+    """
+
+    CONSTR_ID = 0
+    bound_type: IntervalBoundType
+    is_inclusive: Bool
+
+
+@dataclass
+class ValidityRange(PlutusData):
+    """A POSIX-time validity range (Aiken ``Interval<Int>``; constructor 0).
+
+    The ``cardano/transaction.ValidityRange`` an execution is valid within; the
+    ``strategy`` constraint's ``check_validity_range`` requires it to include the
+    transaction's own validity range.
+    """
+
+    CONSTR_ID = 0
+    lower_bound: IntervalBound
+    upper_bound: IntervalBound
+
+
+@dataclass
+class StrategyExecution(PlutusData):
+    """A single signed strategy fill (constructor 0).
+
+    Fields (deployed ``lib/types/strategy.ak`` ``StrategyExecution``):
+
+    * ``order_ref`` — the :class:`OutputReference` of the order UTxO this execution
+      authorises (binds the signature to one specific order).
+    * ``validity_range`` — the :class:`ValidityRange` the execution is valid within.
+    * ``min_received`` — the fill floor for this execution, an
+      :class:`~pycardano.IndefiniteList` of ``[AssetClass, min_amount]`` 2-element
+      lists (an Aiken ``List<(AssetClass, Int)>``).
+    * ``final`` — an :data:`OptionInt`: ``Some(index)`` selects a payout from the
+      constraint's ``final_destinations`` (a terminal fill), ``None`` pays the
+      order's own ``destination`` (a continuation).
+    * ``extension`` — opaque ``Data``, kept as :class:`~pycardano.RawPlutusData`.
+    """
+
+    CONSTR_ID = 0
+    order_ref: OutputReference
+    validity_range: ValidityRange
+    min_received: IndefiniteList
+    final: OptionInt
+    extension: RawPlutusData
+
+
+@dataclass
+class SignedStrategyExecution(PlutusData):
+    """A :class:`StrategyExecution` plus its signatures (constructor 0).
+
+    Fields (deployed ``lib/types/strategy.ak`` ``SignedStrategyExecution``):
+
+    * ``execution`` — the :class:`StrategyExecution` being authorised.
+    * ``signatures`` — an :class:`~pycardano.IndefiniteList` of
+      ``[verification_key, signature]`` 2-element lists (an Aiken
+      ``List<(VerificationKey, Signature)>``); these must satisfy the order's
+      ``StrategyConstraint.auth`` multisig over the serialised ``execution``.
+    """
+
+    CONSTR_ID = 0
+    execution: StrategyExecution
+    signatures: IndefiniteList
+
+
+@dataclass
 class OrderCancel(PlutusData):
     """Order spend redeemer: owner-signed cancel (constructor 0)."""
 
@@ -603,11 +787,36 @@ _PREVIEW_SWAP_CONFIG_TOKEN = (
     "000d039b34ea653da4d8321422e7942e7b621a82d24bb8d2b46b918d83e504fe"
 )
 
+# The ``strategy`` order-config role binds an order to three required constraint
+# modules — the strategy constraint, then the (no-op) route and fairness
+# constraints, in this order — sourced from the role's settings entry whose token
+# name is the strategy config_token below. A strategy order is a signed delegation:
+# its datum carries the :class:`StrategyConstraint` (auth + final destinations),
+# not a concrete fill. These are the applied (preview) module hashes; the route and
+# fairness hashes are shared with the swap role above.
+_PREVIEW_STRATEGY_ORDER_HASH = (
+    "b298d0cb82fd8006d34e83d253e9250af4a35ac9af06573f94a48286"
+)
+_PREVIEW_STRATEGY_CONFIG_TOKEN = (
+    "00d5ea9b8e3c4188cd6532351f716778e81be0ae4f932e5fd68f05aab6ed34ab"
+)
+
+# The ``basic`` order constraint module (a one-shot, non-partial swap). Live basic
+# orders bind a single ``basicOrder`` constraint and an empty config_token (they
+# reference the global settings entry); the order constraint tag is 0, not 2.
+_PREVIEW_BASIC_ORDER_HASH = "3c1477d302e413f7fed7aff025dc65455d550c9a32409b17c7c6177d"
+
 # The default order budget (max scooper fee, lovelace) and the batcher's
 # basis-points share of the fee surplus, matching the values live swap orders
 # carry on preview.
 _SWAP_BUDGET_DEFAULT = 3_000_000
 _SWAP_SHARE_BATCHER_DEFAULT = 10_000
+
+# Defaults matching live strategy / basic orders on preview.
+_STRATEGY_BUDGET_DEFAULT = 3_000_000
+_STRATEGY_SHARE_BATCHER_DEFAULT = 10_000
+_BASIC_BUDGET_DEFAULT = 1_500_000
+_BASIC_SHARE_BATCHER_DEFAULT = 500_000
 
 
 class _SundaeV4PricingMixin:
@@ -643,6 +852,16 @@ class _SundaeV4PricingMixin:
     _route_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_ROUTE_ORDER_HASH)
     _fairness_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_FAIRNESS_ORDER_HASH)
     _swap_config_token: ClassVar[bytes] = bytes.fromhex(_PREVIEW_SWAP_CONFIG_TOKEN)
+
+    # The strategy role's strategy-constraint module hash (the route/fairness
+    # modules are shared with the swap role) and its order-config token name.
+    _strategy_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_STRATEGY_ORDER_HASH)
+    _strategy_config_token: ClassVar[bytes] = bytes.fromhex(
+        _PREVIEW_STRATEGY_CONFIG_TOKEN,
+    )
+
+    # The basic-order constraint module hash (a one-shot swap order).
+    _basic_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_BASIC_ORDER_HASH)
 
     @classmethod
     def dex(cls) -> str:
@@ -791,6 +1010,185 @@ class _SundaeV4PricingMixin:
             budget=budget,
             share_batcher=share_batcher,
             config_token=self._swap_config_token,
+            constraints=constraints,
+            extension=RawPlutusData(CBORTag(121, [])),
+        )
+
+    @staticmethod
+    def _none_datum() -> RawPlutusData:
+        """An ``Option<Data>`` ``None`` (constructor 1): a bare destination datum."""
+        return RawPlutusData(CBORTag(122, []))
+
+    @classmethod
+    def _fixed_destination(
+        cls,
+        address: Address,
+        datum_target: PlutusData | None = None,
+    ) -> DestinationFixed:
+        """A ``DestinationFixed`` paying ``address`` with an optional inline datum.
+
+        ``datum_target`` ``None`` pays a bare address (the ``Option<Data>`` ``None``
+        constructor); otherwise the supplied datum is wrapped as ``Some``.
+        """
+        datum: RawPlutusData = (
+            RawPlutusData(CBORTag(121, [datum_target.to_primitive()]))
+            if datum_target is not None
+            else cls._none_datum()
+        )
+        return DestinationFixed(
+            address=PlutusFullAddress.from_address(address),
+            datum=datum,
+        )
+
+    def strategy_datum(
+        self,
+        address_source: Address,
+        auth: MultisigScript,
+        final_destinations: list[Address],
+        *,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        budget: int = _STRATEGY_BUDGET_DEFAULT,
+        share_batcher: int = _STRATEGY_SHARE_BATCHER_DEFAULT,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 strategy order.
+
+        A strategy order is a *signed delegation*: the datum carries a
+        :class:`StrategyConstraint` (the ``auth`` multisig allowed to sign fills and
+        the candidate ``final_destinations`` it may pay out to), not a concrete swap.
+        The order rests paying back to itself (a :class:`DestinationSelf`
+        continuation) unless ``address_target`` is given; at scoop time the executor
+        supplies a signed :class:`StrategyExecution` that selects the actual fill and
+        — when terminal — one of ``final_destinations`` by index. Deciding and
+        signing that execution is off-chain executor work and is not built here.
+
+        The order binds the ``strategy`` order-config role: ``config_token`` names
+        that settings entry and the ``constraints`` list carries the role's three
+        required modules, in order — the strategy constraint, then the route and
+        fairness constraints as their no-op payloads.
+
+        ``owner`` is a single-signature multisig over ``address_source``'s payment
+        key hash. ``final_destinations`` are paid as bare addresses (no inline
+        datum). ``budget`` is the maximum scooper fee in lovelace and
+        ``share_batcher`` the batcher's basis-points cut of the fee surplus.
+
+        Raises:
+            ValueError: if the source address has no verification-key payment part.
+        """
+        payment_part = address_source.payment_part
+        if not isinstance(payment_part, VerificationKeyHash):
+            raise ValueError(
+                "The order owner must be a verification-key payment credential.",
+            )
+        owner = MultisigSignature(key_hash=bytes(payment_part))
+
+        strategy = StrategyConstraint(
+            auth=auth,
+            final_destinations=IndefiniteList(
+                [self._fixed_destination(dest) for dest in final_destinations],
+            ),
+        )
+        # The route and fairness constraints carry no per-order parameters; their
+        # on-chain payloads are the empty list and the empty constructor-0 record.
+        constraints = IndefiniteList(
+            [
+                IndefiniteList([self._strategy_order_hash, strategy]),
+                IndefiniteList([self._route_order_hash, []]),
+                IndefiniteList(
+                    [self._fairness_order_hash, RawPlutusData(CBORTag(121, []))],
+                ),
+            ],
+        )
+
+        destination: Destination = (
+            self._fixed_destination(address_target, datum_target)
+            if address_target is not None
+            else DestinationSelf()
+        )
+
+        return SundaeV4OrderDatum(
+            owner=owner,
+            destination=destination,
+            budget=budget,
+            share_batcher=share_batcher,
+            config_token=self._strategy_config_token,
+            constraints=constraints,
+            extension=RawPlutusData(CBORTag(121, [])),
+        )
+
+    def basic_datum(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        *,
+        config_token: bytes = b"",
+        budget: int = _BASIC_BUDGET_DEFAULT,
+        share_batcher: int = _BASIC_SHARE_BATCHER_DEFAULT,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 basic (one-shot, non-partial) order.
+
+        A basic order offers ``in_assets`` and asks for ``out_assets`` at the minimum
+        amount it must deliver, in a single fill that cannot partially continue. It
+        binds a single ``basicOrder`` constraint (the :class:`BasicConstraint`
+        payload) — the order constraint tag is ``0``, not the swap order's ``2``.
+
+        Live basic orders carry an empty ``config_token`` (they reference the global
+        settings entry); pass a non-empty ``config_token`` to bind a specific
+        order-config settings entry instead. ``owner`` is a single-signature multisig
+        over ``address_source``'s payment key hash. ``destination`` pays proceeds to
+        ``address_target`` (defaulting to ``address_source``). ``budget`` is the
+        maximum scooper fee in lovelace and ``share_batcher`` the batcher's
+        basis-points cut of the fee surplus.
+
+        Raises:
+            ValueError: if more than one asset is offered or asked, or the source
+                address has no verification-key payment part to own the order.
+        """
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            raise ValueError(
+                "A basic order offers exactly one asset and asks for exactly one.",
+            )
+
+        payment_part = address_source.payment_part
+        if not isinstance(payment_part, VerificationKeyHash):
+            raise ValueError(
+                "The order owner must be a verification-key payment credential.",
+            )
+        owner = MultisigSignature(key_hash=bytes(payment_part))
+
+        basic = BasicConstraint(
+            offered=IndefiniteList(
+                [
+                    IndefiniteList(
+                        [AssetClass.from_assets(in_assets), in_assets.quantity()],
+                    ),
+                ],
+            ),
+            min_received=IndefiniteList(
+                [
+                    IndefiniteList(
+                        [AssetClass.from_assets(out_assets), out_assets.quantity()],
+                    ),
+                ],
+            ),
+        )
+        constraints = IndefiniteList(
+            [IndefiniteList([self._basic_order_hash, basic])],
+        )
+
+        target = address_target if address_target is not None else address_source
+        destination = self._fixed_destination(target, datum_target)
+
+        return SundaeV4OrderDatum(
+            owner=owner,
+            destination=destination,
+            budget=budget,
+            share_batcher=share_batcher,
+            config_token=config_token,
             constraints=constraints,
             extension=RawPlutusData(CBORTag(121, [])),
         )
