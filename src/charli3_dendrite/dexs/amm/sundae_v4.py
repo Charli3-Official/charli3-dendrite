@@ -50,7 +50,12 @@ from pycardano import Network
 from pycardano import PlutusData
 from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
+from pycardano import Redeemer
 from pycardano import ScriptHash
+from pycardano import TransactionBuilder
+from pycardano import UTxO
+from pycardano import VerificationKeyHash
+from pycardano.serialization import CBORTag
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
@@ -408,6 +413,40 @@ class SundaeV4OrderDatum(PlutusData):
 
 
 @dataclass
+class SwapConstraint(PlutusData):
+    """The ``swap``-role order constraint payload (constraint tag 2).
+
+    This is the payload carried by the ``swapOrder`` entry of an order datum's
+    ``constraints`` list (the keyed ``[module_hash, payload]`` pairs). The
+    constraint-tag namespace assigns ``2`` to a swap, so the on-chain payload is a
+    constructor-2 record; the ``swap_order`` withdraw validator reads it by field
+    position (``unconstr_fields``), so field order is load-bearing.
+
+    Fields (deployed ``lib/constraints/swap.ak`` ``SwapFields``):
+
+    * ``offered`` — the :class:`AssetClass` the order is selling (lovelace is the
+      empty-policy/empty-name asset).
+    * ``original_offered`` — the full offered amount at creation; the fee budget is
+      pro-rated against it (``fee_budget = fee_allowance * offered_this_fill /
+      original_offered``).
+    * ``remaining_offered`` — the still-unfilled amount; equal to
+      ``original_offered`` on a fresh order, and decremented on each partial-fill
+      continuation.
+    * ``min_received`` — the per-asset fill floor, an
+      :class:`~pycardano.IndefiniteList` of ``[AssetClass, min_amount]`` 2-element
+      lists (an Aiken ``List<(AssetClass, Int)>``). The on-chain ``check_fill_ratio``
+      enforces ``received * original_offered >= min_amount * offered_this_fill`` so
+      the ratio is preserved across partial fills.
+    """
+
+    CONSTR_ID = 2
+    offered: AssetClass
+    original_offered: int
+    remaining_offered: int
+    min_received: IndefiniteList
+
+
+@dataclass
 class OrderCancel(PlutusData):
     """Order spend redeemer: owner-signed cancel (constructor 0)."""
 
@@ -548,6 +587,28 @@ class FeeSplitConfig(PlutusData):
 _PREVIEW_POOL_HASH = "214a9841042bcbfd10d1cd7cbeaba46a68df644dee665f581ec0cf02"
 _PREVIEW_ORDER_HASH = "9a25ecd03c3b290b741acdefa054923d3dd26623f14e57f44bf8da92"
 
+# The ``swap`` order-config role binds an order to three required constraint
+# modules — the swap constraint, the route constraint, and the fairness
+# constraint — sourced (in this order) from the role's settings entry, whose token
+# name is the config_token below. ``check_constraints_match`` requires the order's
+# constraint hashes to appear in exactly this order, so a swap order's constraints
+# list is always these three keys. These are the applied (preview) module hashes;
+# the parameterized validators differ per network.
+_PREVIEW_SWAP_ORDER_HASH = "1a38df57b59e75ad39fdb06fdf8c97ce435297ecfe5b68a3ea523053"
+_PREVIEW_ROUTE_ORDER_HASH = "ef81595b5b8cf9bc5f0adfb0b8f3a2d60edef9d33755ca87fa86c077"
+_PREVIEW_FAIRNESS_ORDER_HASH = (
+    "b0df1c266988ab3bb5497bf9f6d8749a5f7726e88d43fca52efaa7f4"
+)
+_PREVIEW_SWAP_CONFIG_TOKEN = (
+    "000d039b34ea653da4d8321422e7942e7b621a82d24bb8d2b46b918d83e504fe"
+)
+
+# The default order budget (max scooper fee, lovelace) and the batcher's
+# basis-points share of the fee surplus, matching the values live swap orders
+# carry on preview.
+_SWAP_BUDGET_DEFAULT = 3_000_000
+_SWAP_SHARE_BATCHER_DEFAULT = 10_000
+
 
 class _SundaeV4PricingMixin:
     """Shared DEX-contract surface for the V4 projected-leg pricing classes.
@@ -575,6 +636,13 @@ class _SundaeV4PricingMixin:
         payment_part=ScriptHash(bytes.fromhex(_PREVIEW_ORDER_HASH)),
         network=Network.TESTNET,
     )
+
+    # The swap role's required constraint module hashes (in required order) and
+    # its order-config token name.
+    _swap_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_SWAP_ORDER_HASH)
+    _route_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_ROUTE_ORDER_HASH)
+    _fairness_order_hash: ClassVar[bytes] = bytes.fromhex(_PREVIEW_FAIRNESS_ORDER_HASH)
+    _swap_config_token: ClassVar[bytes] = bytes.fromhex(_PREVIEW_SWAP_CONFIG_TOKEN)
 
     @classmethod
     def dex(cls) -> str:
@@ -632,6 +700,138 @@ class _SundaeV4PricingMixin:
         ``assets`` are used verbatim.
         """
         return True
+
+    def swap_datum(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        *,
+        budget: int = _SWAP_BUDGET_DEFAULT,
+        share_batcher: int = _SWAP_SHARE_BATCHER_DEFAULT,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 swap order.
+
+        The user's order UTxO carries this datum. ``in_assets`` is the single
+        asset being offered (sold), ``out_assets`` the single asset asked for at
+        the minimum amount it must deliver. The order binds to the ``swap``
+        order-config role: ``config_token`` names that settings entry and the
+        ``constraints`` list carries the role's three required modules, in order —
+        the swap constraint (the :class:`SwapConstraint` payload built from the
+        offered/ask amounts), then the route and fairness constraints, which a
+        plain (un-routed) swap leaves as their no-op payloads.
+
+        ``owner`` is a single-signature multisig over ``address_source``'s payment
+        key hash. ``destination`` pays proceeds to ``address_target`` (defaulting
+        to ``address_source``) with no inline datum. ``budget`` is the maximum
+        scooper fee in lovelace and ``share_batcher`` the batcher's basis-points
+        cut of the fee surplus.
+
+        Raises:
+            ValueError: if more than one asset is offered or asked, or the source
+                address has no verification-key payment part to own the order.
+        """
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            raise ValueError(
+                "A swap offers exactly one asset and asks for exactly one asset.",
+            )
+
+        payment_part = address_source.payment_part
+        if not isinstance(payment_part, VerificationKeyHash):
+            raise ValueError(
+                "The order owner must be a verification-key payment credential.",
+            )
+        owner = MultisigSignature(key_hash=bytes(payment_part))
+
+        offered_amount = in_assets.quantity()
+        swap = SwapConstraint(
+            offered=AssetClass.from_assets(in_assets),
+            original_offered=offered_amount,
+            remaining_offered=offered_amount,
+            min_received=IndefiniteList(
+                [
+                    IndefiniteList(
+                        [AssetClass.from_assets(out_assets), out_assets.quantity()],
+                    ),
+                ],
+            ),
+        )
+        # The route and fairness constraints carry no per-order parameters for a
+        # plain swap; their on-chain payloads are the empty list and the empty
+        # constructor-0 record respectively.
+        constraints = IndefiniteList(
+            [
+                IndefiniteList([self._swap_order_hash, swap]),
+                IndefiniteList([self._route_order_hash, []]),
+                IndefiniteList(
+                    [self._fairness_order_hash, RawPlutusData(CBORTag(121, []))],
+                ),
+            ],
+        )
+
+        target = address_target if address_target is not None else address_source
+        # ``Option<Data>`` None == constructor 1; an order without a forwarding
+        # datum on its destination pays a bare address.
+        destination_datum: RawPlutusData = (
+            RawPlutusData(CBORTag(121, [datum_target.to_primitive()]))
+            if datum_target is not None
+            else RawPlutusData(CBORTag(122, []))
+        )
+        destination = DestinationFixed(
+            address=PlutusFullAddress.from_address(target),
+            datum=destination_datum,
+        )
+
+        return SundaeV4OrderDatum(
+            owner=owner,
+            destination=destination,
+            budget=budget,
+            share_batcher=share_batcher,
+            config_token=self._swap_config_token,
+            constraints=constraints,
+            extension=RawPlutusData(CBORTag(121, [])),
+        )
+
+    @classmethod
+    def cancel_redeemer(cls) -> Redeemer:
+        """The order spend redeemer for an owner cancel (``OrderCancel``).
+
+        The order validator's ``Cancel`` branch only checks that the order
+        ``owner`` multisig is satisfied (the owner key hash among the
+        transaction's signatories), so a cancel needs no settings reference input
+        and no withdraw validator — just this redeemer on the order input and the
+        owner as a required signer.
+        """
+        return Redeemer(OrderCancel())
+
+    @classmethod
+    def cancel_tx(
+        cls,
+        order_utxo: UTxO,
+        order_ref_utxo: UTxO,
+        owner: VerificationKeyHash,
+        tx_builder: TransactionBuilder,
+    ) -> TransactionBuilder:
+        """Add an owner-cancel of ``order_utxo`` to ``tx_builder``.
+
+        Spends the live order UTxO with the :meth:`cancel_redeemer`, supplying the
+        order validator from ``order_ref_utxo`` as a reference script (so the
+        script bytes need not be embedded) and registering ``owner`` as a required
+        signer so the validator's owner-multisig check is satisfied.
+        """
+        tx_builder.add_script_input(
+            utxo=order_utxo,
+            script=order_ref_utxo,
+            redeemer=cls.cancel_redeemer(),
+        )
+        signers = list(tx_builder.required_signers or [])
+        if owner not in signers:
+            signers.append(owner)
+        tx_builder.required_signers = signers
+        return tx_builder
 
 
 class _SundaeV4CPPState(_SundaeV4PricingMixin, AbstractConstantProductPoolState):
