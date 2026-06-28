@@ -335,6 +335,18 @@ class CPPoolRedeemer(PlutusData):
                 self.self_index = key.index
 
 
+@dataclass
+class SplashCancelRedeemer(PlutusData):
+    """Owner-reclaim redeemer for a Splash order spend (constructor 0).
+
+    The base ``cancel_redeemer`` emits the executor action (constructor 1); an
+    owner cancelling their own order spends with the owner-reclaim action
+    (constructor 0).
+    """
+
+    CONSTR_ID = 0
+
+
 class SplashBaseState(AbstractPairState):
     """Base state class for Splash DEX pools."""
 
@@ -379,6 +391,15 @@ class SplashBaseState(AbstractPairState):
     def script_class(cls) -> type[PlutusV2Script]:
         """Return the script class for this DEX."""
         return PlutusV2Script
+
+    @classmethod
+    def cancel_redeemer(cls) -> Redeemer:
+        """Return the owner-reclaim redeemer for a Splash order spend.
+
+        Overrides the base executor action (constructor 1) with the owner-reclaim
+        action (constructor 0) used when the order owner cancels their own order.
+        """
+        return Redeemer(SplashCancelRedeemer())
 
     @classmethod
     def extract_pool_nft(cls, values: dict[str, Any]) -> Assets | None:
