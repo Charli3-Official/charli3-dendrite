@@ -1140,6 +1140,14 @@ class MinswapDJEDiUSDStableState(AbstractCommonStableSwapPoolState, MinswapCPPSt
     def order_datum_class(cls) -> type[MinswapStableOrderDatum]:
         return MinswapStableOrderDatum
 
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV1Script] | type[PlutusV2Script]:
+        return PlutusV2Script
+
+    @classmethod
+    def script_class(self) -> type[PlutusV2Script]:
+        return PlutusV2Script
+
     def get_amount_out(
         self,
         asset: Assets,
