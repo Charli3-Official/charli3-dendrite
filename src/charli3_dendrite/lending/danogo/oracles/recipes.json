@@ -1,0 +1,837 @@
+{
+  "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf449eab94177468bdd22eed594871a756d91be42eab3ef06625753062|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "is_reverse": false,
+        "nft_name": "449eab94177468bdd22eed594871a756d91be42eab3ef06625753062",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf506b019656c07487e4c2a752378b8c8cfdb4f673e5cfdaa10ddb8740|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443": {
+    "steps": [
+      {
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "is_reverse": false,
+        "nft_name": "506b019656c07487e4c2a752378b8c8cfdb4f673e5cfdaa10ddb8740",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf57acdd5c0dfbdec9d2d611f57f42951b78ef8fe7dc1935b9ce19d839|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "is_reverse": false,
+        "nft_name": "57acdd5c0dfbdec9d2d611f57f42951b78ef8fe7dc1935b9ce19d839",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1w9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnckmpaw8",
+        "is_reverse": false,
+        "nft_name": "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cff3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de|lovelace": {
+    "steps": [
+      {
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "is_reverse": false,
+        "nft_name": "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cffe24971839096460b051a6da5ee3a6db1224d512e1b71d4d348c1444|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854": {
+    "steps": [
+      {
+        "address": "addr1w9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnckmpaw8",
+        "is_reverse": false,
+        "nft_name": "fe24971839096460b051a6da5ee3a6db1224d512e1b71d4d348c1444",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e811bbbea6a20e0cb0433fc7723e16427d435c298e1b7304365af6b3e6|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "11bbbea6a20e0cb0433fc7723e16427d435c298e1b7304365af6b3e6",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8251d5ccb51543f3647b344d4a4c8f2df5bff9d164854e3e7fe4b1711|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "251d5ccb51543f3647b344d4a4c8f2df5bff9d164854e3e7fe4b1711",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c64d494e",
+        "is_reverse": false,
+        "nft_name": "4d494e",
+        "nft_policy": "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e82648750a97772749ed283bfd4ac0cf230e1a587924b5bfdf2b109331|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "2648750a97772749ed283bfd4ac0cf230e1a587924b5bfdf2b109331",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e82648750a97772749ed283bfd4ac0cf230e1a587924b5bfdf2b109331|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "2648750a97772749ed283bfd4ac0cf230e1a587924b5bfdf2b109331",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e845af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "45af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454",
+        "is_reverse": false,
+        "nft_name": "0014df10464c4454",
+        "nft_policy": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e845af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "45af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454",
+        "is_reverse": false,
+        "nft_name": "0014df10464c4454",
+        "nft_policy": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e845af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "45af09272aeaf60d2215ce33daa6d2bc3ced61e5b59be434d21cd2e8",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454",
+        "is_reverse": false,
+        "nft_name": "0014df10464c4454",
+        "nft_policy": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e87553c4258a557314d787908085e67fb50f7d6f8f6ff6e0d1c9b9306b|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "7553c4258a557314d787908085e67fb50f7d6f8f6ff6e0d1c9b9306b",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e883b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "83b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45",
+        "is_reverse": false,
+        "nft_name": "535452494b45",
+        "nft_policy": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e883b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "83b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45",
+        "is_reverse": false,
+        "nft_name": "535452494b45",
+        "nft_policy": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e883b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "83b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45",
+        "is_reverse": false,
+        "nft_name": "535452494b45",
+        "nft_policy": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e883b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "83b8a0a2074061394fddfe9aebee6fab4924dd73ec1326162f453dc9",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45",
+        "is_reverse": false,
+        "nft_name": "535452494b45",
+        "nft_policy": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8a1bc0130b1eb217e58c2b40f4e6ed7647af5c71157466bd6a0dbb85c|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "a1bc0130b1eb217e58c2b40f4e6ed7647af5c71157466bd6a0dbb85c",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0494e4459",
+        "is_reverse": false,
+        "nft_name": "494e4459",
+        "nft_policy": "533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8a90873033a7449a360ab4a9b07b7262cad46a54031d09d784cf01127|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "a90873033a7449a360ab4a9b07b7262cad46a54031d09d784cf01127",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa",
+        "is_reverse": true,
+        "nft_name": "446a65644f7261636c654e4654",
+        "nft_policy": "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+        "otype": "TDJED",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+        "is_reverse": true,
+        "nft_name": "0014df105553444d",
+        "nft_policy": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "f04403181fbd051edd971af67b85f6c6fe1d9d98949a80b9f3803a14",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+        "is_reverse": true,
+        "nft_name": "0014df105553444d",
+        "nft_policy": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa",
+        "is_reverse": true,
+        "nft_name": "446a65644f7261636c654e4654",
+        "nft_policy": "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+        "otype": "TDJED",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+        "is_reverse": false,
+        "nft_name": "4e49474854",
+        "nft_policy": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+        "is_reverse": false,
+        "nft_name": "4e49474854",
+        "nft_policy": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "94dca24a1f1fcc2ff51cd90f32f4fe9e786d861a2dbf7d27598d26e8fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb|lovelace": {
+    "steps": [
+      {
+        "address": "addr1wx2degj2ru0uctl4rnvs7vh5l608smvxrgkm7lf8txxjd6qs43szs",
+        "is_reverse": false,
+        "nft_name": "fc7f95ea342aff20a4fed512e4b7805003641c483af3e4a379e8eccb",
+        "nft_policy": "814de8a99452972a9fa9fe2c0f59f49697f208005c001ecac1ddfd57",
+        "otype": "TDANOGO_POOL",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+        "is_reverse": false,
+        "nft_name": "4e49474854",
+        "nft_policy": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854": {
+    "steps": [
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+        "is_reverse": true,
+        "nft_name": "4e49474854",
+        "nft_policy": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa",
+        "is_reverse": true,
+        "nft_name": "446a65644f7261636c654e4654",
+        "nft_policy": "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+        "otype": "TDJED",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935455448",
+        "is_reverse": true,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      },
+      {
+        "address": "addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa",
+        "is_reverse": true,
+        "nft_name": "446a65644f7261636c654e4654",
+        "nft_policy": "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+        "otype": "TDJED",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93555534443": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 2
+      }
+    ]
+  },
+  "lovelace|279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b": {
+    "steps": [
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b",
+        "is_reverse": true,
+        "nft_name": "534e454b",
+        "nft_policy": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454": {
+    "steps": [
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454",
+        "is_reverse": true,
+        "nft_name": "0014df10464c4454",
+        "nft_policy": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147": {
+    "steps": [
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147",
+        "is_reverse": true,
+        "nft_name": "494147",
+        "nft_policy": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d": {
+    "steps": [
+      {
+        "address": "addr1wxyc99q448xlkv4q2y3truxq7j2msr6hkqqg0wmzz9n9r6q8j7kpa",
+        "is_reverse": true,
+        "nft_name": "446a65644f7261636c654e4654",
+        "nft_policy": "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+        "otype": "TDJED",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45": {
+    "steps": [
+      {
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "datum_key": "lovelace|f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45",
+        "is_reverse": true,
+        "nft_name": "535452494b45",
+        "nft_policy": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275",
+        "otype": "TMINSWAP_LP",
+        "scale_exp": 0
+      }
+    ]
+  },
+  "lovelace|fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441": {
+    "steps": [
+      {
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "datum_key": "49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1f:lovelace",
+        "is_reverse": false,
+        "nft_name": "",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "otype": "TLIQWID_ORACLE_V2",
+        "scale_exp": 0
+      }
+    ]
+  }
+}
