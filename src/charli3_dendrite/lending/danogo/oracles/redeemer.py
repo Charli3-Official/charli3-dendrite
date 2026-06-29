@@ -37,6 +37,7 @@ from enum import IntEnum
 import cbor2  # type: ignore[import-not-found]
 
 from charli3_dendrite.lending.danogo.datums import asset_unit
+from charli3_dendrite.lending.units import constr_alt
 
 
 class UTxOTarget(IntEnum):
@@ -126,14 +127,8 @@ _CONSTR_TAG_EXT = 1280
 _CONSTR_EXT_OFFSET = 7
 _RDMR_BORROW_FIELD = 4
 
-
-def _constr_alt(tag: int) -> int:
-    """CBOR constructor tag -> alternative index (pycardano convention)."""
-    if _CONSTR_TAG_MIN <= tag <= _CONSTR_TAG_MAX:
-        return tag - _CONSTR_TAG_MIN
-    if tag >= _CONSTR_TAG_EXT:
-        return tag - _CONSTR_TAG_EXT + _CONSTR_EXT_OFFSET
-    raise ValueError(f"not a constructor tag: {tag}")
+# Thin alias over the shared primitive; kept for existing danogo call sites.
+_constr_alt = constr_alt
 
 
 def _alt_constr_tag(alt: int) -> int:
