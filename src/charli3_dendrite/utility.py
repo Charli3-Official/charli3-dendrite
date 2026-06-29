@@ -202,3 +202,15 @@ def apply_params_to_script(script_cbor: bytes, *params: bytes | int) -> bytes:
         for p in params
     ]
     return flatten(apply(unflatten(script_cbor), *constants))
+
+
+# Mainnet slot <-> wall-clock anchor (post-Shelley: 1 slot == 1 second). Declared once:
+# at absolute slot 56_332_800 the wall-clock time is 1_647_899_091_000 ms (the epoch-328
+# boundary). Every other slot's time is this anchor plus the elapsed seconds.
+MAINNET_SLOT_ANCHOR = 56_332_800
+MAINNET_SLOT_ANCHOR_MS = 1_647_899_091_000
+
+
+def slot_to_posix_ms(slot: int) -> int:
+    """Mainnet absolute slot -> the wall-clock POSIX milliseconds for that slot."""
+    return MAINNET_SLOT_ANCHOR_MS + (slot - MAINNET_SLOT_ANCHOR) * 1000

@@ -1,0 +1,266 @@
+[
+  {
+    "tx": "0de94a288e8fe2a85da8a0f08b4e4add63d9f7ced683a55eeba8f05de5d94f9c",
+    "leaves": [
+      {
+        "otype": "TLIQWID_ORACLE_V2",
+        "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f4040ffff9f19207919c350ff1b0000019ec69c65d81a000dbba0d8799f9f9f18771903e8ff9f186f1901f4ffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TMINSWAP_LP",
+        "datum": "d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cc48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad480014df105553444dff1b0000018afb8bde8e1b000004bda8cafa121b000000ca28f319e4184b184bd8799f190e52ffd87980ff",
+        "assets": [
+          [
+            "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad",
+            "0014df105553444d",
+            "868270703692"
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "4d5350",
+            "1"
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171",
+            "9223370340417413499"
+          ]
+        ]
+      }
+    ],
+    "prices": [
+      {
+        "quote": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93555534443",
+        "collateral": "lovelace",
+        "num": 8313,
+        "denom": 500
+      }
+    ]
+  },
+  {
+    "tx": "cc74a9bd6b98c373e095fdfc455f24637f52b9e8d75644762fa15e8af3004562",
+    "leaves": [
+      {
+        "otype": "TLIQWID_ORACLE_V2",
+        "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f4040ffff9f190d3f194e20ff1b0000019eab9577c01a000dbba0d8799f9f9f18751903e8ff9f18d91903e8ffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TDANOGO_POOL",
+        "datum": "d8799f1b0000017540348a3c1b00000174f96ee2c61a98df88671901f41a000135521b000000ec2caec95e1b0000019eaa85963080ff",
+        "assets": [
+          [
+            "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34",
+            "5553444378",
+            "1600535279399"
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TMINSWAP_LP",
+        "datum": "d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cc48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad480014df105553444dff1b0000018b0b540e8c1b000004b6f74a41831b000000caefd17ca7184b184bd8799f190e52ffd87980ff",
+        "assets": [
+          [
+            "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad",
+            "0014df105553444d",
+            "871606878227"
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "4d5350",
+            "1"
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171",
+            "9223370340152635773"
+          ]
+        ]
+      }
+    ],
+    "prices": [
+      {
+        "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+        "collateral": "lovelace",
+        "num": 871606877351,
+        "denom": 5183879397763
+      },
+      {
+        "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+        "collateral": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344",
+        "num": 1,
+        "denom": 1
+      },
+      {
+        "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+        "collateral": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+        "num": 267183331082,
+        "denom": 266985437985
+      }
+    ]
+  },
+  {
+    "tx": "dd724653b2f3de2d6855c847d03abc25b8ca7344b6abb1a87397e8104d2f4d37",
+    "leaves": [
+      {
+        "otype": "TLIQWID_ORACLE_V2",
+        "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f4040ffff9f19256919c350ff1b0000019e92bc71e01a000dbba0d8799f9f9f18451901f4ff9f1901011903e8ffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TLIQWID_ORACLE_V2",
+        "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f581c25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93543425443ffff9f1931ad14ff1b0000019e92baa8d81a000dbba0d8799f9f9f1a00015deb18c8ff9f1a000289d918c8ffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TDJED",
+        "datum": "d8799f5840e0d48abe87dd3c6a07e3e2fa27bd7f641a21576592d7e720743f169ad427d7ad99321c331910c2d775593c7a515098a64858b2a5ab6a93ece617efe768a50408d8799fd8799f192710190765ffd8799fd8799fd87a9f1b0000019e92df5f48ffd87a80ffd8799fd87a9f1b0000019e92ed1ae8ffd87a80ffff43555344ff581c815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299eff",
+        "assets": [
+          [
+            "815aca02042ba9188a2ca4f8ce7b276046e2376b4bce56391342299e",
+            "446a65644f7261636c654e4654",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TSPLASH_CPAMM_G3",
+        "datum": "d8799fd8799f581c112d79f5387b1876f92158d00c182bb6d527a75e4e90cb615c21a02f4c555344415f4254435f4e4654ffd8799f581cfe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae4564455534441ffd8799f581c25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93543425443ffd8799f581c33e085ecce54025b6635af11f5bbe15ea329734fc7209db9482a930a4b555344415f4254435f4c51ff1a00018376185a18641a05c0c9591a002cbd101a06646e131a0031b5be9fd87981d87a81581c66e711a4bf9ddf46ff239143870b6893055a4fd4dea9f99fed6665cdff581c75c4570eb625ae881b32a34c52b159f6f3f3f2c7aaabf5bac46881335820102a9f40831eec20979a38d3fe4b77ccad3ba22baab3704fc2d9eb56487b4b1600ff",
+        "assets": [
+          [
+            "112d79f5387b1876f92158d00c182bb6d527a75e4e90cb615c21a02f",
+            "555344415f4254435f4e4654",
+            "1"
+          ],
+          [
+            "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935",
+            "425443",
+            "6193503"
+          ],
+          [
+            "33e085ecce54025b6635af11f5bbe15ea329734fc7209db9482a930a",
+            "555344415f4254435f4c51",
+            "9223372036854735307"
+          ],
+          [
+            "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae456",
+            "55534441",
+            "205012831"
+          ]
+        ]
+      }
+    ],
+    "prices": [
+      {
+        "quote": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "collateral": "lovelace",
+        "num": 631,
+        "denom": 2119500
+      },
+      {
+        "quote": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935425443",
+        "collateral": "33e085ecce54025b6635af11f5bbe15ea329734fc7209db9482a930a555344415f4254435f4c51",
+        "num": 76463,
+        "denom": 250
+      }
+    ]
+  },
+  {
+    "tx": "002c5250a4d157be89c07f3dcb4d7fff4585d97c2b6561fd4acda53141142c1d",
+    "leaves": [
+      {
+        "otype": "TLIQWID_MARKET_STATE",
+        "datum": "9f1b0000c6cb9e88acc23b0000006b69a1596b1b002ac04c770c72de1b00007e99a6b340451b0000029cb31fec631b0071afe871471c8d9fc24b079f0deb4837f450cddc4fc24d0b614b2766ee12c4adf7ba8000ff1b0000019cce6fb7d01b0000019cce83dc109f1b0001477c3aef10891b002ac04c770c72deff1a002dc6c0ff",
+        "assets": [
+          [
+            "191f768460713989c5ae88821f208522df7800f6b5572ca7905a7a60",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TLIQWID_MARKET_PARAM",
+        "datum": "9f9f011832ff1ab2d05e009f0a080000ff1a00e4e1c01a000493e0041a000dbba00480581c4986257bffd6bc8bda0e56fd7796c5d125fe496deb3a00c5196068a31a001e84809f9f1b000000039a290d2f1b0011c37937e08000ff9f1b000000150e136c311b0011c37937e08000ff9f1b000001fe2f977f3f1b0011c37937e08000ff9f090affff9f1921f8192710ff9f0101ff069f011904e2ff9f0102ff9f0102ff9f0101ff9f0101ff581c469772d2f93d70f92a4930fa608457392e58e480babf723ade7f9857581c6bb0851fa2bf40c6729c9d5df97a4201fdea2b3ae169ad5242bfe47a581ca50ecf6e4d5621d034f0a09714da50cea8e94fcd77388954654d0479d8799f43d87980ff581c7fc0d659f74debe817faa6487f0cbc7d8cec93997adaad543fbfff98d8799f43d87980ff80000000d87a80d87a80d87a80d87a80ff",
+        "assets": [
+          [
+            "1847265fd9019209f837113ec1753a4b0de657987e66f89ebcee47e6",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TLIQWID_ORACLE_V2",
+        "datum": "9f581cd9707344c74e90f9b3ca67d9153cf72b43c937fa59006edf3ab40691d87a9f9f4040ffff9f190c3d1930d4ff1b0000019cce7ee2a01a000dbba0d8799f9f9f188d1903e8ff9f1835187dffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            "1"
+          ]
+        ]
+      },
+      {
+        "otype": "TDANOGO_POOL",
+        "datum": "d8799f1b000006fa57ac84351b000006e99a18dc571a4614904219012c1a008e5bfa1b000000ebf4fd559d1b0000019cc1961f189fd8799f1b000006fa122650de1b000006dacbb230feffffff",
+        "assets": [
+          [
+            "9759bfd89ffa91652064f3a2ef66dcc5c52ca85b55e938ad29198f72",
+            "",
+            "7536790089959"
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+            "1"
+          ]
+        ]
+      }
+    ],
+    "prices": [
+      {
+        "quote": "lovelace",
+        "collateral": "aebcb6eaba17dea962008a9d693e39a3160b02b5b89b1c83e537c599",
+        "num": 45009233371665125,
+        "denom": 37700591035602290406
+      },
+      {
+        "quote": "lovelace",
+        "collateral": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cff3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+        "num": 7672282514485,
+        "denom": 7600382467159
+      }
+    ]
+  }
+]

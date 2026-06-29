@@ -1,0 +1,323 @@
+[
+  {
+    "tx": "cc74a9bd6b98c373e095fdfc455f24637f52b9e8d75644762fa15e8af3004562",
+    "token": "lovelace",
+    "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+    "expected": [
+      871606877351,
+      5183879397763
+    ],
+    "leaves": [
+      {
+        "source_index": 2,
+        "otype": "TMINSWAP_LP",
+        "is_reverse": true,
+        "scale_exp": 0,
+        "address": "addr1z84q0denmyep98ph3tmzwsmw0j7zau9ljmsqx6a4rvaau66j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq777e2a",
+        "nft_policy": "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+        "nft_name": "4d5350",
+        "datum": "d8799fd8799fd87a9f581c1eae96baf29e27682ea3f815aba361a0c6059d45e4bfbe95bbd2f44affffd8799f4040ffd8799f581cc48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad480014df105553444dff1b0000018b0b540e8c1b000004b6f74a41831b000000caefd17ca7184b184bd8799f190e52ffd87980ff",
+        "assets": [
+          [
+            "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad",
+            "0014df105553444d",
+            871606878227
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "4d5350",
+            1
+          ],
+          [
+            "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c",
+            "7dd6988c5a86693c76aeec1ea94afa41770be0de21a775ca7a2a1eabdb6a0171",
+            9223370340152635773
+          ],
+          [
+            "",
+            "",
+            5183885272513
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "cc74a9bd6b98c373e095fdfc455f24637f52b9e8d75644762fa15e8af3004562",
+    "token": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+    "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+    "expected": [
+      267183331082,
+      266985437985
+    ],
+    "leaves": [
+      {
+        "source_index": 1,
+        "otype": "TDANOGO_POOL",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1w9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnckmpaw8",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "nft_name": "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+        "datum": "d8799f1b0000017540348a3c1b00000174f96ee2c61a98df88671901f41a000135521b000000ec2caec95e1b0000019eaa85963080ff",
+        "assets": [
+          [
+            "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34",
+            "5553444378",
+            1600535279399
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+            1
+          ],
+          [
+            "",
+            "",
+            5000000
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "002c5250a4d157be89c07f3dcb4d7fff4585d97c2b6561fd4acda53141142c1d",
+    "token": "aebcb6eaba17dea962008a9d693e39a3160b02b5b89b1c83e537c599",
+    "quote": "lovelace",
+    "expected": [
+      45009233371665125,
+      37700591035602290406
+    ],
+    "leaves": [
+      {
+        "source_index": 0,
+        "otype": "TLIQWID_MARKET_STATE",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1wy2hnuetayx08qj7wx29dqjqmtj7pwru03qpprkhehlgn7qqqv8r0",
+        "nft_policy": "191f768460713989c5ae88821f208522df7800f6b5572ca7905a7a60",
+        "nft_name": "",
+        "datum": "9f1b0000c6cb9e88acc23b0000006b69a1596b1b002ac04c770c72de1b00007e99a6b340451b0000029cb31fec631b0071afe871471c8d9fc24b079f0deb4837f450cddc4fc24d0b614b2766ee12c4adf7ba8000ff1b0000019cce6fb7d01b0000019cce83dc109f1b0001477c3aef10891b002ac04c770c72deff1a002dc6c0ff",
+        "assets": [
+          [
+            "191f768460713989c5ae88821f208522df7800f6b5572ca7905a7a60",
+            "",
+            1
+          ],
+          [
+            "",
+            "",
+            3000000
+          ]
+        ]
+      },
+      {
+        "source_index": 1,
+        "otype": "TLIQWID_ORACLE_V2",
+        "is_reverse": true,
+        "scale_exp": 0,
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "nft_name": "",
+        "datum": "9f581cd9707344c74e90f9b3ca67d9153cf72b43c937fa59006edf3ab40691d87a9f9f4040ffff9f190c3d1930d4ff1b0000019cce7ee2a01a000dbba0d8799f9f9f188d1903e8ff9f1835187dffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            1
+          ],
+          [
+            "",
+            "",
+            1629180
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "002c5250a4d157be89c07f3dcb4d7fff4585d97c2b6561fd4acda53141142c1d",
+    "token": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cff3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+    "quote": "lovelace",
+    "expected": [
+      7672282514485,
+      7600382467159
+    ],
+    "leaves": [
+      {
+        "source_index": 2,
+        "otype": "TDANOGO_POOL",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "nft_name": "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+        "datum": "d8799f1b000006fa57ac84351b000006e99a18dc571a4614904219012c1a008e5bfa1b000000ebf4fd559d1b0000019cc1961f189fd8799f1b000006fa122650de1b000006dacbb230feffffff",
+        "assets": [
+          [
+            "9759bfd89ffa91652064f3a2ef66dcc5c52ca85b55e938ad29198f72",
+            "",
+            7536790089959
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+            1
+          ],
+          [
+            "",
+            "",
+            5000000
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "0de94a288e8fe2a85da8a0f08b4e4add63d9f7ced683a55eeba8f05de5d94f9c",
+    "token": "lovelace",
+    "quote": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff93555534443",
+    "expected": [
+      8313,
+      500
+    ],
+    "leaves": [
+      {
+        "source_index": 0,
+        "otype": "TLIQWID_ORACLE_V2",
+        "is_reverse": false,
+        "scale_exp": 2,
+        "address": "addr1wyu27deslm82zj8fm73s6070latn684ger33alnngug39ggnn53z5",
+        "nft_policy": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+        "nft_name": "",
+        "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f4040ffff9f19207919c350ff1b0000019ec69c65d81a000dbba0d8799f9f9f18771903e8ff9f186f1901f4ffffffff",
+        "assets": [
+          [
+            "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d",
+            "",
+            1
+          ],
+          [
+            "",
+            "",
+            1629180
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "51733a3ae4a37dd333a70cc226fb0fc5a355c3b39d5bb2b233d50dd355e495e3",
+    "token": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+    "quote": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378",
+    "expected": [
+      742560369613,
+      742006670561
+    ],
+    "leaves": [
+      {
+        "source_index": 0,
+        "otype": "TDANOGO_POOL",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1w9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnckmpaw8",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "nft_name": "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+        "datum": "d8799f1b000000ace40c0bcd1b000000acc30b44e11aa0f22e151901f41a0008988e1b000000ec9c518a381b0000019eefe0689080ff",
+        "assets": [
+          [
+            "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34",
+            "5553444378",
+            739860706886
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "6098d885971a7a233bee756f2933a7a300bc49770ca66c11d6b31063",
+            1
+          ],
+          [
+            "",
+            "",
+            5000000
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "4cf065ee36cdf6a77b7d819d19feeb5fd88c1645d06cc4a9b647c898e7370dcd",
+    "token": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cff3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+    "quote": "lovelace",
+    "expected": [
+      9933886813599,
+      9778282558171
+    ],
+    "leaves": [
+      {
+        "source_index": 0,
+        "otype": "TDANOGO_POOL",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "nft_name": "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+        "datum": "d8799f1b00000908e9cb759f1b000008e4af0ef2db1abec0e97119012c1a00c22f841b000000ee0e71a35f1b0000019eecace7989fd8799f1b000009082bccbd111b000008d1413cb8c0ffffff",
+        "assets": [
+          [
+            "9759bfd89ffa91652064f3a2ef66dcc5c52ca85b55e938ad29198f72",
+            "",
+            9694835685545
+          ],
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "f3f0f123b418b38ceebe0fab25e30d96a628d1e9b501121933c9b5de",
+            1
+          ],
+          [
+            "",
+            "",
+            5000000
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "tx": "518a54a42813dce865a525f752ae9685881f272e6c5b1dfd62a03a0e482310b9",
+    "token": "73f29518da0013a671458d52624a4828c5b5bedaff8a950b0063b1cf449eab94177468bdd22eed594871a756d91be42eab3ef06625753062",
+    "quote": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441",
+    "expected": [
+      563249229648,
+      563783711725
+    ],
+    "leaves": [
+      {
+        "source_index": 0,
+        "otype": "TDANOGO_POOL",
+        "is_reverse": false,
+        "scale_exp": 0,
+        "address": "addr1z9el99gcmgqp8fn3gkx4ycj2fq5vtdd7mtlc49gtqp3mrnectd0zw3ydwgtk9hpse3mgyezedms0y054fa47vfkt08qsvu6jmz",
+        "nft_policy": "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+        "nft_name": "449eab94177468bdd22eed594871a756d91be42eab3ef06625753062",
+        "datum": "d8799f1b0000008324452f501b000000834420bbed001902581a00018b611b000000f354b81c531b0000019ee31f320880ff",
+        "assets": [
+          [
+            "fe16cfefe72d4c363e49abc93e91976c4933849b8fc155e978861561",
+            "449eab94177468bdd22eed594871a756d91be42eab3ef06625753062",
+            1
+          ],
+          [
+            "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae456",
+            "55534441",
+            563249330882
+          ],
+          [
+            "",
+            "",
+            5000000
+          ]
+        ]
+      }
+    ]
+  }
+]
