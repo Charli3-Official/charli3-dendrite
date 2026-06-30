@@ -1,0 +1,44 @@
+{
+  "_comment": "Real mainnet FluidTokens V3 loan-action redeemers captured from dbsync (redeemer/redeemer_data tables). Used for byte-exact round-trip tests. The loan SPEND redeemer is an empty Constr0 (d87980); all action logic rides the per-action reward (withdraw) redeemer of shape Constr0[config_ref_input_index:int, actions_for_each_input:IndefiniteList[<ActionData>]].",
+  "loan_spend": {
+    "label": "loan general_spend redeemer (empty Constr0)",
+    "script_hash": "5abbaa2eb177b574707fa3617e3436295d45d7795e0874623a9504da",
+    "cbor": "d87980"
+  },
+  "repay": {
+    "action_script_hash": "5fcd23d021add45fdb25e8c7c674d6e2dbc445feafe246c5a0fab02f",
+    "structure": "Constr0[cfg_idx:int, IndefiniteList[ RepayData ]]; RepayData = Constr0[int,int,int,int, loan_id:bytes28, is_final:Bool(Constr0=False/Constr1=True)]",
+    "single": {
+      "tx_hash": "993715116500e7330b86dd6f9eeda1236a59fe58642b4d21c55afc7c2f482cdb",
+      "cbor": "d8799f039fd8799f01000100581cc83f7c948fa39af8adabefb00bb3d68f829f3018d1e25830ffbc9a08d87a80ffffff"
+    },
+    "multi": {
+      "tx_hash": "88b9947f544e20c15e0fd69216390e36752b54787ee6b6b9263a135db7f32845",
+      "cbor": "d8799f059fd8799f0a070901581c0ed5a5d9c683a3d2e2af0a174ca344e6e44b4a48cfdac8a2256e3078d87a80ffd8799f0a000900581c01a051f3de18fcb406cddd882738f187de9930d9827a8bf4dc0c7f32d87a80ffd8799f0a020100581c83f3824e1523515fb35b79895a61c1e47c7133d520f9f63839ff742ed87a80ffd8799f0a030100581c28009b98ecce73176b24dcf17e280b0dc6b602565418aa1957e6e1efd87a80ffffff"
+    }
+  },
+  "change_collateral": {
+    "action_script_hash": "6ca3b95015bbef6237db91322132ebd3ac0c3850f79096eb6f42e1af",
+    "structure": "Constr0[cfg_idx:int, IndefiniteList[ ChangeCollateralData ]]; ChangeCollateralData = Constr0[int, new_collateral_amount:int, loan_id:bytes28, int, int]",
+    "add": {
+      "tx_hash": "47fea0f4f13784d919262d6556dfdec544bb46828fbbd34b5b0219626d1e8e5f",
+      "cbor": "d8799f049fd8799f071a040d9900581c6b6a18a05741cfdf751b3a3fc2a5fab9cfe33642143ed2e51cb864430300ffd8799f071a77f3b3e0581cd77e55bdeacb0ad4ee0b2ab391571d002709fdd2a2ba2a9abfc86e670300ffd8799f071a7e5b1b61581c338f1d6a5b87735becca0616565d5f1a7a057e607b9bad33a8a258ca0300ffd8799f071a4d025b00581cee18ae8bf4e0100633e5cdf88f87802a9e05c59aac146023cc204add0300ffd8799f071a0c28cb00581c9c59db5f9c0dc62ec8374390d264b589b049f26b3ebab5648f3527cd0300ffd8799f071a3bb3d040581c4bda771ddf42209f4367c3e4f8895787283ff221e2afbe5c863df94f0300ffd8799f071a0614657f581cc0570cd392740b7e382c8497086d6f03ad60ad04246b4c037df57e9c0300ffffff"
+    },
+    "two": {
+      "tx_hash": "78072bd9ea596b650d523acdcab2b9b3c33c54ee57fa9885c1b1a178d6afea6c",
+      "cbor": "d8799f069fd8799f021b0000000158903d62581c62814d3510e5464b324986380d83850c94df118acac45b2a00fc5b690504ffd8799f021a24e8029e581c71202254911cb5066f64c38634c5de379b81c69a614a4ba9290a90a40504ffffff"
+    }
+  },
+  "recast": {
+    "action_script_hash": "696d17c79d1276945d0e96d2368a7c48b431afbe880c008da8fee0f2",
+    "structure": "Constr0[cfg_idx:int, IndefiniteList[ RecastData ]]; RecastData = Constr0[int,int,int,int, amount_paid:int, loan_id:bytes28]",
+    "single": {
+      "tx_hash": "370c181f29c8867ddc574dcc2d35d42065af03eaf0a021a87140411ceeecb063",
+      "cbor": "d8799f029fd8799f010101001a76e948c0581c7e53f41711fde89e7130b4bef3ec05a2966a3e8a996d4266ea15846cffffff"
+    },
+    "two": {
+      "tx_hash": "55c9ded197b605e1280cf9933c9a63b179a4d3da3317789bb9f05cbed73cd724",
+      "cbor": "d8799f039fd8799f030001001a2b07ad12581c4bad16058866d884b7a63429b9de63ee20a3194a635df5360a1d983bffd8799f030101001a6971f7ae581cc83f7c948fa39af8adabefb00bb3d68f829f3018d1e25830ffbc9a08ffffff"
+    }
+  }
+}

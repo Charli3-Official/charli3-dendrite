@@ -36,6 +36,9 @@ class LendingAction(str, Enum):
     REPAY = "repay"
     INCREASE = "increase"
     MODIFY_COLLATERAL = "modify_collateral"
+    RECAST = "recast"
+    REQUEST_CREATE = "request_create"
+    REQUEST_CANCEL = "request_cancel"
 
 
 @dataclass
