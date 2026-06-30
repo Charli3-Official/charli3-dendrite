@@ -43,6 +43,7 @@ from charli3_dendrite.lending.fluidtokens.transactions._common import reward_add
 from charli3_dendrite.lending.fluidtokens.transactions.context import CancelPoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import CreatePoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import _to_utxo
+from charli3_dendrite.lending.fluidtokens.transactions.context import ogmios_entry
 from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import TxOutRef
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanSpendRedeemer,
@@ -93,6 +94,7 @@ def build_create_pool(
 
     for funding in snapshot.funding:
         tx_builder.add_input(_to_utxo(funding))
+        snapshot.add_actor_additional_utxo(ogmios_entry(funding))
     tx_builder.reference_inputs.add(_to_utxo(snapshot.config))
 
     tx_builder.add_minting_script(
@@ -161,6 +163,7 @@ def build_cancel_pool(
     )
     for funding in snapshot.funding:
         tx_builder.add_input(_to_utxo(funding))
+        snapshot.add_actor_additional_utxo(ogmios_entry(funding))
     tx_builder.reference_inputs.add(_to_utxo(snapshot.config))
 
     # --- burn the pool NFT (-1) ------------------------------------------------------

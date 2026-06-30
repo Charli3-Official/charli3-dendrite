@@ -151,3 +151,77 @@ def test_resolve_snapshot_is_not_wired_yet():
             action=LendingAction.BORROW,
             params=_PARAMS,
         )
+
+
+def test_contribute_stashes_pool_funding_additional_utxo() -> None:
+    # both pool actions must populate additional_utxo() so build_and_evaluate can feed
+    # Ogmios the actor (funding) inputs it cannot resolve from its own ledger snapshot.
+    for action, snap_cls, fixture, slot_key in [
+        (
+            LendingAction.POOL_CREATE,
+            CreatePoolSnapshot,
+            "pool_create.json",
+            "block_time",
+        ),
+        (
+            LendingAction.POOL_CANCEL,
+            CancelPoolSnapshot,
+            "pool_cancel.json",
+            "invalid_before",
+        ),
+    ]:
+        fix = _fixture(fixture)
+        snapshot = snap_cls.from_capture(fix)
+        tx_builder = TransactionBuilder(EvalContext(last_block_slot=fix[slot_key]))
+        FluidTokensTxBuilder().contribute(
+            action,
+            tx_builder,
+            snapshot=snapshot,
+            params=ActionParams(actor_address=""),
+        )
+        entries = snapshot.additional_utxo()
+        assert len(entries) == len(snapshot.funding)
+        assert all("transaction" in e and "value" in e for e in entries)
+
+
+def test_resolve_snapshot_pool_cancel_dispatches_to_from_backend(monkeypatch) -> None:
+    captured = {}
+
+    def record(cls, backend, *, pool_utxo, lender_address):  # noqa: ANN001, ARG001
+        captured["pool_utxo"] = pool_utxo
+        captured["lender_address"] = lender_address
+        return object()
+
+    monkeypatch.setattr(
+        CancelPoolSnapshot,
+        "from_backend",
+        classmethod(record),
+    )
+    FluidTokensTxBuilder().resolve_snapshot(
+        object(),
+        market_name="",
+        action=LendingAction.POOL_CANCEL,
+        params=ActionParams(actor_address="addr_lender", loan_utxo="abc123#2"),
+    )
+    assert captured["pool_utxo"] == ("abc123", 2)
+    assert captured["lender_address"] == "addr_lender"
+
+
+def test_resolve_snapshot_pool_cancel_requires_loan_utxo() -> None:
+    with pytest.raises(ValueError, match="POOL_CANCEL requires params.loan_utxo"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            object(),
+            market_name="",
+            action=LendingAction.POOL_CANCEL,
+            params=ActionParams(actor_address="addr_lender"),
+        )
+
+
+def test_resolve_snapshot_pool_create_is_not_supported_via_params() -> None:
+    with pytest.raises(NotImplementedError):
+        FluidTokensTxBuilder().resolve_snapshot(
+            object(),
+            market_name="",
+            action=LendingAction.POOL_CREATE,
+            params=ActionParams(actor_address=""),
+        )

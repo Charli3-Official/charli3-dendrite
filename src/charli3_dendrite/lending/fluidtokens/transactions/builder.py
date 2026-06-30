@@ -7,10 +7,13 @@ its spend / mint-burn / outputs / redeemers / reference inputs into a caller-sup
 byte-exact + gated Ogmios e2e test; this builder is the registry-facing dispatch over
 those contributors.
 
-Live ``resolve_snapshot`` (resolving pools / config NFT / oracle feeds from a backend)
-is a separate milestone: FluidTokens snapshots are currently resolved from captured
-on-chain transactions via each snapshot's ``from_capture``, so ``contribute`` is the
-substantive seam and ``build_and_evaluate``'s live resolution path is not yet wired.
+Live ``resolve_snapshot`` is wired for the pool actions: POOL_CANCEL resolves a
+:class:`CancelPoolSnapshot` from the backend (the pool out-ref + lender address come
+from ``ActionParams``), and POOL_CREATE is resolved by the caller via
+``CreatePoolSnapshot.from_backend`` (it needs typed pool terms + liquidity that
+``ActionParams`` does not carry). The borrower-side actions still resolve from captured
+on-chain transactions via each snapshot's ``from_capture``; their live resolution is a
+separate milestone.
 """
 
 from __future__ import annotations
@@ -73,6 +76,12 @@ _SNAPSHOT_TYPE = {
 }
 
 
+def _parse_out_ref(out_ref: str) -> tuple[str, int]:
+    """Parse a ``tx_hash#index`` string into a ``(tx_hash, index)`` pair."""
+    tx_hash, _, idx = out_ref.partition("#")
+    return tx_hash, int(idx)
+
+
 class FluidTokensTxBuilder(AbstractLendingTxBuilder):
     """Builds FluidTokens borrow / repay / modify / recast / request / pool txs."""
 
@@ -94,17 +103,41 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         action: LendingAction,
         params: ActionParams,
     ) -> PoolActionSnapshot:
-        """Not yet wired: FluidTokens snapshots are resolved from captured txs.
+        """Resolve the live snapshot the action needs.
 
-        Live resolution (pools / config NFT / oracle feeds from a backend) is a
-        separate milestone. Until then, resolve a snapshot via its ``from_capture`` and
-        call :meth:`contribute` directly. ``build_and_evaluate``'s generic resolve path
-        raises here so callers cannot silently get an unresolved snapshot.
+        POOL_CANCEL resolves a :class:`CancelPoolSnapshot` from the backend: the pool
+        UTxO out-ref comes from ``params.loan_utxo`` (a ``"<txhash>#<index>"`` string)
+        and the lender address from ``params.actor_address``.
+
+        POOL_CREATE cannot be resolved from ``ActionParams`` alone -- it needs typed
+        pool terms (+ liquidity / lovelace) that ``ActionParams`` does not carry -- so
+        callers build the snapshot via ``CreatePoolSnapshot.from_backend(...)`` and call
+        :meth:`contribute` directly.
+
+        The borrower-side actions are not yet live-resolvable; resolve them via each
+        snapshot's ``from_capture`` and call :meth:`contribute` directly.
         """
+        if action == LendingAction.POOL_CANCEL:
+            if params.loan_utxo is None:
+                raise ValueError("POOL_CANCEL requires params.loan_utxo")
+            return CancelPoolSnapshot.from_backend(
+                backend,
+                pool_utxo=_parse_out_ref(params.loan_utxo),
+                lender_address=params.actor_address,
+            )
+        if action == LendingAction.POOL_CREATE:
+            raise NotImplementedError(
+                "POOL_CREATE cannot be resolved from ActionParams: it needs typed "
+                "PoolTerms (+ liquidity / lovelace) that ActionParams does not carry. "
+                "Build the snapshot via CreatePoolSnapshot.from_backend(...) and call "
+                "FluidTokensTxBuilder().contribute(LendingAction.POOL_CREATE, ...) "
+                "directly.",
+            )
         raise NotImplementedError(
-            "FluidTokens live snapshot resolution is not implemented yet; resolve a "
-            "snapshot from a captured transaction via '<Snapshot>.from_capture' and "
-            "call FluidTokensTxBuilder().contribute(...) directly.",
+            "FluidTokens live snapshot resolution is not implemented for "
+            f"{action.value}; resolve a snapshot from a captured transaction via "
+            "'<Snapshot>.from_capture' and call "
+            "FluidTokensTxBuilder().contribute(...) directly.",
         )
 
     def contribute(

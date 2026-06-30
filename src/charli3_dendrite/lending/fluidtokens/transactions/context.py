@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from typing import Any
 
 import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
@@ -111,6 +112,40 @@ def _to_utxo(u: Utxo) -> UTxO:
             script=script,
         ),
     )
+
+
+_SCRIPT_LANG = {
+    "plutusV1": "plutus:v1",
+    "plutusV2": "plutus:v2",
+    "plutusV3": "plutus:v3",
+}
+
+
+def ogmios_entry(u: Utxo) -> dict[str, Any]:
+    """The Ogmios ``additionalUtxo`` entry for a resolved `Utxo`.
+
+    Funding (actor) inputs may already be spent / freshly created, so Ogmios cannot
+    resolve them from its own ledger snapshot; they are supplied here for evaluation.
+    """
+    if u.out_ref is None:
+        raise ValueError("cannot build an additionalUtxo entry without an out-ref")
+    value: dict[str, Any] = {"ada": {"lovelace": u.lovelace}}
+    for policy, name, qty in u.assets:
+        value.setdefault(policy, {})[name] = qty
+    entry: dict[str, Any] = {
+        "transaction": {"id": u.out_ref[0]},
+        "index": u.out_ref[1],
+        "address": u.address,
+        "value": value,
+    }
+    if u.datum:
+        entry["datum"] = u.datum
+    if u.ref_script:
+        entry["script"] = {
+            "language": _SCRIPT_LANG.get(u.ref_script_type or "", "plutus:v3"),
+            "cbor": u.ref_script,
+        }
+    return entry
 
 
 def _as_utxo(d: dict) -> Utxo:
