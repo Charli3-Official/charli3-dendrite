@@ -5,11 +5,16 @@ the same building blocks from current chain state via the backend's dbsync `db_q
 `allow_spent=True` lets a caller resolve a historical (already-consumed) UTxO by its
 out-ref -- used to replay a captured pool against live dbsync in tests; live callers
 leave it False so only unspent UTxOs are returned.
+
+Live resolution requires a dbsync-backed backend: `db_query` is a dbsync-only method, so
+a non-dbsync backend raises a clear :class:`TypeError` rather than an opaque attribute
+error.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import Any
 
 from charli3_dendrite.lending.fluidtokens.constants import PROTOCOL_CONFIG_NFT_NAME
 from charli3_dendrite.lending.fluidtokens.constants import PROTOCOL_CONFIG_NFT_POLICY
@@ -20,13 +25,34 @@ if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
 
 
+def _db_query(
+    backend: AbstractBackend,
+    sql: str,
+    args: dict[str, Any],
+) -> list[dict]:
+    """Run a dbsync query, failing loudly if the backend is not dbsync-backed.
+
+    `db_query` is implemented only by the dbsync backend; a different backend has no
+    such method, so raise a clear :class:`TypeError` instead of an opaque
+    ``AttributeError`` deep inside a resolver.
+    """
+    db_query = getattr(backend, "db_query", None)
+    if db_query is None:
+        raise TypeError(
+            "FluidTokens live resolution requires a dbsync-backed backend "
+            f"(got {type(backend).__name__}, which has no db_query)",
+        )
+    return db_query(sql, args)
+
+
 def _assets(backend: AbstractBackend, tx_out_id: int) -> list[tuple[str, str, int]]:
     """The native assets on a tx_out, ordered canonically (policy, name).
 
     Mirrors the capture tool's asset ordering so a resolved `Utxo` compares equal to a
     captured one byte-for-byte.
     """
-    rows = backend.db_query(
+    rows = _db_query(
+        backend,
         """SELECT encode(ma.policy, 'hex') AS policy,
                   encode(ma.name, 'hex') AS name,
                   m.quantity AS quantity
@@ -53,7 +79,8 @@ def resolve_utxo_by_outref(
     retains consumed rows. Raises :class:`ValueError` when no matching output is found.
     """
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = backend.db_query(
+    rows = _db_query(
+        backend,
         f"""SELECT o.id AS id,
                    o.value AS lovelace,
                    a.address AS address,
@@ -94,7 +121,8 @@ def resolve_config_utxo(
 ) -> Utxo:
     """Resolve the UTxO holding the protocol config NFT (most-recent first)."""
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = backend.db_query(
+    rows = _db_query(
+        backend,
         f"""SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
             FROM tx_out o
             JOIN tx t ON t.id = o.tx_id
@@ -126,7 +154,8 @@ def resolve_script_ref(
 ) -> Utxo:
     """Resolve the UTxO carrying the reference script with hash ``script_hash``."""
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = backend.db_query(
+    rows = _db_query(
+        backend,
         f"""SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
             FROM tx_out o
             JOIN tx t ON t.id = o.tx_id
@@ -155,7 +184,8 @@ def resolve_funding(
     limit: int = 20,
 ) -> list[Utxo]:
     """Resolve the unspent UTxOs at ``address`` (most-recent first, up to ``limit``)."""
-    rows = backend.db_query(
+    rows = _db_query(
+        backend,
         """SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
            FROM tx_out o
            JOIN tx t ON t.id = o.tx_id
