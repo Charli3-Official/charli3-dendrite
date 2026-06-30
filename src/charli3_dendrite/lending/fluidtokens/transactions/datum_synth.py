@@ -204,7 +204,9 @@ class PoolTerms:
     pass through the unions (``lender_auth``, ``repayment_mode``, ``liquidation_mode``,
     etc.) without re-encoding them lossily. ``from_pool_datum`` recovers a
     :class:`PoolTerms` from a decoded on-chain :class:`PoolDatum` for round-trip
-    verification.
+    verification. This is the groundwork for the live pool-create path: it is consumed
+    by :func:`synth_pool_datum` to build the inline :class:`PoolDatum`, whereas the
+    capture-replay path carries the datum verbatim instead.
     """
 
     permissioned_condition_script_hash: bytes
@@ -213,9 +215,9 @@ class PoolTerms:
     lender_auth: Datum
     lender_bond_address: Datum
     lender_bond_inline_datum_hash: bytes
-    collateral_options: list
-    min_collateral: list
-    min_collateral_divider: list
+    collateral_options: list[CollateralAsset]
+    min_collateral: list[int]
+    min_collateral_divider: list[int]
     dynamic_collateral_price: Datum
 
     @classmethod
