@@ -48,6 +48,47 @@ class LoanSpendRedeemer(PlutusData):
 
 
 @dataclass
+class ActionMarkerRepay(PlutusData):
+    """The loan-policy action discriminator for a repay == Constr1[] (``d87a80``).
+
+    The loan policy + its withdraw (reward) twin carry a small action marker selecting
+    which loan action is running; a repay selects the alt-1 (empty) variant.
+    """
+
+    CONSTR_ID = 1
+
+
+@dataclass
+class LoanPolicyWithdrawRedeemer(PlutusData):
+    """Loan-policy reward (withdraw) redeemer for a repay.
+
+    == Constr0([config_ref_input_index, ActionMarkerRepay]) (``d8799f03d87a80ff``). The
+    loan-policy reward account is the orchestration twin the loan spend + mint-burn
+    delegate to; it carries the config reference-input index and the repay action
+    marker.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    action_marker: ActionMarkerRepay
+
+
+@dataclass
+class LoanPolicyMintBurnRedeemer(PlutusData):
+    """Loan-policy MINT redeemer burning the loan NFT on a (full) repay.
+
+    == Constr0([config_ref_input_index, ActionMarkerRepay, action_ref_input_index])
+    (``d8799f03d87a8003ff``). Carries the config + per-action reward-script reference
+    indices and the repay action marker.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    action_marker: ActionMarkerRepay
+    action_ref_input_index: int
+
+
+@dataclass
 class RepayData(PlutusData):
     """Per-input repay action == Constr0([...]).
 
