@@ -17,12 +17,14 @@ from charli3_dendrite.lending.fluidtokens.transactions.builder import (
     FluidTokensTxBuilder,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.context import BorrowSnapshot
+from charli3_dendrite.lending.fluidtokens.transactions.context import CancelPoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CancelRequestSnapshot,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     ChangeCollateralSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.context import CreatePoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CreateRequestSnapshot,
 )
@@ -80,7 +82,7 @@ def _params_for(action: LendingAction, fix: dict, snapshot: object) -> ActionPar
     return _PARAMS
 
 
-def test_supported_actions_are_the_six_borrower_actions():
+def test_supported_actions_are_the_borrower_and_pool_actions():
     assert FluidTokensTxBuilder.supported_actions() == {
         LendingAction.BORROW,
         LendingAction.REPAY,
@@ -88,6 +90,8 @@ def test_supported_actions_are_the_six_borrower_actions():
         LendingAction.RECAST,
         LendingAction.REQUEST_CREATE,
         LendingAction.REQUEST_CANCEL,
+        LendingAction.POOL_CREATE,
+        LendingAction.POOL_CANCEL,
     }
     assert FluidTokensTxBuilder.protocol() == "FluidTokens"
 
@@ -145,3 +149,42 @@ def test_resolve_snapshot_is_not_wired_yet():
             action=LendingAction.BORROW,
             params=_PARAMS,
         )
+
+
+@pytest.mark.parametrize(
+    ("action", "snapshot_cls", "fixture", "slot_key"),
+    [
+        (
+            LendingAction.POOL_CREATE,
+            CreatePoolSnapshot,
+            "pool_create.json",
+            "block_time",
+        ),
+        (
+            LendingAction.POOL_CANCEL,
+            CancelPoolSnapshot,
+            "pool_cancel.json",
+            "invalid_before",
+        ),
+    ],
+)
+def test_builder_dispatches_pool_actions(
+    action, snapshot_cls, fixture, slot_key
+) -> None:
+    fix = _fixture(fixture)
+    snapshot = snapshot_cls.from_capture(fix)
+    tx_builder = TransactionBuilder(EvalContext(last_block_slot=fix[slot_key]))
+    FluidTokensTxBuilder().contribute(
+        action,
+        tx_builder,
+        snapshot=snapshot,
+        params=ActionParams(actor_address=""),
+    )
+    tx = Transaction.from_cbor(assemble_unsigned(tx_builder))
+    assert tx.transaction_body.outputs or tx.transaction_body.mint
+
+
+def test_pool_actions_are_supported() -> None:
+    actions = FluidTokensTxBuilder.supported_actions()
+    assert LendingAction.POOL_CREATE in actions
+    assert LendingAction.POOL_CANCEL in actions

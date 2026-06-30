@@ -23,17 +23,21 @@ from charli3_dendrite.lending.fluidtokens.transactions.change_collateral import 
     build_change_collateral,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.context import BorrowSnapshot
+from charli3_dendrite.lending.fluidtokens.transactions.context import CancelPoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CancelRequestSnapshot,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     ChangeCollateralSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.context import CreatePoolSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CreateRequestSnapshot,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.context import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import RepaySnapshot
+from charli3_dendrite.lending.fluidtokens.transactions.pool import build_cancel_pool
+from charli3_dendrite.lending.fluidtokens.transactions.pool import build_create_pool
 from charli3_dendrite.lending.fluidtokens.transactions.recast import build_recast
 from charli3_dendrite.lending.fluidtokens.transactions.repay import build_repay
 from charli3_dendrite.lending.fluidtokens.transactions.request import (
@@ -64,6 +68,8 @@ _SNAPSHOT_TYPE = {
     LendingAction.RECAST: RecastSnapshot,
     LendingAction.REQUEST_CREATE: CreateRequestSnapshot,
     LendingAction.REQUEST_CANCEL: CancelRequestSnapshot,
+    LendingAction.POOL_CREATE: CreatePoolSnapshot,
+    LendingAction.POOL_CANCEL: CancelPoolSnapshot,
 }
 
 
@@ -77,7 +83,7 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
 
     @classmethod
     def supported_actions(cls) -> set[LendingAction]:
-        """Borrower-side actions: borrow, repay, modify-collateral, recast, request."""
+        """Borrow, repay, modify-collateral, recast, request, and pool create/cancel."""
         return set(_SNAPSHOT_TYPE)
 
     def resolve_snapshot(
@@ -112,9 +118,10 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         """Dispatch the action to its FluidTokens contributor.
 
         Validates that `snapshot` is the type the action expects. BORROW / RECAST /
-        REQUEST_CREATE / REQUEST_CANCEL take only the snapshot; REPAY and
-        MODIFY_COLLATERAL additionally consume ``params.amount`` (the lender repayment
-        lovelace, and the new locked collateral amount, respectively).
+        REQUEST_CREATE / REQUEST_CANCEL / POOL_CREATE / POOL_CANCEL take only the
+        snapshot; REPAY and MODIFY_COLLATERAL additionally consume ``params.amount``
+        (the lender repayment lovelace, and the new locked collateral amount,
+        respectively).
         """
         expected = _SNAPSHOT_TYPE.get(action)
         if expected is None:
@@ -147,8 +154,12 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 tx_builder,
                 snapshot=cast(CreateRequestSnapshot, snapshot),
             )
-        else:  # LendingAction.REQUEST_CANCEL
+        elif action == LendingAction.REQUEST_CANCEL:
             build_cancel_request(
                 tx_builder,
                 snapshot=cast(CancelRequestSnapshot, snapshot),
             )
+        elif action == LendingAction.POOL_CREATE:
+            build_create_pool(tx_builder, snapshot=cast(CreatePoolSnapshot, snapshot))
+        else:  # LendingAction.POOL_CANCEL
+            build_cancel_pool(tx_builder, snapshot=cast(CancelPoolSnapshot, snapshot))
