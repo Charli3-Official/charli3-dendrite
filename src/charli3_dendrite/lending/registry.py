@@ -61,8 +61,12 @@ def _register_builtin() -> None:
     protocol package, keeping registration cycle-free.
     """
     from charli3_dendrite.lending.danogo.transactions.builder import DanogoTxBuilder
+    from charli3_dendrite.lending.fluidtokens.transactions.builder import (
+        FluidTokensTxBuilder,
+    )
 
     register_lending_builder("danogo", DanogoTxBuilder)
+    register_lending_builder("fluidtokens", FluidTokensTxBuilder)
 
 
 _register_builtin()

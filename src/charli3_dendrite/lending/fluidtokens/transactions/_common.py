@@ -4,13 +4,19 @@ Canonical-ordering index lookups (the Plutus script context sorts inputs / refer
 inputs by ``(tx_id, index)``) + the reward (stake-script) address encoding + the
 validity-window cap shared by every loan action.
 """
+
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pycardano import Address
+from pycardano import Datum
 from pycardano import Network
+from pycardano import PlutusData
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import UTxO
+from pycardano import VerificationKeyHash
 
 # The FluidTokens loan-action validators cap the validity window; 360 slots mirrors the
 # Danogo cap (the upper bound the validator's time checks tolerate).
@@ -62,6 +68,81 @@ def value_map_indices(
     policy_id_index = sorted_policies.index(target_policy)
     asset_name_index = sorted(policies[target_policy]).index(bytes.fromhex(name_hex))
     return policy_id_index, asset_name_index
+
+
+@dataclass
+class _VKeyCredential(PlutusData):
+    """``Credential.VerificationKey`` == Constr0([key_hash])."""
+
+    CONSTR_ID = 0
+    cred_hash: bytes
+
+
+@dataclass
+class _ScriptCredential(PlutusData):
+    """``Credential.Script`` == Constr1([script_hash])."""
+
+    CONSTR_ID = 1
+    cred_hash: bytes
+
+
+@dataclass
+class _Inline(PlutusData):
+    """``Referenced.Inline`` == Constr0([credential])."""
+
+    CONSTR_ID = 0
+    credential: Datum
+
+
+@dataclass
+class _StakeSome(PlutusData):
+    """``Option.Some`` (stake reference present) == Constr0([referenced])."""
+
+    CONSTR_ID = 0
+    referenced: Datum
+
+
+@dataclass
+class _StakeNone(PlutusData):
+    """``Option.None`` (no stake reference) == Constr1([])."""
+
+    CONSTR_ID = 1
+
+
+@dataclass
+class _PlutusAddress(PlutusData):
+    """Plutus ``Address`` == Constr0([payment_credential, Option<stake>])."""
+
+    CONSTR_ID = 0
+    payment_credential: Datum
+    stake_credential: Datum
+
+
+def plutus_address(address: Address) -> PlutusData:
+    """The Plutus ``cardano/address.Address`` PlutusData for a pycardano `Address`.
+
+    Encodes the payment credential (verification-key -> Constr0 / script -> Constr1) and
+    the stake credential as ``Some(Inline(credential))`` (base address) or ``None``
+    (enterprise address); stake pointers are not produced (FluidTokens addresses use the
+    inline form). Reproduces the on-chain borrower-address bytes byte-exact.
+    """
+    pay = address.payment_part
+    payment = (
+        _VKeyCredential(bytes(pay))
+        if isinstance(pay, VerificationKeyHash)
+        else _ScriptCredential(bytes(pay))
+    )
+    stake = address.staking_part
+    if stake is None:
+        stake_credential: PlutusData = _StakeNone()
+    else:
+        inner = (
+            _VKeyCredential(bytes(stake))
+            if isinstance(stake, VerificationKeyHash)
+            else _ScriptCredential(bytes(stake))
+        )
+        stake_credential = _StakeSome(_Inline(inner))
+    return _PlutusAddress(payment, stake_credential)
 
 
 def reward_address(script_hash: str) -> bytes:

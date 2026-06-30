@@ -5,6 +5,7 @@ records the loan being closed. The receipt is fully derivable from the loan UTxO
 :class:`LoanDatum` + the loan's out-ref + the lender-bond policy, so it reproduces the
 on-chain datum byte-exact (verified in test_datum_synth).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,7 +13,13 @@ from dataclasses import dataclass
 from pycardano import Datum
 from pycardano import PlutusData
 
+from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
+from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
+
+# Origin-id tag a pool-origin loan datum carries: the loan's ``origin_id`` is this tag
+# followed by the originating pool's NFT asset name (`b"POOL" + pool_id`).
+ORIGIN_POOL_TAG = b"POOL"
 
 # The receipt's tag bytestring identifying an installment repayment.
 INSTALLMENT_REPAYMENT_TAG = b"installment_repayment"
@@ -106,6 +113,49 @@ def synth_recast_receipt(
             lender_bond_policy=bytes.fromhex(lender_bond_policy),
             loan_id=loan_id,
         ),
+    )
+
+
+def synth_loan_datum(
+    *,
+    pool_datum: PoolDatum,
+    pool_id: bytes,
+    principal_amount: int,
+    lend_date: int,
+    chosen_collateral_index: int,
+) -> LoanDatum:
+    """Build the continuing loan's :class:`LoanDatum` for a pool-origin borrow.
+
+    Reproduces the on-chain loan output datum byte-exact (verified in test_borrow): a
+    fresh loan starts with ``done_recasts`` / ``repaid_installments`` at 0, carries the
+    borrowed ``principal_amount`` and a ``lend_date`` equal to the validity upper bound
+    (POSIX ms), and inherits every loan term from the pool's ``common_data``. The
+    ``origin_id`` is ``b"POOL"`` + the pool NFT name, and the collateral is the chosen
+    pool collateral option carried through verbatim.
+    """
+    common = pool_datum.common_data
+    options = list(pool_datum.collateral_options)
+    chosen = options[chosen_collateral_index]
+    if not isinstance(chosen, CollateralAsset):
+        chosen = CollateralAsset.from_primitive(chosen)
+    return LoanDatum(
+        done_recasts=0,
+        principal_amount=principal_amount,
+        lend_date=lend_date,
+        repaid_installments=0,
+        interest_rate=common.interest_rate,
+        total_installments=common.total_installments,
+        principal_asset=common.principal_asset,
+        principal_oracle_asset=common.principal_oracle_asset,
+        installment_period=common.installment_period,
+        initial_grace_period=common.initial_grace_period,
+        liquidation_mode=common.liquidation_mode,
+        repayment_mode=common.repayment_mode,
+        repayment_time_window=common.repayment_time_window,
+        penalty_fee_for_late_repayment=common.penalty_fee_for_late_repayment,
+        repayment_receipts=common.repayment_receipts,
+        origin_id=ORIGIN_POOL_TAG + pool_id,
+        collateral=chosen,
     )
 
 

@@ -23,6 +23,8 @@ from pycardano import Datum
 from pycardano import IndefiniteList
 from pycardano import PlutusData
 
+from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import TxOutRef
+
 
 @dataclass
 class BoolFalse(PlutusData):
@@ -170,6 +172,144 @@ class RecastData(PlutusData):
 
 
 @dataclass
+class BondMintRedeemer(PlutusData):
+    """Borrower-/lender-bond MINT redeemer == ``BondMintRedeemer`` in bond.ak.
+
+    == Constr0([IndefiniteList[TxOutRef]]). The bond policy derives each minted bond's
+    asset name (the loan id) by hashing the listed origin input out-refs; on a
+    pool-origin borrow the single entry is the spent pool UTxO's out-ref (both the
+    borrower bond and the lender bond carry the identical redeemer). The field MUST stay
+    an untyped ``IndefiniteList`` and ``__post_init__`` MUST rebuild each
+    :class:`TxOutRef`, else pycardano re-serializes the list / nested constr
+    definite-length (verified byte-exact against the captured fixture).
+    """
+
+    CONSTR_ID = 0
+    origin_input_refs: IndefiniteList  # elements are TxOutRef
+
+    def __post_init__(self) -> None:
+        """Coerce decoded entries back into :class:`TxOutRef`."""
+        self.origin_input_refs = IndefiniteList(
+            [
+                p if isinstance(p, TxOutRef) else TxOutRef.from_primitive(p)
+                for p in self.origin_input_refs
+            ],
+        )
+
+
+@dataclass
+class RequestMintRedeemer(PlutusData):
+    """Request-policy MINT/BURN redeemer == ``RequestMintRedeemer`` in request.ak.
+
+    == Constr0([config_ref_input_index, input_ref]). On a CREATE the request policy
+    derives the minted request NFT's asset name as ``0x<index>`` ++
+    ``blake2b_224(input_ref)``, so ``input_ref`` is the chosen spent input out-ref. On a
+    BURN (cancel) the policy counts only positive mints, so ``input_ref`` only needs to
+    be a spent input; we reproduce the captured value for byte-exactness.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    input_ref: TxOutRef
+
+
+@dataclass
+class RequestCancelAction(PlutusData):
+    """``RequestAction.Cancel`` == Constr0([request_id]) in request.ak.
+
+    ``CancelAfterExpiration`` is Constr1 and ``Lend`` is Constr2 (both out of scope for
+    the borrower create/cancel path); ``request_id`` is the request NFT asset name.
+    """
+
+    CONSTR_ID = 0
+    request_id: bytes
+
+
+@dataclass
+class RequestWithdrawRedeemer(PlutusData):
+    """Request reward (withdraw) redeemer == ``RequestWithdrawRedeemer`` in request.ak.
+
+    == Constr0([config_ref_input_index, IndefiniteList[RequestAction]]). For a single
+    cancel the action list is one :class:`RequestCancelAction`. See
+    :class:`LoanRepayActionWithdrawRedeemer` for why the field stays an untyped
+    ``IndefiniteList`` and why ``__post_init__`` rebuilds each element.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    actions_for_each_input: IndefiniteList  # elements are RequestCancelAction
+
+    def __post_init__(self) -> None:
+        """Coerce decoded Cancel entries back into :class:`RequestCancelAction`."""
+        self.actions_for_each_input = IndefiniteList(
+            [
+                (
+                    p
+                    if isinstance(p, RequestCancelAction)
+                    else RequestCancelAction.from_primitive(p)
+                )
+                for p in self.actions_for_each_input
+            ],
+        )
+
+
+@dataclass
+class PoolBorrowAction(PlutusData):
+    """``PoolAction.Borrow`` == Constr1[...] in pool.ak (``Cancel`` is Constr0).
+
+    Drives the pool ``Withdraw`` (reward) script that mints a new loan from a pool. The
+    index fields are resolved from the final canonical ordering: ``borrower_address`` is
+    the Plutus address the borrower bond + change return to;
+    ``output_with_lender_token_index``
+    points at the lender-bond output; ``principal_oracle_ref_input_index`` /
+    ``chosen_collateral_oracle_ref_input_index`` are the reference-input indices of the
+    principal / collateral oracle feeds (the principal index is a replayed placeholder
+    for an ADA principal); ``chosen_collateral_index`` selects the pool collateral
+    option; ``wanted_principal_amount`` is the borrowed principal in units; ``pool_id``
+    is the pool NFT asset name; ``permissioned_condition_withdraw_index`` is ignored by
+    permissionless pools (replayed for byte-exactness).
+    """
+
+    CONSTR_ID = 1
+    borrower_address: Datum  # pycardano Address constr
+    output_with_lender_token_index: int
+    principal_oracle_ref_input_index: int
+    chosen_collateral_index: int
+    chosen_collateral_oracle_ref_input_index: int
+    wanted_principal_amount: int
+    pool_id: bytes
+    permissioned_condition_withdraw_index: int
+
+
+@dataclass
+class PoolWithdrawRedeemer(PlutusData):
+    """Pool reward (withdraw) redeemer == ``PoolWithdrawRedeemer`` in pool.ak.
+
+    == Constr0([config_ref_input_index, IndefiniteList[PoolAction]]). For a single
+    pool-origin borrow the action list is one :class:`PoolBorrowAction`. See
+    :class:`LoanRepayActionWithdrawRedeemer` for why the field stays an untyped
+    ``IndefiniteList`` and why ``__post_init__`` rebuilds each element.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    actions_for_each_input: IndefiniteList  # elements are PoolBorrowAction
+
+    def __post_init__(self) -> None:
+        """Coerce decoded Borrow entries back into :class:`PoolBorrowAction`."""
+        self.actions_for_each_input = IndefiniteList(
+            [
+                (
+                    p
+                    if isinstance(p, PoolBorrowAction)
+                    else PoolBorrowAction.from_primitive(p)
+                )
+                for p in self.actions_for_each_input
+            ],
+        )
+
+
+@dataclass
 class LoanRepayActionWithdrawRedeemer(PlutusData):
     """Repay reward (withdraw) redeemer.
 
@@ -213,9 +353,11 @@ class LoanChangeCollateralActionWithdrawRedeemer(PlutusData):
         """Coerce decoded entries back into :class:`ChangeCollateralData`."""
         self.actions_for_each_input = IndefiniteList(
             [
-                p
-                if isinstance(p, ChangeCollateralData)
-                else ChangeCollateralData.from_primitive(p)
+                (
+                    p
+                    if isinstance(p, ChangeCollateralData)
+                    else ChangeCollateralData.from_primitive(p)
+                )
                 for p in self.actions_for_each_input
             ],
         )

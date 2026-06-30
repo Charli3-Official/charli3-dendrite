@@ -10,6 +10,7 @@ so the byte-exact datum-synth tests can assert against them.
 Run: PYTHONPATH=src python tests/lending/fluidtokens/transactions/fixtures/_capture_loan_action.py
 Requires dbsync env (DBSYNC_*). Not run in CI.
 """
+
 from __future__ import annotations
 
 import json
@@ -131,9 +132,11 @@ def capture(tx_hash: str, *, label: str) -> dict:
     return dict(
         label=label,
         tx_hash=tx_hash,
-        block_time=int(block_time.timestamp())
-        if hasattr(block_time, "timestamp")
-        else int(block_time),
+        block_time=(
+            int(block_time.timestamp())
+            if hasattr(block_time, "timestamp")
+            else int(block_time)
+        ),
         fee=int(fee),
         invalid_before=int(inv_before) if inv_before is not None else None,
         invalid_hereafter=int(inv_after) if inv_after is not None else None,
@@ -154,6 +157,22 @@ JOBS = {
         "142d5299952aaafe4f6b08a6ad655345663f536576bac3d8bd48e71b6be9e09d"
     ),
     "recast": "f4c3e7ebc6e1cc249a7bc5187e5e9581c2dc9eddd8276ae244e6821320377f26",
+    # Pool-origin borrow: spends a pool UTxO (empty redeemer), mints loan + borrower
+    # bond + lender bond (asset name = hash of the pool out-ref), continues the pool,
+    # dynamic SNEK collateral priced via one signed oracle reward, ADA principal.
+    "borrow_pool": ("3733cbee1c8cca80acaf00bb09c675c8a89a09d6363a2e92df6b2065be692314"),
+    # Create a borrow request: mints one request NFT (asset name = 0x00 ++ hash of the
+    # chosen input out-ref) and locks it + the collateral + an inline RequestDatum at the
+    # request spend address. Only the request mint policy runs.
+    "create_request": (
+        "9c6baee9f46604e1b31c5af201fb4e9ebaaf453d1b63becc64097abf029679bb"
+    ),
+    # Cancel a borrow request: spends the request UTxO (empty redeemer), burns the
+    # request NFT, and drives the request-policy reward (``Cancel``) authorized by the
+    # borrower signature; the collateral returns to the borrower.
+    "cancel_request": (
+        "bbb39d5d0953d7c1560c53b5b66b41c165ec2ee5d1a25d5d2401de0d42d9733f"
+    ),
 }
 
 
