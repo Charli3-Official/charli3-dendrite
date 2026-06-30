@@ -15,6 +15,7 @@ the lender-bond UTxO as reference inputs.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
@@ -35,6 +36,7 @@ from charli3_dendrite.lending.fluidtokens.constants import LOAN_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_RECAST_ACTION_SKH
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_REPAY_ACTION_SKH
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_SPEND_SKH
+from charli3_dendrite.lending.fluidtokens.constants import POOL_ADDRESS
 from charli3_dendrite.lending.fluidtokens.constants import POOL_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import POOL_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.constants import PROTOCOL_CONFIG_NFT_POLICY
@@ -45,6 +47,10 @@ from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.utility import asset_to_value
+
+if TYPE_CHECKING:
+    from charli3_dendrite.backend.backend_base import AbstractBackend
+    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import PoolTerms
 
 
 @dataclass
@@ -808,6 +814,83 @@ class CreatePoolSnapshot(PoolActionSnapshot):
             pool_policy=POOL_POLICY,
         )
 
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        terms: PoolTerms,
+        lender_address: str,
+        pool_lovelace: int,
+        liquidity: list[tuple[str, str, int]],
+        pool_address: str | None = None,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        config_outref: tuple[str, int] | None = None,
+        pool_policy_ref_outref: tuple[str, int] | None = None,
+        input_ref: tuple[str, int] | None = None,
+    ) -> CreatePoolSnapshot:
+        """Resolve a `CreatePoolSnapshot` live from chain state via the backend.
+
+        The lender's funding is resolved from ``funding_outrefs`` (allowing spent, for a
+        captured replay) or from the unspent UTxOs at ``lender_address``; it must be
+        non-empty. The config NFT and the pool policy script are resolved unless pinned
+        by out-ref. The inline ``PoolDatum`` is synthesized from ``terms``.
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+            synth_pool_datum,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        else:
+            funding = resolve_funding(backend, lender_address)
+        if not funding:
+            raise ValueError("no funding UTxOs resolved for pool create")
+        resolved_input_ref = input_ref or funding[0].out_ref
+        if resolved_input_ref is None:
+            raise ValueError("could not determine input_ref for pool create")
+
+        if config_outref:
+            config = resolve_utxo_by_outref(backend, *config_outref, allow_spent=True)
+        else:
+            config = resolve_config_utxo(backend)
+
+        if pool_policy_ref_outref:
+            pool_policy_script_ref = resolve_utxo_by_outref(
+                backend,
+                *pool_policy_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            pool_policy_script_ref = resolve_script_ref(backend, POOL_POLICY)
+
+        return cls(
+            funding=funding,
+            config=config,
+            pool_policy_script_ref=pool_policy_script_ref,
+            pool_address=pool_address or POOL_ADDRESS,
+            pool_datum=synth_pool_datum(terms).to_cbor().hex(),
+            pool_lovelace=pool_lovelace,
+            liquidity=liquidity,
+            input_ref=resolved_input_ref,
+            pool_policy=POOL_POLICY,
+        )
+
 
 @dataclass
 class CancelPoolSnapshot(PoolActionSnapshot):
@@ -860,5 +943,100 @@ class CancelPoolSnapshot(PoolActionSnapshot):
             pool_id=pool_id,
             lender_pkh=lender_pkh,
             mint_input_ref=_mint_input_ref(fix, POOL_POLICY),
+            pool_policy=POOL_POLICY,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        pool_utxo: tuple[str, int],
+        lender_address: str | None = None,
+        allow_spent_pool: bool = False,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        config_outref: tuple[str, int] | None = None,
+        pool_spend_ref_outref: tuple[str, int] | None = None,
+        pool_policy_ref_outref: tuple[str, int] | None = None,
+    ) -> CancelPoolSnapshot:
+        """Resolve a `CancelPoolSnapshot` live from chain state via the backend.
+
+        The pool UTxO is resolved by ``pool_utxo`` out-ref (``allow_spent_pool`` lets a
+        captured/historical pool be replayed); its ``PoolDatum`` supplies the pool id +
+        the lender vkey hash. The config NFT and the pool spend / pool policy scripts
+        are resolved unless pinned by out-ref. Funding is optional for a burn-only
+        cancel:
+        the burn redeemer's ``input_ref`` only needs to reference a spent input, and the
+        pool UTxO itself is spent, so it falls back to the pool out-ref.
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        pool = resolve_utxo_by_outref(
+            backend,
+            *pool_utxo,
+            allow_spent=allow_spent_pool,
+        )
+        if pool.datum is None:
+            raise ValueError("resolved pool UTxO is missing its datum")
+        pool_id = next(bytes.fromhex(n) for p, n, _ in pool.assets if p == POOL_POLICY)
+        datum = PoolDatum.from_cbor(bytes.fromhex(pool.datum))
+        lender_pkh = bytes(datum.lender_auth.data.value[0])
+
+        if config_outref:
+            config = resolve_utxo_by_outref(backend, *config_outref, allow_spent=True)
+        else:
+            config = resolve_config_utxo(backend)
+
+        if pool_spend_ref_outref:
+            pool_spend_script_ref = resolve_utxo_by_outref(
+                backend,
+                *pool_spend_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            pool_spend_script_ref = resolve_script_ref(backend, POOL_SPEND_SKH)
+
+        if pool_policy_ref_outref:
+            pool_policy_script_ref = resolve_utxo_by_outref(
+                backend,
+                *pool_policy_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            pool_policy_script_ref = resolve_script_ref(backend, POOL_POLICY)
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        elif lender_address:
+            funding = resolve_funding(backend, lender_address)
+        else:
+            funding = []
+        mint_input_ref = funding[0].out_ref if funding else pool_utxo
+        if mint_input_ref is None:
+            raise ValueError("could not determine mint input_ref for pool cancel")
+
+        return cls(
+            pool=pool,
+            funding=funding,
+            config=config,
+            pool_spend_script_ref=pool_spend_script_ref,
+            pool_policy_script_ref=pool_policy_script_ref,
+            pool_id=pool_id,
+            lender_pkh=lender_pkh,
+            mint_input_ref=mint_input_ref,
             pool_policy=POOL_POLICY,
         )
