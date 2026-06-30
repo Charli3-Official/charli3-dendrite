@@ -71,7 +71,13 @@ def build_create_pool(
     *,
     snapshot: CreatePoolSnapshot,
 ) -> None:
-    """Contribute a forward create-pool to `tx_builder`."""
+    """Contribute a forward create-pool to `tx_builder`.
+
+    Wires: the lender funding inputs, the pool-NFT mint (its asset name derived from
+    the chosen input out-ref), the config reference input, and the pool output (the
+    pool NFT + liquidity + the inline pool datum at the pool spend address). The caller
+    funds/balances/evaluates.
+    """
     config_ref = snapshot.config.out_ref
     if config_ref is None:
         raise ValueError("snapshot config is missing its out-ref")
@@ -120,7 +126,13 @@ def build_cancel_pool(
     *,
     snapshot: CancelPoolSnapshot,
 ) -> None:
-    """Contribute a forward cancel-pool to `tx_builder`."""
+    """Contribute a forward cancel-pool to `tx_builder`.
+
+    Wires: the pool spend (empty redeemer), the pool-NFT burn, the pool-policy reward
+    (``Cancel``) withdrawal, the config reference input, and the lender required signer
+    (its ``lenderAuth`` verification-key hash). The liquidity release is left to the
+    caller's change handling. The caller funds/balances/evaluates.
+    """
     pool = snapshot.pool
     if pool.out_ref is None or pool.datum is None or pool.address is None:
         raise ValueError("snapshot pool UTxO is missing its out-ref/datum/address")
@@ -141,6 +153,7 @@ def build_cancel_pool(
         actions_for_each_input=IndefiniteList([PoolCancelAction(pool_id=pool_id)]),
     )
 
+    # --- spend the pool (empty redeemer) + the lender funding inputs -----------------
     tx_builder.add_script_input(
         _to_utxo(pool),
         script=_to_utxo(snapshot.pool_spend_script_ref),
@@ -150,6 +163,7 @@ def build_cancel_pool(
         tx_builder.add_input(_to_utxo(funding))
     tx_builder.reference_inputs.add(_to_utxo(snapshot.config))
 
+    # --- burn the pool NFT (-1) ------------------------------------------------------
     tx_builder.add_minting_script(
         _to_utxo(snapshot.pool_policy_script_ref),
         redeemer=Redeemer(mint_rdmr),
@@ -163,6 +177,7 @@ def build_cancel_pool(
     )
     tx_builder.mint = burn if tx_builder.mint is None else tx_builder.mint + burn
 
+    # --- pool-policy reward (Cancel) + the lender required signer --------------------
     tx_builder.add_withdrawal_script(
         _to_utxo(snapshot.pool_policy_script_ref),
         Redeemer(withdraw_rdmr),
