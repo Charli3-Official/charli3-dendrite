@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
+from pycardano import Datum
 from pycardano import IndefiniteList
 from pycardano import PlutusData
 
@@ -59,32 +60,40 @@ class ActionMarkerRepay(PlutusData):
 
 
 @dataclass
-class LoanPolicyWithdrawRedeemer(PlutusData):
-    """Loan-policy reward (withdraw) redeemer for a repay.
+class ActionMarkerChangeCollateral(PlutusData):
+    """The loan-policy action discriminator for change-collateral == Constr2[]."""
 
-    == Constr0([config_ref_input_index, ActionMarkerRepay]) (``d8799f03d87a80ff``). The
-    loan-policy reward account is the orchestration twin the loan spend + mint-burn
-    delegate to; it carries the config reference-input index and the repay action
-    marker.
+    CONSTR_ID = 2
+
+
+@dataclass
+class LoanPolicyWithdrawRedeemer(PlutusData):
+    """Loan-policy reward (withdraw) redeemer for a loan action.
+
+    == Constr0([config_ref_input_index, action_marker]). The loan-policy reward account
+    is the orchestration twin the loan spend (and, on a full repay, the mint-burn)
+    delegate to; it carries the config reference-input index and the action marker
+    (``ActionMarkerRepay`` for a repay -> ``d8799f03d87a80ff``,
+    ``ActionMarkerChangeCollateral`` for change-collateral -> ``d8799f04d87b80ff``).
     """
 
     CONSTR_ID = 0
     config_ref_input_index: int
-    action_marker: ActionMarkerRepay
+    action_marker: Datum
 
 
 @dataclass
 class LoanPolicyMintBurnRedeemer(PlutusData):
     """Loan-policy MINT redeemer burning the loan NFT on a (full) repay.
 
-    == Constr0([config_ref_input_index, ActionMarkerRepay, action_ref_input_index])
-    (``d8799f03d87a8003ff``). Carries the config + per-action reward-script reference
-    indices and the repay action marker.
+    == Constr0([config_ref_input_index, action_marker, action_ref_input_index])
+    (``d8799f03d87a8003ff``). Carries the config + per-action reference indices and the
+    repay action marker.
     """
 
     CONSTR_ID = 0
     config_ref_input_index: int
-    action_marker: ActionMarkerRepay
+    action_marker: Datum
     action_ref_input_index: int
 
 

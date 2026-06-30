@@ -20,16 +20,20 @@ from pycardano import Asset
 from pycardano import AssetName
 from pycardano import IndefiniteList
 from pycardano import MultiAsset
-from pycardano import Network
 from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
-from pycardano import UTxO
 from pycardano import Withdrawals
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_REPAY_ACTION_SKH
+from charli3_dendrite.lending.fluidtokens.transactions._common import input_index
+from charli3_dendrite.lending.fluidtokens.transactions._common import ref_index
+from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
+from charli3_dendrite.lending.fluidtokens.transactions._common import (
+    set_validity_window,
+)
 from charli3_dendrite.lending.fluidtokens.transactions.context import RepaySnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import _to_utxo
 from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
@@ -54,41 +58,6 @@ from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import RepayData
 from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
 from charli3_dendrite.utility import asset_to_value
-
-# The FluidTokens loan-action validators cap the validity window; 360 slots mirrors the
-# Danogo cap (the upper bound the validator's time checks tolerate).
-_REPAY_VALIDITY_SLOTS = 360
-
-
-def _ref_index(tx_builder: TransactionBuilder) -> dict[tuple[str, int], int]:
-    """Map each reference input's out-ref to its index in the canonical ordering."""
-    inputs = [u.input for u in tx_builder.reference_inputs if isinstance(u, UTxO)]
-    inputs.sort(key=lambda i: (bytes(i.transaction_id), i.index))
-    return {
-        (bytes(i.transaction_id).hex(), i.index): pos for pos, i in enumerate(inputs)
-    }
-
-
-def _input_index(tx_builder: TransactionBuilder, out_ref: tuple[str, int]) -> int:
-    """Index of `out_ref` in the canonical (tx id, index) input ordering."""
-    inputs = sorted(
-        tx_builder.inputs,
-        key=lambda u: (bytes(u.input.transaction_id), u.input.index),
-    )
-    for pos, u in enumerate(inputs):
-        if (bytes(u.input.transaction_id).hex(), u.input.index) == out_ref:
-            return pos
-    raise ValueError(f"input {out_ref} not found")
-
-
-def _reward_address(script_hash: str) -> bytes:
-    """The network-tagged reward (stake-script) address bytes for `script_hash`."""
-    return bytes(
-        Address(
-            staking_part=ScriptHash(bytes.fromhex(script_hash)),
-            network=Network.MAINNET,
-        ),
-    )
 
 
 def build_repay(
@@ -119,13 +88,7 @@ def build_repay(
     if config_ref is None or lender_bond_ref is None or bond_ref is None:
         raise ValueError("snapshot config/lender-bond/borrower-bond is missing out-ref")
 
-    lower = (
-        tx_builder.validity_start
-        if tx_builder.validity_start is not None
-        else tx_builder.context.last_block_slot
-    )
-    tx_builder.validity_start = lower
-    tx_builder.ttl = lower + _REPAY_VALIDITY_SLOTS
+    set_validity_window(tx_builder)
 
     loan_id = snapshot.loan_id
     repay_data, repay_rdmr, policy_withdraw_rdmr, mint_rdmr = _repay_redeemers(loan_id)
@@ -167,8 +130,8 @@ def build_repay(
     )
     tx_builder.withdrawals = Withdrawals(
         {
-            _reward_address(snapshot.loan_policy): 0,
-            _reward_address(LOAN_REPAY_ACTION_SKH): 0,
+            reward_address(snapshot.loan_policy): 0,
+            reward_address(LOAN_REPAY_ACTION_SKH): 0,
         },
     )
 
@@ -178,16 +141,16 @@ def build_repay(
         snapshot=snapshot,
         lender_lovelace=lender_lovelace,
     )
-    ref_index = _ref_index(tx_builder)
-    cfg_idx = ref_index[config_ref]
+    refs = ref_index(tx_builder)
+    cfg_idx = refs[config_ref]
     repay_rdmr.config_ref_input_index = cfg_idx
     policy_withdraw_rdmr.config_ref_input_index = cfg_idx
     mint_rdmr.config_ref_input_index = cfg_idx
     mint_rdmr.action_ref_input_index = cfg_idx
-    repay_data.index_0 = _input_index(tx_builder, bond_ref)
+    repay_data.index_0 = input_index(tx_builder, bond_ref)
     repay_data.index_1 = tx_builder.outputs.index(lender_out)
     repay_data.index_2 = tx_builder.outputs.index(bond_return)
-    repay_data.index_3 = ref_index[lender_bond_ref]
+    repay_data.index_3 = refs[lender_bond_ref]
 
 
 def _repay_redeemers(

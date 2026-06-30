@@ -26,6 +26,9 @@ from pycardano import Value
 
 from charli3_dendrite.lending.fluidtokens.constants import BORROWER_BOND_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LENDER_BOND_POLICY
+from charli3_dendrite.lending.fluidtokens.constants import (
+    LOAN_CHANGE_COLLATERAL_ACTION_SKH,
+)
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_REPAY_ACTION_SKH
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_SPEND_SKH
@@ -224,3 +227,96 @@ def _fee_output(outputs: list[Utxo], loan: Utxo) -> Utxo:
         if not u.assets and u.datum is None and u.address != loan.address
     ]
     return min(candidates, key=lambda u: u.lovelace)
+
+
+@dataclass
+class ChangeCollateralSnapshot(PoolActionSnapshot):
+    """Resolved building blocks for a single-loan change-collateral.
+
+    The loan UTxO is spent (empty redeemer) and re-created at the same address with the
+    SAME datum but a NEW locked-collateral amount; the borrower-bond NFT is returned. No
+    NFT is minted/burned. The action re-prices the collateral via a signed oracle feed,
+    so it additionally drives the oracle reward (``Withdraw``) script -- whose redeemer
+    carries an off-chain oracle signature and is therefore replayed verbatim
+    (`oracle_reward_cbor`) rather than synthesized. The config NFT + oracle feed are
+    reference inputs; the four scripts (general_spend, loan policy, change-collateral
+    action, oracle) are supplied by reference.
+    """
+
+    loan: Utxo
+    borrower_bond: Utxo
+    config: Utxo
+    oracle_feed: Utxo
+    spend_script_ref: Utxo
+    loan_policy_script_ref: Utxo
+    action_script_ref: Utxo
+    oracle_script_ref: Utxo
+    oracle_reward_cbor: str
+    loan_id: bytes
+    loan_policy: str
+    bond_policy: str
+
+    @property
+    def loan_datum(self) -> LoanDatum:
+        """The loan UTxO's decoded :class:`LoanDatum` (carried through unchanged)."""
+        if self.loan.datum is None:
+            raise ValueError("snapshot loan UTxO is missing its datum")
+        return LoanDatum.from_cbor(bytes.fromhex(self.loan.datum))
+
+    @classmethod
+    def from_capture(cls, fix: dict) -> ChangeCollateralSnapshot:
+        """Rebuild a `ChangeCollateralSnapshot` from a captured real change-collateral.
+
+        The captured spent inputs are the loan UTxO, the borrower-bond input (holding
+        the loan's bond NFT), and the borrower's funding. The reference inputs are the
+        config NFT, the oracle feed (holding the loan's principal-oracle NFT), and the
+        four loan scripts. The signed oracle reward redeemer is read from the captured
+        redeemer set.
+        """
+        inputs = [_as_utxo(u) for u in fix["inputs"]]
+        ref_inputs = [_as_utxo(u) for u in fix["ref_inputs"]]
+
+        loan = next(
+            u
+            for u in inputs
+            if u.datum and _parses_loan(u.datum) and u.holds_policy(LOAN_POLICY)
+        )
+        loan_id = next(bytes.fromhex(n) for p, n, _ in loan.assets if p == LOAN_POLICY)
+        borrower_bond = next(
+            u for u in inputs if u.holds(BORROWER_BOND_POLICY, loan_id.hex())
+        )
+        config = next(
+            u for u in ref_inputs if u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        oracle_feed = next(
+            u
+            for u in ref_inputs
+            if u.ref_script is None and not u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        # The oracle withdraw script varies by collateral; identify it (and its signed
+        # reward redeemer) by elimination -- it is the reference script / reward
+        # redeemer that is none of loan-spend, loan-policy, change-collateral-action.
+        known = {LOAN_SPEND_SKH, LOAN_POLICY, LOAN_CHANGE_COLLATERAL_ACTION_SKH}
+        oracle_reward = next(
+            r
+            for r in fix["redeemers"]
+            if r["purpose"] == "reward" and r["script_hash"] not in known
+        )
+        oracle_skh = oracle_reward["script_hash"]
+        return cls(
+            loan=loan,
+            borrower_bond=borrower_bond,
+            config=config,
+            oracle_feed=oracle_feed,
+            spend_script_ref=_script_ref_by_hash(ref_inputs, LOAN_SPEND_SKH),
+            loan_policy_script_ref=_script_ref_by_hash(ref_inputs, LOAN_POLICY),
+            action_script_ref=_script_ref_by_hash(
+                ref_inputs,
+                LOAN_CHANGE_COLLATERAL_ACTION_SKH,
+            ),
+            oracle_script_ref=_script_ref_by_hash(ref_inputs, oracle_skh),
+            oracle_reward_cbor=oracle_reward["cbor"],
+            loan_id=loan_id,
+            loan_policy=LOAN_POLICY,
+            bond_policy=BORROWER_BOND_POLICY,
+        )

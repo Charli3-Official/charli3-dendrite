@@ -150,6 +150,9 @@ def capture(tx_hash: str, *, label: str) -> dict:
 
 JOBS = {
     "repay_full": "993715116500e7330b86dd6f9eeda1236a59fe58642b4d21c55afc7c2f482cdb",
+    "change_collateral": (
+        "142d5299952aaafe4f6b08a6ad655345663f536576bac3d8bd48e71b6be9e09d"
+    ),
 }
 
 
