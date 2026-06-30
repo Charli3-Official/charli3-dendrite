@@ -756,3 +756,109 @@ class CancelRequestSnapshot(PoolActionSnapshot):
             mint_input_ref=_mint_input_ref(fix, REQUEST_POLICY),
             request_policy=REQUEST_POLICY,
         )
+
+
+@dataclass
+class CreatePoolSnapshot(PoolActionSnapshot):
+    """Resolved building blocks for creating a lender pool.
+
+    The lender's wallet inputs fund the pool: one pool NFT is minted (asset name
+    ``0x00`` ++ ``blake2b_224`` of the chosen input out-ref) and locked, together with
+    the lender's liquidity and an inline :class:`PoolDatum`, at the pool spend address.
+    Only the pool mint policy runs; the ``PoolDatum`` is the lender's choice and is
+    carried through verbatim (it is validated only when the pool is later
+    borrowed/cancelled). The config NFT + the pool policy script are reference inputs.
+    """
+
+    funding: list[Utxo]
+    config: Utxo
+    pool_policy_script_ref: Utxo
+    pool_address: str
+    pool_datum: str
+    pool_lovelace: int
+    liquidity: list[tuple[str, str, int]]
+    input_ref: tuple[str, int]
+    pool_policy: str
+
+    @classmethod
+    def from_capture(cls, fix: dict) -> CreatePoolSnapshot:
+        """Rebuild a `CreatePoolSnapshot` from a captured real pool create."""
+        inputs = [_as_utxo(u) for u in fix["inputs"]]
+        ref_inputs = [_as_utxo(u) for u in fix["ref_inputs"]]
+        outputs = [_as_utxo(u) for u in fix["outputs"]]
+
+        pool_out = next(
+            u for u in outputs if u.datum is not None and u.holds_policy(POOL_POLICY)
+        )
+        if pool_out.datum is None:
+            raise ValueError("pool-create output is missing its datum")
+        liquidity = [(p, n, q) for p, n, q in pool_out.assets if p != POOL_POLICY]
+        config = next(
+            u for u in ref_inputs if u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        return cls(
+            funding=inputs,
+            config=config,
+            pool_policy_script_ref=_script_ref_by_hash(ref_inputs, POOL_POLICY),
+            pool_address=pool_out.address,
+            pool_datum=pool_out.datum,
+            pool_lovelace=pool_out.lovelace,
+            liquidity=liquidity,
+            input_ref=_mint_input_ref(fix, POOL_POLICY),
+            pool_policy=POOL_POLICY,
+        )
+
+
+@dataclass
+class CancelPoolSnapshot(PoolActionSnapshot):
+    """Resolved building blocks for cancelling a lender pool.
+
+    The pool UTxO is spent (empty redeemer via the pool spend script), the pool NFT is
+    burned, and the pool-policy reward (``Cancel``) drives the logic -- authorized by
+    the lender (its ``lenderAuth`` verification-key hash must be a required signer). The
+    liquidity returns to the lender. The config NFT + the pool spend / pool policy
+    scripts are reference inputs; the burn redeemer's ``input_ref`` is any spent input
+    (replayed from the capture for byte-exactness).
+    """
+
+    pool: Utxo
+    funding: list[Utxo]
+    config: Utxo
+    pool_spend_script_ref: Utxo
+    pool_policy_script_ref: Utxo
+    pool_id: bytes
+    lender_pkh: bytes
+    mint_input_ref: tuple[str, int]
+    pool_policy: str
+
+    @classmethod
+    def from_capture(cls, fix: dict) -> CancelPoolSnapshot:
+        """Rebuild a `CancelPoolSnapshot` from a captured real pool cancel."""
+        inputs = [_as_utxo(u) for u in fix["inputs"]]
+        ref_inputs = [_as_utxo(u) for u in fix["ref_inputs"]]
+
+        pool = next(
+            u
+            for u in inputs
+            if u.datum and _parses_pool(u.datum) and u.holds_policy(POOL_POLICY)
+        )
+        pool_id = next(bytes.fromhex(n) for p, n, _ in pool.assets if p == POOL_POLICY)
+        funding = [u for u in inputs if u.out_ref != pool.out_ref]
+        config = next(
+            u for u in ref_inputs if u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        if pool.datum is None:
+            raise ValueError("cancel-pool input is missing its datum")
+        datum = PoolDatum.from_cbor(bytes.fromhex(pool.datum))
+        lender_pkh = bytes(datum.lender_auth.data.value[0])
+        return cls(
+            pool=pool,
+            funding=funding,
+            config=config,
+            pool_spend_script_ref=_script_ref_by_hash(ref_inputs, POOL_SPEND_SKH),
+            pool_policy_script_ref=_script_ref_by_hash(ref_inputs, POOL_POLICY),
+            pool_id=pool_id,
+            lender_pkh=lender_pkh,
+            mint_input_ref=_mint_input_ref(fix, POOL_POLICY),
+            pool_policy=POOL_POLICY,
+        )
