@@ -49,112 +49,122 @@ class LoanSpendRedeemer(PlutusData):
 
 
 @dataclass
-class ActionMarkerRepay(PlutusData):
-    """The loan-policy action discriminator for a repay == Constr1[] (``d87a80``).
+class ActionTypeClaim(PlutusData):
+    """``ActionType.Claim`` == Constr0[] (lender / liquidation action; out of scope)."""
 
-    The loan policy + its withdraw (reward) twin carry a small action marker selecting
-    which loan action is running; a repay selects the alt-1 (empty) variant.
-    """
+    CONSTR_ID = 0
+
+
+@dataclass
+class ActionTypeRepay(PlutusData):
+    """``ActionType.Repay`` == Constr1[] (``d87a80``)."""
 
     CONSTR_ID = 1
 
 
 @dataclass
-class ActionMarkerChangeCollateral(PlutusData):
-    """The loan-policy action discriminator for change-collateral == Constr2[]."""
+class ActionTypeChangeCollateral(PlutusData):
+    """``ActionType.ChangeCollateral`` == Constr2[] (``d87b80``)."""
 
     CONSTR_ID = 2
 
 
 @dataclass
-class ActionMarkerRecast(PlutusData):
-    """The loan-policy action discriminator for a recast == Constr3[] (``d87c80``)."""
+class ActionTypeRecast(PlutusData):
+    """``ActionType.Recast`` == Constr3[] (``d87c80``)."""
 
     CONSTR_ID = 3
 
 
 @dataclass
-class LoanPolicyWithdrawRedeemer(PlutusData):
-    """Loan-policy reward (withdraw) redeemer for a loan action.
+class LoanWithdrawRedeemer(PlutusData):
+    """Loan-policy reward (withdraw) redeemer == ``LoanWithdrawRedeemer`` in loan.ak.
 
-    == Constr0([config_ref_input_index, action_marker]). The loan-policy reward account
-    is the orchestration twin the loan spend (and, on a full repay, the mint-burn)
-    delegate to; it carries the config reference-input index and the action marker
-    (``ActionMarkerRepay`` for a repay -> ``d8799f03d87a80ff``,
-    ``ActionMarkerChangeCollateral`` for change-collateral -> ``d8799f04d87b80ff``).
+    == Constr0([config_ref_input_index, action_type]). The loan-policy reward account is
+    the orchestration twin the loan spend (and, on a full repay, the mint-burn) delegate
+    to; the loan policy checks a matching per-action withdraw is present for the chosen
+    ``action_type`` (``ActionTypeRepay`` -> ``d8799f03d87a80ff``,
+    ``ActionTypeChangeCollateral`` -> ``d8799f04d87b80ff``).
     """
 
     CONSTR_ID = 0
     config_ref_input_index: int
-    action_marker: Datum
+    action_type: Datum
 
 
 @dataclass
-class LoanPolicyMintBurnRedeemer(PlutusData):
-    """Loan-policy MINT redeemer burning the loan NFT on a (full) repay.
+class LoanMintRedeemer(PlutusData):
+    """Loan-policy MINT redeemer == ``LoanMintRedeemer`` in loan.ak.
 
-    == Constr0([config_ref_input_index, action_marker, action_ref_input_index])
-    (``d8799f03d87a8003ff``). Carries the config + per-action reference indices and the
-    repay action marker.
+    == Constr0([config_ref_input_index, is_pool_origin, origin_withdraw_redeemer_index])
+    (a repay-close burn -> ``d8799f03d87a8003ff``). ``is_pool_origin`` selects pool- vs
+    request-origin and ``origin_withdraw_redeemer_index`` points at that origin's
+    withdraw redeemer when MINTING a loan (borrow). On a BURN (repay-close) the loan
+    policy counts only positive mints, so both fields are ignored; we still reproduce
+    the captured values for byte-exactness.
     """
 
     CONSTR_ID = 0
     config_ref_input_index: int
-    action_marker: Datum
-    action_ref_input_index: int
+    is_pool_origin: Datum  # PlutusBool
+    origin_withdraw_redeemer_index: int
 
 
 @dataclass
 class RepayData(PlutusData):
-    """Per-input repay action == Constr0([...]).
+    """Per-input repay action == ``RepayData`` in loan.ak (Constr0).
 
-    Six fields: four leading plain ``int`` indices, the 28-byte ``loan_id``, and the
-    ``is_final_repayment`` flag (``Constr0[]`` False / ``Constr1[]`` True). The exact
-    output/input/ref-input semantics of the index fields are confirmed in the action
-    builders (Tasks 9-11); they are left neutrally named here.
+    Field semantics (confirmed against `ft-cardano-loans-v3` lib/loan.ak +
+    loan_repay_action.ak): ``borrower_bond_output_index`` is the absolute output index
+    holding the returned borrower-bond NFT; ``lender_bond_ref_input_index`` is the
+    absolute reference-input index of the lender-bond UTxO; the two
+    ``..._policy_id_index`` / ``..._asset_name_index`` are the positions of the
+    lender-bond policy id / loan-id asset name inside that ref UTxO's on-chain value map
+    (`efficient_quantity_of`); ``is_final_repayment`` (Bool) closes a perpetual loan.
     """
 
     CONSTR_ID = 0
-    index_0: int
-    index_1: int
-    index_2: int
-    index_3: int
+    borrower_bond_output_index: int
+    lender_bond_ref_input_index: int
+    lender_bond_ref_input_policy_id_index: int
+    lender_bond_ref_input_asset_name_index: int
     loan_id: bytes
     is_final_repayment: PlutusBool
 
 
 @dataclass
 class ChangeCollateralData(PlutusData):
-    """Per-input change-collateral action == Constr0([...]).
+    """Per-input change-collateral action == ``ChangeCollateralData`` in loan.ak.
 
-    Five fields: a leading plain ``int`` index, ``new_collateral_amount`` (the target
-    locked collateral), the 28-byte ``loan_id``, then two trailing plain ``int``
-    indices. The exact index semantics are confirmed in the action builders
-    (Tasks 9-11); those fields are left neutrally named here.
+    ``borrower_bond_output_index`` is the absolute output index holding the returned
+    borrower-bond NFT; ``new_collateral_amount`` is the target locked collateral;
+    ``collateral_oracle_ref_input_index`` / ``principal_oracle_ref_input_index`` are the
+    absolute reference-input indices of the collateral / principal oracle feeds (the
+    principal index is unused when the principal is ADA).
     """
 
     CONSTR_ID = 0
-    index_0: int
+    borrower_bond_output_index: int
     new_collateral_amount: int
     loan_id: bytes
-    index_1: int
-    index_2: int
+    collateral_oracle_ref_input_index: int
+    principal_oracle_ref_input_index: int
 
 
 @dataclass
 class RecastData(PlutusData):
-    """Per-input recast action == Constr0([...]).
+    """Per-input recast action == ``RecastData`` in loan.ak (Constr0).
 
-    Six fields: four leading plain ``int`` indices, ``amount_paid``, and the 28-byte
-    ``loan_id``. The exact index semantics are confirmed in the action builders
-    (Tasks 9-11); those fields are left neutrally named here.
+    Same index semantics as :class:`RepayData` (borrower-bond output index, lender-bond
+    ref index + value-map policy-id / asset-name positions); ``amount_paid`` is the
+    recast payment in principal units.
     """
 
     CONSTR_ID = 0
-    index_0: int
-    index_1: int
-    index_2: int
-    index_3: int
+    borrower_bond_output_index: int
+    lender_bond_ref_input_index: int
+    lender_bond_ref_input_policy_id_index: int
+    lender_bond_ref_input_asset_name_index: int
     amount_paid: int
     loan_id: bytes
 

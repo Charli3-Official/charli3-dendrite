@@ -28,32 +28,28 @@ from pycardano import Withdrawals
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_REPAY_ACTION_SKH
-from charli3_dendrite.lending.fluidtokens.transactions._common import input_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import ref_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
 from charli3_dendrite.lending.fluidtokens.transactions._common import (
     set_validity_window,
 )
+from charli3_dendrite.lending.fluidtokens.transactions._common import value_map_indices
 from charli3_dendrite.lending.fluidtokens.transactions.context import RepaySnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import _to_utxo
 from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
     synth_repayment_receipt,
 )
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    ActionMarkerRepay,
-)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import ActionTypeRepay
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import BoolTrue
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    LoanPolicyMintBurnRedeemer,
-)
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    LoanPolicyWithdrawRedeemer,
-)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import LoanMintRedeemer
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanRepayActionWithdrawRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanSpendRedeemer,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
+    LoanWithdrawRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import RepayData
 from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
@@ -136,7 +132,7 @@ def build_repay(
     )
 
     # --- outputs + redeemer-index resolution from the FINAL canonical ordering -----
-    lender_out, bond_return = _add_repay_outputs(
+    _, bond_return = _add_repay_outputs(
         tx_builder,
         snapshot=snapshot,
         lender_lovelace=lender_lovelace,
@@ -146,11 +142,19 @@ def build_repay(
     repay_rdmr.config_ref_input_index = cfg_idx
     policy_withdraw_rdmr.config_ref_input_index = cfg_idx
     mint_rdmr.config_ref_input_index = cfg_idx
-    mint_rdmr.action_ref_input_index = cfg_idx
-    repay_data.index_0 = input_index(tx_builder, bond_ref)
-    repay_data.index_1 = tx_builder.outputs.index(lender_out)
-    repay_data.index_2 = tx_builder.outputs.index(bond_return)
-    repay_data.index_3 = refs[lender_bond_ref]
+    # On a repay-close burn the loan policy ignores these (only positive mints are
+    # counted); we still point at the config ref for byte-exactness with the capture.
+    mint_rdmr.origin_withdraw_redeemer_index = cfg_idx
+    policy_idx, name_idx = value_map_indices(
+        snapshot.lender_bond.lovelace,
+        snapshot.lender_bond.assets,
+        snapshot.lender_bond_policy,
+        loan_id.hex(),
+    )
+    repay_data.borrower_bond_output_index = tx_builder.outputs.index(bond_return)
+    repay_data.lender_bond_ref_input_index = refs[lender_bond_ref]
+    repay_data.lender_bond_ref_input_policy_id_index = policy_idx
+    repay_data.lender_bond_ref_input_asset_name_index = name_idx
 
 
 def _repay_redeemers(
@@ -158,8 +162,8 @@ def _repay_redeemers(
 ) -> tuple[
     RepayData,
     LoanRepayActionWithdrawRedeemer,
-    LoanPolicyWithdrawRedeemer,
-    LoanPolicyMintBurnRedeemer,
+    LoanWithdrawRedeemer,
+    LoanMintRedeemer,
 ]:
     """The four repay redeemers with placeholder indices (filled once ordering known).
 
@@ -168,10 +172,10 @@ def _repay_redeemers(
     known, so every Redeemer role stays consistent.
     """
     repay_data = RepayData(
-        index_0=0,
-        index_1=0,
-        index_2=0,
-        index_3=0,
+        borrower_bond_output_index=0,
+        lender_bond_ref_input_index=0,
+        lender_bond_ref_input_policy_id_index=0,
+        lender_bond_ref_input_asset_name_index=0,
         loan_id=loan_id,
         is_final_repayment=BoolTrue(),
     )
@@ -181,14 +185,14 @@ def _repay_redeemers(
             config_ref_input_index=0,
             actions_for_each_input=IndefiniteList([repay_data]),
         ),
-        LoanPolicyWithdrawRedeemer(
+        LoanWithdrawRedeemer(
             config_ref_input_index=0,
-            action_marker=ActionMarkerRepay(),
+            action_type=ActionTypeRepay(),
         ),
-        LoanPolicyMintBurnRedeemer(
+        LoanMintRedeemer(
             config_ref_input_index=0,
-            action_marker=ActionMarkerRepay(),
-            action_ref_input_index=0,
+            is_pool_origin=BoolTrue(),
+            origin_withdraw_redeemer_index=0,
         ),
     )
 

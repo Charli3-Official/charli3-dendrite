@@ -38,6 +38,32 @@ def input_index(tx_builder: TransactionBuilder, out_ref: tuple[str, int]) -> int
     raise ValueError(f"input {out_ref} not found")
 
 
+def value_map_indices(
+    lovelace: int,
+    assets: list[tuple[str, str, int]],
+    policy_hex: str,
+    name_hex: str,
+) -> tuple[int, int]:
+    """Position of (policy, asset name) inside a UTxO's on-chain value map.
+
+    The loan validators' ``efficient_quantity_of`` reads the reference input's value as
+    a raw CBOR map and indexes it positionally: ``policyIdIndex`` into the policy
+    entries and ``assetNameIndex`` into that policy's asset entries. The Cardano ledger
+    serializes ``Value`` as an ascending-key map (lovelace under the empty policy id
+    sorts first), so we reproduce that ordering with plain ``bytes`` comparison.
+    """
+    policies: dict[bytes, set[bytes]] = {}
+    if lovelace:
+        policies.setdefault(b"", set()).add(b"")
+    for policy, name, _qty in assets:
+        policies.setdefault(bytes.fromhex(policy), set()).add(bytes.fromhex(name))
+    sorted_policies = sorted(policies)
+    target_policy = bytes.fromhex(policy_hex)
+    policy_id_index = sorted_policies.index(target_policy)
+    asset_name_index = sorted(policies[target_policy]).index(bytes.fromhex(name_hex))
+    return policy_id_index, asset_name_index
+
+
 def reward_address(script_hash: str) -> bytes:
     """The network-tagged reward (stake-script) address bytes for `script_hash`."""
     return bytes(

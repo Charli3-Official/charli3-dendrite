@@ -9,9 +9,9 @@ just decode) produces correct bytes.
 import json
 from pathlib import Path
 
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    BoolTrue,
-)
+from pycardano import IndefiniteList
+
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import BoolTrue
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanChangeCollateralActionWithdrawRedeemer,
 )
@@ -26,7 +26,6 @@ from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import RepayData
 from charli3_dendrite.lending.transactions.base import LendingAction
-from pycardano import IndefiniteList
 
 FIX = json.loads((Path(__file__).parent / "fixtures" / "redeemers.json").read_text())
 
@@ -79,16 +78,16 @@ def test_repay_fresh_construct_matches_capture():
         actions_for_each_input=IndefiniteList(
             [
                 RepayData(
-                    index_0=1,
-                    index_1=0,
-                    index_2=1,
-                    index_3=0,
+                    borrower_bond_output_index=1,
+                    lender_bond_ref_input_index=0,
+                    lender_bond_ref_input_policy_id_index=1,
+                    lender_bond_ref_input_asset_name_index=0,
                     loan_id=bytes.fromhex(
-                        "c83f7c948fa39af8adabefb00bb3d68f829f3018d1e25830ffbc9a08"
+                        "c83f7c948fa39af8adabefb00bb3d68f829f3018d1e25830ffbc9a08",
                     ),
                     is_final_repayment=BoolTrue(),
-                )
-            ]
+                ),
+            ],
         ),
     )
     assert rdmr.to_cbor_hex() == FIX["repay"]["single"]["cbor"]

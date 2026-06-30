@@ -26,25 +26,23 @@ from pycardano import Withdrawals
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_RECAST_ACTION_SKH
-from charli3_dendrite.lending.fluidtokens.transactions._common import input_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import ref_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
+from charli3_dendrite.lending.fluidtokens.transactions._common import value_map_indices
 from charli3_dendrite.lending.fluidtokens.transactions.context import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import _to_utxo
 from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
     synth_recast_receipt,
 )
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    ActionMarkerRecast,
-)
-from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    LoanPolicyWithdrawRedeemer,
-)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import ActionTypeRecast
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanRecastActionWithdrawRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanSpendRedeemer,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
+    LoanWithdrawRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import RecastData
 from charli3_dendrite.utility import asset_to_value
@@ -80,10 +78,10 @@ def build_recast(
     tx_builder.ttl = snapshot.valid_to
 
     recast_data = RecastData(
-        index_0=0,
-        index_1=0,
-        index_2=0,
-        index_3=0,
+        borrower_bond_output_index=0,
+        lender_bond_ref_input_index=0,
+        lender_bond_ref_input_policy_id_index=0,
+        lender_bond_ref_input_asset_name_index=0,
         amount_paid=snapshot.amount_paid,
         loan_id=snapshot.loan_id,
     )
@@ -91,9 +89,9 @@ def build_recast(
         config_ref_input_index=0,
         actions_for_each_input=IndefiniteList([recast_data]),
     )
-    policy_rdmr = LoanPolicyWithdrawRedeemer(
+    policy_rdmr = LoanWithdrawRedeemer(
         config_ref_input_index=0,
-        action_marker=ActionMarkerRecast(),
+        action_type=ActionTypeRecast(),
     )
 
     # --- spend the loan (empty redeemer) + the borrower-bond input -----------------
@@ -126,17 +124,23 @@ def build_recast(
     )
 
     # --- outputs: lender recast payment, continuing loan, bond return, fee ----------
-    lender_out, bond_return = _add_recast_outputs(tx_builder, snapshot=snapshot)
+    _, bond_return = _add_recast_outputs(tx_builder, snapshot=snapshot)
 
     # --- resolve role indices from the FINAL canonical ordering --------------------
     refs = ref_index(tx_builder)
     cfg_idx = refs[config_ref]
     policy_rdmr.config_ref_input_index = cfg_idx
     action_rdmr.config_ref_input_index = cfg_idx
-    recast_data.index_0 = input_index(tx_builder, loan.out_ref)
-    recast_data.index_1 = refs[lender_bond_ref]
-    recast_data.index_2 = tx_builder.outputs.index(bond_return)
-    recast_data.index_3 = tx_builder.outputs.index(lender_out)
+    policy_idx, name_idx = value_map_indices(
+        snapshot.lender_bond.lovelace,
+        snapshot.lender_bond.assets,
+        snapshot.lender_bond_policy,
+        snapshot.loan_id.hex(),
+    )
+    recast_data.borrower_bond_output_index = tx_builder.outputs.index(bond_return)
+    recast_data.lender_bond_ref_input_index = refs[lender_bond_ref]
+    recast_data.lender_bond_ref_input_policy_id_index = policy_idx
+    recast_data.lender_bond_ref_input_asset_name_index = name_idx
 
 
 def _add_recast_outputs(

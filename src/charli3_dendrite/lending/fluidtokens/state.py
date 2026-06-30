@@ -26,6 +26,7 @@ from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
 from charli3_dendrite.lending.fluidtokens.market import FluidMarket
+from charli3_dendrite.lending.fluidtokens.math import amortization_installment
 from charli3_dendrite.lending.fluidtokens.math import health_factor as hf_math
 from charli3_dendrite.lending.fluidtokens.math import installments_pi_amount
 from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
@@ -217,22 +218,33 @@ class FluidLoanState(AbstractLoanState):
                 apy_coef=int(mode_fields[0]),
                 lend_date_ms=ld.lend_date,
                 now_ms=self._now_ms,
+                repaid_installments=ld.repaid_installments,
+                installment_period=ld.installment_period,
+                initial_grace_period=ld.initial_grace_period,
             )
-        # Best-effort for the non-perpetual modes (no live fixture; unvalidated):
-        # total principal+interest spread across the installment schedule, minus the
-        # installments already repaid.
+        # Non-perpetual modes (no live fixture yet): the contract's get_remaining_debt
+        # is (totalInstallments - repaidInstallments) * next_installment, where the
+        # per-installment amount is the amortized annuity (interest-on-remaining-
+        # principal) or the (principal+interest)/installments split.
         installments = ld.total_installments
-        per_installment = installments_pi_amount(
-            principal=ld.principal_amount,
-            interest_rate=ld.interest_rate,
-            total_installments=installments,
-        )
-        if mode_alt in (_REPAYMENT_INTEREST_ON_PRINCIPAL, _REPAYMENT_INSTALLMENTS):
-            remaining = max(installments - ld.repaid_installments, 0)
-            if installments <= 0:
-                return per_installment
-            return per_installment * remaining
-        return ld.principal_amount
+        if installments <= 0:
+            return ld.principal_amount
+        if mode_alt == _REPAYMENT_INTEREST_ON_PRINCIPAL:
+            per_installment = amortization_installment(
+                principal=ld.principal_amount,
+                interest_rate=ld.interest_rate,
+                total_installments=installments,
+            )
+        elif mode_alt == _REPAYMENT_INSTALLMENTS:
+            per_installment = installments_pi_amount(
+                principal=ld.principal_amount,
+                interest_rate=ld.interest_rate,
+                total_installments=installments,
+            )
+        else:
+            return ld.principal_amount
+        remaining = max(installments - ld.repaid_installments, 0)
+        return per_installment * remaining
 
     def _collateral_unit(self) -> str:
         ld: LoanDatum = self.loan_datum  # type: ignore[assignment]

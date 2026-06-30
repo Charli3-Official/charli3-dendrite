@@ -25,7 +25,6 @@ from pycardano import TransactionOutput
 from pycardano import Withdrawals
 
 from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.lending.fluidtokens.transactions._common import input_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import ref_index
 from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
 from charli3_dendrite.lending.fluidtokens.transactions._common import (
@@ -37,7 +36,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.context import (
 from charli3_dendrite.lending.fluidtokens.transactions.context import Utxo
 from charli3_dendrite.lending.fluidtokens.transactions.context import _to_utxo
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    ActionMarkerChangeCollateral,
+    ActionTypeChangeCollateral,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     ChangeCollateralData,
@@ -46,10 +45,10 @@ from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanChangeCollateralActionWithdrawRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    LoanPolicyWithdrawRedeemer,
+    LoanSpendRedeemer,
 )
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
-    LoanSpendRedeemer,
+    LoanWithdrawRedeemer,
 )
 from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
 from charli3_dendrite.utility import asset_to_value
@@ -91,19 +90,19 @@ def build_change_collateral(
     set_validity_window(tx_builder)
 
     cc_data = ChangeCollateralData(
-        index_0=0,
+        borrower_bond_output_index=0,
         new_collateral_amount=target_collateral,
         loan_id=snapshot.loan_id,
-        index_1=0,
-        index_2=0,
+        collateral_oracle_ref_input_index=0,
+        principal_oracle_ref_input_index=0,
     )
     action_rdmr = LoanChangeCollateralActionWithdrawRedeemer(
         config_ref_input_index=0,
         actions_for_each_input=IndefiniteList([cc_data]),
     )
-    policy_rdmr = LoanPolicyWithdrawRedeemer(
+    policy_rdmr = LoanWithdrawRedeemer(
         config_ref_input_index=0,
-        action_marker=ActionMarkerChangeCollateral(),
+        action_type=ActionTypeChangeCollateral(),
     )
 
     # --- spend the loan (empty redeemer) + the borrower-bond input -----------------
@@ -154,27 +153,29 @@ def build_change_collateral(
         datum=RawCBOR(bytes.fromhex(loan.datum)),
     )
     tx_builder.add_output(loan_out)
-    tx_builder.add_output(
-        TransactionOutput(
-            Address.decode(snapshot.borrower_bond.address),
-            asset_to_value(
-                Assets(
-                    **{
-                        "lovelace": OUTPUT_MIN_ADA,
-                        snapshot.bond_policy + snapshot.loan_id.hex(): 1,
-                    },
-                ),
+    bond_return = TransactionOutput(
+        Address.decode(snapshot.borrower_bond.address),
+        asset_to_value(
+            Assets(
+                **{
+                    "lovelace": OUTPUT_MIN_ADA,
+                    snapshot.bond_policy + snapshot.loan_id.hex(): 1,
+                },
             ),
         ),
     )
+    tx_builder.add_output(bond_return)
 
     # --- resolve role indices from the FINAL canonical ordering --------------------
     refs = ref_index(tx_builder)
     cfg_idx = refs[config_ref]
     policy_rdmr.config_ref_input_index = cfg_idx
     action_rdmr.config_ref_input_index = cfg_idx
-    cc_data.index_0 = input_index(tx_builder, loan.out_ref)
-    cc_data.index_1 = refs[oracle_feed_ref]
+    cc_data.borrower_bond_output_index = tx_builder.outputs.index(bond_return)
+    cc_data.collateral_oracle_ref_input_index = refs[oracle_feed_ref]
+    # The principal oracle index is unused for an ADA principal (the on-chain capture
+    # carries 0); a non-ADA principal would set it to the principal oracle ref index.
+    cc_data.principal_oracle_ref_input_index = 0
 
 
 def _skh(script_ref: Utxo) -> str:

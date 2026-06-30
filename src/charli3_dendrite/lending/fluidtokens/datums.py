@@ -51,13 +51,19 @@ class NoLiquidationDutchAuctionClaim(PlutusData):
 
 @dataclass
 class Liquidation(PlutusData):
-    """LiquidationMode variant: liquidate against a loan-to-value threshold."""
+    """LiquidationMode variant: liquidate against a loan-to-value threshold.
+
+    Three fields, matching the deployed datum and `ft-cardano-loans-v3` lib
+    (`general.ak`): the LTV is ``l_tv / l_tv_divider``, and the sign of
+    ``partial_liquidation_penalty_per_mille`` encodes the borrower-equity rule
+    (``< 0`` the borrower loses all collateral; ``>= 0`` the lender pays back the
+    difference; ``> 0`` that per-mille of the debt is kept as a penalty).
+    """
 
     CONSTR_ID = 2
     l_tv: int
     l_tv_divider: int
     partial_liquidation_penalty_per_mille: int
-    equity_in_principal_currency: bool
 
 
 @dataclass
