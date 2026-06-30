@@ -310,6 +310,62 @@ class PoolWithdrawRedeemer(PlutusData):
 
 
 @dataclass
+class PoolMintRedeemer(PlutusData):
+    """Pool-policy MINT/BURN redeemer == ``PoolMintRedeemer`` in pool.ak.
+
+    == Constr0([config_ref_input_index, input_ref]). On a CREATE the pool policy derives
+    the minted pool NFT's asset name as ``0x<index>`` ++ ``blake2b_224(input_ref)``, so
+    ``input_ref`` is the chosen spent input out-ref. On a BURN (cancel) the policy
+    counts only positive mints, so ``input_ref`` only needs to be a spent input; we
+    reproduce the captured value for byte-exactness. Mirrors
+    :class:`RequestMintRedeemer`.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    input_ref: TxOutRef
+
+
+@dataclass
+class PoolCancelAction(PlutusData):
+    """``PoolAction.Cancel`` == Constr0([pool_id]) in pool.ak (``Borrow`` is Constr1).
+
+    ``pool_id`` is the pool NFT asset name.
+    """
+
+    CONSTR_ID = 0
+    pool_id: bytes
+
+
+@dataclass
+class PoolCancelWithdrawRedeemer(PlutusData):
+    """Pool reward (withdraw) redeemer for a single cancel.
+
+    == Constr0([config_ref_input_index, IndefiniteList[PoolCancelAction]]). Distinct
+    from :class:`PoolWithdrawRedeemer` (which coerces to :class:`PoolBorrowAction`); the
+    field stays an untyped ``IndefiniteList`` and ``__post_init__`` rebuilds each
+    element as a :class:`PoolCancelAction`, mirroring :class:`RequestWithdrawRedeemer`.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    actions_for_each_input: IndefiniteList  # elements are PoolCancelAction
+
+    def __post_init__(self) -> None:
+        """Coerce decoded Cancel entries back into :class:`PoolCancelAction`."""
+        self.actions_for_each_input = IndefiniteList(
+            [
+                (
+                    p
+                    if isinstance(p, PoolCancelAction)
+                    else PoolCancelAction.from_primitive(p)
+                )
+                for p in self.actions_for_each_input
+            ],
+        )
+
+
+@dataclass
 class LoanRepayActionWithdrawRedeemer(PlutusData):
     """Repay reward (withdraw) redeemer.
 
