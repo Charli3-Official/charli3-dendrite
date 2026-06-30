@@ -8,12 +8,14 @@ on-chain datum byte-exact (verified in test_datum_synth).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from pycardano import Datum
 from pycardano import PlutusData
 
 from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
+from charli3_dendrite.lending.fluidtokens.datums import CommonData
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 
@@ -191,4 +193,67 @@ def synth_repayment_receipt(
             lender_bond_policy=bytes.fromhex(lender_bond_policy),
             loan_id=loan_id,
         ),
+    )
+
+
+@dataclass
+class PoolTerms:
+    """Lender-chosen terms for a new pool, mapped 1:1 onto :class:`PoolDatum`.
+
+    Holds the raw (already PlutusData-typed) sub-objects so the live create path can
+    pass through the unions (``lender_auth``, ``repayment_mode``, ``liquidation_mode``,
+    etc.) without re-encoding them lossily. ``from_pool_datum`` recovers a
+    :class:`PoolTerms` from a decoded on-chain :class:`PoolDatum` for round-trip
+    verification.
+    """
+
+    permissioned_condition_script_hash: bytes
+    extra_data: Datum
+    common_data: CommonData
+    lender_auth: Datum
+    lender_bond_address: Datum
+    lender_bond_inline_datum_hash: bytes
+    collateral_options: list
+    min_collateral: list
+    min_collateral_divider: list
+    dynamic_collateral_price: Datum
+
+    @classmethod
+    def from_pool_datum(cls, datum: PoolDatum) -> PoolTerms:
+        """Recover lender terms from a decoded on-chain :class:`PoolDatum`."""
+
+        def _as_list(field: Iterable) -> list:
+            return list(field)  # works for plain list and pycardano IndefiniteList
+
+        return cls(
+            permissioned_condition_script_hash=datum.permissioned_condition_script_hash,
+            extra_data=datum.extra_data,
+            common_data=datum.common_data,
+            lender_auth=datum.lender_auth,
+            lender_bond_address=datum.lender_bond_address,
+            lender_bond_inline_datum_hash=datum.lender_bond_inline_datum_hash,
+            collateral_options=_as_list(datum.collateral_options),
+            min_collateral=_as_list(datum.min_collateral),
+            min_collateral_divider=_as_list(datum.min_collateral_divider),
+            dynamic_collateral_price=datum.dynamic_collateral_price,
+        )
+
+
+def synth_pool_datum(terms: PoolTerms) -> PoolDatum:
+    """Build a :class:`PoolDatum` from lender :class:`PoolTerms`.
+
+    ``PoolDatum.__post_init__`` pins the conditional list encodings (empty -> definite,
+    non-empty -> ``IndefiniteList``), so passing plain lists through is sufficient.
+    """
+    return PoolDatum(
+        permissioned_condition_script_hash=terms.permissioned_condition_script_hash,
+        extra_data=terms.extra_data,
+        common_data=terms.common_data,
+        lender_auth=terms.lender_auth,
+        lender_bond_address=terms.lender_bond_address,
+        lender_bond_inline_datum_hash=terms.lender_bond_inline_datum_hash,
+        collateral_options=terms.collateral_options,
+        min_collateral=terms.min_collateral,
+        min_collateral_divider=terms.min_collateral_divider,
+        dynamic_collateral_price=terms.dynamic_collateral_price,
     )
