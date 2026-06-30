@@ -173,6 +173,14 @@ JOBS = {
     "cancel_request": (
         "bbb39d5d0953d7c1560c53b5b66b41c165ec2ee5d1a25d5d2401de0d42d9733f"
     ),
+    # Create a lender pool: mints one pool NFT (asset name = 0x00 ++ hash of the chosen
+    # input out-ref) and locks it + the lender's liquidity + an inline PoolDatum at the
+    # pool spend address. Only the pool mint policy runs.
+    "pool_create": ("a810ebdf8ffbbc6532c5250b588158d9492c7b16e6334efafa7e5fddcb36c4f1"),
+    # Cancel a lender pool: spends the pool UTxO (empty redeemer), burns the pool NFT, and
+    # drives the pool-policy reward (Cancel) authorized by the lender signature; the
+    # liquidity returns to the lender.
+    "pool_cancel": ("ce2b0a8c9cb7d3cc21c987a6377c65177a73da72c3b877cdfe023fd63bcd28b3"),
 }
 
 
