@@ -65,6 +65,50 @@ class RepaymentReceiptDatum(PlutusData):
     lender_bond: LenderBondRef
 
 
+# The receipt's tag bytestring identifying a recast.
+RECAST_TAG = b"recast"
+
+
+@dataclass
+class RecastReceiptDatum(PlutusData):
+    """The recast-receipt datum on the lender output == Constr0([...]).
+
+    Records the recast against the loan: the loan out-ref, the ``recast`` tag, the loan
+    id, and the lender-bond it credits.
+    """
+
+    CONSTR_ID = 0
+    loan_out_ref: TxOutRef
+    tag: bytes
+    loan_id: bytes
+    lender_bond: LenderBondRef
+
+
+def synth_recast_receipt(
+    *,
+    loan_out_ref: tuple[str, int],
+    loan_id: bytes,
+    lender_bond_policy: str,
+) -> RecastReceiptDatum:
+    """Build the recast-receipt datum for the lender output of a recast.
+
+    Pins the receipt to the loan being recast (its out-ref + id) and the lender-bond it
+    credits; reproduces the on-chain datum byte-exact (verified in test_datum_synth).
+    """
+    return RecastReceiptDatum(
+        loan_out_ref=TxOutRef(
+            tx_id=bytes.fromhex(loan_out_ref[0]),
+            index=loan_out_ref[1],
+        ),
+        tag=RECAST_TAG,
+        loan_id=loan_id,
+        lender_bond=LenderBondRef(
+            lender_bond_policy=bytes.fromhex(lender_bond_policy),
+            loan_id=loan_id,
+        ),
+    )
+
+
 def synth_repayment_receipt(
     *,
     loan_datum: LoanDatum,

@@ -67,6 +67,13 @@ class ActionMarkerChangeCollateral(PlutusData):
 
 
 @dataclass
+class ActionMarkerRecast(PlutusData):
+    """The loan-policy action discriminator for a recast == Constr3[] (``d87c80``)."""
+
+    CONSTR_ID = 3
+
+
+@dataclass
 class LoanPolicyWithdrawRedeemer(PlutusData):
     """Loan-policy reward (withdraw) redeemer for a loan action.
 

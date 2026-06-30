@@ -153,6 +153,7 @@ JOBS = {
     "change_collateral": (
         "142d5299952aaafe4f6b08a6ad655345663f536576bac3d8bd48e71b6be9e09d"
     ),
+    "recast": "f4c3e7ebc6e1cc249a7bc5187e5e9581c2dc9eddd8276ae244e6821320377f26",
 }
 
 

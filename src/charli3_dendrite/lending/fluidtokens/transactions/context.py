@@ -30,6 +30,7 @@ from charli3_dendrite.lending.fluidtokens.constants import (
     LOAN_CHANGE_COLLATERAL_ACTION_SKH,
 )
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_POLICY
+from charli3_dendrite.lending.fluidtokens.constants import LOAN_RECAST_ACTION_SKH
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_REPAY_ACTION_SKH
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.constants import PROTOCOL_CONFIG_NFT_POLICY
@@ -227,6 +228,120 @@ def _fee_output(outputs: list[Utxo], loan: Utxo) -> Utxo:
         if not u.assets and u.datum is None and u.address != loan.address
     ]
     return min(candidates, key=lambda u: u.lovelace)
+
+
+@dataclass
+class RecastSnapshot(PoolActionSnapshot):
+    """Resolved building blocks for a single-loan perpetual recast.
+
+    The loan UTxO is spent (empty redeemer) and re-created at the same address with an
+    UPDATED datum (``done_recasts`` + 1, the new capitalized ``principal_amount``, and
+    the new ``lend_date``) and the same collateral; the lender is paid the recast amount
+    via a wallet output carrying a recast receipt; the borrower-bond NFT is returned and
+    a protocol fee is paid. The config NFT + the lender-bond UTxO are reference inputs;
+    the three loan scripts (general_spend, loan policy, recast action) are by reference.
+    The recomputed datum values + paid amount are sourced from the captured action (the
+    e2e replays them); a live builder would derive them from the recast math.
+    """
+
+    loan: Utxo
+    borrower_bond: Utxo
+    funding: Utxo
+    lender_bond: Utxo
+    config: Utxo
+    spend_script_ref: Utxo
+    loan_policy_script_ref: Utxo
+    action_script_ref: Utxo
+    lender_address: str
+    fee_address: str
+    fee_lovelace: int
+    amount_paid: int
+    new_principal_amount: int
+    new_lend_date: int
+    valid_from: int
+    valid_to: int
+    loan_id: bytes
+    loan_policy: str
+    bond_policy: str
+    lender_bond_policy: str
+
+    @property
+    def new_loan_datum(self) -> LoanDatum:
+        """The continuing loan's updated :class:`LoanDatum` (recast applied).
+
+        Mutates a copy of the spent loan's datum: ``done_recasts`` + 1, the new
+        capitalized principal, and the new lend date. Reproduces the on-chain loan
+        output datum byte-exact (verified in test_recast).
+        """
+        if self.loan.datum is None:
+            raise ValueError("snapshot loan UTxO is missing its datum")
+        datum = LoanDatum.from_cbor(bytes.fromhex(self.loan.datum))
+        datum.done_recasts += 1
+        datum.principal_amount = self.new_principal_amount
+        datum.lend_date = self.new_lend_date
+        return datum
+
+    @classmethod
+    def from_capture(cls, fix: dict) -> RecastSnapshot:
+        """Rebuild a `RecastSnapshot` from a captured real recast (fixture replay)."""
+        inputs = [_as_utxo(u) for u in fix["inputs"]]
+        ref_inputs = [_as_utxo(u) for u in fix["ref_inputs"]]
+        outputs = [_as_utxo(u) for u in fix["outputs"]]
+
+        loan = next(
+            u
+            for u in inputs
+            if u.datum and _parses_loan(u.datum) and u.holds_policy(LOAN_POLICY)
+        )
+        loan_id = next(bytes.fromhex(n) for p, n, _ in loan.assets if p == LOAN_POLICY)
+        borrower_bond = next(
+            u for u in inputs if u.holds(BORROWER_BOND_POLICY, loan_id.hex())
+        )
+        # The borrower's funding input (no native assets); its out-ref can sort before
+        # the loan, so it must be present for the action's input indices to line up.
+        funding = next(u for u in inputs if not u.assets and u.out_ref != loan.out_ref)
+        config = next(
+            u for u in ref_inputs if u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        lender_bond = next(
+            u for u in ref_inputs if u.holds(LENDER_BOND_POLICY, loan_id.hex())
+        )
+        loan_out = next(
+            u
+            for u in outputs
+            if u.address == loan.address
+            and u.datum is not None
+            and u.holds(LOAN_POLICY, loan_id.hex())
+        )
+        if loan_out.datum is None:
+            raise ValueError("recast loan output is missing its datum")
+        new_loan_datum = LoanDatum.from_cbor(bytes.fromhex(loan_out.datum))
+        lender_out = next(
+            u for u in outputs if u.datum is not None and u.address != loan.address
+        )
+        fee_out = _fee_output(outputs, loan)
+        return cls(
+            loan=loan,
+            borrower_bond=borrower_bond,
+            funding=funding,
+            lender_bond=lender_bond,
+            config=config,
+            spend_script_ref=_script_ref_by_hash(ref_inputs, LOAN_SPEND_SKH),
+            loan_policy_script_ref=_script_ref_by_hash(ref_inputs, LOAN_POLICY),
+            action_script_ref=_script_ref_by_hash(ref_inputs, LOAN_RECAST_ACTION_SKH),
+            lender_address=lender_out.address,
+            fee_address=fee_out.address,
+            fee_lovelace=fee_out.lovelace,
+            amount_paid=lender_out.lovelace,
+            new_principal_amount=new_loan_datum.principal_amount,
+            new_lend_date=new_loan_datum.lend_date,
+            valid_from=int(fix["invalid_before"]),
+            valid_to=int(fix["invalid_hereafter"]),
+            loan_id=loan_id,
+            loan_policy=LOAN_POLICY,
+            bond_policy=BORROWER_BOND_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+        )
 
 
 @dataclass
