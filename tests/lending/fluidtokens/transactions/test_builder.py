@@ -50,6 +50,8 @@ _CASES = {
     LendingAction.RECAST: ("recast.json", RecastSnapshot),
     LendingAction.REQUEST_CREATE: ("create_request.json", CreateRequestSnapshot),
     LendingAction.REQUEST_CANCEL: ("cancel_request.json", CancelRequestSnapshot),
+    LendingAction.POOL_CREATE: ("pool_create.json", CreatePoolSnapshot),
+    LendingAction.POOL_CANCEL: ("pool_cancel.json", CancelPoolSnapshot),
 }
 _PARAMS = ActionParams(actor_address="unused")
 
@@ -149,42 +151,3 @@ def test_resolve_snapshot_is_not_wired_yet():
             action=LendingAction.BORROW,
             params=_PARAMS,
         )
-
-
-@pytest.mark.parametrize(
-    ("action", "snapshot_cls", "fixture", "slot_key"),
-    [
-        (
-            LendingAction.POOL_CREATE,
-            CreatePoolSnapshot,
-            "pool_create.json",
-            "block_time",
-        ),
-        (
-            LendingAction.POOL_CANCEL,
-            CancelPoolSnapshot,
-            "pool_cancel.json",
-            "invalid_before",
-        ),
-    ],
-)
-def test_builder_dispatches_pool_actions(
-    action, snapshot_cls, fixture, slot_key
-) -> None:
-    fix = _fixture(fixture)
-    snapshot = snapshot_cls.from_capture(fix)
-    tx_builder = TransactionBuilder(EvalContext(last_block_slot=fix[slot_key]))
-    FluidTokensTxBuilder().contribute(
-        action,
-        tx_builder,
-        snapshot=snapshot,
-        params=ActionParams(actor_address=""),
-    )
-    tx = Transaction.from_cbor(assemble_unsigned(tx_builder))
-    assert tx.transaction_body.outputs or tx.transaction_body.mint
-
-
-def test_pool_actions_are_supported() -> None:
-    actions = FluidTokensTxBuilder.supported_actions()
-    assert LendingAction.POOL_CREATE in actions
-    assert LendingAction.POOL_CANCEL in actions

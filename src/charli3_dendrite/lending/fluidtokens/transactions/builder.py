@@ -74,7 +74,7 @@ _SNAPSHOT_TYPE = {
 
 
 class FluidTokensTxBuilder(AbstractLendingTxBuilder):
-    """Builds FluidTokens borrow / repay / modify / recast / request txs."""
+    """Builds FluidTokens borrow / repay / modify / recast / request / pool txs."""
 
     @classmethod
     def protocol(cls) -> str:
@@ -161,5 +161,10 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
             )
         elif action == LendingAction.POOL_CREATE:
             build_create_pool(tx_builder, snapshot=cast(CreatePoolSnapshot, snapshot))
-        else:  # LendingAction.POOL_CANCEL
+        elif action == LendingAction.POOL_CANCEL:
             build_cancel_pool(tx_builder, snapshot=cast(CancelPoolSnapshot, snapshot))
+        else:
+            # `_SNAPSHOT_TYPE` admitted the action but no branch dispatches it: a new
+            # entry was added without wiring it here. Fail loudly rather than fall
+            # through to a mis-cast contributor.
+            raise NotImplementedError(f"contribute for {action}")
