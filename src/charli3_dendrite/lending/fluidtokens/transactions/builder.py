@@ -76,6 +76,7 @@ _SNAPSHOT_TYPE = {
 }
 
 
+# TODO(dry): hoist to a shared infra out-ref parser (also in danogo).
 def _parse_out_ref(out_ref: str) -> tuple[str, int]:
     """Parse a ``tx_hash#index`` string into a ``(tx_hash, index)`` pair."""
     tx_hash, _, idx = out_ref.partition("#")

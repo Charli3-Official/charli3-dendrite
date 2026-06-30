@@ -17,6 +17,12 @@ from charli3_dendrite.lending.fluidtokens.transactions.context import (  # noqa:
 from charli3_dendrite.lending.fluidtokens.transactions.context import (  # noqa: E402
     CreatePoolSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.context import (  # noqa: E402
+    _as_utxo,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.context import (  # noqa: E402
+    ogmios_entry,
+)
 from charli3_dendrite.lending.fluidtokens.transactions.pool import (  # noqa: E402
     build_cancel_pool,
 )
@@ -29,11 +35,6 @@ from charli3_dendrite.lending.transactions.infra import evaluate_tx_cbor  # noqa
 from pycardano import TransactionBuilder  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-_SCRIPT_LANG = {
-    "plutusV1": "plutus:v1",
-    "plutusV2": "plutus:v2",
-    "plutusV3": "plutus:v3",
-}
 
 
 def _gate(file: str) -> pytest.MarkDecorator:
@@ -43,26 +44,8 @@ def _gate(file: str) -> pytest.MarkDecorator:
     )
 
 
-def _utxo_entry(u: dict[str, Any]) -> dict[str, Any]:
-    value: dict[str, Any] = {"ada": {"lovelace": int(u["lovelace"])}}
-    for policy, asset_name, qty in u["assets"]:
-        value.setdefault(policy, {})[asset_name] = int(qty)
-    entry: dict[str, Any] = {
-        "transaction": {"id": u["out_ref"][0]},
-        "index": u["out_ref"][1],
-        "address": u["address"],
-        "value": value,
-    }
-    if u.get("datum"):
-        entry["datum"] = u["datum"]
-    if u.get("ref_script"):
-        lang = _SCRIPT_LANG.get(u.get("ref_script_type") or "", "plutus:v3")
-        entry["script"] = {"language": lang, "cbor": u["ref_script"]}
-    return entry
-
-
 def _additional_utxo(fix: dict[str, Any]) -> list[dict[str, Any]]:
-    return [_utxo_entry(u) for u in fix["inputs"] + fix["ref_inputs"]]
+    return [ogmios_entry(_as_utxo(u)) for u in fix["inputs"] + fix["ref_inputs"]]
 
 
 @_gate("pool_create.json")

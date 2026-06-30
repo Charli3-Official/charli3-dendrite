@@ -122,10 +122,12 @@ _SCRIPT_LANG = {
 
 
 def ogmios_entry(u: Utxo) -> dict[str, Any]:
-    """The Ogmios ``additionalUtxo`` entry for a resolved `Utxo`.
+    """Serialize any resolved `Utxo` into its Ogmios ``additionalUtxo`` entry.
 
-    Funding (actor) inputs may already be spent / freshly created, so Ogmios cannot
-    resolve them from its own ledger snapshot; they are supplied here for evaluation.
+    Used both for funding (actor) inputs when building a tx and, in the e2e replays, for
+    spent/reference inputs. Funding inputs may already be spent / freshly created, so
+    Ogmios cannot resolve them from its own ledger snapshot; they are supplied here for
+    evaluation.
     """
     if u.out_ref is None:
         raise ValueError("cannot build an additionalUtxo entry without an out-ref")
