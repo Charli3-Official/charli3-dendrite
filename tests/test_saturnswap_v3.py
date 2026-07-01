@@ -182,3 +182,16 @@ def test_v3_premium_payment_uncovered_is_none() -> None:
     """Uncovered orders owe no premium."""
     datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
     assert datum.premium_payment(1_000_000) is None
+
+
+def test_v3_relist_carries_coverage_and_floor_forward() -> None:
+    """A covered order's partial-fill relist carries coverage + floor forward."""
+    covered = SaturnSwapSwapDatumV3.from_cbor(_hex("order_b6bcaeb6_out1_cov_some.hex"))
+    relist = covered.build_relist_datum(
+        spent_tx_hash=_B6BCAE_TX,
+        spent_index=1,
+        user_sell_amount=400,  # partial (buy side is 1000)
+    )
+    assert isinstance(relist.coverage, SaturnSwapSomeCoverage)
+    assert relist.coverage.value.premium_bps == covered.coverage.value.premium_bps
+    assert relist.min_partial_fill == covered.min_partial_fill
