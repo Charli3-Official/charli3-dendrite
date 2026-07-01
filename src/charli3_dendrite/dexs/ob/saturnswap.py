@@ -376,6 +376,28 @@ class SaturnSwapSwapDatumV3(OrderDatum):
             coverage=self.coverage,
         )
 
+    def premium_payment(
+        self,
+        user_sell_amount: int,
+    ) -> tuple[str, Assets] | None:
+        """Aegis premium owed for a fill: ``(vault_bech32, buy-asset premium)``.
+
+        ``None`` for uncovered orders. The premium is out-of-pocket for the filler,
+        denominated in the BUY asset, and paid to the coverage vault as a real
+        output the validator requires on a covered fill.
+        """
+        if not self.is_covered():
+            return None
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return (
+            self.coverage.value.vault.to_address().encode(),
+            Assets(**{buy_unit: self.premium_for_fill(user_sell_amount)}),
+        )
+
 
 @dataclass
 class SaturnSwapSwapAction(PlutusData):
@@ -941,10 +963,6 @@ class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
         two_ada = 2_000_000
         user_sell_amount = int(in_assets.quantity())
 
-        # Covered fills must emit the Aegis premium output; handled separately.
-        if self.order_datum.is_covered():
-            msg = "covered SaturnSwap V3 fills require the premium output path"
-            raise NotImplementedError(msg)
         # Reject a partial below the on-chain min_partial_fill floor.
         self.order_datum.check_min_partial_fill(user_sell_amount)
 
@@ -1017,6 +1035,26 @@ class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
             new_amount_sell,
             payment_datum,
         )
+
+        # Covered orders owe an out-of-pocket premium output (buy asset) to the
+        # Aegis vault; the validator requires it and enforces vault distinctness.
+        premium = self.order_datum.premium_payment(user_sell_amount)
+        if premium is not None:
+            vault_bech32, premium_assets = premium
+            vault_address = Address.decode(vault_bech32)
+            if vault_address.payment_part == owner_address.payment_part:
+                msg = "coverage vault must differ from the order owner"
+                raise ValueError(msg)
+            premium_output = TransactionOutput(
+                address=vault_address,
+                amount=asset_to_value(premium_assets),
+                datum=payment_datum,
+            )
+            premium_output.amount.coin = max(
+                premium_output.amount.coin,
+                min_lovelace(tx_builder.context, output=premium_output),
+            )
+            tx_builder.add_output(premium_output)
 
         action = SaturnSwapSwapAction(
             user_sell_amount=user_sell_amount,

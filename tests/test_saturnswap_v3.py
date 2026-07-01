@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.ob.saturnswap import _SATURNSWAP_ORDER_STATE_CLASSES
 from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
@@ -156,3 +157,28 @@ def test_v3_relist_datum_reconstructs_real_partial() -> None:
         user_sell_amount=3_000_000,
     )
     assert relist.to_cbor_hex() == _hex("order_ad182bcd.hex")
+
+
+# Covered order b6bcaeb6...#1: sell 4 ADA / buy 1000 WIFF, premium_bps=100.
+# Full fill delivers 1000 WIFF -> premium = max(1, 1000*100//10000) = 10 WIFF to
+# the Aegis vault (payment credential 63e326c9...).
+_COVERED_PREMIUM = 10
+_VAULT_CRED_PREFIX = "63e326c9"
+
+
+def test_v3_premium_payment_covered() -> None:
+    """A covered fill owes premium_for_fill of the BUY asset to the Aegis vault."""
+    datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_b6bcaeb6_out1_cov_some.hex"))
+    payment = datum.premium_payment(datum.amount_buy)  # full fill
+    assert payment is not None
+    vault, premium = payment
+    buy_unit = datum.policy_id_buy.hex() + datum.asset_name_buy.hex()
+    assert premium == Assets(**{buy_unit: _COVERED_PREMIUM})
+    vault_cred = bytes(Address.decode(vault).payment_part).hex()
+    assert vault_cred.startswith(_VAULT_CRED_PREFIX)
+
+
+def test_v3_premium_payment_uncovered_is_none() -> None:
+    """Uncovered orders owe no premium."""
+    datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
+    assert datum.premium_payment(1_000_000) is None
