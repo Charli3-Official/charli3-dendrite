@@ -18,10 +18,14 @@ from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
 from charli3_dendrite.lending.fluidtokens.datums import CommonData
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
+from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
 
 # Origin-id tag a pool-origin loan datum carries: the loan's ``origin_id`` is this tag
 # followed by the originating pool's NFT asset name (`b"POOL" + pool_id`).
 ORIGIN_POOL_TAG = b"POOL"
+
+# Origin-id tag a request-origin loan datum carries: ``b"REQUEST" + request_id``.
+ORIGIN_REQUEST_TAG = b"REQUEST"
 
 # The receipt's tag bytestring identifying an installment repayment.
 INSTALLMENT_REPAYMENT_TAG = b"installment_repayment"
@@ -159,6 +163,64 @@ def synth_loan_datum(
         origin_id=ORIGIN_POOL_TAG + pool_id,
         collateral=chosen,
     )
+
+
+def synth_loan_datum_from_request(
+    *,
+    request_datum: RequestDatum,
+    request_id: bytes,
+    given_principal_amount: int,
+    lend_date: int,
+) -> LoanDatum:
+    """Build the loan's :class:`LoanDatum` for a request-fill (``Lend``).
+
+    Reproduces the on-chain loan output datum byte-exact (verified in test_lend): a
+    fresh loan starts with ``done_recasts`` / ``repaid_installments`` at 0, carries the
+    lender-supplied ``given_principal_amount`` and a ``lend_date`` equal to the validity
+    upper bound (POSIX ms), and inherits every loan term from the request's
+    ``common_data``. The ``origin_id`` is ``b"REQUEST"`` + the request NFT name, and the
+    collateral is the request's collateral carried through verbatim.
+    """
+    common = request_datum.common_data
+    collateral = request_datum.collateral
+    if not isinstance(collateral, CollateralAsset):
+        collateral = CollateralAsset.from_primitive(collateral)
+    return LoanDatum(
+        done_recasts=0,
+        principal_amount=given_principal_amount,
+        lend_date=lend_date,
+        repaid_installments=0,
+        interest_rate=common.interest_rate,
+        total_installments=common.total_installments,
+        principal_asset=common.principal_asset,
+        principal_oracle_asset=common.principal_oracle_asset,
+        installment_period=common.installment_period,
+        initial_grace_period=common.initial_grace_period,
+        liquidation_mode=common.liquidation_mode,
+        repayment_mode=common.repayment_mode,
+        repayment_time_window=common.repayment_time_window,
+        penalty_fee_for_late_repayment=common.penalty_fee_for_late_repayment,
+        repayment_receipts=common.repayment_receipts,
+        origin_id=ORIGIN_REQUEST_TAG + request_id,
+        collateral=collateral,
+    )
+
+
+def request_principal_bounds(
+    request_datum: RequestDatum,
+    *,
+    collateral_amount: int,
+) -> tuple[int, int]:
+    """The static ``[min, max]`` principal a lender may supply against a request.
+
+    Mirrors the contract's static check (`request.ak` / `finance.ak`): the minimum is
+    ``ceil(collateral_amount / (min_principal / min_principal_divider))`` and the
+    maximum is the request's ``max_principal``. Oracle (dynamic) pricing is out of
+    scope for L2.
+    """
+    numerator = collateral_amount * request_datum.min_principal_divider
+    min_principal = -(-numerator // request_datum.min_principal)  # ceil division
+    return min_principal, request_datum.max_principal
 
 
 def synth_repayment_receipt(
