@@ -48,3 +48,23 @@ def test_request_principal_bounds_ceils_the_min_and_returns_max() -> None:
     expected_lo = -(-(1_000 * datum.min_principal_divider) // datum.min_principal)
     assert lo == expected_lo
     assert hi == datum.max_principal
+
+
+def test_synth_reproduces_captured_loan_datum() -> None:
+    import json
+    from pathlib import Path
+
+    from charli3_dendrite.lending.fluidtokens.transactions.context import LendSnapshot
+    from charli3_dendrite.utility import slot_to_posix_ms
+
+    fix = json.loads(
+        (Path(__file__).parent / "fixtures" / "lend.json").read_text(),
+    )
+    snap = LendSnapshot.from_capture(fix)
+    loan = synth_loan_datum_from_request(
+        request_datum=snap.request_datum,
+        request_id=snap.request_id,
+        given_principal_amount=snap.given_principal_amount,
+        lend_date=slot_to_posix_ms(snap.valid_to),
+    )
+    assert loan.to_cbor().hex() == fix["loan_out_datum"]
