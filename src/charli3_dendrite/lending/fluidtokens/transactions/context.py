@@ -968,12 +968,23 @@ class LendSnapshot(PoolActionSnapshot):
         the borrower address, collateral, and principal bounds, and its value supplies
         the request NFT name. The config NFT + the five script refs (request policy,
         request spend, loan policy, both bond policies) are resolved unless pinned by
-        out-ref. ``given_principal_amount`` defaults to the request's ``maxPrincipal``;
-        the oracle / permissioned indices default to ``0`` (inert in the static
+        out-ref. ``given_principal_amount`` defaults to the request's ``maxPrincipal``
+        (and is validated against the request's static ``[min, max]`` bounds); the
+        oracle / permissioned indices default to ``0`` (inert in the static
         permissionless case). The borrower output lovelace equals the principal (ADA),
         and the loan output carries ``loan_lovelace`` + the request's collateral
         unchanged.
+
+        ``valid_from`` / ``valid_to`` pin the transaction's validity window (and the
+        loan's baked-in maturity). When omitted they default to a live window derived
+        from the backend tip -- ``valid_from`` = the current slot, ``valid_to`` =
+        ``valid_from`` + ``LOAN_ACTION_VALIDITY_SLOTS`` -- matching the
+        ``set_validity_window`` convention the other loan actions use; pass them
+        explicitly to replay a captured window byte-exact.
         """
+        from charli3_dendrite.lending.fluidtokens.transactions._common import (
+            LOAN_ACTION_VALIDITY_SLOTS,
+        )
         from charli3_dendrite.lending.fluidtokens.transactions._common import (
             address_from_plutus,
         )
@@ -993,6 +1004,7 @@ class LendSnapshot(PoolActionSnapshot):
         from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
             resolve_utxo_by_outref,
         )
+        from charli3_dendrite.lending.transactions.infra import current_slot
 
         request = resolve_utxo_by_outref(
             backend,
@@ -1009,11 +1021,33 @@ class LendSnapshot(PoolActionSnapshot):
         collateral = next(
             (p, n, q) for p, n, q in request.assets if p != REQUEST_POLICY
         )
-        _min_principal, max_principal = request_principal_bounds(
+        min_principal, max_principal = request_principal_bounds(
             datum,
             collateral_amount=collateral[2],
         )
         principal = given_principal_amount or max_principal
+        if not min_principal <= principal <= max_principal:
+            raise ValueError(
+                f"lend principal {principal} is outside the request's static bounds "
+                f"[{min_principal}, {max_principal}]",
+            )
+
+        # When the caller does not pin the validity window, derive it live from the
+        # backend tip, mirroring `set_validity_window` (used by build_repay /
+        # build_change_collateral): lower bound = current slot, upper bound = lower +
+        # LOAN_ACTION_VALIDITY_SLOTS. `build_lend` consumes these verbatim, so leaving
+        # them at 0 would emit an unusable (slot-0 validity + maturity) transaction.
+        if valid_from is None or valid_to is None:
+            tip = current_slot(backend)
+            resolved_valid_from = valid_from if valid_from is not None else tip
+            resolved_valid_to = (
+                valid_to
+                if valid_to is not None
+                else resolved_valid_from + LOAN_ACTION_VALIDITY_SLOTS
+            )
+        else:
+            resolved_valid_from = valid_from
+            resolved_valid_to = valid_to
 
         def _ref(
             outref: tuple[str, int] | None,
@@ -1066,8 +1100,8 @@ class LendSnapshot(PoolActionSnapshot):
             collateral_amount=collateral[2],
             loan_lovelace=loan_lovelace,
             borrower_output_lovelace=principal,
-            valid_from=valid_from if valid_from is not None else 0,
-            valid_to=valid_to if valid_to is not None else 0,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
             request_policy=REQUEST_POLICY,
             loan_policy=LOAN_POLICY,
             lender_bond_policy=LENDER_BOND_POLICY,
