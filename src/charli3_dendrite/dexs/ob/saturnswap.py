@@ -17,6 +17,7 @@ from pycardano import PaymentSigningKey
 from pycardano import PaymentVerificationKey
 from pycardano import PlutusData
 from pycardano import PlutusV2Script
+from pycardano import PlutusV3Script
 from pycardano import Redeemer
 from pycardano import TransactionBuilder
 from pycardano import TransactionId
@@ -62,6 +63,12 @@ SATURNSWAP_ORDER_ADDRESS = (
 SATURNSWAP_LEGACY_ORDER_ADDRESS = (
     "addr1zyd0sj57d9lpu7cy9g9qdurpazqc9l4eaxk6j59nd2gkh4"
     "275jq4yvpskgayj55xegdp30g5rfynax66r8vgn9fldndsqzf5tn"
+)
+# V3 (PlutusV3) contract; script hash
+# 6023f59dce0064f1d6d27594dbea25bc4305a9f6a10f3a064037553a.
+SATURNSWAP_V3_ORDER_ADDRESS = (
+    "addr1z9sz8avaecqxfuwk6f6efkl2yk7yxpdf76ss7wsxgqm42w"
+    "h2l9cdyhc0eja9mxq0lgeer90edhlfymnxv2ym3szcetqsp0ume8"
 )
 
 # When the protocol shares its authorize hot-key, set this env var to the signing
@@ -200,6 +207,119 @@ class SaturnSwapSwapDatum(OrderDatum):
 
 
 @dataclass
+class SaturnSwapOutputReferenceV3(PlutusData):
+    """Flat OutputReference: Constr0[tx_id: bytes(32), index]. No TxId wrapper."""
+
+    CONSTR_ID = 0
+    tx_id: bytes
+    index: int
+
+
+@dataclass
+class SaturnSwapPaymentDatumV3(PlutusData):
+    """PaymentDatum { output_reference } with the flat V3 OutputReference."""
+
+    CONSTR_ID = 0
+    output_reference: SaturnSwapOutputReferenceV3
+
+
+@dataclass
+class SaturnSwapCoverage(PlutusData):
+    """Aegis coverage { vault, premium_bps, policy_ref }."""
+
+    CONSTR_ID = 0
+    vault: PlutusFullAddress
+    premium_bps: int
+    policy_ref: SaturnSwapOutputReferenceV3
+
+
+@dataclass
+class SaturnSwapSomeCoverage(PlutusData):
+    """Some(Coverage) wrapper for Option<Coverage>."""
+
+    CONSTR_ID = 0
+    value: SaturnSwapCoverage
+
+
+@dataclass
+class SaturnSwapSwapDatumV3(OrderDatum):
+    """V3 SwapDatum (11 fields).
+
+    Extends the V2 layout with ``min_partial_fill`` and optional Aegis
+    ``coverage``, and uses the flat :class:`SaturnSwapOutputReferenceV3`.
+    """
+
+    CONSTR_ID = 0
+    owner: PlutusFullAddress
+    policy_id_sell: bytes
+    asset_name_sell: bytes
+    amount_sell: int
+    policy_id_buy: bytes
+    asset_name_buy: bytes
+    amount_buy: int
+    valid_before_time: Union[PlutusNone, SaturnSwapSomeInt]
+    output_reference: SaturnSwapOutputReferenceV3
+    min_partial_fill: int
+    coverage: Union[SaturnSwapSomeCoverage, PlutusNone]
+
+    def pool_pair(self) -> Assets | None:
+        """Return the asset pair for this swap datum."""
+        sell_unit = (
+            "lovelace"
+            if self.policy_id_sell == b""
+            else self.policy_id_sell.hex() + self.asset_name_sell.hex()
+        )
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return Assets(**{sell_unit: 0}) + Assets(**{buy_unit: 0})
+
+    def address_source(self) -> str | None:
+        """Return the maker address as a bech32 string."""
+        return self.owner.to_address().encode()
+
+    def requested_amount(self) -> Assets:
+        """Return the requested buy asset amount."""
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return Assets(**{buy_unit: self.amount_buy})
+
+    def order_type(self) -> OrderType | None:
+        """Return the order type classification."""
+        return OrderType.swap
+
+    def is_covered(self) -> bool:
+        """Return whether the order carries Aegis coverage."""
+        return isinstance(self.coverage, SaturnSwapSomeCoverage)
+
+    def premium_bps(self) -> int | None:
+        """Coverage premium in basis points, or None when uncovered."""
+        return self.coverage.value.premium_bps if self.is_covered() else None
+
+    def coverage_vault(self) -> str | None:
+        """Aegis vault bech32 address, or None when uncovered."""
+        if not self.is_covered():
+            return None
+        return self.coverage.value.vault.to_address().encode()
+
+    def premium_for_fill(self, user_sell_amount: int) -> int:
+        """Out-of-pocket premium (buy asset) for a fill of ``user_sell_amount``.
+
+        ``max(1, user_sell_amount * premium_bps // 10000)`` for covered orders;
+        ``0`` when uncovered.
+        """
+        if not self.is_covered():
+            return 0
+        base = (user_sell_amount * self.coverage.value.premium_bps) // 10_000
+        return max(1, base)
+
+
+@dataclass
 class SaturnSwapSwapAction(PlutusData):
     """SwapAction(user_sell_amount, input_index, output_index)."""
 
@@ -311,8 +431,8 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
         return SaturnSwapSwapDatum
 
     @classmethod
-    def default_script_class(cls) -> type[PlutusV2Script]:
-        """Return default script type."""
+    def default_script_class(cls) -> type[PlutusV2Script] | type[PlutusV3Script]:
+        """Return default script type (V2 base; the V3 leaf overrides)."""
         return PlutusV2Script
 
     @property
@@ -699,9 +819,42 @@ class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
         return [SATURNSWAP_LEGACY_ORDER_ADDRESS]
 
 
+class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
+    """V3 (PlutusV3) SaturnSwap order state — 1% taker-fee contract.
+
+    Orders resting at :data:`SATURNSWAP_V3_ORDER_ADDRESS` (script hash
+    ``6023f59d…``). Same 1% non-auth taker fee as the live V2 contract; the datum
+    is the 11-field :class:`SaturnSwapSwapDatumV3` (flat OutputReference +
+    ``min_partial_fill`` + optional coverage) and the script is PlutusV3.
+    """
+
+    TAKER_FEE_BPS: ClassVar[int] = SATURNSWAP_TAKER_FEE_BPS
+
+    @classmethod
+    def dex(cls) -> str:
+        """Return the DEX name."""
+        return "SaturnSwap"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Return order script addresses (V3 contract)."""
+        return [SATURNSWAP_V3_ORDER_ADDRESS]
+
+    @classmethod
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Return the V3 order datum class."""
+        return SaturnSwapSwapDatumV3
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V3 orders are spent via a PlutusV3 reference script."""
+        return PlutusV3Script
+
+
 # Concrete SaturnSwap contracts, newest first. The order book walks all of these
-# so both the live 1% contract and the legacy 4% contract are aggregated.
+# so the V3, live 1%, and legacy 4% contracts are aggregated.
 _SATURNSWAP_ORDER_STATE_CLASSES: list[type[_SaturnSwapOrderStateBase]] = [
+    SaturnSwapV3OrderState,
     SaturnSwapOrderState,
     SaturnSwapLegacyOrderState,
 ]
