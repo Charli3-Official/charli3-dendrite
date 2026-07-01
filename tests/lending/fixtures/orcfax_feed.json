@@ -1,0 +1,17 @@
+{
+  "feed_id": "CER/ADA-USD/3",
+  "feed_id_prefix": "4345522f4144412d5553442f33",
+  "feed_address": "addr1wyvnaejjzxanknsw5hm4raq4y6f4tfjsut3hqmmztn035jc4rpcfn",
+  "feed_policy": "193ee65211bb3b4e0ea5f751f415269355a650e2e3706f625cdf1a4b",
+  "feed_name": "",
+  "feed_nft": "193ee65211bb3b4e0ea5f751f415269355a650e2e3706f625cdf1a4b",
+  "datum_cbor": "d8799fd8799f4d4345522f4144412d5553442f331b0000019edc8ac6a2d8799f1a00027e051a000f4240ffffd8799f581c3c12f6735ef87655c5b27bced3f828d857d0a27fd20f2cda18ebf2fbffff",
+  "datum_hash": "068ef4a31b13655097b6fbfd8296ceb5465d04419095743faeb78829f4432953",
+  "tx_hash": "a16b451afbb11198a0f179d79c5dc6ebe863e2c348783e088a3d8c0f5952b91f",
+  "tx_index": 0,
+  "block_no": 13567259,
+  "block_time": "2026-06-18 21:03:37",
+  "num": 163333,
+  "denom": 1000000,
+  "created_at": 1781816542882
+}
