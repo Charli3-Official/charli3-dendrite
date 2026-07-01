@@ -1072,6 +1072,23 @@ class LendSnapshot(PoolActionSnapshot):
         else:
             funding = []
 
+        # The new loan is created at the loan spend script's payment credential paired
+        # with the staking credential inherited from the spent request UTxO -- the
+        # borrower's chosen action-withdraw credential that governs the loan lifecycle.
+        # The Lend validator enforces this carry-over, so the loan output address must
+        # reuse the request's stake part; LOAN_ADDRESS only pins the payment credential
+        # (its stake part is a placeholder that does not match a live request).
+        loan_address = LOAN_ADDRESS
+        if request.address is not None:
+            request_address = Address.decode(request.address)
+            loan_address = str(
+                Address(
+                    payment_part=Address.decode(LOAN_ADDRESS).payment_part,
+                    staking_part=request_address.staking_part,
+                    network=request_address.network,
+                ),
+            )
+
         return cls(
             request=request,
             funding=funding,
@@ -1087,7 +1104,7 @@ class LendSnapshot(PoolActionSnapshot):
                 borrower_bond_ref_outref,
                 BORROWER_BOND_POLICY,
             ),
-            loan_address=LOAN_ADDRESS,
+            loan_address=loan_address,
             borrower_address=borrower_address,
             request_id=request_id,
             loan_id=loan_nft_name(request.out_ref),
