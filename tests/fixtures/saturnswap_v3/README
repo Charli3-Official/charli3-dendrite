@@ -1,0 +1,109 @@
+SaturnSwap V3 order datum fixtures
+==================================
+
+Real mainnet SwapDatum CBOR (inline / datum-hash-resolved) captured from the V3
+order script address and from the filler-repo cited on-chain proof transactions.
+Captured via the public Koios mainnet API (no key).
+
+V3 order script address:
+  addr1z9sz8avaecqxfuwk6f6efkl2yk7yxpdf76ss7wsxgqm42wh2l9cdyhc0eja9mxq0lgeer90edhlfymnxv2ym3szcetqsp0ume8
+  script hash: 6023f59dce0064f1d6d27594dbea25bc4305a9f6a10f3a064037553a
+
+Each *.hex file is the raw datum CBOR hex on a single line (no trailing newline),
+suitable for `bytes.fromhex(open(f).read().strip())` -> cbor2.loads / PlutusData.from_cbor.
+
+Fixtures
+--------
+
+order_ad182bcd.hex
+  Source: LIVE UTxO ad182bcd7273ed7130ac22568ee9ddb0890f90db7040dd68e2bafa69342805b3#0
+          (resting at the V3 address at capture time; also the filler repo's
+          partial-fill proof tx). Datum was INLINE on the live UTxO.
+  Sell side: 1500 FRENCHIE WIFF (policy 50cd0a2d...89f8e, name 4652454e43484945205749464620),
+             held UTxO value 2.1 ADA + the 1500 tokens.
+  coverage = None (Constr 1 / tag 122)
+  min_partial_fill = 1000000
+  Carries a non-null seed order-ref (Constr 0): b6bcae...754cc index 2.
+
+order_18a01339.hex
+  Source: LIVE UTxO 18a0133987f8f2f308b5f62fb319d64a5276896585d35beab7efd8ea1edfd14e#0
+          (resting at the V3 address at capture time). Datum was INLINE.
+  UTxO value 10 ADA. Owner uses a SCRIPT payment credential (Constr 1 / tag 122,
+  hash 7b3130ac...818db) with no stake part (Constr 1 / tag 122).
+  coverage = None
+  min_partial_fill = 0
+  seed order-ref = all-zero placeholder, index 0.
+
+order_b6bcaeb6_out0_cov_none.hex
+  Source: create proof tx b6bcaeb69401127ed650fea550c87464c7fed8aeef05f25950738db6ece754cc,
+          output #0 (and identical datum on #3). Resolved via datum_info by hash
+          630e472394b0ab3751ac8c39990507c1f3556c3827757c70e3065255695b0b43
+          (the create-tx outputs carried datum-hash, not inline).
+  Sell 4.0 ADA -> buy 1000 FRENCHIE WIFF. coverage = None. min_partial_fill = 0.
+
+order_b6bcaeb6_out2_cov_none.hex
+  Source: create proof tx b6bcae... output #2. Resolved via datum_info by hash
+          7669735d2bb00ed29d1e664a3846a31e8747e1f9d9ee0d2cf0a77da3b5465e0c.
+  Buy 3000 FRENCHIE WIFF for 6.0 ADA (sell side). coverage = None.
+  min_partial_fill = 1000000. Same field ordering as order_ad182bcd.
+
+order_b6bcaeb6_out1_cov_some.hex  <-- the coverage=Some fixture
+  Source: create proof tx b6bcae... output #1. Resolved via datum_info by hash
+          5361df2a2eb79e6a7e896ca10455af451a8cc5c78bc880245f228bd7242d8054.
+  This is the COVERED order: it is spent by the filler repo's covered proof tx
+  fe17fb88fe4282e133e980808b9e11fc92aa0f7fe1ee3f89f3ab7a77abe4d784 (which lists
+  b6bcae...754cc#1 as an input with this exact datum hash). No output returns to
+  the V3 address in the covered tx, so the coverage=Some datum survives only on the
+  spent input -> captured here from the create tx.
+  Sell 4.0 ADA -> buy 1000 FRENCHIE WIFF. coverage = Some(...) (Constr 0 / tag 121):
+    beneficiary payment cred 63e326c9...df45ae (Constr 0), no stake part,
+    a 100 field (coverage amount / min), and an all-zero seed-ref (index 0).
+  min_partial_fill = 0.
+
+Field breakdown (eyeballed from cbor2 decode)
+---------------------------------------------
+SwapDatum is a Constr-0 record. Two field orderings are seen depending on which
+side is ADA:
+
+  When ADA is the SELL side (b6bcae out0/1/2, live 18a01339):
+    [ owner_address,
+      sell_policy (empty = lovelace/ADA), sell_name (empty),
+      sell_amount (int),
+      buy_policy, buy_name, buy_amount (int),
+      <Constr-1 flag>,
+      seed_order_ref = Constr0(tx_hash bytes32, index int),
+      min_partial_fill (int),
+      coverage = Constr1 None | Constr0 Some(...) ]
+
+  When a token is the SELL side (live ad182bcd, b6bcae out2):
+    [ owner_address,
+      buy_policy, buy_name, buy_amount (int),
+      sell_policy (empty = ADA) ... ] etc. — i.e. the paid/received pair is
+      ordered by which asset is ADA; confirm exact field semantics against the
+      V3 on-chain SwapDatum definition when wiring the decoder.
+
+  coverage sentinel:  Constr 1 (tag 122) = None ;  Constr 0 (tag 121) = Some.
+  Only order_b6bcaeb6_out1_cov_some.hex has coverage = Some.
+
+Provenance / how captured
+-------------------------
+  Live UTxOs:
+    POST https://api.koios.rest/api/v1/address_utxos
+      {"_addresses":["addr1z9sz8ava...szcetqsp0ume8"],"_extended":true}
+    -> inline_datum.bytes on each UTxO.
+  Create-tx datums (datum-hash outputs):
+    POST https://api.koios.rest/api/v1/tx_info  {"_tx_hashes":["b6bcae...754cc"]}
+      -> outputs at the V3 address carry datum_hash (not inline)
+    POST https://api.koios.rest/api/v1/datum_info
+      {"_datum_hashes":["630e47...","5361df...","7669735d..."]}  -> .bytes
+  Covered-order confirmation:
+    POST https://api.koios.rest/api/v1/tx_info
+      {"_tx_hashes":["fe17fb...e4d784"],"_inputs":true}
+      -> input b6bcae...754cc#1 with datum_hash 5361df... (the cov=Some order).
+
+Proof txs (from the filler repo):
+  create  b6bcaeb69401127ed650fea550c87464c7fed8aeef05f25950738db6ece754cc
+  covered fe17fb88fe4282e133e980808b9e11fc92aa0f7fe1ee3f89f3ab7a77abe4d784
+  partial ad182bcd7273ed7130ac22568ee9ddb0890f90db7040dd68e2bafa69342805b3
+
+Do NOT commit these fixtures.
