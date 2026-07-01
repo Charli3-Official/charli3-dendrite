@@ -802,6 +802,145 @@ class CancelRequestSnapshot(PoolActionSnapshot):
 
 
 @dataclass
+class LendSnapshot(PoolActionSnapshot):
+    """Resolved building blocks for filling a borrow request (``Lend``).
+
+    A lender spends the borrower's request UTxO (empty redeemer via the request spend
+    ``general_spend`` script) and drives the request-policy reward (``Lend``): the
+    request NFT is burned, and the loan NFT + borrower-bond + lender-bond are minted
+    (asset name = the loan id = ``blake2b_224`` of the spent request out-ref). The loan
+    UTxO carries the loan NFT + the request's collateral (unchanged) + a synthesized
+    :class:`LoanDatum`; the borrower output (absolute index 0) carries the principal +
+    the borrower bond + ``InlineDatum(requestRef)``. The lender bond is unconstrained on
+    chain (it rides in the tx change). Targets the simplest case: permissionless, ADA
+    principal, static pricing (no oracle witnesses).
+    """
+
+    request: Utxo
+    funding: list[Utxo]
+    config: Utxo
+    request_spend_script_ref: Utxo
+    request_policy_script_ref: Utxo
+    loan_policy_script_ref: Utxo
+    lender_bond_policy_script_ref: Utxo
+    borrower_bond_policy_script_ref: Utxo
+    loan_address: str
+    borrower_address: str
+    request_id: bytes
+    loan_id: bytes
+    given_principal_amount: int
+    principal_oracle_ref_input_index: int
+    collateral_oracle_ref_input_index: int
+    permissioned_condition_withdraw_index: int
+    mint_input_ref: tuple[str, int]
+    collateral_unit: str
+    collateral_amount: int
+    loan_lovelace: int
+    borrower_output_lovelace: int
+    valid_from: int
+    valid_to: int
+    request_policy: str
+    loan_policy: str
+    lender_bond_policy: str
+    borrower_bond_policy: str
+
+    @property
+    def request_datum(self) -> RequestDatum:
+        """The spent request UTxO's decoded :class:`RequestDatum`."""
+        if self.request.datum is None:
+            raise ValueError("snapshot request UTxO is missing its datum")
+        return RequestDatum.from_cbor(bytes.fromhex(self.request.datum))
+
+    @classmethod
+    def from_capture(cls, fix: dict) -> LendSnapshot:
+        """Rebuild a `LendSnapshot` from a captured real request-fill.
+
+        The spent request UTxO parses as a ``RequestDatum`` + holds the request NFT; the
+        remaining spent inputs are the lender's funding. The loan output holds the loan
+        NFT + the collateral (+ a ``LoanDatum``); the borrower output holds the borrower
+        bond. The ``Lend`` action's indices/amount are read from the captured
+        request-policy reward redeemer.
+        """
+        inputs = [_as_utxo(u) for u in fix["inputs"]]
+        ref_inputs = [_as_utxo(u) for u in fix["ref_inputs"]]
+        outputs = [_as_utxo(u) for u in fix["outputs"]]
+
+        request = next(
+            u
+            for u in inputs
+            if u.datum and _parses_request(u.datum) and u.holds_policy(REQUEST_POLICY)
+        )
+        if request.out_ref is None:
+            raise ValueError("request input is missing its out-ref")
+        request_id = next(
+            bytes.fromhex(n) for p, n, _ in request.assets if p == REQUEST_POLICY
+        )
+        funding = [u for u in inputs if u.out_ref != request.out_ref]
+
+        loan_out = next(
+            u for u in outputs if u.datum is not None and u.holds_policy(LOAN_POLICY)
+        )
+        loan_id = next(
+            bytes.fromhex(n) for p, n, _ in loan_out.assets if p == LOAN_POLICY
+        )
+        collateral = next((p, n, q) for p, n, q in loan_out.assets if p != LOAN_POLICY)
+        borrower_out = next(u for u in outputs if u.holds_policy(BORROWER_BOND_POLICY))
+
+        config = next(
+            u for u in ref_inputs if u.holds_policy(PROTOCOL_CONFIG_NFT_POLICY)
+        )
+        lend_reward = next(
+            r
+            for r in fix["redeemers"]
+            if r["purpose"] == "reward" and r["script_hash"] == REQUEST_POLICY
+        )
+        lend = cbor2.loads(bytes.fromhex(lend_reward["cbor"])).value[1][0]
+        (
+            principal_oracle_idx,
+            collateral_oracle_idx,
+            given_principal_amount,
+            _request_id,
+            permissioned_idx,
+        ) = lend.value
+
+        return cls(
+            request=request,
+            funding=funding,
+            config=config,
+            request_spend_script_ref=_script_ref_by_hash(ref_inputs, REQUEST_SPEND_SKH),
+            request_policy_script_ref=_script_ref_by_hash(ref_inputs, REQUEST_POLICY),
+            loan_policy_script_ref=_script_ref_by_hash(ref_inputs, LOAN_POLICY),
+            lender_bond_policy_script_ref=_script_ref_by_hash(
+                ref_inputs,
+                LENDER_BOND_POLICY,
+            ),
+            borrower_bond_policy_script_ref=_script_ref_by_hash(
+                ref_inputs,
+                BORROWER_BOND_POLICY,
+            ),
+            loan_address=loan_out.address,
+            borrower_address=borrower_out.address,
+            request_id=request_id,
+            loan_id=loan_id,
+            given_principal_amount=int(given_principal_amount),
+            principal_oracle_ref_input_index=int(principal_oracle_idx),
+            collateral_oracle_ref_input_index=int(collateral_oracle_idx),
+            permissioned_condition_withdraw_index=int(permissioned_idx),
+            mint_input_ref=_mint_input_ref(fix, REQUEST_POLICY),
+            collateral_unit=collateral[0] + collateral[1],
+            collateral_amount=collateral[2],
+            loan_lovelace=loan_out.lovelace,
+            borrower_output_lovelace=borrower_out.lovelace,
+            valid_from=int(fix["invalid_before"]),
+            valid_to=int(fix["invalid_hereafter"]),
+            request_policy=REQUEST_POLICY,
+            loan_policy=LOAN_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+            borrower_bond_policy=BORROWER_BOND_POLICY,
+        )
+
+
+@dataclass
 class CreatePoolSnapshot(PoolActionSnapshot):
     """Resolved building blocks for creating a lender pool.
 
