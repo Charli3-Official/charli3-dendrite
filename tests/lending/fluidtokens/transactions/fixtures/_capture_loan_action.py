@@ -181,6 +181,12 @@ JOBS = {
     # drives the pool-policy reward (Cancel) authorized by the lender signature; the
     # liquidity returns to the lender.
     "pool_cancel": ("ce2b0a8c9cb7d3cc21c987a6377c65177a73da72c3b877cdfe023fd63bcd28b3"),
+    # Fill a borrow request (Lend): spends the request UTxO (empty redeemer via the
+    # request spend general_spend), burns the request NFT, drives the request-policy
+    # reward (Lend), mints the loan + borrower-bond + lender-bond (asset name = hash of
+    # the spent request out-ref), and outputs the borrower's principal + bond (index 0)
+    # and the loan UTxO. Permissionless, ADA principal, static (no oracle) fill.
+    "lend": ("043a6f047ccafecb9bc915f5cd66bfeca456b10e83aea6957052b9b09b5c9e6d"),
 }
 
 
