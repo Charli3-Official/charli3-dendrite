@@ -66,6 +66,8 @@ def test_lend_from_backend_resolves_capture_fields() -> None:
     assert snap.request_id == cap.request_id
     assert snap.loan_id == cap.loan_id
     assert snap.borrower_address == cap.borrower_address
+    # The loan output must inherit the borrower's stake credential (Lend validator).
+    assert snap.loan_address == cap.loan_address
     assert snap.given_principal_amount == cap.given_principal_amount
     assert snap.collateral_unit == cap.collateral_unit
     assert snap.collateral_amount == cap.collateral_amount
