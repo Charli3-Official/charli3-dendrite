@@ -226,6 +226,45 @@ class RequestCancelAction(PlutusData):
 
 
 @dataclass
+class RequestLendAction(PlutusData):
+    """``RequestAction.Lend`` == Constr2[...] in request.ak (fills a request).
+
+    Drives the request ``Withdraw`` (reward) script that spends a borrower's request
+    UTxO to originate a loan. In the static-ADA case the two oracle indices are inert
+    placeholders (the validator never reads them; the observed protocol tx uses ``0``);
+    ``given_principal_amount`` is the lender-chosen principal (capped by
+    ``maxPrincipal`` and floored by the collateral ratio); ``request_id`` is the
+    request NFT asset name;
+    ``permissioned_condition_withdraw_index`` is ignored by permissionless requests
+    (replayed for byte-exactness).
+    """
+
+    CONSTR_ID = 2
+    principal_oracle_ref_input_index: int
+    collateral_oracle_ref_input_index: int
+    given_principal_amount: int
+    request_id: bytes
+    permissioned_condition_withdraw_index: int
+
+
+def _coerce_request_action(p: object) -> PlutusData:
+    """Coerce a decoded request-action primitive to its typed class by constructor.
+
+    Already-typed actions pass through; a raw ``CBORTag`` is dispatched on its tag
+    (Constr0 == 121 -> Cancel, Constr2 == 123 -> Lend). Keeps
+    :class:`RequestWithdrawRedeemer` byte-exact for both the cancel and lend paths.
+    """
+    if isinstance(p, (RequestCancelAction, RequestLendAction)):
+        return p
+    tag = getattr(p, "tag", None)
+    if tag == 121:  # noqa: PLR2004 - Constr0 == Cancel
+        return RequestCancelAction.from_primitive(p)
+    if tag == 123:  # noqa: PLR2004 - Constr2 == Lend
+        return RequestLendAction.from_primitive(p)
+    raise ValueError(f"unsupported RequestAction primitive: {p!r}")
+
+
+@dataclass
 class RequestWithdrawRedeemer(PlutusData):
     """Request reward (withdraw) redeemer == ``RequestWithdrawRedeemer`` in request.ak.
 
@@ -237,19 +276,12 @@ class RequestWithdrawRedeemer(PlutusData):
 
     CONSTR_ID = 0
     config_ref_input_index: int
-    actions_for_each_input: IndefiniteList  # elements are RequestCancelAction
+    actions_for_each_input: IndefiniteList  # elements are RequestCancelAction | RequestLendAction  # noqa: E501
 
     def __post_init__(self) -> None:
-        """Coerce decoded Cancel entries back into :class:`RequestCancelAction`."""
+        """Coerce decoded entries back into their typed Cancel / Lend action classes."""
         self.actions_for_each_input = IndefiniteList(
-            [
-                (
-                    p
-                    if isinstance(p, RequestCancelAction)
-                    else RequestCancelAction.from_primitive(p)
-                )
-                for p in self.actions_for_each_input
-            ],
+            [_coerce_request_action(p) for p in self.actions_for_each_input],
         )
 
 
