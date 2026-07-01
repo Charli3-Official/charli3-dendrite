@@ -1,4 +1,5 @@
 # noqa
+import json
 from enum import Enum
 
 from pycardano import Address
@@ -16,6 +17,7 @@ from pydantic import RootModel
 from pydantic import model_serializer
 from pydantic import model_validator
 from pydantic.alias_generators import to_camel
+from pydantic_core import core_schema
 
 
 class DendriteBaseModel(BaseModel):
@@ -80,52 +82,184 @@ class BaseDict(BaseList):
         return self.root.get(item, 0)
 
 
-class Assets(BaseDict):
-    """Contains all tokens and quantities."""
+def _digest_assets(value: object) -> dict[str, int]:
+    """Normalize an ``Assets`` input to a lovelace-first ``dict[str, int]``.
 
-    root: dict[str, int]
+    Accepts the same shapes the old pydantic ``_digest_assets`` before-validator did:
+    another ``Assets`` / anything with ``.root``, a ``{"values": [...]}`` mapping of
+    objects with ``unit``/``quantity``, a list of length-1 dicts, a plain dict, or
+    kwargs (an items-able).
+    """
+    if hasattr(value, "root"):
+        root = dict(value.root)
+    elif (
+        isinstance(value, dict)
+        and "values" in value
+        and isinstance(value["values"], list)
+    ):
+        root = {v.unit: v.quantity for v in value["values"]}
+    elif isinstance(value, list) and value and isinstance(value[0], dict):
+        if not all(len(v) == 1 for v in value):
+            raise ValueError(
+                "For a list of dictionaries, each dictionary must be of length 1.",
+            )
+        root = {k: v for d in value for k, v in d.items()}
+    elif isinstance(value, dict):
+        root = dict(value)
+    else:
+        root = dict(value.items())  # type: ignore[attr-defined]
+    return dict(sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0]))
+
+
+class Assets:
+    """Contains all tokens and quantities.
+
+    A plain (non-pydantic) ``unit -> quantity`` mapping with lovelace-first ordering.
+    ``.root`` is a live, mutable, insertion-ordered ``dict``: the pool math mutates it
+    in place (``apply_swap``, finite-difference probes, and the non-ADA min-ADA append
+    that must NOT re-sort), so it stays a real dict rather than an opaque model field.
+    Dropping the pydantic ``RootModel`` removes the per-construction validation +
+    accessor overhead that dominates tight construction/access loops;
+    ``__get_pydantic_core_schema__`` keeps it usable as a field type on the pydantic
+    pool-state models.
+    """
+
+    __slots__ = ("root",)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Build from a positional value, a ``root=`` dict, or unit kwargs."""
+        if args:
+            value: object = args[0]
+        elif len(kwargs) == 1 and "root" in kwargs:
+            value = kwargs["root"]
+        else:
+            value = kwargs
+        self.root: dict[str, int] = _digest_assets(value)
+
+    def items(self):  # noqa: ANN201
+        """Return iterable of key-value pairs."""
+        return self.root.items()
+
+    def keys(self):  # noqa: ANN201
+        """Return iterable of keys."""
+        return self.root.keys()
+
+    def values(self):  # noqa: ANN201
+        """Return iterable of values."""
+        return self.root.values()
+
+    def __iter__(self):  # noqa: ANN204
+        """Iterate over the units (keys)."""
+        return iter(self.root)
+
+    def __getitem__(self, item: str) -> int:
+        """Get quantity by unit (missing -> 0)."""
+        return self.root.get(item, 0)
+
+    def __len__(self) -> int:
+        """Number of distinct units."""
+        return len(self.root)
+
+    def __contains__(self, item: str) -> bool:
+        """Whether ``item`` is a present unit."""
+        return item in self.root
 
     def unit(self, index: int = 0) -> str:
         """Units of asset at `index`."""
-        return list(self.keys())[index]
+        return next(iter(self.root)) if index == 0 else list(self.root)[index]
 
     def quantity(self, index: int = 0) -> int:
         """Quantity of the asset at `index`."""
-        return list(self.values())[index]
+        if index == 0:
+            return next(iter(self.root.values()))
+        return list(self.root.values())[index]
 
-    @model_validator(mode="before")
-    def _digest_assets(cls, values: dict) -> dict:
-        if hasattr(values, "root"):
-            root = values.root
-        elif "values" in values and isinstance(values["values"], list):
-            root = {v.unit: v.quantity for v in values["values"]}
-        elif isinstance(values, list) and isinstance(values[0], dict):
-            if not all(len(v) == 1 for v in values):
-                raise ValueError(
-                    "For a list of dictionaries, each dictionary must be of length 1.",
-                )
-            root = {k: v for d in values for k, v in d.items()}
-        else:
-            root = dict(values.items())
-        return dict(
-            sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0]),
+    def __add__(self, b: "Assets") -> "Assets":
+        """Add two assets."""
+        keys = set(self.keys()) | set(b.keys())
+        return Assets(**{key: self[key] + b[key] for key in keys})
+
+    def __sub__(self, b: "Assets") -> "Assets":
+        """Subtract two assets."""
+        keys = set(self.keys()) | set(b.keys())
+        return Assets(**{key: self[key] - b[key] for key in keys})
+
+    def __eq__(self, other: object) -> bool:
+        """Equal iff the same ``unit -> quantity`` mapping."""
+        if isinstance(other, Assets):
+            return self.root == other.root
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        """Hash of the canonical ``(unit, quantity)`` items."""
+        return hash(tuple(self.root.items()))
+
+    def __repr__(self) -> str:
+        """Debug representation."""
+        return f"Assets(root={self.root!r})"
+
+    # --- pydantic-model API surface the pool code calls (no pydantic engine) ---
+    def model_dump(self, **_kwargs: object) -> dict[str, int]:
+        """Return the ``unit -> quantity`` dict (mirrors ``RootModel.model_dump``)."""
+        return dict(self.root)
+
+    def model_dump_json(self, **_kwargs: object) -> str:
+        """Return the mapping as a compact JSON object string."""
+        return json.dumps(self.root, separators=(",", ":"))
+
+    def copy(self, **_kwargs: object) -> "Assets":
+        """Return an independent copy (fresh dict, order preserved)."""
+        return self.model_construct(root=dict(self.root))
+
+    def model_copy(self, **_kwargs: object) -> "Assets":
+        """Return an independent copy (fresh dict, order preserved)."""
+        return self.model_construct(root=dict(self.root))
+
+    @classmethod
+    def model_validate(cls, obj: object, **_kwargs: object) -> "Assets":
+        """Coerce ``obj`` to ``Assets`` (an existing instance passes through)."""
+        return obj if isinstance(obj, cls) else cls(obj)
+
+    @classmethod
+    def model_validate_json(cls, data: str, **_kwargs: object) -> "Assets":
+        """Parse a JSON object string into ``Assets``."""
+        return cls(json.loads(data))
+
+    @classmethod
+    def model_construct(
+        cls,
+        root: dict[str, int] | None = None,
+        **kwargs: int,
+    ) -> "Assets":
+        """No-sort, no-validate construction (mirrors pydantic ``model_construct``).
+
+        Callers pass an already-canonical ``root`` (e.g. ``reset_assets`` in the hot
+        path), so this must NOT re-sort — it sets ``.root`` verbatim.
+        """
+        obj = cls.__new__(cls)
+        obj.root = root if root is not None else dict(kwargs)
+        return obj
+
+    # --- pydantic field-type protocol (models with `assets: Assets` still validate) ---
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source: object,
+        _handler: object,
+    ) -> object:
+        """Validate/serialize as a plain dict inside pydantic models."""
+        return core_schema.no_info_plain_validator_function(
+            cls._pyd_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda a: dict(a.root),
+                when_used="always",
+            ),
         )
 
-    def __add__(a: "Assets", b: "Assets") -> "Assets":
-        """Add two assets."""
-        intersection = set(a.keys()) | set(b.keys())
-
-        result = {key: a[key] + b[key] for key in intersection}
-
-        return Assets(**result)
-
-    def __sub__(a: "Assets", b: "Assets") -> "Assets":
-        """Subtract two assets."""
-        intersection = set(a.keys()) | set(b.keys())
-
-        result = {key: a[key] - b[key] for key in intersection}
-
-        return Assets(**result)
+    @classmethod
+    def _pyd_validate(cls, value: object) -> "Assets":
+        """Coerce a validation input to ``Assets`` (instance passthrough)."""
+        return value if isinstance(value, cls) else cls(value)
 
 
 class ScriptReference(DendriteBaseModel):
