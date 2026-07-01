@@ -145,6 +145,38 @@ def plutus_address(address: Address) -> PlutusData:
     return _PlutusAddress(payment, stake_credential)
 
 
+# Plutus `Constr` CBOR tags for the two credential variants (key vs script).
+_CONSTR_VKEY_TAG = 121
+_CONSTR_SCRIPT_TAG = 122
+
+
+def _credential_from_plutus(constr: object) -> VerificationKeyHash | ScriptHash:
+    """A Plutus credential ``Constr(tag, [hash])`` -> pycardano key/script hash."""
+    tag = getattr(constr, "tag", _CONSTR_VKEY_TAG)
+    payload = constr.value[0]  # type: ignore[attr-defined]
+    if tag == _CONSTR_SCRIPT_TAG:
+        return ScriptHash(payload)
+    return VerificationKeyHash(payload)
+
+
+def address_from_plutus(addr: object) -> Address:
+    """Decode a Plutus ``Address`` (``Constr0[payment_credential, Option<stake>]``).
+
+    The inverse of :func:`plutus_address`: both credentials may be key- or
+    script-based, and the stake reference is the inline ``Some(Inline(credential))``
+    form (no pointers) or ``None`` (enterprise address). ``addr`` is the decoded
+    ``CBORTag`` of the address constr (e.g. ``RawPlutusData.data``).
+    """
+    payment = _credential_from_plutus(addr.value[0])  # type: ignore[attr-defined]
+    stake_opt = addr.value[1]  # type: ignore[attr-defined]
+    staking: VerificationKeyHash | ScriptHash | None = None
+    if (
+        getattr(stake_opt, "tag", _CONSTR_SCRIPT_TAG) == _CONSTR_VKEY_TAG
+    ):  # Some(Inline)
+        staking = _credential_from_plutus(stake_opt.value[0].value[0])
+    return Address(payment_part=payment, staking_part=staking, network=Network.MAINNET)
+
+
 def reward_address(script_hash: str) -> bytes:
     """The network-tagged reward (stake-script) address bytes for `script_hash`."""
     return bytes(

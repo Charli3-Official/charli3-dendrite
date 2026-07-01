@@ -28,6 +28,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.context import CreatePool
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CreateRequestSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.context import LendSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import RepaySnapshot
 from charli3_dendrite.lending.transactions.base import ActionParams
@@ -50,6 +51,7 @@ _CASES = {
     LendingAction.RECAST: ("recast.json", RecastSnapshot),
     LendingAction.REQUEST_CREATE: ("create_request.json", CreateRequestSnapshot),
     LendingAction.REQUEST_CANCEL: ("cancel_request.json", CancelRequestSnapshot),
+    LendingAction.LEND: ("lend.json", LendSnapshot),
     LendingAction.POOL_CREATE: ("pool_create.json", CreatePoolSnapshot),
     LendingAction.POOL_CANCEL: ("pool_cancel.json", CancelPoolSnapshot),
 }
@@ -92,6 +94,7 @@ def test_supported_actions_are_the_borrower_and_pool_actions():
         LendingAction.RECAST,
         LendingAction.REQUEST_CREATE,
         LendingAction.REQUEST_CANCEL,
+        LendingAction.LEND,
         LendingAction.POOL_CREATE,
         LendingAction.POOL_CANCEL,
     }
@@ -169,6 +172,12 @@ def test_contribute_stashes_pool_funding_additional_utxo() -> None:
             "pool_cancel.json",
             "invalid_before",
         ),
+        (
+            LendingAction.LEND,
+            LendSnapshot,
+            "lend.json",
+            "invalid_before",
+        ),
     ]:
         fix = _fixture(fixture)
         snapshot = snap_cls.from_capture(fix)
@@ -224,4 +233,46 @@ def test_resolve_snapshot_pool_create_is_not_supported_via_params() -> None:
             market_name="",
             action=LendingAction.POOL_CREATE,
             params=ActionParams(actor_address=""),
+        )
+
+
+def test_resolve_snapshot_lend_dispatches_to_from_backend(monkeypatch) -> None:
+    captured = {}
+
+    def record(
+        cls,  # noqa: ANN001
+        backend,  # noqa: ANN001, ARG001
+        *,
+        request_utxo,  # noqa: ANN001
+        given_principal_amount,  # noqa: ANN001
+        lender_address,  # noqa: ANN001
+    ):
+        captured["request_utxo"] = request_utxo
+        captured["given_principal_amount"] = given_principal_amount
+        captured["lender_address"] = lender_address
+        return object()
+
+    monkeypatch.setattr(LendSnapshot, "from_backend", classmethod(record))
+    FluidTokensTxBuilder().resolve_snapshot(
+        object(),
+        market_name="",
+        action=LendingAction.LEND,
+        params=ActionParams(
+            actor_address="addr_lender",
+            loan_utxo="abc123#7",
+            amount=5_000_000,
+        ),
+    )
+    assert captured["request_utxo"] == ("abc123", 7)
+    assert captured["given_principal_amount"] == 5_000_000
+    assert captured["lender_address"] == "addr_lender"
+
+
+def test_resolve_snapshot_lend_requires_loan_utxo() -> None:
+    with pytest.raises(ValueError, match="LEND requires params.loan_utxo"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            object(),
+            market_name="",
+            action=LendingAction.LEND,
+            params=ActionParams(actor_address="addr_lender"),
         )

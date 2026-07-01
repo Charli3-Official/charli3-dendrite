@@ -39,6 +39,7 @@ class LendingAction(str, Enum):
     RECAST = "recast"
     REQUEST_CREATE = "request_create"
     REQUEST_CANCEL = "request_cancel"
+    LEND = "lend"
     POOL_CREATE = "pool_create"
     POOL_CANCEL = "pool_cancel"
 

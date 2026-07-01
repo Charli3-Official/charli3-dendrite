@@ -7,13 +7,14 @@ its spend / mint-burn / outputs / redeemers / reference inputs into a caller-sup
 byte-exact + gated Ogmios e2e test; this builder is the registry-facing dispatch over
 those contributors.
 
-Live ``resolve_snapshot`` is wired for the pool actions: POOL_CANCEL resolves a
+Live ``resolve_snapshot`` is wired for the pool actions and LEND: POOL_CANCEL resolves a
 :class:`CancelPoolSnapshot` from the backend (the pool out-ref + lender address come
-from ``ActionParams``), and POOL_CREATE is resolved by the caller via
-``CreatePoolSnapshot.from_backend`` (it needs typed pool terms + liquidity that
-``ActionParams`` does not carry). The borrower-side actions still resolve from captured
-on-chain transactions via each snapshot's ``from_capture``; their live resolution is a
-separate milestone.
+from ``ActionParams``), LEND resolves a :class:`LendSnapshot` from the backend (the
+request out-ref + optional principal / lender address come from ``ActionParams``), and
+POOL_CREATE is resolved by the caller via ``CreatePoolSnapshot.from_backend`` (it needs
+typed pool terms + liquidity that ``ActionParams`` does not carry). The remaining
+borrower-side actions still resolve from captured on-chain transactions via each
+snapshot's ``from_capture``; their live resolution is a separate milestone.
 """
 
 from __future__ import annotations
@@ -37,8 +38,10 @@ from charli3_dendrite.lending.fluidtokens.transactions.context import CreatePool
 from charli3_dendrite.lending.fluidtokens.transactions.context import (
     CreateRequestSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.context import LendSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens.transactions.context import RepaySnapshot
+from charli3_dendrite.lending.fluidtokens.transactions.lend import build_lend
 from charli3_dendrite.lending.fluidtokens.transactions.pool import build_cancel_pool
 from charli3_dendrite.lending.fluidtokens.transactions.pool import build_create_pool
 from charli3_dendrite.lending.fluidtokens.transactions.recast import build_recast
@@ -71,6 +74,7 @@ _SNAPSHOT_TYPE = {
     LendingAction.RECAST: RecastSnapshot,
     LendingAction.REQUEST_CREATE: CreateRequestSnapshot,
     LendingAction.REQUEST_CANCEL: CancelRequestSnapshot,
+    LendingAction.LEND: LendSnapshot,
     LendingAction.POOL_CREATE: CreatePoolSnapshot,
     LendingAction.POOL_CANCEL: CancelPoolSnapshot,
 }
@@ -84,7 +88,7 @@ def _parse_out_ref(out_ref: str) -> tuple[str, int]:
 
 
 class FluidTokensTxBuilder(AbstractLendingTxBuilder):
-    """Builds FluidTokens borrow / repay / modify / recast / request / pool txs."""
+    """Build FluidTokens borrow/repay/modify/recast/request/lend/pool txs."""
 
     @classmethod
     def protocol(cls) -> str:
@@ -93,7 +97,7 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
 
     @classmethod
     def supported_actions(cls) -> set[LendingAction]:
-        """Borrow, repay, modify-collateral, recast, request, and pool create/cancel."""
+        """Borrow, repay, modify, recast, request, lend, and pool create/cancel."""
         return set(_SNAPSHOT_TYPE)
 
     def resolve_snapshot(
@@ -109,6 +113,12 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         POOL_CANCEL resolves a :class:`CancelPoolSnapshot` from the backend: the pool
         UTxO out-ref comes from ``params.loan_utxo`` (a ``"<txhash>#<index>"`` string)
         and the lender address from ``params.actor_address``.
+
+        LEND resolves a :class:`LendSnapshot` from the backend: the request UTxO out-ref
+        comes from ``params.loan_utxo``, the (optional) lender-supplied principal from
+        ``params.amount`` (falling back to the request's ``maxPrincipal``), and the
+        lender address (used to resolve the lender's funding) from
+        ``params.actor_address``.
 
         POOL_CREATE cannot be resolved from ``ActionParams`` alone -- it needs typed
         pool terms (+ liquidity / lovelace) that ``ActionParams`` does not carry -- so
@@ -134,6 +144,15 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 "FluidTokensTxBuilder().contribute(LendingAction.POOL_CREATE, ...) "
                 "directly.",
             )
+        if action == LendingAction.LEND:
+            if params.loan_utxo is None:
+                raise ValueError("LEND requires params.loan_utxo (the request out-ref)")
+            return LendSnapshot.from_backend(
+                backend,
+                request_utxo=_parse_out_ref(params.loan_utxo),
+                given_principal_amount=params.amount or None,
+                lender_address=params.actor_address,
+            )
         raise NotImplementedError(
             "FluidTokens live snapshot resolution is not implemented for "
             f"{action.value}; resolve a snapshot from a captured transaction via "
@@ -152,7 +171,7 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         """Dispatch the action to its FluidTokens contributor.
 
         Validates that `snapshot` is the type the action expects. BORROW / RECAST /
-        REQUEST_CREATE / REQUEST_CANCEL / POOL_CREATE / POOL_CANCEL take only the
+        REQUEST_CREATE / REQUEST_CANCEL / LEND / POOL_CREATE / POOL_CANCEL take only the
         snapshot; REPAY and MODIFY_COLLATERAL additionally consume ``params.amount``
         (the lender repayment lovelace, and the new locked collateral amount,
         respectively).
@@ -193,6 +212,8 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 tx_builder,
                 snapshot=cast(CancelRequestSnapshot, snapshot),
             )
+        elif action == LendingAction.LEND:
+            build_lend(tx_builder, snapshot=cast(LendSnapshot, snapshot))
         elif action == LendingAction.POOL_CREATE:
             build_create_pool(tx_builder, snapshot=cast(CreatePoolSnapshot, snapshot))
         elif action == LendingAction.POOL_CANCEL:

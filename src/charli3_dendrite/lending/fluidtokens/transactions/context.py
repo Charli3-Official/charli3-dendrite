@@ -30,6 +30,7 @@ from pycardano import Value
 
 from charli3_dendrite.lending.fluidtokens.constants import BORROWER_BOND_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LENDER_BOND_POLICY
+from charli3_dendrite.lending.fluidtokens.constants import LOAN_ADDRESS
 from charli3_dendrite.lending.fluidtokens.constants import (
     LOAN_CHANGE_COLLATERAL_ACTION_SKH,
 )
@@ -933,6 +934,140 @@ class LendSnapshot(PoolActionSnapshot):
             borrower_output_lovelace=borrower_out.lovelace,
             valid_from=int(fix["invalid_before"]),
             valid_to=int(fix["invalid_hereafter"]),
+            request_policy=REQUEST_POLICY,
+            loan_policy=LOAN_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+            borrower_bond_policy=BORROWER_BOND_POLICY,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        request_utxo: tuple[str, int],
+        given_principal_amount: int | None = None,
+        lender_address: str | None = None,
+        allow_spent_request: bool = False,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        config_outref: tuple[str, int] | None = None,
+        request_spend_ref_outref: tuple[str, int] | None = None,
+        request_policy_ref_outref: tuple[str, int] | None = None,
+        loan_policy_ref_outref: tuple[str, int] | None = None,
+        lender_bond_ref_outref: tuple[str, int] | None = None,
+        borrower_bond_ref_outref: tuple[str, int] | None = None,
+        valid_from: int | None = None,
+        valid_to: int | None = None,
+        loan_lovelace: int = 2_000_000,
+    ) -> LendSnapshot:
+        """Resolve a `LendSnapshot` live from chain state via the backend.
+
+        The request UTxO is resolved by ``request_utxo`` out-ref
+        (``allow_spent_request`` lets a captured/historical request be replayed); its
+        ``RequestDatum`` supplies
+        the borrower address, collateral, and principal bounds, and its value supplies
+        the request NFT name. The config NFT + the five script refs (request policy,
+        request spend, loan policy, both bond policies) are resolved unless pinned by
+        out-ref. ``given_principal_amount`` defaults to the request's ``maxPrincipal``;
+        the oracle / permissioned indices default to ``0`` (inert in the static
+        permissionless case). The borrower output lovelace equals the principal (ADA),
+        and the loan output carries ``loan_lovelace`` + the request's collateral
+        unchanged.
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions._common import (
+            address_from_plutus,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+            request_principal_bounds,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.lend import loan_nft_name
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        request = resolve_utxo_by_outref(
+            backend,
+            *request_utxo,
+            allow_spent=allow_spent_request,
+        )
+        if request.datum is None or request.out_ref is None:
+            raise ValueError("resolved request UTxO is missing its datum/out-ref")
+        request_id = next(
+            bytes.fromhex(n) for p, n, _ in request.assets if p == REQUEST_POLICY
+        )
+        datum = RequestDatum.from_cbor(bytes.fromhex(request.datum))
+        borrower_address = str(address_from_plutus(datum.borrower_address.data))
+        collateral = next(
+            (p, n, q) for p, n, q in request.assets if p != REQUEST_POLICY
+        )
+        _min_principal, max_principal = request_principal_bounds(
+            datum,
+            collateral_amount=collateral[2],
+        )
+        principal = given_principal_amount or max_principal
+
+        def _ref(
+            outref: tuple[str, int] | None,
+            script_hash: str,
+        ) -> Utxo:
+            if outref:
+                return resolve_utxo_by_outref(backend, *outref, allow_spent=True)
+            return resolve_script_ref(backend, script_hash)
+
+        if config_outref:
+            config = resolve_utxo_by_outref(backend, *config_outref, allow_spent=True)
+        else:
+            config = resolve_config_utxo(backend)
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        elif lender_address:
+            funding = resolve_funding(backend, lender_address)
+        else:
+            funding = []
+
+        return cls(
+            request=request,
+            funding=funding,
+            config=config,
+            request_spend_script_ref=_ref(request_spend_ref_outref, REQUEST_SPEND_SKH),
+            request_policy_script_ref=_ref(request_policy_ref_outref, REQUEST_POLICY),
+            loan_policy_script_ref=_ref(loan_policy_ref_outref, LOAN_POLICY),
+            lender_bond_policy_script_ref=_ref(
+                lender_bond_ref_outref,
+                LENDER_BOND_POLICY,
+            ),
+            borrower_bond_policy_script_ref=_ref(
+                borrower_bond_ref_outref,
+                BORROWER_BOND_POLICY,
+            ),
+            loan_address=LOAN_ADDRESS,
+            borrower_address=borrower_address,
+            request_id=request_id,
+            loan_id=loan_nft_name(request.out_ref),
+            given_principal_amount=principal,
+            principal_oracle_ref_input_index=0,
+            collateral_oracle_ref_input_index=0,
+            permissioned_condition_withdraw_index=0,
+            mint_input_ref=request.out_ref,
+            collateral_unit=collateral[0] + collateral[1],
+            collateral_amount=collateral[2],
+            loan_lovelace=loan_lovelace,
+            borrower_output_lovelace=principal,
+            valid_from=valid_from if valid_from is not None else 0,
+            valid_to=valid_to if valid_to is not None else 0,
             request_policy=REQUEST_POLICY,
             loan_policy=LOAN_POLICY,
             lender_bond_policy=LENDER_BOND_POLICY,
