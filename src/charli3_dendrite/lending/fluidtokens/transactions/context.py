@@ -802,6 +802,64 @@ class CancelRequestSnapshot(PoolActionSnapshot):
         )
 
 
+def _resolve_loan_lovelace(
+    loan_lovelace: int | None,
+    *,
+    loan_address: str,
+    loan_id: bytes,
+    collateral: tuple[str, str, int],
+    request_datum: RequestDatum,
+    request_id: bytes,
+    principal: int,
+    valid_from: int,
+    valid_to: int,
+) -> int:
+    """The loan output's coin: an explicit value as-is, else its protocol min-ADA.
+
+    ``build_lend`` writes ``loan_lovelace`` onto the loan output verbatim (balancing
+    does not raise a fixed output's coin), so the live default must be the output's real
+    min-UTxO rather than a flat guess that could fall below it. Mirrors the loan output
+    ``_add_lend_outputs`` builds (loan NFT + collateral + synthesized ``LoanDatum``) and
+    floors it via ``pycardano.min_lovelace`` over the nominal mainnet params in
+    ``EvalContext`` (the mechanism the sibling loan builders use for their outputs).
+    """
+    if loan_lovelace is not None:
+        return loan_lovelace
+
+    from pycardano import min_lovelace
+
+    from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+        synth_loan_datum_from_request,
+    )
+    from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
+    from charli3_dendrite.lending.transactions.infra import EvalContext
+    from charli3_dendrite.utility import slot_to_posix_ms
+
+    loan_datum = synth_loan_datum_from_request(
+        request_datum=request_datum,
+        request_id=request_id,
+        given_principal_amount=principal,
+        lend_date=slot_to_posix_ms(valid_to),
+    )
+    # OUTPUT_MIN_ADA is only a nominal coin so the output serializes for sizing; its
+    # byte length matches the resulting min, so it does not skew `min_lovelace`.
+    loan_output = TransactionOutput(
+        Address.decode(loan_address),
+        asset_to_value(
+            Assets(
+                **{
+                    "lovelace": OUTPUT_MIN_ADA,
+                    LOAN_POLICY + loan_id.hex(): 1,
+                    collateral[0] + collateral[1]: collateral[2],
+                },
+            ),
+        ),
+        datum=loan_datum,
+    )
+    return min_lovelace(EvalContext(last_block_slot=valid_from), output=loan_output)
+
+
 @dataclass
 class LendSnapshot(PoolActionSnapshot):
     """Resolved building blocks for filling a borrow request (``Lend``).
@@ -958,7 +1016,7 @@ class LendSnapshot(PoolActionSnapshot):
         borrower_bond_ref_outref: tuple[str, int] | None = None,
         valid_from: int | None = None,
         valid_to: int | None = None,
-        loan_lovelace: int = 2_000_000,
+        loan_lovelace: int | None = None,
     ) -> LendSnapshot:
         """Resolve a `LendSnapshot` live from chain state via the backend.
 
@@ -973,7 +1031,11 @@ class LendSnapshot(PoolActionSnapshot):
         oracle / permissioned indices default to ``0`` (inert in the static
         permissionless case). The borrower output lovelace equals the principal (ADA),
         and the loan output carries ``loan_lovelace`` + the request's collateral
-        unchanged.
+        unchanged. ``loan_lovelace`` defaults (when ``None``) to the loan output's
+        protocol min-ADA -- computed via ``pycardano.min_lovelace`` over the actual
+        loan output (loan NFT + collateral + synthesized ``LoanDatum``) -- since
+        ``build_lend`` uses it verbatim as the output coin and balancing does not raise
+        a fixed output's coin; an explicit value is used as-is (byte-exact replay).
 
         ``valid_from`` / ``valid_to`` pin the transaction's validity window (and the
         loan's baked-in maturity). When omitted they default to a live window derived
@@ -1078,16 +1140,29 @@ class LendSnapshot(PoolActionSnapshot):
         # The Lend validator enforces this carry-over, so the loan output address must
         # reuse the request's stake part; LOAN_ADDRESS only pins the payment credential
         # (its stake part is a placeholder that does not match a live request).
-        loan_address = LOAN_ADDRESS
-        if request.address is not None:
-            request_address = Address.decode(request.address)
-            loan_address = str(
-                Address(
-                    payment_part=Address.decode(LOAN_ADDRESS).payment_part,
-                    staking_part=request_address.staking_part,
-                    network=request_address.network,
-                ),
-            )
+        if request.address is None:
+            raise ValueError("resolved request UTxO is missing its address")
+        request_address = Address.decode(request.address)
+        loan_address = str(
+            Address(
+                payment_part=Address.decode(LOAN_ADDRESS).payment_part,
+                staking_part=request_address.staking_part,
+                network=request_address.network,
+            ),
+        )
+
+        loan_id = loan_nft_name(request.out_ref)
+        resolved_loan_lovelace = _resolve_loan_lovelace(
+            loan_lovelace,
+            loan_address=loan_address,
+            loan_id=loan_id,
+            collateral=collateral,
+            request_datum=datum,
+            request_id=request_id,
+            principal=principal,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
+        )
 
         return cls(
             request=request,
@@ -1107,15 +1182,22 @@ class LendSnapshot(PoolActionSnapshot):
             loan_address=loan_address,
             borrower_address=borrower_address,
             request_id=request_id,
-            loan_id=loan_nft_name(request.out_ref),
+            loan_id=loan_id,
             given_principal_amount=principal,
             principal_oracle_ref_input_index=0,
             collateral_oracle_ref_input_index=0,
+            # Intentionally differs from a captured fill (which may carry 1): the
+            # permissioned-condition index is ignored for permissionless requests, so 0
+            # is inert here. Not a bug -- do not "restore" the captured value.
             permissioned_condition_withdraw_index=0,
+            # Intentionally differs from a captured fill (which used a different spent
+            # input): the request-NFT burn redeemer's input_ref only needs to point at
+            # ANY spent input, and the request UTxO is itself spent, so its out-ref is a
+            # valid, always-available choice.
             mint_input_ref=request.out_ref,
             collateral_unit=collateral[0] + collateral[1],
             collateral_amount=collateral[2],
-            loan_lovelace=loan_lovelace,
+            loan_lovelace=resolved_loan_lovelace,
             borrower_output_lovelace=principal,
             valid_from=resolved_valid_from,
             valid_to=resolved_valid_to,
