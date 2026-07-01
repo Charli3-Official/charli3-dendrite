@@ -136,3 +136,23 @@ def test_v3_min_partial_fill_guard_no_floor() -> None:
     """With min_partial_fill == 0, any partial is allowed."""
     datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_18a01339.hex"))  # floor == 0
     datum.check_min_partial_fill(1)
+
+
+# Real mainnet partial fill: tx ad182bcd... partially filled order b6bcaeb6...#2
+# (sell 3000 WIFF / buy 6 ADA) with 3_000_000 lovelace, relisting sell 1500 WIFF /
+# buy 3 ADA at ad182bcd#0. The relist datum our builder produces must byte-match
+# what mainnet accepted (order_ad182bcd fixture).
+_B6BCAE_TX = "b6bcaeb69401127ed650fea550c87464c7fed8aeef05f25950738db6ece754cc"
+
+
+def test_v3_relist_datum_reconstructs_real_partial() -> None:
+    """build_relist_datum reproduces a real on-chain V3 relist byte-for-byte."""
+    consumed = SaturnSwapSwapDatumV3.from_cbor(
+        _hex("order_b6bcaeb6_out2_cov_none.hex"),
+    )
+    relist = consumed.build_relist_datum(
+        spent_tx_hash=_B6BCAE_TX,
+        spent_index=2,
+        user_sell_amount=3_000_000,
+    )
+    assert relist.to_cbor_hex() == _hex("order_ad182bcd.hex")

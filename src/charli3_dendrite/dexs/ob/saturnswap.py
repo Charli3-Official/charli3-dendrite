@@ -332,6 +332,50 @@ class SaturnSwapSwapDatumV3(OrderDatum):
             )
             raise ValueError(msg)
 
+    def build_relist_datum(
+        self,
+        spent_tx_hash: str,
+        spent_index: int,
+        user_sell_amount: int,
+    ) -> "SaturnSwapSwapDatumV3":
+        """Continuation (relist) datum for a partial fill of ``user_sell_amount``.
+
+        Owner, pair, ``valid_before_time``, ``min_partial_fill`` and ``coverage``
+        carry forward unchanged; the flat ``output_reference`` points to the spent
+        order. Mirrors the residual-amount math in
+        :meth:`SaturnSwapV3OrderState.swap_utxo` (including the ADA-sell carve).
+        """
+        two_ada = 2_000_000
+        new_amount_buy = self.amount_buy - user_sell_amount
+        new_amount_sell = _ratio_amount(
+            self.amount_buy,
+            new_amount_buy,
+            self.amount_sell,
+        )
+        if self.policy_id_sell == b"" and new_amount_sell > two_ada:
+            new_amount_sell -= two_ada
+            new_amount_buy = _ratio_amount(
+                self.amount_sell,
+                new_amount_sell,
+                self.amount_buy,
+            )
+        return SaturnSwapSwapDatumV3(
+            owner=self.owner,
+            policy_id_sell=self.policy_id_sell,
+            asset_name_sell=self.asset_name_sell,
+            amount_sell=new_amount_sell,
+            policy_id_buy=self.policy_id_buy,
+            asset_name_buy=self.asset_name_buy,
+            amount_buy=new_amount_buy,
+            valid_before_time=self.valid_before_time,
+            output_reference=SaturnSwapOutputReferenceV3(
+                tx_id=bytes.fromhex(spent_tx_hash),
+                index=spent_index,
+            ),
+            min_partial_fill=self.min_partial_fill,
+            coverage=self.coverage,
+        )
+
 
 @dataclass
 class SaturnSwapSwapAction(PlutusData):
