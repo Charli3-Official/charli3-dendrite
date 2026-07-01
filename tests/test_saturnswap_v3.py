@@ -115,3 +115,24 @@ def test_v3_pricing_parity_with_v2() -> None:
     assert SaturnSwapV3OrderState.TAKER_FEE_BPS == SaturnSwapOrderState.TAKER_FEE_BPS
     assert SaturnSwapV3OrderState.get_amount_out is SaturnSwapOrderState.get_amount_out
     assert SaturnSwapV3OrderState.get_amount_in is SaturnSwapOrderState.get_amount_in
+
+
+def test_v3_min_partial_fill_guard_rejects_below_floor() -> None:
+    """A partial fill below the min_partial_fill floor is rejected."""
+    # order_ad182bcd: min_partial_fill = 1_000_000, amount_buy = 3_000_000
+    datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
+    with pytest.raises(ValueError, match="min_partial_fill"):
+        datum.check_min_partial_fill(500_000)
+
+
+def test_v3_min_partial_fill_guard_allows_at_or_above_floor_and_full() -> None:
+    """Partial at/above the floor and a full fill are allowed."""
+    datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
+    datum.check_min_partial_fill(1_500_000)  # partial, at/above floor
+    datum.check_min_partial_fill(datum.amount_buy)  # full fill is always allowed
+
+
+def test_v3_min_partial_fill_guard_no_floor() -> None:
+    """With min_partial_fill == 0, any partial is allowed."""
+    datum = SaturnSwapSwapDatumV3.from_cbor(_hex("order_18a01339.hex"))  # floor == 0
+    datum.check_min_partial_fill(1)

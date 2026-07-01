@@ -318,6 +318,20 @@ class SaturnSwapSwapDatumV3(OrderDatum):
         base = (user_sell_amount * self.coverage.value.premium_bps) // 10_000
         return max(1, base)
 
+    def check_min_partial_fill(self, user_sell_amount: int) -> None:
+        """Reject a partial fill below the min_partial_fill floor.
+
+        A partial fill (``user_sell_amount < amount_buy``) must deliver at least
+        ``min_partial_fill`` of the buy asset; a full fill is always allowed.
+        """
+        is_partial = user_sell_amount < self.amount_buy
+        if is_partial and user_sell_amount < self.min_partial_fill:
+            msg = (
+                f"partial fill {user_sell_amount} below min_partial_fill "
+                f"{self.min_partial_fill}"
+            )
+            raise ValueError(msg)
+
 
 @dataclass
 class SaturnSwapSwapAction(PlutusData):
