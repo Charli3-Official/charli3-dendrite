@@ -421,12 +421,20 @@ class SaturnSwapSwapAction(PlutusData):
         input_index = input_utxo.input.index
 
         for i, txo in enumerate(tx_builder.outputs):
-            if not isinstance(txo.datum, SaturnSwapPaymentDatum):
+            datum = txo.datum
+            if isinstance(datum, SaturnSwapPaymentDatum):
+                # V2: nested OutputReference -> TxId -> bytes.
+                ref_tx_id = datum.output_reference.tx_id.value
+                ref_index = datum.output_reference.index
+            elif isinstance(datum, SaturnSwapPaymentDatumV3):
+                # V3: flat OutputReference (tx_id is bare bytes).
+                ref_tx_id = datum.output_reference.tx_id
+                ref_index = datum.output_reference.index
+            else:
                 continue
-            output_ref = txo.datum.output_reference
             if (
-                output_ref.tx_id.value == bytes.fromhex(str(input_tx_id))
-                and output_ref.index == input_index
+                ref_tx_id == bytes.fromhex(str(input_tx_id))
+                and ref_index == input_index
                 and txo.address == owner_address
             ):
                 self.output_index = i
@@ -642,7 +650,7 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
         tx_builder: TransactionBuilder,
         sell_unit: str,
         new_amount_sell: int,
-        payment_datum: "SaturnSwapPaymentDatum",
+        payment_datum: "SaturnSwapPaymentDatum | SaturnSwapPaymentDatumV3",
     ) -> None:
         """Add the taker-fee output, or require the authorize hot-key signature.
 
@@ -907,6 +915,148 @@ class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
     def default_script_class(cls) -> type[PlutusV3Script]:
         """V3 orders are spent via a PlutusV3 reference script."""
         return PlutusV3Script
+
+    def swap_utxo(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        tx_builder: TransactionBuilder,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+    ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Build a V3 taker-fill for this order.
+
+        Uses the flat :class:`SaturnSwapPaymentDatumV3` and the V3 relist datum
+        (:meth:`SaturnSwapSwapDatumV3.build_relist_datum`), enforces the
+        ``min_partial_fill`` floor, and preserves the authorized fee-free path.
+        Covered orders require the out-of-pocket premium output and are handled
+        separately.
+
+        TODO(dry): the owner-output / fee / partial-residual scaffold mirrors the
+        V2 base ``swap_utxo``; fold the shared body into an order-book mixin so V2
+        and V3 stop duplicating it.
+        """
+        two_ada = 2_000_000
+        user_sell_amount = int(in_assets.quantity())
+
+        # Covered fills must emit the Aegis premium output; handled separately.
+        if self.order_datum.is_covered():
+            msg = "covered SaturnSwap V3 fills require the premium output path"
+            raise NotImplementedError(msg)
+        # Reject a partial below the on-chain min_partial_fill floor.
+        self.order_datum.check_min_partial_fill(user_sell_amount)
+
+        if self.reference_utxo is not None:
+            tx_builder.reference_inputs.add(self.reference_utxo)
+
+        order_address = (
+            get_backend()
+            .get_pool_in_tx(
+                self.tx_hash,
+                addresses=self.pool_selector().addresses,
+            )[0]
+            .address
+        )
+        input_utxo = UTxO(
+            TransactionInput(
+                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                index=self.tx_index,
+            ),
+            output=TransactionOutput(
+                address=order_address,
+                amount=asset_to_value(self.assets),
+                datum_hash=self.order_datum.hash(),
+            ),
+        )
+        script_input_lovelace = input_utxo.output.amount.coin
+
+        # Flat V3 payment datum stamped on every output (owner/fee/relist).
+        output_ref = SaturnSwapOutputReferenceV3(
+            tx_id=bytes.fromhex(self.tx_hash),
+            index=self.tx_index,
+        )
+        payment_datum = SaturnSwapPaymentDatumV3(output_reference=output_ref)
+
+        partial = user_sell_amount < self.order_datum.amount_buy
+        sell_unit = out_assets.unit()
+        buy_unit = in_assets.unit()
+        sell_is_ada = sell_unit == "lovelace"
+
+        owner_address = self.order_datum.owner.to_address()
+        owner_assets = Assets(**{buy_unit: user_sell_amount})
+        new_amount_sell = _ratio_amount(
+            self.order_datum.amount_buy,
+            user_sell_amount,
+            self.order_datum.amount_sell,
+        )
+        if partial and sell_is_ada and new_amount_sell > two_ada:
+            owner_assets.root["lovelace"] = (
+                owner_assets.root.get("lovelace", 0) + two_ada
+            )
+        elif not partial and not sell_is_ada:
+            owner_assets.root["lovelace"] = (
+                owner_assets.root.get("lovelace", 0) + script_input_lovelace
+            )
+
+        owner_output = TransactionOutput(
+            address=owner_address,
+            amount=asset_to_value(owner_assets),
+            datum=payment_datum,
+        )
+        owner_output.amount.coin = max(
+            owner_output.amount.coin,
+            min_lovelace(tx_builder.context, output=owner_output),
+        )
+        tx_builder.add_output(owner_output)
+
+        self._add_fee_or_authorize(
+            tx_builder,
+            sell_unit,
+            new_amount_sell,
+            payment_datum,
+        )
+
+        action = SaturnSwapSwapAction(
+            user_sell_amount=user_sell_amount,
+            input_index=0,
+            output_index=0,
+        )
+        redeemer = Redeemer(action)
+        tx_builder.add_script_input(
+            utxo=input_utxo,
+            script=self.reference_utxo,
+            redeemer=redeemer,
+        )
+        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+
+        if partial:
+            new_datum = self.order_datum.build_relist_datum(
+                self.tx_hash,
+                self.tx_index,
+                user_sell_amount,
+            )
+            residual_assets = Assets(**{sell_unit: new_datum.amount_sell})
+            residual_output = TransactionOutput(
+                address=order_address,
+                amount=asset_to_value(residual_assets),
+                datum=new_datum,
+            )
+            if sell_is_ada:
+                residual_output.amount.coin = max(
+                    residual_output.amount.coin,
+                    min_lovelace(tx_builder.context, output=residual_output),
+                )
+            else:
+                residual_output.amount.coin = max(
+                    script_input_lovelace,
+                    min_lovelace(tx_builder.context, output=residual_output),
+                )
+            tx_builder.datums.update({new_datum.hash(): new_datum})
+            return residual_output, new_datum
+
+        return None, self.order_datum
 
 
 # Concrete SaturnSwap contracts, newest first. The order book walks all of these
