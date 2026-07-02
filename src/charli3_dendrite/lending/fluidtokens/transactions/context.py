@@ -421,6 +421,49 @@ def _fee_output(outputs: list[Utxo], loan: Utxo) -> Utxo:
 _PERPETUAL_MODE_ALT = 2
 
 
+def _recast_capitalization(
+    loan_datum: LoanDatum,
+    *,
+    valid_from: int,
+    valid_to: int,
+    amount_paid: int,
+) -> tuple[int, int]:
+    """Return ``(new_principal_amount, new_lend_date)`` for a perpetual recast.
+
+    ``new_lend_date`` resets to the validity window's LOWER bound (POSIX-ms of
+    ``valid_from``); the outstanding debt is measured to the UPPER bound (POSIX-ms of
+    ``valid_to``) -- the point the on-chain validator accrues interest to -- and reduced
+    by the borrower's ``amount_paid``. Raises for a non-perpetual loan (recast is
+    perpetual-only) or an ``amount_paid`` that exceeds the debt.
+    """
+    from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
+    from charli3_dendrite.lending.units import constr
+    from charli3_dendrite.utility import slot_to_posix_ms
+
+    mode_alt, mode_fields = constr(loan_datum.repayment_mode)
+    if mode_alt != _PERPETUAL_MODE_ALT:
+        raise ValueError(
+            "recast is only defined for perpetual loans (repayment_mode alt 2)",
+        )
+    debt = perpetual_outstanding_debt(
+        principal=loan_datum.principal_amount,
+        interest_rate=loan_datum.interest_rate,
+        apy_coef=int(mode_fields[0]),
+        lend_date_ms=loan_datum.lend_date,
+        now_ms=slot_to_posix_ms(valid_to),
+        repaid_installments=loan_datum.repaid_installments,
+        installment_period=loan_datum.installment_period,
+        initial_grace_period=loan_datum.initial_grace_period,
+    )
+    new_principal_amount = debt - amount_paid
+    if new_principal_amount < 0:
+        raise ValueError(
+            f"amount_paid ({amount_paid}) exceeds the outstanding debt ({debt}); "
+            "a recast cannot pay down more than is owed",
+        )
+    return new_principal_amount, slot_to_posix_ms(valid_from)
+
+
 @dataclass
 class RecastSnapshot(PoolActionSnapshot):
     """Resolved building blocks for a single-loan perpetual recast.
@@ -579,7 +622,6 @@ class RecastSnapshot(PoolActionSnapshot):
         The recast fee defaults to :func:`_resolve_recast_fee`; explicit ``fee_address``
         / ``fee_lovelace`` are used as-is.
         """
-        from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
         from charli3_dendrite.lending.fluidtokens.transactions._common import (
             LOAN_ACTION_VALIDITY_SLOTS,
         )
@@ -599,8 +641,6 @@ class RecastSnapshot(PoolActionSnapshot):
             resolve_utxo_by_outref,
         )
         from charli3_dendrite.lending.transactions.infra import current_slot
-        from charli3_dendrite.lending.units import constr
-        from charli3_dendrite.utility import slot_to_posix_ms
 
         loan = resolve_utxo_by_outref(backend, *loan_utxo, allow_spent=allow_spent)
         if loan.datum is None or loan.out_ref is None:
@@ -668,24 +708,12 @@ class RecastSnapshot(PoolActionSnapshot):
             resolved_valid_from = valid_from
             resolved_valid_to = valid_to
 
-        new_lend_date = slot_to_posix_ms(resolved_valid_from)
-
-        mode_alt, mode_fields = constr(loan_datum.repayment_mode)
-        if mode_alt != _PERPETUAL_MODE_ALT:
-            raise ValueError(
-                "recast is only defined for perpetual loans (repayment_mode alt 2)",
-            )
-        debt = perpetual_outstanding_debt(
-            principal=loan_datum.principal_amount,
-            interest_rate=loan_datum.interest_rate,
-            apy_coef=int(mode_fields[0]),
-            lend_date_ms=loan_datum.lend_date,
-            now_ms=slot_to_posix_ms(resolved_valid_to),
-            repaid_installments=loan_datum.repaid_installments,
-            installment_period=loan_datum.installment_period,
-            initial_grace_period=loan_datum.initial_grace_period,
+        new_principal_amount, new_lend_date = _recast_capitalization(
+            loan_datum,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
+            amount_paid=amount_paid,
         )
-        new_principal_amount = debt - amount_paid
 
         if fee_address is None or fee_lovelace is None:
             resolved_addr, resolved_amt = _resolve_recast_fee(config)
