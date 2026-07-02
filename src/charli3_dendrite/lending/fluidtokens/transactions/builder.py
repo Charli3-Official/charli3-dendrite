@@ -222,7 +222,10 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
 
         The loan out-ref comes from ``params.loan_utxo``, the borrower address from
         ``params.actor_address``, and the recast ``amount_paid`` from ``params.amount``;
-        the validity window defaults from the backend tip.
+        the validity window defaults from the backend tip. ``amount_paid`` is a real
+        magnitude (not optional-with-fallback like LEND's): omitting ``params.amount``
+        (default ``0``) performs a zero-repayment recast that capitalizes the full
+        outstanding debt into the new principal.
         """
         if params.loan_utxo is None:
             raise ValueError("RECAST requires params.loan_utxo (the loan out-ref)")
