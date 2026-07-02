@@ -34,6 +34,7 @@ from charli3_dendrite.dexs.ob.geniusyield import GeniusYieldOrderState
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapLegacyOrderState
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderBook
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
+from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapV3OrderState
 from charli3_dendrite.utility import Assets
 
 # from charli3_dendrite.dexs.ob.axo import AxoOBMarketState  # noqa: ERA001
