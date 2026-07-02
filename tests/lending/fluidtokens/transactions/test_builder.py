@@ -276,3 +276,68 @@ def test_resolve_snapshot_lend_requires_loan_utxo() -> None:
             action=LendingAction.LEND,
             params=ActionParams(actor_address="addr_lender"),
         )
+
+
+def test_resolve_snapshot_repay_dispatches_to_from_backend(monkeypatch) -> None:
+    captured = {}
+
+    def fake_from_backend(backend, **kwargs):  # noqa: ANN001, ANN003, ARG001
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        RepaySnapshot,
+        "from_backend",
+        classmethod(
+            lambda cls, backend, **kw: fake_from_backend(backend, **kw),  # noqa: ARG005
+        ),
+    )
+    FluidTokensTxBuilder().resolve_snapshot(
+        backend=None,
+        market_name="m",
+        action=LendingAction.REPAY,
+        params=ActionParams(actor_address="addr1x", loan_utxo="ab" * 32 + "#1"),
+    )
+    assert captured["loan_utxo"] == ("ab" * 32, 1)
+    assert captured["actor_address"] == "addr1x"
+
+
+def test_resolve_snapshot_repay_requires_loan_utxo() -> None:
+    with pytest.raises(ValueError, match="REPAY requires params.loan_utxo"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.REPAY,
+            params=ActionParams(actor_address="addr1x"),
+        )
+
+
+def test_resolve_snapshot_cancel_request_dispatches(monkeypatch) -> None:
+    captured = {}
+    # from_backend lands in a later task; register it so the dispatch can be exercised.
+    monkeypatch.setattr(
+        CancelRequestSnapshot,
+        "from_backend",
+        classmethod(
+            lambda cls, backend, **kw: captured.update(kw) or object(),  # noqa: ARG005
+        ),
+        raising=False,
+    )
+    FluidTokensTxBuilder().resolve_snapshot(
+        backend=None,
+        market_name="m",
+        action=LendingAction.REQUEST_CANCEL,
+        params=ActionParams(actor_address="addr1b", loan_utxo="cd" * 32 + "#0"),
+    )
+    assert captured["request_utxo"] == ("cd" * 32, 0)
+    assert captured["borrower_address"] == "addr1b"
+
+
+def test_resolve_snapshot_request_cancel_requires_loan_utxo() -> None:
+    with pytest.raises(ValueError, match="REQUEST_CANCEL requires params.loan_utxo"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.REQUEST_CANCEL,
+            params=ActionParams(actor_address="addr1b"),
+        )

@@ -7,14 +7,18 @@ its spend / mint-burn / outputs / redeemers / reference inputs into a caller-sup
 byte-exact + gated Ogmios e2e test; this builder is the registry-facing dispatch over
 those contributors.
 
-Live ``resolve_snapshot`` is wired for the pool actions and LEND: POOL_CANCEL resolves a
-:class:`CancelPoolSnapshot` from the backend (the pool out-ref + lender address come
-from ``ActionParams``), LEND resolves a :class:`LendSnapshot` from the backend (the
-request out-ref + optional principal / lender address come from ``ActionParams``), and
-POOL_CREATE is resolved by the caller via ``CreatePoolSnapshot.from_backend`` (it needs
-typed pool terms + liquidity that ``ActionParams`` does not carry). The remaining
-borrower-side actions still resolve from captured on-chain transactions via each
-snapshot's ``from_capture``; their live resolution is a separate milestone.
+Live ``resolve_snapshot`` is wired for the pool actions, LEND, REPAY, and
+REQUEST_CANCEL: POOL_CANCEL resolves a :class:`CancelPoolSnapshot` from the backend (the
+pool out-ref + lender address come from ``ActionParams``), LEND resolves a
+:class:`LendSnapshot` from the backend (the request out-ref + optional principal /
+lender address come from ``ActionParams``), REPAY resolves a :class:`RepaySnapshot` from
+the backend (the loan out-ref + actor address come from ``ActionParams``),
+REQUEST_CANCEL resolves a :class:`CancelRequestSnapshot` from the backend (the request
+out-ref + borrower address come from ``ActionParams``), and POOL_CREATE is resolved by
+the caller via ``CreatePoolSnapshot.from_backend`` (it needs typed pool terms +
+liquidity that ``ActionParams`` does not carry). The remaining borrower-side actions
+still resolve from captured on-chain transactions via each snapshot's ``from_capture``;
+their live resolution is a separate milestone.
 """
 
 from __future__ import annotations
@@ -120,6 +124,14 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         lender address (used to resolve the lender's funding) from
         ``params.actor_address``.
 
+        REPAY resolves a :class:`RepaySnapshot` from the backend: the loan UTxO out-ref
+        comes from ``params.loan_utxo`` and the actor (repayer) address from
+        ``params.actor_address``.
+
+        REQUEST_CANCEL resolves a :class:`CancelRequestSnapshot` from the backend: the
+        request UTxO out-ref comes from ``params.loan_utxo`` and the borrower address
+        from ``params.actor_address``.
+
         POOL_CREATE cannot be resolved from ``ActionParams`` alone -- it needs typed
         pool terms (+ liquidity / lovelace) that ``ActionParams`` does not carry -- so
         callers build the snapshot via ``CreatePoolSnapshot.from_backend(...)`` and call
@@ -152,6 +164,26 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 request_utxo=_parse_out_ref(params.loan_utxo),
                 given_principal_amount=params.amount or None,
                 lender_address=params.actor_address,
+            )
+        if action == LendingAction.REPAY:
+            if params.loan_utxo is None:
+                raise ValueError("REPAY requires params.loan_utxo (the loan out-ref)")
+            return RepaySnapshot.from_backend(
+                backend,
+                loan_utxo=_parse_out_ref(params.loan_utxo),
+                actor_address=params.actor_address,
+            )
+        if action == LendingAction.REQUEST_CANCEL:
+            if params.loan_utxo is None:
+                raise ValueError(
+                    "REQUEST_CANCEL requires params.loan_utxo (the request out-ref)",
+                )
+            # CancelRequestSnapshot's live resolver is not yet implemented; this is a
+            # forward reference to it.
+            return CancelRequestSnapshot.from_backend(  # type: ignore[attr-defined]
+                backend,
+                request_utxo=_parse_out_ref(params.loan_utxo),
+                borrower_address=params.actor_address,
             )
         raise NotImplementedError(
             "FluidTokens live snapshot resolution is not implemented for "
