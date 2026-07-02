@@ -14,11 +14,13 @@ pool out-ref + lender address come from ``ActionParams``), LEND resolves a
 lender address come from ``ActionParams``), REPAY resolves a :class:`RepaySnapshot` from
 the backend (the loan out-ref + actor address come from ``ActionParams``),
 REQUEST_CANCEL resolves a :class:`CancelRequestSnapshot` from the backend (the request
-out-ref + borrower address come from ``ActionParams``), and POOL_CREATE is resolved by
-the caller via ``CreatePoolSnapshot.from_backend`` (it needs typed pool terms +
-liquidity that ``ActionParams`` does not carry). The remaining borrower-side actions
-still resolve from captured on-chain transactions via each snapshot's ``from_capture``;
-their live resolution is a separate milestone.
+out-ref + borrower address come from ``ActionParams``). POOL_CREATE, REQUEST_CREATE,
+MODIFY_COLLATERAL, and BORROW cannot be resolved from ``ActionParams`` alone -- they
+need typed terms or a time-bound oracle witness / injected datums / fee that
+``ActionParams`` does not carry -- so callers build those snapshots via
+``<Snapshot>.from_backend(...)`` and call :meth:`contribute` directly. Every supported
+action is now either live-resolvable via ``resolve_snapshot`` or has such a
+``from_backend`` directive.
 """
 
 from __future__ import annotations
@@ -81,6 +83,41 @@ _SNAPSHOT_TYPE = {
     LendingAction.LEND: LendSnapshot,
     LendingAction.POOL_CREATE: CreatePoolSnapshot,
     LendingAction.POOL_CANCEL: CancelPoolSnapshot,
+}
+
+
+# Actions whose snapshot needs typed terms / an off-chain witness that ``ActionParams``
+# cannot carry: they resolve via ``<Snapshot>.from_backend(...)`` + ``contribute``
+# directly rather than through ``resolve_snapshot``. Each maps to its guidance message.
+_FROM_BACKEND_DIRECTIVE = {
+    LendingAction.POOL_CREATE: (
+        "POOL_CREATE cannot be resolved from ActionParams: it needs typed PoolTerms "
+        "(+ liquidity / lovelace) that ActionParams does not carry. Build the snapshot "
+        "via CreatePoolSnapshot.from_backend(...) and call "
+        "FluidTokensTxBuilder().contribute(LendingAction.POOL_CREATE, ...) directly."
+    ),
+    LendingAction.REQUEST_CREATE: (
+        "REQUEST_CREATE cannot be resolved from ActionParams: it needs typed "
+        "RequestTerms (+ collateral / lovelace) that ActionParams does not carry. "
+        "Build the snapshot via CreateRequestSnapshot.from_backend(...) and call "
+        "FluidTokensTxBuilder().contribute(LendingAction.REQUEST_CREATE, ...) directly."
+    ),
+    LendingAction.MODIFY_COLLATERAL: (
+        "MODIFY_COLLATERAL cannot be resolved from ActionParams: it needs a time-bound "
+        "oracle witness (oracle_reward_cbor + the oracle feed / script-ref out-refs) "
+        "that ActionParams cannot carry. Build the snapshot via "
+        "ChangeCollateralSnapshot.from_backend(...) and call "
+        "FluidTokensTxBuilder().contribute(LendingAction.MODIFY_COLLATERAL, ..., "
+        "params=ActionParams(..., amount=<target collateral>)) directly."
+    ),
+    LendingAction.BORROW: (
+        "BORROW cannot be resolved from ActionParams: it needs a time-bound oracle "
+        "witness (oracle_reward_cbor + the oracle feed / script-ref out-refs), the "
+        "injected lender-bond datum preimage, and the borrow protocol fee -- none of "
+        "which ActionParams can carry. Build the snapshot via "
+        "BorrowSnapshot.from_backend(...) and call "
+        "FluidTokensTxBuilder().contribute(LendingAction.BORROW, ...) directly."
+    ),
 }
 
 
@@ -148,9 +185,18 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         ``CreateRequestSnapshot.from_backend(...)`` and call :meth:`contribute`
         directly.
 
-        The remaining borrower-side actions (BORROW, MODIFY_COLLATERAL) are not yet
-        live-resolvable; resolve them via each snapshot's ``from_capture`` and call
-        :meth:`contribute` directly.
+        MODIFY_COLLATERAL likewise cannot be resolved from ``ActionParams`` alone -- it
+        needs a time-bound oracle witness (``oracle_reward_cbor`` + the oracle feed /
+        script-ref out-refs) that ``ActionParams`` cannot carry -- so callers build the
+        snapshot via ``ChangeCollateralSnapshot.from_backend(...)`` and call
+        :meth:`contribute` directly (the new locked collateral amount is threaded
+        through ``ActionParams.amount``).
+
+        BORROW likewise cannot be resolved from ``ActionParams`` alone -- it needs a
+        time-bound oracle witness (``oracle_reward_cbor`` + the oracle feed /
+        script-ref out-refs), the injected lender-bond datum preimage, and the borrow
+        protocol fee -- so callers build the snapshot via
+        ``BorrowSnapshot.from_backend(...)`` and call :meth:`contribute` directly.
         """
         if action == LendingAction.POOL_CANCEL:
             if params.loan_utxo is None:
@@ -160,23 +206,8 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 pool_utxo=_parse_out_ref(params.loan_utxo),
                 lender_address=params.actor_address,
             )
-        if action == LendingAction.POOL_CREATE:
-            raise NotImplementedError(
-                "POOL_CREATE cannot be resolved from ActionParams: it needs typed "
-                "PoolTerms (+ liquidity / lovelace) that ActionParams does not carry. "
-                "Build the snapshot via CreatePoolSnapshot.from_backend(...) and call "
-                "FluidTokensTxBuilder().contribute(LendingAction.POOL_CREATE, ...) "
-                "directly.",
-            )
-        if action == LendingAction.REQUEST_CREATE:
-            raise NotImplementedError(
-                "REQUEST_CREATE cannot be resolved from ActionParams: it needs "
-                "typed RequestTerms (+ collateral / lovelace) that ActionParams "
-                "does not carry. Build the snapshot via "
-                "CreateRequestSnapshot.from_backend(...) and call "
-                "FluidTokensTxBuilder().contribute(LendingAction.REQUEST_CREATE, "
-                "...) directly.",
-            )
+        if action in _FROM_BACKEND_DIRECTIVE:
+            raise NotImplementedError(_FROM_BACKEND_DIRECTIVE[action])
         if action == LendingAction.LEND:
             if params.loan_utxo is None:
                 raise ValueError("LEND requires params.loan_utxo (the request out-ref)")

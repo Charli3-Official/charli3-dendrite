@@ -146,8 +146,11 @@ def test_build_and_evaluate_rejects_unsupported_action():
         )
 
 
-def test_resolve_snapshot_is_not_wired_yet():
-    with pytest.raises(NotImplementedError, match="from_capture"):
+def test_resolve_snapshot_borrow_directs_to_from_backend():
+    with pytest.raises(
+        NotImplementedError,
+        match="BorrowSnapshot.from_backend",
+    ):
         FluidTokensTxBuilder().resolve_snapshot(
             None,
             market_name="x",
@@ -402,5 +405,18 @@ def test_resolve_snapshot_request_create_directs_to_from_backend() -> None:
             backend=None,
             market_name="m",
             action=LendingAction.REQUEST_CREATE,
+            params=ActionParams(actor_address="addr1b"),
+        )
+
+
+def test_resolve_snapshot_modify_collateral_directs_to_from_backend() -> None:
+    with pytest.raises(
+        NotImplementedError,
+        match="ChangeCollateralSnapshot.from_backend",
+    ):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.MODIFY_COLLATERAL,
             params=ActionParams(actor_address="addr1b"),
         )

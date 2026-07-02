@@ -14,8 +14,11 @@ the lender-bond UTxO as reference inputs.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from fractions import Fraction
+from math import ceil
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -54,6 +57,7 @@ from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
+    from charli3_dendrite.lending.fluidtokens.oracles.witness import OracleReward
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import PoolTerms
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
         RequestTerms,
@@ -837,6 +841,374 @@ class ChangeCollateralSnapshot(PoolActionSnapshot):
             bond_policy=BORROWER_BOND_POLICY,
         )
 
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        loan_utxo: tuple[str, int],
+        oracle_reward_cbor: str,
+        oracle_feed_outref: tuple[str, int],
+        actor_address: str | None = None,
+        allow_spent: bool = False,
+        config_outref: tuple[str, int] | None = None,
+        spend_ref_outref: tuple[str, int] | None = None,
+        loan_policy_ref_outref: tuple[str, int] | None = None,
+        action_ref_outref: tuple[str, int] | None = None,
+        oracle_script_ref_outref: tuple[str, int] | None = None,
+        borrower_bond_outref: tuple[str, int] | None = None,
+    ) -> ChangeCollateralSnapshot:
+        """Resolve a `ChangeCollateralSnapshot` live from chain state via the backend.
+
+        The loan UTxO is resolved by ``loan_utxo`` out-ref (``allow_spent`` replays a
+        captured/closed loan); its loan NFT supplies the ``loan_id``. The borrower-bond
+        input is located by the bond NFT (``BORROWER_BOND_POLICY`` + ``loan_id``) unless
+        pinned by out-ref; when ``actor_address`` is given the resolved bond UTxO must
+        be held by it. The config NFT and the three loan scripts (loan spend, loan
+        policy, change-collateral action) are resolved unless pinned.
+
+        The oracle is an off-chain, time-bound dependency, so its pieces are INJECTED
+        rather than derived: ``oracle_reward_cbor`` is the freshly signed price message
+        (validated here as well-formed, then replayed verbatim by the builder), and both
+        the oracle feed (``oracle_feed_outref``) and the oracle reference-script UTxO
+        (``oracle_script_ref_outref``) are supplied by out-ref because they are external
+        to the loan and not derivable from it -- a captured witness only replays when
+        the transaction's validity window is pinned to the window the witness covers.
+        """
+        from charli3_dendrite.lending.fluidtokens.oracles.witness import OracleReward
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_asset,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        # The oracle witness is replayed verbatim by the builder; validate it is
+        # well-formed here so a malformed message fails loudly at resolution rather
+        # than deep inside script evaluation.
+        OracleReward.parse(oracle_reward_cbor)
+        if oracle_script_ref_outref is None:
+            raise ValueError(
+                "change-collateral requires oracle_script_ref_outref: the oracle "
+                "reference-script UTxO is external to the loan and not derivable from "
+                "it (the oracle client supplies it alongside the witness)",
+            )
+
+        loan = resolve_utxo_by_outref(backend, *loan_utxo, allow_spent=allow_spent)
+        if loan.datum is None:
+            raise ValueError("resolved loan UTxO is missing its datum")
+        loan_id = next(bytes.fromhex(n) for p, n, _ in loan.assets if p == LOAN_POLICY)
+
+        def _pin_or(
+            outref: tuple[str, int] | None,
+            resolver: Callable[[], Utxo],
+        ) -> Utxo:
+            if outref:
+                return resolve_utxo_by_outref(backend, *outref, allow_spent=True)
+            return resolver()
+
+        borrower_bond = _pin_or(
+            borrower_bond_outref,
+            lambda: resolve_utxo_by_asset(backend, BORROWER_BOND_POLICY, loan_id.hex()),
+        )
+        if actor_address is not None and borrower_bond.address != actor_address:
+            raise ValueError(
+                "borrower-bond UTxO is not held by actor_address "
+                f"({borrower_bond.address} != {actor_address})",
+            )
+
+        config = _pin_or(config_outref, lambda: resolve_config_utxo(backend))
+        oracle_feed = resolve_utxo_by_outref(
+            backend,
+            *oracle_feed_outref,
+            allow_spent=True,
+        )
+        oracle_script_ref = resolve_utxo_by_outref(
+            backend,
+            *oracle_script_ref_outref,
+            allow_spent=True,
+        )
+        spend_script_ref = _pin_or(
+            spend_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_SPEND_SKH),
+        )
+        loan_policy_script_ref = _pin_or(
+            loan_policy_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_POLICY),
+        )
+        action_script_ref = _pin_or(
+            action_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_CHANGE_COLLATERAL_ACTION_SKH),
+        )
+
+        return cls(
+            loan=loan,
+            borrower_bond=borrower_bond,
+            config=config,
+            oracle_feed=oracle_feed,
+            spend_script_ref=spend_script_ref,
+            loan_policy_script_ref=loan_policy_script_ref,
+            action_script_ref=action_script_ref,
+            oracle_script_ref=oracle_script_ref,
+            oracle_reward_cbor=oracle_reward_cbor,
+            loan_id=loan_id,
+            loan_policy=LOAN_POLICY,
+            bond_policy=BORROWER_BOND_POLICY,
+        )
+
+
+# The FluidTokens borrow validator caps the transaction's validity window at one hour
+# (3600 slots), a distinct, wider bound than the 360-slot ``LOAN_ACTION_VALIDITY_SLOTS``
+# the loan-action validators use. The window additionally must fall inside the signed
+# oracle witness's ms window.
+BORROW_VALIDITY_SLOTS = 3600
+
+# The Plutus ``Unit`` datum (``Constr0([])``); the default lender-bond output datum when
+# the pool commits its hash.
+_UNIT_DATUM_HEX = "d87980"
+
+
+def loan_id_from_pool_outref(pool_out_ref: tuple[str, int]) -> bytes:
+    """The loan id a pool-origin borrow mints: ``blake2b_224`` of the pool out-ref.
+
+    The bond policy names each minted NFT (loan / borrower bond / lender bond) after
+    this id, derived by hashing the serialized ``OutputReference`` of the spent pool
+    UTxO. The out-ref is encoded exactly as the bond-mint redeemer encodes it (a
+    ``TxOutRef`` ``Constr0([tx_id, index])``) so the derived name matches the mint.
+    """
+    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import TxOutRef
+
+    tx_ref = TxOutRef(tx_id=bytes.fromhex(pool_out_ref[0]), index=pool_out_ref[1])
+    return hashlib.blake2b(tx_ref.to_cbor(), digest_size=28).digest()
+
+
+def _address_from_pool_datum(pool_datum: PoolDatum) -> Address:
+    """Decode the pool's committed ``lender_bond_address`` to a pycardano `Address`."""
+    from charli3_dendrite.lending.fluidtokens.transactions._common import (
+        address_from_plutus,
+    )
+
+    raw = pool_datum.lender_bond_address
+    data = raw.data if hasattr(raw, "data") else raw
+    return address_from_plutus(data)
+
+
+def _collateral_unit(pool_datum: PoolDatum, chosen_collateral_index: int) -> str:
+    """The unit (``policy_hex`` ++ ``name_hex``) of the chosen collateral option."""
+    from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
+    from charli3_dendrite.lending.units import constr
+
+    options = list(pool_datum.collateral_options)
+    chosen = options[chosen_collateral_index]
+    if not isinstance(chosen, CollateralAsset):
+        chosen = CollateralAsset.from_primitive(chosen)
+    alt, fields = constr(chosen.maybe_asset_name)
+    name = bytes(fields[0]) if alt == 0 and fields else b""
+    return chosen.policy_id.hex() + name.hex()
+
+
+def _min_collateral_amount(
+    pool_datum: PoolDatum,
+    *,
+    chosen_collateral_index: int,
+    principal_amount: int,
+    price_num: int,
+    price_den: int,
+) -> int:
+    """Minimum collateral units required to back ``principal_amount`` (ADA principal).
+
+    Mirrors the pool validator's collateral floor. For a dynamically-priced pool the
+    principal is first expressed in lovelace (1:1 for an ADA principal), scaled by the
+    option's ``min_collateral_divider / min_collateral`` ratio, and converted to
+    collateral units at the oracle price ``price_num / price_den``
+    (``ceil(collateral_lovelace * price_den / price_num)``). For a statically-priced
+    pool the floor is ``ceil(principal_amount * min_collateral / min_collateral_div)``.
+    Non-ADA principal pools would additionally price the principal via their own oracle
+    and are out of scope.
+    """
+    principal_asset = pool_datum.common_data.principal_asset
+    if principal_asset.policy_id or principal_asset.asset_name:
+        raise NotImplementedError(
+            "min-collateral for a non-ADA principal pool needs the principal oracle "
+            "price; only ADA-principal pools are supported",
+        )
+    from charli3_dendrite.lending.units import constr
+
+    min_collateral = int(list(pool_datum.min_collateral)[chosen_collateral_index])
+    divider = int(list(pool_datum.min_collateral_divider)[chosen_collateral_index])
+    dynamic_alt, _ = constr(pool_datum.dynamic_collateral_price)
+    if dynamic_alt == 1:  # Bool True -> dynamic (oracle) pricing
+        collateral_in_lovelace = Fraction(principal_amount * divider, min_collateral)
+        return ceil(collateral_in_lovelace * Fraction(price_den, price_num))
+    return ceil(Fraction(principal_amount * min_collateral, divider))
+
+
+def _resolve_lender_bond_datum(
+    pool_datum: PoolDatum,
+    lender_bond_datum: str | bytes | None,
+) -> str:
+    """The lender-bond output's inline datum (hex), validated against the pool's commit.
+
+    The pool commits only ``blake2b_256(serialise_data(preimage))`` as
+    ``lender_bond_inline_datum_hash``, so the actual datum is an off-chain preimage the
+    caller injects. When omitted, the Plutus ``Unit`` datum is tried and accepted only
+    if it hashes to the committed value; else the caller must inject the preimage. The
+    chosen preimage is ALWAYS re-hashed and checked before it is returned.
+    """
+    committed = bytes(pool_datum.lender_bond_inline_datum_hash)
+    if lender_bond_datum is None:
+        candidate = _UNIT_DATUM_HEX
+    elif isinstance(lender_bond_datum, bytes):
+        candidate = lender_bond_datum.hex()
+    else:
+        candidate = lender_bond_datum
+    digest = hashlib.blake2b(bytes.fromhex(candidate), digest_size=32).digest()
+    if digest != committed:
+        if lender_bond_datum is None:
+            raise ValueError(
+                "lender_bond_datum is required: the pool commits a non-Unit "
+                "lender-bond inline datum hash; inject the datum preimage via "
+                "lender_bond_datum",
+            )
+        raise ValueError(
+            "lender_bond_datum does not hash to the pool's committed "
+            "lender_bond_inline_datum_hash",
+        )
+    return candidate
+
+
+def _resolve_borrow_window(
+    oracle: OracleReward,
+    *,
+    valid_from: int | None,
+    valid_to: int | None,
+    tip: int,
+) -> tuple[int, int]:
+    """The borrow's ``(valid_from, valid_to)`` slot window, covered by the witness.
+
+    A fully pinned window (byte-exact replay) is accepted only if it is inside the
+    one-hour cap AND covered by the signed oracle witness. Otherwise the window is
+    derived from the backend ``tip`` (lower bound) and the witness's covered slot
+    range, capped at :data:`BORROW_VALIDITY_SLOTS`; a window that cannot be fit inside
+    the witness raises (the witness is stale relative to the tip).
+    """
+    if valid_from is not None and valid_to is not None:
+        if valid_to - valid_from > BORROW_VALIDITY_SLOTS:
+            raise ValueError(
+                f"borrow validity window exceeds {BORROW_VALIDITY_SLOTS} slots",
+            )
+        if not oracle.contains_slot_window(valid_from, valid_to):
+            raise ValueError(
+                "pinned validity window is not covered by the oracle witness",
+            )
+        return valid_from, valid_to
+    witness_from, witness_to = oracle.tx_validity_slots()
+    lower = valid_from if valid_from is not None else max(tip, witness_from)
+    upper = (
+        valid_to
+        if valid_to is not None
+        else min(lower + BORROW_VALIDITY_SLOTS, witness_to)
+    )
+    if upper - lower > BORROW_VALIDITY_SLOTS:
+        upper = lower + BORROW_VALIDITY_SLOTS
+    if not oracle.contains_slot_window(lower, upper):
+        raise ValueError(
+            "could not fit a validity window inside the oracle witness; the witness "
+            "may be stale relative to the backend tip",
+        )
+    return lower, upper
+
+
+def _resolve_borrow_loan_lovelace(
+    *,
+    loan_address: str,
+    loan_id: bytes,
+    collateral_unit: str,
+    collateral_amount: int,
+    pool_datum: PoolDatum,
+    pool_id: bytes,
+    principal_amount: int,
+    chosen_collateral_index: int,
+    valid_from: int,
+    valid_to: int,
+) -> int:
+    """The loan output's min-UTxO coin (loan NFT + collateral + synthesized datum).
+
+    ``build_borrow`` writes this onto the loan output verbatim (balancing does not
+    raise a fixed output's coin), so the default is the output's real protocol min-ADA
+    computed via ``pycardano.min_lovelace`` over the actual loan output -- not the flat
+    5-ADA ``OUTPUT_MIN_ADA``. Mirrors the request-fill loan floor.
+    """
+    from pycardano import min_lovelace
+
+    from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+        synth_loan_datum,
+    )
+    from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
+    from charli3_dendrite.lending.transactions.infra import EvalContext
+    from charli3_dendrite.utility import slot_to_posix_ms
+
+    loan_datum = synth_loan_datum(
+        pool_datum=pool_datum,
+        pool_id=pool_id,
+        principal_amount=principal_amount,
+        lend_date=slot_to_posix_ms(valid_to),
+        chosen_collateral_index=chosen_collateral_index,
+    )
+    loan_output = TransactionOutput(
+        Address.decode(loan_address),
+        asset_to_value(
+            Assets(
+                **{
+                    "lovelace": OUTPUT_MIN_ADA,
+                    LOAN_POLICY + loan_id.hex(): 1,
+                    collateral_unit: collateral_amount,
+                },
+            ),
+        ),
+        datum=loan_datum,
+    )
+    return min_lovelace(EvalContext(last_block_slot=valid_from), output=loan_output)
+
+
+def _resolve_lender_bond_lovelace(
+    *,
+    lender_bond_address: str,
+    loan_id: bytes,
+    lender_bond_datum: str,
+    valid_from: int,
+) -> int:
+    """The lender-bond output's min-UTxO coin (lender-bond NFT + the injected datum)."""
+    from pycardano import min_lovelace
+
+    from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
+    from charli3_dendrite.lending.transactions.infra import EvalContext
+
+    lender_bond_output = TransactionOutput(
+        Address.decode(lender_bond_address),
+        asset_to_value(
+            Assets(
+                **{
+                    "lovelace": OUTPUT_MIN_ADA,
+                    LENDER_BOND_POLICY + loan_id.hex(): 1,
+                },
+            ),
+        ),
+        datum=RawCBOR(bytes.fromhex(lender_bond_datum)),
+    )
+    return min_lovelace(
+        EvalContext(last_block_slot=valid_from),
+        output=lender_bond_output,
+    )
+
 
 @dataclass
 class BorrowSnapshot(PoolActionSnapshot):
@@ -1001,6 +1373,263 @@ class BorrowSnapshot(PoolActionSnapshot):
             permissioned_condition_withdraw_index=int(permissioned_idx),
             valid_from=int(fix["invalid_before"]),
             valid_to=int(fix["invalid_hereafter"]),
+            loan_id=loan_id,
+            pool_id=pool_id,
+            loan_policy=LOAN_POLICY,
+            pool_policy=POOL_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+            borrower_bond_policy=BORROWER_BOND_POLICY,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        pool_utxo: tuple[str, int],
+        borrower_address: str,
+        principal_amount: int,
+        chosen_collateral_index: int,
+        oracle_reward_cbor: str,
+        oracle_feed_outref: tuple[str, int],
+        oracle_script_ref_outref: tuple[str, int],
+        fee_lovelace: int,
+        collateral_amount: int | None = None,
+        lender_bond_datum: str | bytes | None = None,
+        valid_from: int | None = None,
+        valid_to: int | None = None,
+        allow_spent: bool = False,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        borrower_output_lovelace: int | None = None,
+        config_outref: tuple[str, int] | None = None,
+        pool_spend_ref_outref: tuple[str, int] | None = None,
+        pool_policy_ref_outref: tuple[str, int] | None = None,
+        loan_policy_ref_outref: tuple[str, int] | None = None,
+        lender_bond_policy_ref_outref: tuple[str, int] | None = None,
+        borrower_bond_policy_ref_outref: tuple[str, int] | None = None,
+    ) -> BorrowSnapshot:
+        """Resolve a pool-origin `BorrowSnapshot` live from chain state via the backend.
+
+        The pool UTxO is resolved by ``pool_utxo`` out-ref (``allow_spent`` replays a
+        captured/consumed pool); its NFT supplies the ``pool_id`` and its ``PoolDatum``
+        supplies the loan terms, the lender-bond commit, and the collateral pricing.
+        Everything the pool validator pins is DERIVED from that datum + the borrow
+        params: the ``loan_id`` (``blake2b_224`` of the pool out-ref), the loan output
+        address (loan-spend payment credential + the borrower's stake credential), the
+        chosen collateral unit + its minimum amount, and the continuing pool's reduced
+        principal (ADA principal -> ``pool.lovelace - principal_amount``).
+
+        Several fields are INJECTED because they are off-chain / not derivable from the
+        pool: ``oracle_reward_cbor`` is the freshly signed, time-bound price message
+        (validated well-formed here, replayed verbatim by the builder), and the oracle
+        feed (``oracle_feed_outref``) and oracle reference script
+        (``oracle_script_ref_outref``) are supplied by out-ref because they are external
+        to the pool; ``fee_lovelace`` is the borrow protocol fee, which is neither
+        validator-enforced nor recorded in the ``PoolDatum`` / config, so it is a
+        required argument (it is NOT the flat repay fee); and ``lender_bond_datum`` is
+        the preimage of the committed ``lender_bond_inline_datum_hash`` -- when omitted
+        the Plutus ``Unit`` datum is tried and accepted only if it matches the commit.
+
+        ``valid_from`` / ``valid_to`` pin the tx validity window for byte-exact replay;
+        when omitted the window is derived from the backend tip and the oracle witness's
+        covered slot range (capped at :data:`BORROW_VALIDITY_SLOTS`), and is asserted to
+        fall inside the witness. ``collateral_amount`` defaults to the computed minimum
+        and must not fall below it. Only the pool-continuation case is supported: a
+        full-drain borrow (``principal_amount`` >= the pool's principal) burns the pool
+        NFT with no pool output and raises :class:`NotImplementedError`; permissioned
+        pools are likewise out of scope.
+        """
+        from charli3_dendrite.lending.fluidtokens.oracles.witness import OracleReward
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+        from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
+        from charli3_dendrite.lending.transactions.infra import current_slot
+
+        if principal_amount <= 0:
+            raise ValueError("principal_amount must be > 0")
+        # The oracle witness is replayed verbatim by the builder; validate it is
+        # well-formed here so a malformed message fails at resolution, not deep inside
+        # script evaluation.
+        oracle = OracleReward.parse(oracle_reward_cbor)
+        if oracle_script_ref_outref is None:
+            raise ValueError(
+                "borrow requires oracle_script_ref_outref: the oracle reference-script "
+                "UTxO is external to the pool and not derivable from it (the oracle "
+                "client supplies it alongside the witness)",
+            )
+
+        pool = resolve_utxo_by_outref(backend, *pool_utxo, allow_spent=allow_spent)
+        if pool.datum is None or pool.out_ref is None:
+            raise ValueError("resolved pool UTxO is missing its datum/out-ref")
+        pool_datum = PoolDatum.from_cbor(bytes.fromhex(pool.datum))
+        if bytes(pool_datum.permissioned_condition_script_hash) != b"NONE":
+            raise NotImplementedError(
+                "permissioned pools are out of scope: the borrow needs the canonical "
+                "permissioned-condition withdrawal index",
+            )
+        # Only the pool-continuation case is supported; a full drain (remaining
+        # principal == 0) burns the pool NFT with no continuing output.
+        if principal_amount >= pool.lovelace:
+            raise NotImplementedError(
+                "full-drain borrow (principal_amount >= the pool's principal) burns "
+                "the pool NFT with no continuation output; only the pool-continuation "
+                "case is supported",
+            )
+        pool_id = next(bytes.fromhex(n) for p, n, _ in pool.assets if p == POOL_POLICY)
+        loan_id = loan_id_from_pool_outref(pool.out_ref)
+
+        collateral_unit = _collateral_unit(pool_datum, chosen_collateral_index)
+        min_needed = _min_collateral_amount(
+            pool_datum,
+            chosen_collateral_index=chosen_collateral_index,
+            principal_amount=principal_amount,
+            price_num=oracle.price_num,
+            price_den=oracle.price_den,
+        )
+        if collateral_amount is None:
+            collateral_amount = min_needed
+        elif collateral_amount < min_needed:
+            raise ValueError(
+                f"collateral_amount {collateral_amount} is below the minimum "
+                f"{min_needed} required to back principal {principal_amount}",
+            )
+
+        loan_address = str(
+            Address(
+                payment_part=Address.decode(LOAN_ADDRESS).payment_part,
+                staking_part=Address.decode(borrower_address).staking_part,
+                network=Address.decode(borrower_address).network,
+            ),
+        )
+        lender_bond_address = str(_address_from_pool_datum(pool_datum))
+        resolved_lender_bond_datum = _resolve_lender_bond_datum(
+            pool_datum,
+            lender_bond_datum,
+        )
+
+        tip = current_slot(backend) if valid_from is None or valid_to is None else 0
+        resolved_valid_from, resolved_valid_to = _resolve_borrow_window(
+            oracle,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            tip=tip,
+        )
+
+        def _pin_or(
+            outref: tuple[str, int] | None,
+            resolver: Callable[[], Utxo],
+        ) -> Utxo:
+            if outref:
+                return resolve_utxo_by_outref(backend, *outref, allow_spent=True)
+            return resolver()
+
+        config = _pin_or(config_outref, lambda: resolve_config_utxo(backend))
+        oracle_feed = resolve_utxo_by_outref(
+            backend,
+            *oracle_feed_outref,
+            allow_spent=True,
+        )
+        oracle_script_ref = resolve_utxo_by_outref(
+            backend,
+            *oracle_script_ref_outref,
+            allow_spent=True,
+        )
+        pool_spend_script_ref = _pin_or(
+            pool_spend_ref_outref,
+            lambda: resolve_script_ref(backend, POOL_SPEND_SKH),
+        )
+        pool_policy_script_ref = _pin_or(
+            pool_policy_ref_outref,
+            lambda: resolve_script_ref(backend, POOL_POLICY),
+        )
+        loan_policy_script_ref = _pin_or(
+            loan_policy_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_POLICY),
+        )
+        lender_bond_policy_script_ref = _pin_or(
+            lender_bond_policy_ref_outref,
+            lambda: resolve_script_ref(backend, LENDER_BOND_POLICY),
+        )
+        borrower_bond_policy_script_ref = _pin_or(
+            borrower_bond_policy_ref_outref,
+            lambda: resolve_script_ref(backend, BORROWER_BOND_POLICY),
+        )
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        else:
+            funding = resolve_funding(backend, borrower_address)
+
+        loan_lovelace = _resolve_borrow_loan_lovelace(
+            loan_address=loan_address,
+            loan_id=loan_id,
+            collateral_unit=collateral_unit,
+            collateral_amount=collateral_amount,
+            pool_datum=pool_datum,
+            pool_id=pool_id,
+            principal_amount=principal_amount,
+            chosen_collateral_index=chosen_collateral_index,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
+        )
+        lender_bond_out = Utxo(
+            address=lender_bond_address,
+            lovelace=_resolve_lender_bond_lovelace(
+                lender_bond_address=lender_bond_address,
+                loan_id=loan_id,
+                lender_bond_datum=resolved_lender_bond_datum,
+                valid_from=resolved_valid_from,
+            ),
+            assets=[(LENDER_BOND_POLICY, loan_id.hex(), 1)],
+            datum=resolved_lender_bond_datum,
+        )
+
+        return cls(
+            pool=pool,
+            funding=funding,
+            config=config,
+            oracle_feed=oracle_feed,
+            pool_spend_script_ref=pool_spend_script_ref,
+            pool_policy_script_ref=pool_policy_script_ref,
+            loan_policy_script_ref=loan_policy_script_ref,
+            lender_bond_policy_script_ref=lender_bond_policy_script_ref,
+            borrower_bond_policy_script_ref=borrower_bond_policy_script_ref,
+            oracle_script_ref=oracle_script_ref,
+            oracle_reward_cbor=oracle_reward_cbor,
+            loan_address=loan_address,
+            lender_bond_out=lender_bond_out,
+            borrower_address=borrower_address,
+            borrower_output_lovelace=(
+                borrower_output_lovelace
+                if borrower_output_lovelace is not None
+                else OUTPUT_MIN_ADA
+            ),
+            collateral_unit=collateral_unit,
+            collateral_amount=collateral_amount,
+            loan_lovelace=loan_lovelace,
+            fee_address=_PROTOCOL_FEE_ADDRESS,
+            fee_lovelace=fee_lovelace,
+            pool_continuation_lovelace=pool.lovelace - principal_amount,
+            principal_amount=principal_amount,
+            chosen_collateral_index=chosen_collateral_index,
+            # Non-permissioned pools ignore this index (the pool datum's
+            # permissioned-condition hash is ``b"NONE"``, guarded above), so 0 is inert.
+            permissioned_condition_withdraw_index=0,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
             loan_id=loan_id,
             pool_id=pool_id,
             loan_policy=LOAN_POLICY,

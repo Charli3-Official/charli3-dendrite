@@ -214,3 +214,12 @@ MAINNET_SLOT_ANCHOR_MS = 1_647_899_091_000
 def slot_to_posix_ms(slot: int) -> int:
     """Mainnet absolute slot -> the wall-clock POSIX milliseconds for that slot."""
     return MAINNET_SLOT_ANCHOR_MS + (slot - MAINNET_SLOT_ANCHOR) * 1000
+
+
+def posix_ms_to_slot(posix_ms: int) -> int:
+    """Wall-clock POSIX milliseconds -> the mainnet absolute slot containing them.
+
+    Inverse of :func:`slot_to_posix_ms`: floors to the slot in progress at
+    `posix_ms`, so `posix_ms_to_slot(slot_to_posix_ms(slot)) == slot`.
+    """
+    return MAINNET_SLOT_ANCHOR + (posix_ms - MAINNET_SLOT_ANCHOR_MS) // 1000
