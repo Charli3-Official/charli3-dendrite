@@ -474,8 +474,9 @@ class RecastSnapshot(PoolActionSnapshot):
     via a wallet output carrying a recast receipt; the borrower-bond NFT is returned and
     a protocol fee is paid. The config NFT + the lender-bond UTxO are reference inputs;
     the three loan scripts (general_spend, loan policy, recast action) are by reference.
-    The recomputed datum values + paid amount are sourced from the captured action (the
-    e2e replays them); a live builder would derive them from the recast math.
+    ``from_backend`` derives the recomputed datum values from the recast math (see
+    :func:`_recast_capitalization`); ``from_capture`` sources them from the captured
+    action for byte-exact replay.
     """
 
     loan: Utxo
