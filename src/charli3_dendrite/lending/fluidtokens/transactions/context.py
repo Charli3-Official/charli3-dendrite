@@ -1167,6 +1167,24 @@ def _resolve_protocol_fee(config: Utxo) -> tuple[str, int]:  # noqa: ARG001
     return _PROTOCOL_FEE_ADDRESS, _PROTOCOL_FEE_LOVELACE
 
 
+# RECAST pays the same protocol fee address as the other loan actions but a flat 9 ADA
+# (vs REPAY's 5 ADA); pinned to the fee output recast.json carries (see
+# test_recast_fee).
+# MAINTENANCE: fixed deployment constant, NOT validated against the live chain -- a
+# stale value is returned silently. Update on a protocol redeploy / fee change.
+_RECAST_FEE_LOVELACE = 9_000_000
+
+
+def _resolve_recast_fee(config: Utxo) -> tuple[str, int]:  # noqa: ARG001
+    """The protocol fee (address, lovelace) a recast must pay.
+
+    Not present in the config datum; pinned to the fee value recast.json carries (see
+    test_recast_fee) via the deployment constant above. ``config`` is accepted for API
+    symmetry with a datum-sourced resolver. See the constant's MAINTENANCE note.
+    """
+    return _PROTOCOL_FEE_ADDRESS, _RECAST_FEE_LOVELACE
+
+
 @dataclass
 class LendSnapshot(PoolActionSnapshot):
     """Resolved building blocks for filling a borrow request (``Lend``).
