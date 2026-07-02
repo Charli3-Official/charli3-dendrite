@@ -417,6 +417,10 @@ def _fee_output(outputs: list[Utxo], loan: Utxo) -> Utxo:
     return min(candidates, key=lambda u: u.lovelace)
 
 
+# The perpetual ``repayment_mode`` constructor alt; recast is defined only for it.
+_PERPETUAL_MODE_ALT = 2
+
+
 @dataclass
 class RecastSnapshot(PoolActionSnapshot):
     """Resolved building blocks for a single-loan perpetual recast.
@@ -524,6 +528,187 @@ class RecastSnapshot(PoolActionSnapshot):
             new_lend_date=new_loan_datum.lend_date,
             valid_from=int(fix["invalid_before"]),
             valid_to=int(fix["invalid_hereafter"]),
+            loan_id=loan_id,
+            loan_policy=LOAN_POLICY,
+            bond_policy=BORROWER_BOND_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        loan_utxo: tuple[str, int],
+        actor_address: str,
+        amount_paid: int,
+        allow_spent: bool = False,
+        valid_from: int | None = None,
+        valid_to: int | None = None,
+        config_outref: tuple[str, int] | None = None,
+        spend_ref_outref: tuple[str, int] | None = None,
+        loan_policy_ref_outref: tuple[str, int] | None = None,
+        action_ref_outref: tuple[str, int] | None = None,
+        lender_bond_outref: tuple[str, int] | None = None,
+        borrower_bond_outref: tuple[str, int] | None = None,
+        funding_outref: tuple[str, int] | None = None,
+        lender_address: str | None = None,
+        fee_address: str | None = None,
+        fee_lovelace: int | None = None,
+    ) -> RecastSnapshot:
+        """Resolve a perpetual-recast `RecastSnapshot` live from chain state.
+
+        The loan UTxO is resolved by ``loan_utxo`` out-ref (``allow_spent`` replays a
+        captured loan); its loan NFT supplies the ``loan_id``. The borrower-bond input
+        (in ``actor_address``'s wallet) and the lender-bond reference input are located
+        by the bond NFTs (``BORROWER_BOND_POLICY`` / ``LENDER_BOND_POLICY`` +
+        ``loan_id``) unless pinned by out-ref; the borrower funds the recast from a
+        single funding UTxO (pinned, or the first ``resolve_funding`` result). The
+        config NFT and the three loan scripts (loan spend, loan policy, recast action)
+        are resolved unless pinned.
+
+        Recast is defined only for perpetual loans (``repayment_mode`` constructor alt
+        2); a non-perpetual loan raises. The two recomputed datum values follow the
+        validity window: ``new_lend_date`` resets to the window's LOWER bound (POSIX-ms
+        of ``valid_from``), while the capitalized ``new_principal_amount`` is the
+        perpetual outstanding debt measured to the UPPER bound (POSIX-ms of
+        ``valid_to``) minus ``amount_paid`` (the borrower's repayment at recast). When
+        ``valid_from`` / ``valid_to`` are omitted the window defaults live from the
+        backend tip -- lower bound = current slot, upper bound = lower +
+        ``LOAN_ACTION_VALIDITY_SLOTS``; pass them to replay a captured window.
+        The recast fee defaults to :func:`_resolve_recast_fee`; explicit ``fee_address``
+        / ``fee_lovelace`` are used as-is.
+        """
+        from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
+        from charli3_dendrite.lending.fluidtokens.transactions._common import (
+            LOAN_ACTION_VALIDITY_SLOTS,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_asset,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+        from charli3_dendrite.lending.transactions.infra import current_slot
+        from charli3_dendrite.lending.units import constr
+        from charli3_dendrite.utility import slot_to_posix_ms
+
+        loan = resolve_utxo_by_outref(backend, *loan_utxo, allow_spent=allow_spent)
+        if loan.datum is None or loan.out_ref is None:
+            raise ValueError("resolved loan UTxO is missing its datum/out-ref")
+        loan_datum = LoanDatum.from_cbor(bytes.fromhex(loan.datum))
+        loan_id = next(bytes.fromhex(n) for p, n, _ in loan.assets if p == LOAN_POLICY)
+
+        def _pin_or(
+            outref: tuple[str, int] | None,
+            resolver: Callable[[], Utxo],
+        ) -> Utxo:
+            if outref:
+                return resolve_utxo_by_outref(backend, *outref, allow_spent=True)
+            return resolver()
+
+        borrower_bond = _pin_or(
+            borrower_bond_outref,
+            lambda: resolve_utxo_by_asset(backend, BORROWER_BOND_POLICY, loan_id.hex()),
+        )
+        if borrower_bond.address != actor_address:
+            raise ValueError(
+                "borrower-bond UTxO is not held by actor_address "
+                f"({borrower_bond.address} != {actor_address})",
+            )
+        lender_bond = _pin_or(
+            lender_bond_outref,
+            lambda: resolve_utxo_by_asset(backend, LENDER_BOND_POLICY, loan_id.hex()),
+        )
+
+        if funding_outref:
+            funding = resolve_utxo_by_outref(backend, *funding_outref, allow_spent=True)
+        else:
+            candidates = resolve_funding(backend, actor_address)
+            if not candidates:
+                raise ValueError("no funding UTxO resolved for recast")
+            funding = candidates[0]
+
+        config = _pin_or(config_outref, lambda: resolve_config_utxo(backend))
+        spend_script_ref = _pin_or(
+            spend_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_SPEND_SKH),
+        )
+        loan_policy_script_ref = _pin_or(
+            loan_policy_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_POLICY),
+        )
+        action_script_ref = _pin_or(
+            action_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_RECAST_ACTION_SKH),
+        )
+
+        # When the caller does not pin the validity window, derive it live from the
+        # backend tip, mirroring `set_validity_window`: lower bound = current slot,
+        # upper bound = lower + LOAN_ACTION_VALIDITY_SLOTS. The recast math consumes
+        # these verbatim, so leaving them at 0 would emit an unusable transaction.
+        if valid_from is None or valid_to is None:
+            tip = current_slot(backend)
+            resolved_valid_from = valid_from if valid_from is not None else tip
+            resolved_valid_to = (
+                valid_to
+                if valid_to is not None
+                else resolved_valid_from + LOAN_ACTION_VALIDITY_SLOTS
+            )
+        else:
+            resolved_valid_from = valid_from
+            resolved_valid_to = valid_to
+
+        new_lend_date = slot_to_posix_ms(resolved_valid_from)
+
+        mode_alt, mode_fields = constr(loan_datum.repayment_mode)
+        if mode_alt != _PERPETUAL_MODE_ALT:
+            raise ValueError(
+                "recast is only defined for perpetual loans (repayment_mode alt 2)",
+            )
+        debt = perpetual_outstanding_debt(
+            principal=loan_datum.principal_amount,
+            interest_rate=loan_datum.interest_rate,
+            apy_coef=int(mode_fields[0]),
+            lend_date_ms=loan_datum.lend_date,
+            now_ms=slot_to_posix_ms(resolved_valid_to),
+            repaid_installments=loan_datum.repaid_installments,
+            installment_period=loan_datum.installment_period,
+            initial_grace_period=loan_datum.initial_grace_period,
+        )
+        new_principal_amount = debt - amount_paid
+
+        if fee_address is None or fee_lovelace is None:
+            resolved_addr, resolved_amt = _resolve_recast_fee(config)
+            fee_address = fee_address if fee_address is not None else resolved_addr
+            fee_lovelace = fee_lovelace if fee_lovelace is not None else resolved_amt
+
+        return cls(
+            loan=loan,
+            borrower_bond=borrower_bond,
+            funding=funding,
+            lender_bond=lender_bond,
+            config=config,
+            spend_script_ref=spend_script_ref,
+            loan_policy_script_ref=loan_policy_script_ref,
+            action_script_ref=action_script_ref,
+            lender_address=lender_address or lender_bond.address,
+            fee_address=fee_address,
+            fee_lovelace=fee_lovelace,
+            amount_paid=amount_paid,
+            new_principal_amount=new_principal_amount,
+            new_lend_date=new_lend_date,
+            valid_from=resolved_valid_from,
+            valid_to=resolved_valid_to,
             loan_id=loan_id,
             loan_policy=LOAN_POLICY,
             bond_policy=BORROWER_BOND_POLICY,
