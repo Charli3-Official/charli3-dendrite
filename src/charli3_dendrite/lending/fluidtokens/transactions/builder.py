@@ -178,9 +178,7 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 raise ValueError(
                     "REQUEST_CANCEL requires params.loan_utxo (the request out-ref)",
                 )
-            # CancelRequestSnapshot's live resolver is not yet implemented; this is a
-            # forward reference to it.
-            return CancelRequestSnapshot.from_backend(  # type: ignore[attr-defined]
+            return CancelRequestSnapshot.from_backend(
                 backend,
                 request_utxo=_parse_out_ref(params.loan_utxo),
                 borrower_address=params.actor_address,

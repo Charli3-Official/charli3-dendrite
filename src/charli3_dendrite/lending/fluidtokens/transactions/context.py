@@ -904,6 +904,104 @@ class CancelRequestSnapshot(PoolActionSnapshot):
             request_policy=REQUEST_POLICY,
         )
 
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        request_utxo: tuple[str, int],
+        borrower_address: str | None = None,
+        allow_spent_request: bool = False,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        config_outref: tuple[str, int] | None = None,
+        request_spend_ref_outref: tuple[str, int] | None = None,
+        request_policy_ref_outref: tuple[str, int] | None = None,
+    ) -> CancelRequestSnapshot:
+        """Resolve a `CancelRequestSnapshot` live from chain state via the backend.
+
+        The request UTxO is resolved by ``request_utxo`` out-ref
+        (``allow_spent_request`` lets a captured/historical request be replayed); its
+        ``RequestDatum`` supplies the request id + the borrower vkey hash. The config
+        NFT and the request spend / request policy scripts are resolved unless pinned by
+        out-ref. Funding is resolved from ``funding_outrefs`` or the borrower's wallet
+        (``borrower_address``) and is optional for a burn-only cancel: the burn
+        redeemer's ``input_ref`` only needs to reference a spent input, so it falls back
+        to the request out-ref.
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        request = resolve_utxo_by_outref(
+            backend,
+            *request_utxo,
+            allow_spent=allow_spent_request,
+        )
+        if request.datum is None or request.out_ref is None:
+            raise ValueError("resolved request UTxO is missing its datum/out-ref")
+        request_id = next(
+            bytes.fromhex(n) for p, n, _ in request.assets if p == REQUEST_POLICY
+        )
+        datum = RequestDatum.from_cbor(bytes.fromhex(request.datum))
+        borrower_pkh = bytes(datum.borrower_auth.data.value[0])
+
+        if config_outref:
+            config = resolve_utxo_by_outref(backend, *config_outref, allow_spent=True)
+        else:
+            config = resolve_config_utxo(backend)
+
+        if request_spend_ref_outref:
+            request_spend_script_ref = resolve_utxo_by_outref(
+                backend,
+                *request_spend_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            request_spend_script_ref = resolve_script_ref(backend, REQUEST_SPEND_SKH)
+
+        if request_policy_ref_outref:
+            request_policy_script_ref = resolve_utxo_by_outref(
+                backend,
+                *request_policy_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            request_policy_script_ref = resolve_script_ref(backend, REQUEST_POLICY)
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        elif borrower_address:
+            funding = resolve_funding(backend, borrower_address)
+        else:
+            funding = []
+        mint_input_ref = funding[0].out_ref if funding else request_utxo
+        if mint_input_ref is None:
+            raise ValueError("could not determine mint input_ref for request cancel")
+
+        return cls(
+            request=request,
+            funding=funding,
+            config=config,
+            request_spend_script_ref=request_spend_script_ref,
+            request_policy_script_ref=request_policy_script_ref,
+            request_id=request_id,
+            borrower_pkh=borrower_pkh,
+            mint_input_ref=mint_input_ref,
+            request_policy=REQUEST_POLICY,
+        )
+
 
 def _resolve_loan_lovelace(
     loan_lovelace: int | None,
