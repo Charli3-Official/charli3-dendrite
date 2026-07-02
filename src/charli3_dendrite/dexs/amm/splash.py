@@ -303,7 +303,7 @@ class SSPoolRedeemer(PlutusData):
         # Set the input index
         for key, value in tx_builder.redeemers().items():
             if value.data == self:
-                self.self_index = key.index
+                self.pool_in_idx = key.index
 
         # Set the output index
         for i, txo in enumerate(tx_builder.outputs):

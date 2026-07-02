@@ -25,6 +25,23 @@ def test_lovelace_first_ordering():
     assert list(a.keys()) == [L, T1, T2]
 
 
+def test_string_quantities_coerced_to_int():
+    # The pydantic RootModel[dict[str, int]] this replaced coerced str/Decimal
+    # quantities to int; callers (reserves parsed from JSON/ledger sources) still supply
+    # strings. A surviving str reaches asset_to_value and yields a non-int Value coin
+    # (pycardano rejects it), so Assets must coerce on construction.
+    from charli3_dendrite.utility import asset_to_value
+
+    a = Assets(root={L: "16145260", T1: "42"})
+    assert a[L] == 16145260 and isinstance(a[L], int)
+    assert a[T1] == 42 and isinstance(a[T1], int)
+    # An int input is unchanged (no regression).
+    assert Assets(root={L: 5_000_000})[L] == 5_000_000
+    # End to end: the resulting Value coin is a real int.
+    coin = asset_to_value(a).coin
+    assert coin == 16145260 and isinstance(coin, int)
+
+
 def test_construction_shapes_agree():
     ref = [(L, 7), (T1, 3)]
     assert list(Assets(root={T1: 3, L: 7}).items()) == ref
