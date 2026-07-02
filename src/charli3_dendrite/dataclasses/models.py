@@ -108,7 +108,16 @@ def _digest_assets(value: object) -> dict[str, int]:
         root = dict(value)
     else:
         root = dict(value.items())  # type: ignore[attr-defined]
-    return dict(sorted(root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0]))
+    # Coerce quantities to int: the pydantic ``RootModel[dict[str, int]]`` this replaced
+    # validated str/Decimal quantities to int, and callers (e.g. reserves parsed from
+    # JSON/ledger sources) still supply strings. Without this a string quantity survives
+    # into ``asset_to_value`` and yields a non-int Value coin that pycardano rejects.
+    return {
+        k: int(v)
+        for k, v in sorted(
+            root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0],
+        )
+    }
 
 
 class Assets:
