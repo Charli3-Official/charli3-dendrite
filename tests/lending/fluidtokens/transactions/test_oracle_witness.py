@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import cbor2  # type: ignore[import-not-found]
 import pytest
+from pycardano import RawPlutusData
 
 from charli3_dendrite.lending.fluidtokens.constants import (
     LOAN_CHANGE_COLLATERAL_ACTION_SKH,
@@ -19,6 +21,9 @@ from charli3_dendrite.lending.fluidtokens.constants import (
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LOAN_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.constants import POOL_POLICY
+from charli3_dendrite.lending.fluidtokens.oracles.witness import (
+    build_oracle_reward_cbor,
+)
 from charli3_dendrite.lending.fluidtokens.oracles.witness import OracleReward
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
@@ -122,3 +127,77 @@ def test_parse_rejects_non_oracle_cbor() -> None:
     # A bare integer is valid cbor but not an oracle-reward Constr.
     with pytest.raises(ValueError):
         OracleReward.parse("00")
+
+
+def _decode_reward_parts(cbor_hex: str) -> dict:
+    """Decode a captured oracle-reward redeemer into its message parts + signatures."""
+    top = cbor2.loads(bytes.fromhex(cbor_hex))
+    signed = top.value
+    message, price_num, price_den = signed[0].value
+    valid_from_ms, valid_to_ms, token = message.value
+    policy, name = token.value
+    signatures = [(sig.value[0], sig.value[1]) for sig in signed[1]]
+    return {
+        "valid_from_ms": valid_from_ms,
+        "valid_to_ms": valid_to_ms,
+        "collateral_policy": policy.hex(),
+        "collateral_name": name.hex(),
+        "price_num": price_num,
+        "price_den": price_den,
+        "signatures": signatures,
+    }
+
+
+@pytest.mark.parametrize(
+    ("fixture", "oracle_cbor"),
+    [
+        ("change_collateral.json", _change_collateral_oracle_cbor),
+        ("borrow_pool.json", _borrow_oracle_cbor),
+    ],
+)
+def test_build_oracle_reward_matches_capture_on_chain(fixture, oracle_cbor) -> None:
+    """A reward rebuilt from decoded parts is on-chain-equivalent to the capture.
+
+    The raw bytes differ (captures use indefinite-length arrays), but the tx builder
+    round-trips the redeemer through ``RawPlutusData``; asserting the normalized forms
+    match proves a reconstructed witness serializes on-chain identically -- so the same
+    signatures verify over the same ``serialise_data(message)``.
+    """
+    captured = oracle_cbor(_fixture(fixture))
+    rebuilt = build_oracle_reward_cbor(**_decode_reward_parts(captured))
+
+    assert (
+        RawPlutusData.from_cbor(rebuilt).to_cbor()
+        == RawPlutusData.from_cbor(captured).to_cbor()
+    )
+    # And the rebuilt witness parses back to the same signed values.
+    assert (
+        OracleReward.parse(rebuilt).valid_from_ms
+        == OracleReward.parse(
+            captured,
+        ).valid_from_ms
+    )
+
+
+def test_build_oracle_reward_rejects_bad_signature() -> None:
+    with pytest.raises(ValueError, match="64 bytes"):
+        build_oracle_reward_cbor(
+            valid_from_ms=1,
+            valid_to_ms=2,
+            collateral_policy="ab" * 28,
+            collateral_name="534e454b",
+            price_num=1,
+            price_den=1,
+            signatures=[(b"\x00" * 10, 0)],
+        )
+
+    with pytest.raises(ValueError, match="at least one signature"):
+        build_oracle_reward_cbor(
+            valid_from_ms=1,
+            valid_to_ms=2,
+            collateral_policy="ab" * 28,
+            collateral_name="534e454b",
+            price_num=1,
+            price_den=1,
+            signatures=[],
+        )

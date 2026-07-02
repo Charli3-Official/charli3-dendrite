@@ -30,6 +30,8 @@ from charli3_dendrite.utility import slot_to_posix_ms
 
 # Plutus ``Constr`` alternative 0 encodes to CBOR tag 121.
 _CONSTR_0 = 121
+# Ed25519 signatures are always 64 bytes.
+_ED25519_SIG_LEN = 64
 
 
 def _constr_fields(value: object, arity: int, what: str) -> list:
@@ -40,6 +42,58 @@ def _constr_fields(value: object, arity: int, what: str) -> list:
     if not isinstance(fields, list) or len(fields) != arity:
         raise ValueError(f"oracle reward {what}: expected {arity} fields")
     return fields
+
+
+def _constr0(fields: list) -> cbor2.CBORTag:
+    """Wrap ``fields`` in a Plutus ``Constr`` alternative-0 (CBOR tag 121)."""
+    return cbor2.CBORTag(_CONSTR_0, fields)
+
+
+def build_oracle_reward_cbor(
+    *,
+    valid_from_ms: int,
+    valid_to_ms: int,
+    collateral_policy: str,
+    collateral_name: str,
+    price_num: int,
+    price_den: int,
+    signatures: list[tuple[bytes, int]],
+) -> str:
+    """Assemble a signed oracle-reward redeemer cbor-hex from its parts.
+
+    Inverse of :meth:`OracleReward.parse`: builds the ``Constr`` message (validity
+    window + priced token + rational price) and the list of
+    ``(ed25519_signature, signer_index)`` entries into the redeemer the oracle
+    ``Withdraw`` script expects. ``collateral_policy`` / ``collateral_name`` are hex;
+    each ``signer_index`` selects the signing key within the oracle's ordered public
+    keys.
+
+    The output is deliberately NOT canonicalized: the transaction builder round-trips
+    the redeemer through ``pycardano.RawPlutusData`` and the ledger re-encodes the
+    message that the on-chain ``serialise_data`` signature check verifies, so only the
+    structure and values -- never the raw byte layout -- must be correct. A redeemer
+    built here therefore serializes on-chain identically to a captured one carrying the
+    same message and signatures.
+
+    Raises :class:`ValueError` on an empty signature list or a non-64-byte signature.
+    """
+    if not signatures:
+        raise ValueError("oracle reward: at least one signature is required")
+    signature_entries: list[cbor2.CBORTag] = []
+    for signature, index in signatures:
+        if not isinstance(signature, (bytes, bytearray)):
+            raise ValueError("oracle reward: signature must be bytes")
+        if len(signature) != _ED25519_SIG_LEN:
+            raise ValueError(
+                f"oracle reward: signature must be {_ED25519_SIG_LEN} bytes",
+            )
+        signature_entries.append(_constr0([bytes(signature), index]))
+
+    token = _constr0([bytes.fromhex(collateral_policy), bytes.fromhex(collateral_name)])
+    message = _constr0([valid_from_ms, valid_to_ms, token])
+    signed = _constr0([message, price_num, price_den])
+    redeemer = _constr0([signed, signature_entries])
+    return cbor2.dumps(redeemer).hex()
 
 
 @dataclass(frozen=True)

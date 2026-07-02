@@ -1,36 +1,40 @@
-"""Thin, optional client for the FluidTokens Provider API oracle witness.
+"""Thin, optional client for the FluidTokens oracle witness.
 
 A live BORROW or MODIFY_COLLATERAL must re-price its collateral through a signed,
 time-bound "oracle reward" message that cannot be synthesized offline or replayed:
 ``BorrowSnapshot.from_backend`` / ``ChangeCollateralSnapshot.from_backend`` accept
 that witness as INJECTED arguments (``oracle_reward_cbor`` plus the oracle feed and
 oracle reference-script out-refs). This module is the ONLY network-touching seam that
-produces those injected values from FluidTokens' Provider API; the deterministic core
-(``from_backend`` and all offline tests) never imports or reaches it.
+produces those injected values from FluidTokens' public oracle registry; the
+deterministic core (``from_backend`` and all offline tests) never imports or reaches it.
 
 Using the client is entirely optional: a caller who already has a witness (e.g. from
 the protocol owner, or captured on-chain) injects it into ``from_backend`` directly and
 never touches this module.
 
-UNVERIFIED SCHEMA
------------------
-The Provider API lives at ``https://api.fluidtokens.com`` and is authenticated with an
-``x-api-key`` header. Its documented surface builds whole transactions server-side
-(``POST /providers/pools/borrow|new|cancel|modify``) and exposes market/position reads;
-there is NO documented endpoint that returns a raw signed oracle witness and no
-documented modify-collateral endpoint. So both the exact endpoint used to obtain a raw
-witness AND the response shape it returns are UNVERIFIED against the live API.
+CONFIRMED SCHEMA
+----------------
+The witness is assembled from a single public registry endpoint,
+``GET /get-oracle-tokens`` on ``https://api.fluidtokens.com`` (verified live against the
+protocol API). It returns one entry per oracle-priced token; the entry for the borrow
+collateral carries everything needed:
 
-Every such assumption is quarantined in the small, clearly-marked ``_endpoint_*`` /
-``_parse_*`` helpers below so that, once the real schema is confirmed, only those
-helpers change -- never the public surface. The gated integration test
-(``tests/lending/fluidtokens/oracles/test_fluid_api.py``) is the confirmation
-mechanism: it runs only when ``FLUIDTOKENS_API_KEY`` is set and validates the live
-response against a well-formed bundle.
+* ``fluidOracle.referenceInput`` -> the oracle feed reference-input out-ref.
+* ``fluidOracle.referenceScript`` -> the oracle withdraw reference-script out-ref.
+* ``supportedOracle.multisig`` -> the current signed price window: ``validFrom`` /
+  ``validTo`` (POSIX ms), ``tokenPriceInLovelaces`` / ``tokenPriceDenominator``, and a
+  ``multisigOracle.signatures`` list of ``{publicKey, signature}`` pairs.
+
+The signed ``oracle_reward_cbor`` redeemer is reconstructed from those parts via
+:func:`build_oracle_reward_cbor`; the token identity in the signed message is the
+collateral token itself. Only ``multisig`` oracles are supported (all FluidTokens
+lending collaterals use them); ``c3``-backed oracles price from an on-chain Charli3 feed
+and are not handled here. ``lender_bond_datum`` is not served by this endpoint and is
+returned as ``None`` -- the borrow caller injects the ``Unit`` fallback / preimage.
 
 Credentials are read from the environment and NEVER committed: ``FLUIDTOKENS_API_BASE``
-(default ``https://api.fluidtokens.com``) and ``FLUIDTOKENS_API_KEY`` (sent verbatim as
-the ``x-api-key`` header).
+(default ``https://api.fluidtokens.com``) and ``FLUIDTOKENS_API_KEY`` (sent as the
+``x-api-key`` header).
 """
 
 from __future__ import annotations
@@ -41,20 +45,27 @@ from typing import Any
 
 import requests
 
+from charli3_dendrite.lending.fluidtokens.oracles.witness import (
+    build_oracle_reward_cbor,
+)
+
 DEFAULT_API_BASE = "https://api.fluidtokens.com"
 ENV_API_BASE = "FLUIDTOKENS_API_BASE"
 ENV_API_KEY = "FLUIDTOKENS_API_KEY"  # env var name, not a secret
+
+ORACLE_TOKENS_PATH = "/get-oracle-tokens"
+_MULTISIG_ORACLE = "multisig"
 
 _HTTP_OK_MIN = 200
 _HTTP_OK_MAX = 300
 
 
 class FluidTokensApiError(RuntimeError):
-    """Raised when the FluidTokens Provider API cannot yield a usable witness.
+    """Raised when the FluidTokens registry cannot yield a usable witness.
 
-    Covers the three failure modes the caller must act on: missing credentials, a
-    non-2xx HTTP response, and a 2xx response whose shape does not match what the
-    witness bundle needs. Each carries an actionable message.
+    Covers the failure modes the caller must act on: missing credentials, a non-2xx
+    HTTP response, a response whose shape does not match the registry, an unknown
+    collateral token, or an unsupported oracle type. Each carries an actionable message.
     """
 
 
@@ -67,8 +78,8 @@ class OracleWitnessBundle:
     verbatim by the builder); ``oracle_feed_outref`` is the collateral oracle feed
     reference UTxO and ``oracle_script_ref_outref`` the oracle withdraw
     reference-script UTxO, each an ``(tx_hash, index)`` out-ref. ``lender_bond_datum``
-    is the optional borrow-only lender-bond datum preimage (hex), ``None`` when the
-    protocol commits to the Plutus ``Unit`` datum.
+    is the optional borrow-only lender-bond datum preimage (hex); the registry never
+    serves it, so it is always ``None`` here and the borrow caller supplies it.
     """
 
     oracle_reward_cbor: str
@@ -78,16 +89,16 @@ class OracleWitnessBundle:
 
 
 class FluidTokensProviderClient:
-    """Thin HTTP client that fetches a fresh oracle witness bundle.
+    """Thin HTTP client that builds a fresh oracle witness bundle from the registry.
 
     Configuration comes from the environment unless overridden: ``api_base`` defaults to
     :data:`FLUIDTOKENS_API_BASE` (then :data:`DEFAULT_API_BASE`) and ``api_key`` to
     :data:`FLUIDTOKENS_API_KEY`. A missing key raises :class:`FluidTokensApiError` at
     construction with instructions to set the env vars or inject the witness directly.
 
-    The client is deliberately minimal: it owns the credential/transport concerns and
-    delegates every UNVERIFIED endpoint / response-shape assumption to the isolated
-    ``_endpoint_*`` / ``_parse_*`` helpers.
+    The client owns the credential/transport concerns; the registry-shape parsing and
+    the reward reconstruction are isolated in the ``_select_entry`` / ``_bundle_from_*``
+    helpers.
     """
 
     def __init__(
@@ -123,73 +134,125 @@ class FluidTokensProviderClient:
         self,
         *,
         collateral_unit: str,
-        principal_unit: str,
+        principal_unit: str | None = None,
         borrower_address: str | None = None,
         principal_amount: int | None = None,
     ) -> OracleWitnessBundle:
-        """Fetch a fresh, time-bound oracle witness for a (collateral, principal).
+        """Fetch a fresh, time-bound oracle witness for ``collateral_unit``.
 
         Returns an :class:`OracleWitnessBundle` ready to inject into
         ``BorrowSnapshot.from_backend`` / ``ChangeCollateralSnapshot.from_backend``.
-        ``borrower_address`` / ``principal_amount`` are forwarded when present because
-        the documented endpoints build a whole borrow tx server-side and may require
-        them to produce a matching witness.
+        The witness is keyed solely by the collateral token (``policy + name`` hex, or
+        ``policy.name``). The ``principal_unit`` / ``borrower_address`` /
+        ``principal_amount`` args are accepted for call-site symmetry with the borrow
+        resolver but do not affect the oracle lookup.
 
-        UNVERIFIED against the live schema: the exact endpoint and the response shape
-        parsed here MUST be confirmed against ``api.fluidtokens.com``; they are covered
-        only by the gated integration test. Raises :class:`FluidTokensApiError` on a
-        non-2xx response or a response whose shape does not yield a bundle.
+        Raises :class:`FluidTokensApiError` on a non-2xx response, an unexpected
+        registry shape, an unknown collateral token, or a non-``multisig`` oracle.
         """
-        path, payload = self._endpoint_and_payload(
-            collateral_unit=collateral_unit,
-            principal_unit=principal_unit,
-            borrower_address=borrower_address,
-            principal_amount=principal_amount,
-        )
-        body = self._post(path, payload)
-        return self._parse_witness(body)
+        tokens = self._get(ORACLE_TOKENS_PATH)
+        entry = self._select_entry(tokens, collateral_unit)
+        return self._bundle_from_entry(entry, collateral_unit=collateral_unit)
 
-    # -- UNVERIFIED seam: endpoint + request shape ----------------------------------
-    def _endpoint_and_payload(
+    def _select_entry(
         self,
+        tokens: object,
+        collateral_unit: str,
+    ) -> dict[str, Any]:
+        """Return the active registry entry whose token matches ``collateral_unit``.
+
+        Raises :class:`FluidTokensApiError` if the registry is not a list, no active
+        entry prices the collateral, or the matched entry is not a ``multisig`` oracle.
+        """
+        if not isinstance(tokens, list):
+            raise FluidTokensApiError(
+                "FluidTokens registry response was not a JSON array; cannot select an "
+                f"oracle token (got {type(tokens).__name__}).",
+            )
+        want = _normalize_unit(collateral_unit)
+        for entry in tokens:
+            if not isinstance(entry, dict):
+                continue
+            token = entry.get("token") or {}
+            unit = f"{token.get('policyId', '')}{token.get('assetName', '')}"
+            if _normalize_unit(unit) != want:
+                continue
+            if not entry.get("active", True):
+                raise FluidTokensApiError(
+                    f"FluidTokens oracle for collateral {collateral_unit} is inactive.",
+                )
+            if _MULTISIG_ORACLE not in (entry.get("supportedOracle") or {}):
+                raise FluidTokensApiError(
+                    f"FluidTokens oracle for collateral {collateral_unit} is not a "
+                    f"multisig oracle (preferred={entry.get('preferredOracle')!r}); "
+                    "only multisig oracles are supported by this client.",
+                )
+            return entry
+        raise FluidTokensApiError(
+            "FluidTokens registry has no oracle token for collateral "
+            f"{collateral_unit}.",
+        )
+
+    def _bundle_from_entry(
+        self,
+        entry: dict[str, Any],
         *,
         collateral_unit: str,
-        principal_unit: str,
-        borrower_address: str | None,
-        principal_amount: int | None,
-    ) -> tuple[str, dict[str, Any]]:
-        """Build the (path, JSON body) for the witness request. UNVERIFIED.
+    ) -> OracleWitnessBundle:
+        """Reconstruct an :class:`OracleWitnessBundle` from a ``multisig`` entry.
 
-        No documented endpoint returns a raw witness, so this targets the borrow
-        builder (``/providers/pools/borrow``) from which a witness is expected to be
-        extractable, sending the pair (and, when known, borrower/principal). Confirm
-        the real path + body against the live API; only this method changes once known.
+        Reads the reference out-refs from ``fluidOracle`` and rebuilds the signed reward
+        redeemer from ``supportedOracle.multisig`` (window, price, signatures) with the
+        collateral token as the priced token. Raises :class:`FluidTokensApiError` if a
+        required field is missing or malformed.
         """
-        payload: dict[str, Any] = {
-            "collateral": collateral_unit,
-            "principal": principal_unit,
-        }
-        if borrower_address is not None:
-            payload["address"] = borrower_address
-        if principal_amount is not None:
-            payload["amount"] = principal_amount
-        return "/providers/pools/borrow", payload
+        fluid = entry.get("fluidOracle") or {}
+        feed = _parse_outref(fluid.get("referenceInput"), what="oracle feed")
+        script_ref = _parse_outref(
+            fluid.get("referenceScript"),
+            what="oracle script-ref",
+        )
 
-    def _post(self, path: str, payload: dict[str, Any]) -> Any:  # noqa: ANN401
-        """POST ``payload`` to ``path`` and return the decoded JSON body.
+        token = entry.get("token") or {}
+        multisig = (entry.get("supportedOracle") or {}).get(_MULTISIG_ORACLE) or {}
+        public_keys = [
+            str(pk).lower()
+            for pk in (entry.get("multisigOracle") or {}).get("publicKeys", [])
+        ]
+        try:
+            reward_cbor = build_oracle_reward_cbor(
+                valid_from_ms=int(multisig["validFrom"]),
+                valid_to_ms=int(multisig["validTo"]),
+                collateral_policy=str(token["policyId"]),
+                collateral_name=str(token["assetName"]),
+                price_num=int(multisig["tokenPriceInLovelaces"]),
+                price_den=int(multisig["tokenPriceDenominator"]),
+                signatures=_parse_signatures(multisig, public_keys),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise FluidTokensApiError(
+                f"FluidTokens multisig oracle for collateral {collateral_unit} is "
+                f"missing or malformed: {exc}",
+            ) from exc
+
+        return OracleWitnessBundle(
+            oracle_reward_cbor=reward_cbor,
+            oracle_feed_outref=feed,
+            oracle_script_ref_outref=script_ref,
+            lender_bond_datum=None,
+        )
+
+    def _get(self, path: str) -> Any:  # noqa: ANN401
+        """GET ``path`` and return the decoded JSON body.
 
         Raises :class:`FluidTokensApiError` on a transport error, a non-2xx status, or a
         body that is not valid JSON -- each with the status/URL for diagnosis.
         """
         url = f"{self._api_base}{path}"
         try:
-            response = self._session.post(
+            response = self._session.get(
                 url,
-                json=payload,
-                headers={
-                    "x-api-key": self._api_key,
-                    "Content-Type": "application/json",
-                },
+                headers={"x-api-key": self._api_key},
                 timeout=self._timeout,
             )
         except requests.RequestException as exc:
@@ -209,94 +272,58 @@ class FluidTokensProviderClient:
                 f"FluidTokens API {url} returned a non-JSON body: {exc}",
             ) from exc
 
-    # -- UNVERIFIED seam: response shape --------------------------------------------
-    def _parse_witness(self, body: Any) -> OracleWitnessBundle:  # noqa: ANN401
-        """Parse a decoded response body into an :class:`OracleWitnessBundle`.
 
-        UNVERIFIED against the live schema.
+def _parse_signatures(
+    multisig: dict[str, Any],
+    public_keys: list[str],
+) -> list[tuple[bytes, int]]:
+    """Extract ``(signature, signer_index)`` pairs from a multisig oracle block.
 
-        The live field names are unconfirmed, so a small set of candidate keys is
-        accepted for each piece (see ``_first``). Confirm against the real response and
-        narrow these to the true keys; only this method + its helpers change. Raises
-        :class:`FluidTokensApiError` if a required piece is absent or malformed.
-        """
-        if not isinstance(body, dict):
-            raise FluidTokensApiError(
-                "FluidTokens API response was not a JSON object; cannot extract an "
-                f"oracle witness (got {type(body).__name__}).",
-            )
-
-        reward = _first(
-            body,
-            ("oracle_reward_cbor", "oracleRewardCbor", "oracleReward"),
-        )
-        if not isinstance(reward, str) or not reward:
-            raise FluidTokensApiError(
-                "FluidTokens API response missing the signed oracle reward cbor "
-                "(expected a hex string under oracle_reward_cbor / oracleReward).",
-            )
-
-        feed = _parse_outref(
-            _first(body, ("oracle_feed_outref", "oracleFeedOutRef", "oracleFeed")),
-            what="oracle feed",
-        )
-        script_ref = _parse_outref(
-            _first(
-                body,
-                (
-                    "oracle_script_ref_outref",
-                    "oracleScriptRefOutRef",
-                    "oracleScriptRef",
-                ),
-            ),
-            what="oracle script-ref",
-        )
-
-        lender_bond = _first(body, ("lender_bond_datum", "lenderBondDatum"))
-        if lender_bond is not None and not isinstance(lender_bond, str):
-            raise FluidTokensApiError(
-                "FluidTokens API response lender bond datum must be a hex string.",
-            )
-
-        return OracleWitnessBundle(
-            oracle_reward_cbor=reward,
-            oracle_feed_outref=feed,
-            oracle_script_ref_outref=script_ref,
-            lender_bond_datum=lender_bond,
-        )
+    Each ``signer_index`` is the position of the signature's public key within the
+    oracle's ordered ``publicKeys`` (falling back to encounter order when the key is
+    absent from the list). Raises :class:`ValueError` if no signatures are present.
+    """
+    raw = (multisig.get("multisigOracle") or {}).get("signatures") or []
+    signatures: list[tuple[bytes, int]] = []
+    for position, item in enumerate(raw):
+        signature = bytes.fromhex(str(item["signature"]))
+        public_key = str(item.get("publicKey", "")).lower()
+        index = public_keys.index(public_key) if public_key in public_keys else position
+        signatures.append((signature, index))
+    if not signatures:
+        raise ValueError("no signatures in multisig oracle block")
+    return signatures
 
 
-def _first(body: dict[str, Any], keys: tuple[str, ...]) -> Any:  # noqa: ANN401
-    """Return the first present value among ``keys`` (UNVERIFIED aliases), else None."""
-    for key in keys:
-        if key in body and body[key] is not None:
-            return body[key]
-    return None
+def _normalize_unit(unit: str) -> str:
+    """Normalize an asset unit for comparison: drop ``.`` separators, lowercase."""
+    return unit.replace(".", "").lower()
 
 
 def _parse_outref(value: Any, *, what: str) -> tuple[str, int]:  # noqa: ANN401
-    """Coerce an out-ref into ``(tx_hash, index)``. UNVERIFIED shape.
+    """Coerce a registry out-ref into ``(tx_hash, index)``.
 
-    Accepts the common encodings so a schema change is absorbed here: a mapping
-    (``{"txHash": ..., "index": ...}`` and snake/output aliases), a two-item
-    ``[tx_hash, index]`` pair, or a ``"tx_hash#index"`` string. Raises
+    Accepts the registry's ``"tx_hash#index"`` string plus the common mapping /
+    two-item-pair encodings so a minor shape change is absorbed here. Raises
     :class:`FluidTokensApiError` if none apply.
     """
-    if isinstance(value, dict):
-        tx_hash = _first(value, ("tx_hash", "txHash", "transaction_id", "hash"))
-        index = _first(value, ("index", "output_index", "outputIndex", "ix"))
-        if isinstance(tx_hash, str) and isinstance(index, int):
-            return tx_hash, index
+    if isinstance(value, str) and "#" in value:
+        str_hash, _, str_index = value.partition("#")
+        if str_hash and str_index.isdigit():
+            return str_hash, int(str_index)
+    elif isinstance(value, dict):
+        raw_hash = value.get("txHash") or value.get("tx_hash") or value.get("hash")
+        raw_index = value.get("index")
+        if raw_index is None:
+            raw_index = value.get("outputIndex", value.get("output_index"))
+        if isinstance(raw_hash, str) and isinstance(raw_index, int):
+            return raw_hash, raw_index
     elif isinstance(value, (list, tuple)) and len(value) == 2:  # noqa: PLR2004
-        tx_hash, index = value
-        if isinstance(tx_hash, str) and isinstance(index, int):
-            return tx_hash, index
-    elif isinstance(value, str) and "#" in value:
-        tx_hash, _, index = value.partition("#")
-        if tx_hash and index.isdigit():
-            return tx_hash, int(index)
+        pair_hash, pair_index = value
+        if isinstance(pair_hash, str) and isinstance(pair_index, int):
+            return pair_hash, pair_index
 
     raise FluidTokensApiError(
-        f"FluidTokens API response {what} out-ref is missing or malformed; expected "
-        "a (tx_hash, index) mapping, pair, or 'tx_hash#index' string.",
+        f"FluidTokens registry {what} out-ref is missing or malformed; expected a "
+        "'tx_hash#index' string.",
     )
