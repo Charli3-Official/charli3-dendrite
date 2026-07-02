@@ -341,3 +341,13 @@ def test_resolve_snapshot_request_cancel_requires_loan_utxo() -> None:
             action=LendingAction.REQUEST_CANCEL,
             params=ActionParams(actor_address="addr1b"),
         )
+
+
+def test_resolve_snapshot_request_create_directs_to_from_backend() -> None:
+    with pytest.raises(NotImplementedError, match="REQUEST_CREATE"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.REQUEST_CREATE,
+            params=ActionParams(actor_address="addr1b"),
+        )

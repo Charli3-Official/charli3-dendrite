@@ -137,8 +137,15 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         callers build the snapshot via ``CreatePoolSnapshot.from_backend(...)`` and call
         :meth:`contribute` directly.
 
-        The borrower-side actions are not yet live-resolvable; resolve them via each
-        snapshot's ``from_capture`` and call :meth:`contribute` directly.
+        REQUEST_CREATE likewise cannot be resolved from ``ActionParams`` alone -- it
+        needs typed request terms (+ collateral / lovelace) that ``ActionParams`` does
+        not carry -- so callers build the snapshot via
+        ``CreateRequestSnapshot.from_backend(...)`` and call :meth:`contribute`
+        directly.
+
+        The remaining borrower-side actions (BORROW, MODIFY_COLLATERAL, RECAST) are not
+        yet live-resolvable; resolve them via each snapshot's ``from_capture`` and call
+        :meth:`contribute` directly.
         """
         if action == LendingAction.POOL_CANCEL:
             if params.loan_utxo is None:
@@ -155,6 +162,15 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 "Build the snapshot via CreatePoolSnapshot.from_backend(...) and call "
                 "FluidTokensTxBuilder().contribute(LendingAction.POOL_CREATE, ...) "
                 "directly.",
+            )
+        if action == LendingAction.REQUEST_CREATE:
+            raise NotImplementedError(
+                "REQUEST_CREATE cannot be resolved from ActionParams: it needs "
+                "typed RequestTerms (+ collateral / lovelace) that ActionParams "
+                "does not carry. Build the snapshot via "
+                "CreateRequestSnapshot.from_backend(...) and call "
+                "FluidTokensTxBuilder().contribute(LendingAction.REQUEST_CREATE, "
+                "...) directly.",
             )
         if action == LendingAction.LEND:
             if params.loan_utxo is None:
