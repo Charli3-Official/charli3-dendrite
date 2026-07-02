@@ -14,6 +14,7 @@ the lender-bond UTxO as reference inputs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Any
@@ -257,6 +258,108 @@ class RepaySnapshot(PoolActionSnapshot):
             lender_bond_policy=LENDER_BOND_POLICY,
             fee_address=fee_out.address,
             fee_lovelace=fee_out.lovelace,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        loan_utxo: tuple[str, int],
+        actor_address: str,
+        allow_spent: bool = False,
+        config_outref: tuple[str, int] | None = None,
+        spend_ref_outref: tuple[str, int] | None = None,
+        loan_policy_ref_outref: tuple[str, int] | None = None,
+        repay_action_ref_outref: tuple[str, int] | None = None,
+        lender_bond_outref: tuple[str, int] | None = None,
+        borrower_bond_outref: tuple[str, int] | None = None,
+        fee_address: str | None = None,
+        fee_lovelace: int | None = None,
+    ) -> RepaySnapshot:
+        """Resolve a full-repay `RepaySnapshot` live from chain state via the backend.
+
+        The loan UTxO is resolved by ``loan_utxo`` out-ref (``allow_spent`` replays a
+        captured/closed loan); its loan NFT supplies the ``loan_id``. The borrower-bond
+        input (in ``actor_address``'s wallet) and the lender-bond reference input are
+        located by the bond NFTs (``BORROWER_BOND_POLICY`` / ``LENDER_BOND_POLICY`` +
+        ``loan_id``) unless pinned by out-ref. The config NFT and the three loan scripts
+        (loan spend, loan policy, repay-action) are resolved unless pinned. The protocol
+        fee defaults to :func:`_resolve_protocol_fee`; explicit ``fee_address`` /
+        ``fee_lovelace`` are used as-is (byte-exact replay).
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_asset,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        loan = resolve_utxo_by_outref(backend, *loan_utxo, allow_spent=allow_spent)
+        if loan.datum is None:
+            raise ValueError("resolved loan UTxO is missing its datum")
+        loan_id = next(bytes.fromhex(n) for p, n, _ in loan.assets if p == LOAN_POLICY)
+
+        def _pin_or(
+            outref: tuple[str, int] | None,
+            resolver: Callable[[], Utxo],
+        ) -> Utxo:
+            if outref:
+                return resolve_utxo_by_outref(backend, *outref, allow_spent=True)
+            return resolver()
+
+        config = _pin_or(config_outref, lambda: resolve_config_utxo(backend))
+        spend_script_ref = _pin_or(
+            spend_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_SPEND_SKH),
+        )
+        loan_policy_script_ref = _pin_or(
+            loan_policy_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_POLICY),
+        )
+        repay_action_script_ref = _pin_or(
+            repay_action_ref_outref,
+            lambda: resolve_script_ref(backend, LOAN_REPAY_ACTION_SKH),
+        )
+        lender_bond = _pin_or(
+            lender_bond_outref,
+            lambda: resolve_utxo_by_asset(backend, LENDER_BOND_POLICY, loan_id.hex()),
+        )
+        borrower_bond = _pin_or(
+            borrower_bond_outref,
+            lambda: resolve_utxo_by_asset(backend, BORROWER_BOND_POLICY, loan_id.hex()),
+        )
+        if borrower_bond.address != actor_address:
+            raise ValueError(
+                "borrower-bond UTxO is not held by actor_address "
+                f"({borrower_bond.address} != {actor_address})",
+            )
+
+        if fee_address is None or fee_lovelace is None:
+            resolved_addr, resolved_amt = _resolve_protocol_fee(config)
+            fee_address = fee_address if fee_address is not None else resolved_addr
+            fee_lovelace = fee_lovelace if fee_lovelace is not None else resolved_amt
+
+        return cls(
+            loan=loan,
+            borrower_bond=borrower_bond,
+            lender_bond=lender_bond,
+            config=config,
+            spend_script_ref=spend_script_ref,
+            loan_policy_script_ref=loan_policy_script_ref,
+            repay_action_script_ref=repay_action_script_ref,
+            loan_id=loan_id,
+            loan_policy=LOAN_POLICY,
+            bond_policy=BORROWER_BOND_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+            fee_address=fee_address,
+            fee_lovelace=fee_lovelace,
         )
 
 
