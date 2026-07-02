@@ -860,6 +860,30 @@ def _resolve_loan_lovelace(
     return min_lovelace(EvalContext(last_block_slot=valid_from), output=loan_output)
 
 
+# The protocol fee a loan action pays: a fixed script (fee) address and a flat 5-ADA
+# amount. Neither the fee address nor the amount appears in the config NFT datum (which
+# carries only the protocol's script hashes / policy ids); both are pinned to the fee
+# value the fee output in ``repay_full.json`` carries (see test_protocol_fee).
+#
+# MAINTENANCE: these are fixed deployment constants, NOT validated against the live
+# chain. They must be updated if the protocol redeploys or changes its fee -- a stale
+# value would be returned silently, with no runtime signal.
+_PROTOCOL_FEE_ADDRESS = "addr1x9z4cq2qm23tvtn4uxeuzf8arnvqgqw6whzjh3r8jqkxdk4f02nfch7l297055r7z37fwamryqrd3en97sp7jq7gtffsfkk0p6"  # noqa: E501
+_PROTOCOL_FEE_LOVELACE = 5_000_000
+
+
+def _resolve_protocol_fee(config: Utxo) -> tuple[str, int]:  # noqa: ARG001
+    """The protocol fee (address, lovelace) a loan action must pay.
+
+    Not present in the config datum; pinned to the fee value the fee output in
+    ``repay_full.json`` carries (see test_protocol_fee) via the deployment constants
+    above. ``config`` is accepted for API symmetry with a datum-sourced resolver (and so
+    a redeploy can re-source it here). See the constants' MAINTENANCE note: the pinned
+    values are not validated against the live chain.
+    """
+    return _PROTOCOL_FEE_ADDRESS, _PROTOCOL_FEE_LOVELACE
+
+
 @dataclass
 class LendSnapshot(PoolActionSnapshot):
     """Resolved building blocks for filling a borrow request (``Lend``).
