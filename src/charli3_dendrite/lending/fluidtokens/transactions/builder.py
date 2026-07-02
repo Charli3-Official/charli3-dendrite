@@ -132,6 +132,11 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         request UTxO out-ref comes from ``params.loan_utxo`` and the borrower address
         from ``params.actor_address``.
 
+        RECAST resolves a :class:`RecastSnapshot` from the backend: the loan out-ref
+        comes from ``params.loan_utxo``, the borrower address from
+        ``params.actor_address``, and the recast ``amount_paid`` from ``params.amount``;
+        the validity window defaults from the backend tip.
+
         POOL_CREATE cannot be resolved from ``ActionParams`` alone -- it needs typed
         pool terms (+ liquidity / lovelace) that ``ActionParams`` does not carry -- so
         callers build the snapshot via ``CreatePoolSnapshot.from_backend(...)`` and call
@@ -143,8 +148,8 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
         ``CreateRequestSnapshot.from_backend(...)`` and call :meth:`contribute`
         directly.
 
-        The remaining borrower-side actions (BORROW, MODIFY_COLLATERAL, RECAST) are not
-        yet live-resolvable; resolve them via each snapshot's ``from_capture`` and call
+        The remaining borrower-side actions (BORROW, MODIFY_COLLATERAL) are not yet
+        live-resolvable; resolve them via each snapshot's ``from_capture`` and call
         :meth:`contribute` directly.
         """
         if action == LendingAction.POOL_CANCEL:
@@ -199,11 +204,37 @@ class FluidTokensTxBuilder(AbstractLendingTxBuilder):
                 request_utxo=_parse_out_ref(params.loan_utxo),
                 borrower_address=params.actor_address,
             )
+        if action == LendingAction.RECAST:
+            return self._resolve_recast(backend, params)
         raise NotImplementedError(
             "FluidTokens live snapshot resolution is not implemented for "
             f"{action.value}; resolve a snapshot from a captured transaction via "
             "'<Snapshot>.from_capture' and call "
             "FluidTokensTxBuilder().contribute(...) directly.",
+        )
+
+    def _resolve_recast(
+        self,
+        backend: AbstractBackend,
+        params: ActionParams,
+    ) -> PoolActionSnapshot:
+        """Resolve a :class:`RecastSnapshot` from ``ActionParams``.
+
+        The loan out-ref comes from ``params.loan_utxo``, the borrower address from
+        ``params.actor_address``, and the recast ``amount_paid`` from ``params.amount``;
+        the validity window defaults from the backend tip.
+        """
+        if params.loan_utxo is None:
+            raise ValueError("RECAST requires params.loan_utxo (the loan out-ref)")
+        if params.amount is None:
+            raise ValueError(
+                "RECAST requires params.amount (the recast amount_paid)",
+            )
+        return RecastSnapshot.from_backend(
+            backend,
+            loan_utxo=_parse_out_ref(params.loan_utxo),
+            actor_address=params.actor_address,
+            amount_paid=params.amount,
         )
 
     def contribute(

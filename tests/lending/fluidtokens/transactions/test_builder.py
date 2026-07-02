@@ -312,6 +312,59 @@ def test_resolve_snapshot_repay_requires_loan_utxo() -> None:
         )
 
 
+def test_resolve_snapshot_recast_dispatches_to_from_backend(monkeypatch) -> None:
+    captured = {}
+
+    def fake_from_backend(backend, **kwargs):  # noqa: ANN001, ANN003, ARG001
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        RecastSnapshot,
+        "from_backend",
+        classmethod(
+            lambda cls, backend, **kw: fake_from_backend(backend, **kw),  # noqa: ARG005
+        ),
+    )
+    FluidTokensTxBuilder().resolve_snapshot(
+        backend=None,
+        market_name="m",
+        action=LendingAction.RECAST,
+        params=ActionParams(
+            actor_address="addrB",
+            loan_utxo="aa" * 32 + "#0",
+            amount=5_000_000,
+        ),
+    )
+    assert captured["loan_utxo"] == ("aa" * 32, 0)
+    assert captured["actor_address"] == "addrB"
+    assert captured["amount_paid"] == 5_000_000
+
+
+def test_resolve_snapshot_recast_requires_loan_utxo() -> None:
+    with pytest.raises(ValueError, match="RECAST requires params.loan_utxo"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.RECAST,
+            params=ActionParams(actor_address="addrB", amount=5_000_000),
+        )
+
+
+def test_resolve_snapshot_recast_requires_amount() -> None:
+    with pytest.raises(ValueError, match="RECAST requires params.amount"):
+        FluidTokensTxBuilder().resolve_snapshot(
+            backend=None,
+            market_name="m",
+            action=LendingAction.RECAST,
+            params=ActionParams(
+                actor_address="addrB",
+                loan_utxo="aa" * 32 + "#0",
+                amount=None,
+            ),
+        )
+
+
 def test_resolve_snapshot_cancel_request_dispatches(monkeypatch) -> None:
     captured = {}
     # from_backend lands in a later task; register it so the dispatch can be exercised.
