@@ -367,6 +367,28 @@ class SplashBaseState(AbstractPairState):
         """Return the order selector addresses."""
         return ["addr1w9ryamhgnuz6lau86sqytte2gz5rlktv2yce05e0h3207qssa8euj"]
 
+    def _reinstate_pool_lovelace(
+        self,
+        assets: Assets,
+        pool_utxo_assets: Assets,
+    ) -> None:
+        """Preserve a token/token pool's min-UTxO ADA in the rebuilt pool value.
+
+        When neither reserve is ADA, the pool still holds lovelace as min-UTxO. The
+        reserve-bearing ``self.assets`` carries only the two token reserves (a lovelace
+        key would sort to index 0 and corrupt the positional ``reserve_a``/``reserve_b``
+        indexing), so a value rebuilt from it via ``asset_to_value`` has coin 0 and the
+        builder defaults the recreated pool output to the protocol minimum, dropping the
+        pool's real ADA. The pool validator requires that ADA preserved exactly across a
+        swap (it lies outside the two swapped reserves and is unchanged), so copy the
+        coin from the resolved on-chain pool UTxO into the rebuilt value. For an
+        ADA-paired pool lovelace is a genuine reserve -- carried and updated by the swap
+        -- so this is a no-op.
+        """
+        if self.unit_a == "lovelace" or self.unit_b == "lovelace":
+            return
+        assets.root["lovelace"] = pool_utxo_assets["lovelace"]
+
     @property
     def stake_address(self) -> Address | None:
         """Return the stake address for orders."""
@@ -633,6 +655,7 @@ class SplashSSPState(SplashBaseState, AbstractCommonStableSwapPoolState):
 
         # Create the pool input UTxO
         assets = self.assets + self.pool_nft + self.lp_tokens
+        self._reinstate_pool_lovelace(assets, order_info[0].assets)
         input_utxo = UTxO(
             TransactionInput(
                 transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
@@ -810,6 +833,7 @@ class SplashCPPState(SplashBaseState, AbstractConstantProductPoolState):
             self.pool_datum.to_cbor(),
         )
         assets = self.assets + self.pool_nft + self.lp_tokens
+        self._reinstate_pool_lovelace(assets, order_info[0].assets)
         assets.root[pool_datum.asset_x.assets.unit()] += pool_datum.treasury_x
         assets.root[pool_datum.asset_y.assets.unit()] += pool_datum.treasury_y
         input_utxo = UTxO(
@@ -995,6 +1019,7 @@ class SplashCPPRoyaltyState(SplashCPPState):
             self.pool_datum.to_cbor(),
         )
         assets = self.assets + self.pool_nft + self.lp_tokens
+        self._reinstate_pool_lovelace(assets, order_info[0].assets)
         assets.root[pool_datum.asset_x.assets.unit()] += (
             pool_datum.treasury_x + self.pool_datum.royalty_x
         )
