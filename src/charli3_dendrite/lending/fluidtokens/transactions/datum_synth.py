@@ -321,3 +321,71 @@ def synth_pool_datum(terms: PoolTerms) -> PoolDatum:
         min_collateral_divider=terms.min_collateral_divider,
         dynamic_collateral_price=terms.dynamic_collateral_price,
     )
+
+
+@dataclass
+class RequestTerms:
+    """Borrower-chosen terms for a new request, mapped 1:1 onto :class:`RequestDatum`.
+
+    Holds the raw (already PlutusData-typed) sub-objects so the live create path can
+    pass through the unions (``borrower_auth``, ``borrower_address``,
+    ``dynamic_collateral_price``, etc.) and the ``collateral`` without re-encoding them
+    lossily. ``from_request_datum`` recovers a :class:`RequestTerms` from a decoded
+    on-chain :class:`RequestDatum` for round-trip verification. This is the groundwork
+    for the live request-create path: it is consumed by :func:`synth_request_datum` to
+    build the inline :class:`RequestDatum`, whereas the capture-replay path carries the
+    datum verbatim instead.
+    """
+
+    permissioned_condition_script_hash: bytes
+    extra_data: Datum
+    common_data: CommonData
+    borrower_auth: Datum
+    borrower_address: Datum
+    collateral: CollateralAsset
+    min_principal: int
+    min_principal_divider: int
+    max_principal: int
+    dynamic_collateral_price: Datum
+    request_expiration: int
+    request_expiration_penalty: int
+
+    @classmethod
+    def from_request_datum(cls, datum: RequestDatum) -> RequestTerms:
+        """Recover borrower terms from a decoded on-chain :class:`RequestDatum`."""
+        return cls(
+            permissioned_condition_script_hash=datum.permissioned_condition_script_hash,
+            extra_data=datum.extra_data,
+            common_data=datum.common_data,
+            borrower_auth=datum.borrower_auth,
+            borrower_address=datum.borrower_address,
+            collateral=datum.collateral,
+            min_principal=datum.min_principal,
+            min_principal_divider=datum.min_principal_divider,
+            max_principal=datum.max_principal,
+            dynamic_collateral_price=datum.dynamic_collateral_price,
+            request_expiration=datum.request_expiration,
+            request_expiration_penalty=datum.request_expiration_penalty,
+        )
+
+
+def synth_request_datum(terms: RequestTerms) -> RequestDatum:
+    """Build a :class:`RequestDatum` from borrower :class:`RequestTerms`.
+
+    :class:`RequestDatum` carries no conditional list fields, so every field passes
+    through verbatim to reproduce the on-chain datum byte-exact.
+    """
+    return RequestDatum(
+        permissioned_condition_script_hash=terms.permissioned_condition_script_hash,
+        extra_data=terms.extra_data,
+        common_data=terms.common_data,
+        borrower_auth=terms.borrower_auth,
+        borrower_address=terms.borrower_address,
+        collateral=terms.collateral,
+        min_principal=terms.min_principal,
+        min_principal_divider=terms.min_principal_divider,
+        max_principal=terms.max_principal,
+        dynamic_collateral_price=terms.dynamic_collateral_price,
+        request_expiration=terms.request_expiration,
+        request_expiration_penalty=terms.request_expiration_penalty,
+    )
