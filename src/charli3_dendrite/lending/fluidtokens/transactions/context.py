@@ -43,6 +43,7 @@ from charli3_dendrite.lending.fluidtokens.constants import POOL_ADDRESS
 from charli3_dendrite.lending.fluidtokens.constants import POOL_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import POOL_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.constants import PROTOCOL_CONFIG_NFT_POLICY
+from charli3_dendrite.lending.fluidtokens.constants import REQUEST_ADDRESS
 from charli3_dendrite.lending.fluidtokens.constants import REQUEST_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import REQUEST_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
@@ -54,6 +55,9 @@ from charli3_dendrite.utility import asset_to_value
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import PoolTerms
+    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+        RequestTerms,
+    )
 
 
 @dataclass
@@ -841,6 +845,84 @@ class CreateRequestSnapshot(PoolActionSnapshot):
             request_lovelace=request_out.lovelace,
             collateral=collateral,
             input_ref=_mint_input_ref(fix, REQUEST_POLICY),
+            request_policy=REQUEST_POLICY,
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        terms: RequestTerms,
+        borrower_address: str,
+        request_lovelace: int,
+        collateral: list[tuple[str, str, int]],
+        request_address: str | None = None,
+        funding_outrefs: list[tuple[str, int]] | None = None,
+        config_outref: tuple[str, int] | None = None,
+        request_policy_ref_outref: tuple[str, int] | None = None,
+        input_ref: tuple[str, int] | None = None,
+    ) -> CreateRequestSnapshot:
+        """Resolve a `CreateRequestSnapshot` live from chain state via the backend.
+
+        The borrower's funding is resolved from ``funding_outrefs`` (allowing spent,
+        for a captured replay) or from the unspent UTxOs at ``borrower_address``; it
+        must be non-empty. The config NFT and the request policy script are resolved
+        unless pinned by out-ref. The inline ``RequestDatum`` is synthesized from
+        ``terms``.
+        """
+        from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
+            synth_request_datum,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_funding,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_script_ref,
+        )
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_utxo_by_outref,
+        )
+
+        if funding_outrefs:
+            funding = [
+                resolve_utxo_by_outref(backend, h, i, allow_spent=True)
+                for h, i in funding_outrefs
+            ]
+        else:
+            funding = resolve_funding(backend, borrower_address)
+        if not funding:
+            raise ValueError("no funding UTxOs resolved for request create")
+        resolved_input_ref = input_ref or funding[0].out_ref
+        if resolved_input_ref is None:
+            raise ValueError("could not determine input_ref for request create")
+
+        if config_outref:
+            config = resolve_utxo_by_outref(backend, *config_outref, allow_spent=True)
+        else:
+            config = resolve_config_utxo(backend)
+
+        if request_policy_ref_outref:
+            request_policy_script_ref = resolve_utxo_by_outref(
+                backend,
+                *request_policy_ref_outref,
+                allow_spent=True,
+            )
+        else:
+            request_policy_script_ref = resolve_script_ref(backend, REQUEST_POLICY)
+
+        return cls(
+            funding=funding,
+            config=config,
+            request_policy_script_ref=request_policy_script_ref,
+            request_address=request_address or REQUEST_ADDRESS,
+            request_datum=synth_request_datum(terms).to_cbor().hex(),
+            request_lovelace=request_lovelace,
+            collateral=collateral,
+            input_ref=resolved_input_ref,
             request_policy=REQUEST_POLICY,
         )
 
