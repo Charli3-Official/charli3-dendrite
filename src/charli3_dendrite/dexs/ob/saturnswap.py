@@ -1110,7 +1110,7 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
     """SaturnSwap order book aggregating individual orders.
 
     Aggregates orders from every contract version in
-    :data:`_SATURNSWAP_ORDER_STATE_CLASSES` (live 1% + legacy 4%).
+    :data:`_SATURNSWAP_ORDER_STATE_CLASSES` (V3 1%, live 1%, legacy 4%).
     """
 
     _deposit: Assets = Assets(lovelace=0)
@@ -1124,8 +1124,8 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
         """Build an order book from provided orders or backend UTxOs.
 
         When ``orders`` is not supplied, UTxOs are fetched for every contract
-        version (live 1% + legacy 4%) and validated with the matching order-state
-        class so each order carries the correct taker fee.
+        version (V3 1%, live 1%, legacy 4%) and validated with the matching
+        order-state class so each order carries the correct taker fee.
         """
         min_pair_assets = 2
         utxo_limit = 10_000

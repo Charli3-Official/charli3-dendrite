@@ -195,3 +195,22 @@ def test_v3_relist_carries_coverage_and_floor_forward() -> None:
     assert isinstance(relist.coverage, SaturnSwapSomeCoverage)
     assert relist.coverage.value.premium_bps == covered.coverage.value.premium_bps
     assert relist.min_partial_fill == covered.min_partial_fill
+
+
+def test_v3_order_state_is_top_level_exported() -> None:
+    """SaturnSwapV3OrderState is re-exported from the package top level.
+
+    The V2 + legacy order states and the order book are all importable as
+    ``charli3_dendrite.<name>``; the V3 leaf must be too, so downstream code
+    imports it the same way instead of reaching into the submodule.
+    """
+    import charli3_dendrite
+
+    assert hasattr(
+        charli3_dendrite, "SaturnSwapV3OrderState"
+    ), "SaturnSwapV3OrderState must be re-exported at the package top level"
+    assert charli3_dendrite.SaturnSwapV3OrderState is SaturnSwapV3OrderState
+    # parity with the sibling saturnswap top-level exports
+    assert hasattr(charli3_dendrite, "SaturnSwapOrderState")
+    assert hasattr(charli3_dendrite, "SaturnSwapLegacyOrderState")
+    assert hasattr(charli3_dendrite, "SaturnSwapOrderBook")
