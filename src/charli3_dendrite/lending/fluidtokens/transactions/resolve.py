@@ -120,6 +120,27 @@ def resolve_config_utxo(
     allow_spent: bool = False,
 ) -> Utxo:
     """Resolve the UTxO holding the protocol config NFT (most-recent first)."""
+    return resolve_utxo_by_asset(
+        backend,
+        PROTOCOL_CONFIG_NFT_POLICY,
+        PROTOCOL_CONFIG_NFT_NAME,
+        allow_spent=allow_spent,
+    )
+
+
+def resolve_utxo_by_asset(
+    backend: AbstractBackend,
+    policy: str,
+    name: str,
+    *,
+    allow_spent: bool = False,
+) -> Utxo:
+    """Resolve the newest UTxO holding the native asset ``policy`` + ``name``.
+
+    Filters to unspent unless ``allow_spent`` is set (dbsync retains consumed rows, so a
+    captured/historical bond UTxO can be replayed). Raises :class:`ValueError` when no
+    matching output is found.
+    """
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
     rows = _db_query(
         backend,
@@ -133,10 +154,10 @@ def resolve_config_utxo(
               {spent_filter}
             ORDER BY o.id DESC
             LIMIT 1""",  # noqa: S608
-        {"p": PROTOCOL_CONFIG_NFT_POLICY, "n": PROTOCOL_CONFIG_NFT_NAME},
+        {"p": policy, "n": name},
     )
     if not rows:
-        raise ValueError("no UTxO holding the protocol config NFT")
+        raise ValueError(f"no UTxO holding asset {policy}{name}")
     row = rows[0]
     return resolve_utxo_by_outref(
         backend,
