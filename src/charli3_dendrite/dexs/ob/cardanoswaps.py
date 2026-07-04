@@ -14,6 +14,7 @@ are implemented separately.
 import hashlib
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Union
 
 from pycardano import Address
@@ -30,12 +31,17 @@ from pycardano import UTxO
 from pycardano import plutus_script_hash
 from pycardano.utils import min_lovelace
 
+from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderState
+from charli3_dendrite.dexs.ob.ob_base import BuyOrderBook
+from charli3_dendrite.dexs.ob.ob_base import OrderBookOrder
+from charli3_dendrite.dexs.ob.ob_base import SellOrderBook
 from charli3_dendrite.utility import asset_to_value
 
 # v2 one-way beacon minting policy id (also stored verbatim in the datum's
@@ -262,6 +268,13 @@ class CardanoSwapsOrderState(AbstractOrderState):
     datum_hash: str
     inactive: bool = False
     fee: int = 0
+    # The resting UTxO's on-chain address. Unlike every other order-book DEX, a
+    # Cardano-Swaps order carries no owner in its datum — the owner is the resting
+    # address's staking credential (the beacon-tagged swap address = validator
+    # payment part + owner staking part). Retaining it here lets an aggregate fill
+    # (:class:`CardanoSwapsOrderBook`) recover each maker's owner without a separate
+    # lookup; it is populated from the backend UTxO record on ingest.
+    address: str | None = None
 
     _batcher: Assets = Assets(lovelace=0)
     _datum_parsed: PlutusData | None = None
@@ -806,3 +819,183 @@ class CardanoSwapsOrderState(AbstractOrderState):
         # script must be executed (a withdrawal). This builder only assembles the
         # spend + burn; signing/withdrawal is the caller's responsibility.
         return self.order_datum
+
+
+class CardanoSwapsOrderBook(AbstractOrderBookState):
+    """Aggregate order book over resting Cardano-Swaps one-way swap UTxOs.
+
+    The batcher-less, fee-less sibling of the other order-book aggregates: it
+    holds many individual :class:`CardanoSwapsOrderState` orders for a token pair
+    and prices/fills across them. Because a Cardano-Swaps order carries no
+    protocol fee (``fee = 0``), the base level-walk ``get_amount_out`` /
+    ``get_amount_in`` are inherited unchanged; only ``price`` (and construction)
+    diverge, and ``swap_utxo`` folds a fill across the individual orders.
+    """
+
+    fee: int = 0
+    _deposit: Assets = Assets(lovelace=0)
+
+    @classmethod
+    def get_book(
+        cls,
+        assets: Assets,
+        orders: list[CardanoSwapsOrderState] | None = None,
+    ) -> "CardanoSwapsOrderBook":
+        """Build an order book from Cardano-Swaps orders for the given pair.
+
+        Args:
+            assets: The token pair to build the book for (unit(0) + unit(1)).
+            orders: Pre-fetched orders, or None to discover from the backend by
+                beacon policy (``pool_selector`` is beacon-based, not address-based).
+        """
+        if orders is None:
+            selector = CardanoSwapsOrderState.pool_selector()
+            result = get_backend().get_pool_utxos(
+                limit=10000,
+                historical=False,
+                **selector.model_dump(),
+            )
+            orders = [
+                CardanoSwapsOrderState.model_validate(r.model_dump()) for r in result
+            ]
+
+        buy_orders = []
+        sell_orders = []
+        for order in orders:
+            if order.inactive:
+                continue
+            num, denom = order.price
+            o = OrderBookOrder(
+                price=num / denom,
+                quantity=int(order.available.quantity()),
+                state=order,
+            )
+            if order.in_unit == assets.unit() and order.out_unit == assets.unit(1):
+                sell_orders.append(o)
+            elif order.in_unit == assets.unit(1) and order.out_unit == assets.unit(0):
+                buy_orders.append(o)
+
+        return CardanoSwapsOrderBook(
+            assets=assets,
+            plutus_v2=True,
+            block_time=int(time.time()),
+            block_index=0,
+            sell_book_full=SellOrderBook(sell_orders),
+            buy_book_full=BuyOrderBook(buy_orders),
+        )
+
+    @classmethod
+    def dex(cls) -> str:
+        """Official dex name."""
+        return "CardanoSwaps"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Order selection: discovery is by beacon policy, not address."""
+        return CardanoSwapsOrderState.order_selector()
+
+    @classmethod
+    def pool_selector(cls) -> PoolSelector:
+        """Pool/order selection: by beacon policy id."""
+        return CardanoSwapsOrderState.pool_selector()
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV2Script]:
+        """The swap spending validator is a Plutus V2 script."""
+        return CardanoSwapsOrderState.default_script_class()
+
+    @classmethod
+    def order_datum_class(cls) -> type[PlutusData]:
+        """The PlutusData class for parsing order datums."""
+        return CardanoSwapsOrderState.order_datum_class()
+
+    @property
+    def swap_forward(self) -> bool:
+        """Swap forwarding is supported on the individual orders."""
+        return False
+
+    @property
+    def stake_address(self) -> Address | None:
+        """Batcher-less: no order-book stake address."""
+        return None
+
+    @property
+    def pool_id(self) -> str:
+        """Unique identifier for the Cardano-Swaps order book."""
+        return "CardanoSwaps"
+
+    @property
+    def price(self) -> tuple[Decimal, Decimal]:
+        """Mid price of assets based on the full order books.
+
+        Overridden with an empty-book guard: Cardano-Swaps books are frequently
+        one-sided (all orders offering one direction of the pair), and the base
+        ``price`` dereferences the never-populated optional ``buy_book[0]`` /
+        ``sell_book[0]``.
+        """
+        if not self.buy_book_full or not self.sell_book_full:
+            return Decimal(0), Decimal(0)
+        buy = Decimal(self.buy_book_full[0].price)
+        sell = Decimal(self.sell_book_full[0].price)
+        return (
+            Decimal((buy + (Decimal(1) / sell)) / 2),
+            Decimal((sell + (Decimal(1) / buy)) / 2),
+        )
+
+    def swap_utxo(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        tx_builder: TransactionBuilder,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+    ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Build a fill by walking the book, folding one fill per resting order.
+
+        Iterates the appropriate side (sell or buy) best-price-first, filling each
+        resting order via its own ``swap_utxo`` until the input is exhausted. Each
+        fill is threaded the maker's real owner — the resting UTxO's staking
+        credential, carried on the order's ``address`` — so the continuing output
+        lands back at the correct beacon-tagged swap address (defaulting the owner
+        to the taker would reconstruct the wrong input and fail validation).
+        """
+        if in_assets.unit() == self.assets.unit():
+            book = self.sell_book_full
+        else:
+            book = self.buy_book_full
+
+        in_remaining = Assets.model_validate(in_assets.model_dump())
+        txo = None
+        datum = None
+
+        for order in book:
+            state = order.state
+
+            order_out, _ = state.get_amount_out(in_remaining)
+            order_in, _ = state.get_amount_in(order_out)
+
+            # Stop once the remaining budget cannot satisfy a meaningful fill.
+            if order_out.quantity() <= 0 or order_in.quantity() <= 0:
+                break
+
+            if state.address is None:
+                raise ValueError(
+                    "Cardano-Swaps order-book fill requires each resting order's "
+                    "address (the maker's owner staking credential).",
+                )
+
+            txo, datum = state.swap_utxo(
+                address_source=address_source,
+                in_assets=order_in,
+                out_assets=order_out,
+                tx_builder=tx_builder,
+                owner_address=Address.decode(state.address),
+            )
+
+            in_remaining -= order_in
+            if in_remaining.quantity() <= state.price[0] / state.price[1]:
+                break
+
+        return txo, datum
