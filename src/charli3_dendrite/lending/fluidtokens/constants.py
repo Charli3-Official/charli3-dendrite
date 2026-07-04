@@ -2,13 +2,21 @@
 
 The protocol is parameterized by a single config NFT; the config UTxO datum holds
 every protocol script hash / policy id. The constants below are the live mainnet
-deployment coordinates, and `resolve_addresses` returns them as the coordinate set
-used by the loader/builder.
+deployment coordinates (a static fallback), and `resolve_addresses` re-reads the live
+config datum through the backend so entity discovery self-heals across a redeploy,
+falling back to the constants when the datum cannot be read (e.g. a non-dbsync
+backend).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import TypedDict
+
+import cbor2  # type: ignore[import-not-found]
+from pycardano import Address
+from pycardano import Network
+from pycardano import ScriptHash
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -53,18 +61,147 @@ class FluidScriptAddresses(TypedDict):
     request_policy: str
 
 
-def resolve_addresses(backend: AbstractBackend) -> FluidScriptAddresses:  # noqa: ARG001
-    """Return the mainnet coordinate set.
+# Config datum layout: Constr(0, [ ... ]). Fields 0-1 are governance credentials; 2-15
+# are the policy ids / script hashes below; 16-21 are reserved (currently empty / zero).
+_CONFIG_CONSTR_0 = 121
+_CONFIG_MIN_FIELDS = 16
+_CONFIG_FIELD_IX = {
+    "pool_policy": 2,
+    "request_policy": 3,
+    "borrower_bond_policy": 4,
+    "lender_bond_policy": 5,
+    "loan_policy": 6,
+    "repayment_policy": 7,
+    "pool_spend_skh": 8,
+    "request_spend_skh": 9,
+    "loan_spend_skh": 10,
+    "loan_claim_action_skh": 11,
+    "loan_repay_action_skh": 12,
+    "loan_change_collateral_action_skh": 13,
+    "loan_recast_action_skh": 14,
+    "asset_manager_spend_skh": 15,
+}
 
-    Returns the constant coordinates defined in this module. The `backend` argument is
-    a design seam: a future revision can re-read the config NFT datum through it to
-    survive a redeploy, matching Danogo's `resolve_addresses` signature.
+
+@dataclass(frozen=True)
+class FluidConfig:
+    """The protocol policy ids / script hashes carried by the config NFT datum.
+
+    Every field is a hex hash. :meth:`parse` decodes the on-chain config datum;
+    :meth:`defaults` returns the static mainnet constants defined in this module, used
+    as a fallback when the live datum cannot be read.
     """
+
+    pool_policy: str
+    request_policy: str
+    borrower_bond_policy: str
+    lender_bond_policy: str
+    loan_policy: str
+    repayment_policy: str
+    pool_spend_skh: str
+    request_spend_skh: str
+    loan_spend_skh: str
+    loan_claim_action_skh: str
+    loan_repay_action_skh: str
+    loan_change_collateral_action_skh: str
+    loan_recast_action_skh: str
+    asset_manager_spend_skh: str
+
+    @classmethod
+    def parse(cls, datum_cbor: str) -> FluidConfig:
+        """Decode the config NFT datum cbor-hex into a :class:`FluidConfig`.
+
+        Reads the known policy/script-hash fields (2-15) and tolerates the reserved
+        tail (16+). Raises :class:`ValueError` if the datum is not the expected
+        ``Constr(0, [...])`` with at least the known fields, all bytes.
+        """
+        try:
+            top = cbor2.loads(bytes.fromhex(datum_cbor))
+        except (ValueError, cbor2.CBORDecodeError) as exc:
+            raise ValueError(f"config datum: undecodable cbor: {exc}") from exc
+        if not isinstance(top, cbor2.CBORTag) or top.tag != _CONFIG_CONSTR_0:
+            raise ValueError("config datum: expected Constr(0, ...)")
+        fields = top.value
+        if not isinstance(fields, list) or len(fields) < _CONFIG_MIN_FIELDS:
+            raise ValueError(
+                f"config datum: expected >= {_CONFIG_MIN_FIELDS} fields",
+            )
+
+        def _hash(name: str) -> str:
+            value = fields[_CONFIG_FIELD_IX[name]]
+            if not isinstance(value, bytes):
+                raise ValueError(f"config datum: field {name} is not bytes")
+            return value.hex()
+
+        return cls(**{name: _hash(name) for name in _CONFIG_FIELD_IX})
+
+    @classmethod
+    def defaults(cls) -> FluidConfig:
+        """The static mainnet constants defined in this module."""
+        return cls(
+            pool_policy=POOL_POLICY,
+            request_policy=REQUEST_POLICY,
+            borrower_bond_policy=BORROWER_BOND_POLICY,
+            lender_bond_policy=LENDER_BOND_POLICY,
+            loan_policy=LOAN_POLICY,
+            repayment_policy=REPAYMENT_POLICY,
+            pool_spend_skh=POOL_SPEND_SKH,
+            request_spend_skh=REQUEST_SPEND_SKH,
+            loan_spend_skh=LOAN_SPEND_SKH,
+            loan_claim_action_skh=LOAN_CLAIM_ACTION_SKH,
+            loan_repay_action_skh=LOAN_REPAY_ACTION_SKH,
+            loan_change_collateral_action_skh=LOAN_CHANGE_COLLATERAL_ACTION_SKH,
+            loan_recast_action_skh=LOAN_RECAST_ACTION_SKH,
+            asset_manager_spend_skh=ASSET_MANAGER_SPEND_SKH,
+        )
+
+
+def _payment_address(script_hash_hex: str) -> str:
+    """A mainnet payment-credential (enterprise) address for a spend script hash.
+
+    Entity UTxOs sit at base addresses whose stake part is not carried by the config
+    datum, but the backend discovers them by payment credential only, so a
+    payment-credential address is the stable, redeploy-proof identity to match on.
+    """
+    return Address(
+        payment_part=ScriptHash(bytes.fromhex(script_hash_hex)),
+        network=Network.MAINNET,
+    ).encode()
+
+
+def resolve_config(backend: AbstractBackend) -> FluidConfig:
+    """Read the live config NFT datum into a :class:`FluidConfig`.
+
+    Falls back to :meth:`FluidConfig.defaults` when the datum cannot be read or parsed
+    (e.g. a non-dbsync backend, a missing config UTxO, or an unexpected datum shape) so
+    the loader keeps working offline / against a degraded backend.
+    """
+    try:
+        # Imported lazily: `resolve` imports this module, so a top-level import cycles.
+        from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
+            resolve_config_utxo,
+        )
+
+        utxo = resolve_config_utxo(backend)
+        return FluidConfig.parse(utxo.datum)
+    except (TypeError, ValueError, IndexError, KeyError, AttributeError):
+        return FluidConfig.defaults()
+
+
+def resolve_addresses(backend: AbstractBackend) -> FluidScriptAddresses:
+    """Resolve the entity coordinate set, preferring the live config NFT datum.
+
+    Re-reads the config datum through `backend` so pool / loan / request discovery
+    self-heals across a protocol redeploy (new spend scripts / policies); falls back to
+    the static mainnet constants when the datum cannot be read. Addresses are
+    payment-credential identities (see :func:`_payment_address`).
+    """
+    config = resolve_config(backend)
     return FluidScriptAddresses(
-        pool=POOL_ADDRESS,
-        loan=LOAN_ADDRESS,
-        request=REQUEST_ADDRESS,
-        pool_policy=POOL_POLICY,
-        loan_policy=LOAN_POLICY,
-        request_policy=REQUEST_POLICY,
+        pool=_payment_address(config.pool_spend_skh),
+        loan=_payment_address(config.loan_spend_skh),
+        request=_payment_address(config.request_spend_skh),
+        pool_policy=config.pool_policy,
+        loan_policy=config.loan_policy,
+        request_policy=config.request_policy,
     )
