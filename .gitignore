@@ -1,6 +1,9 @@
 docs/ai
 .cursor
 
+# Local-only FluidTokens working notes (internal backlog; not for the public repo)
+src/charli3_dendrite/lending/fluidtokens/BACKLOG.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

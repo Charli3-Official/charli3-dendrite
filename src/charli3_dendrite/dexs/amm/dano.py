@@ -994,7 +994,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         A fresh chain parse carries the dex NFT *inside* the assets bag (extracted
         later), not as a ``dex_nft`` key, so it takes the full parse path. Mirrors
         VyFi / WingRiders V2; makes the serialize→reingest round-trip idempotent
-        for both the dendrite model_dump form and steelswap's net silver.
+        for both the dendrite model_dump form and a downstream consumer's
+        net-reserves view.
         """
         if "dex_nft" in values:
             if not isinstance(values["assets"], Assets):
