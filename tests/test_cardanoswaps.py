@@ -1041,3 +1041,152 @@ def test_ref_script_guard_rejects_missing_script(method_name) -> None:
     )
     with pytest.raises(ValueError, match="no output script"):
         getattr(CardanoSwapsOrderState, method_name)(no_script)
+
+
+# --- CardanoSwapsOrderBook (aggregate order book) --------------------------
+#
+# The aggregate over many resting one-way swaps: get_book buckets orders into a
+# buy/sell book, the inherited base level-walk prices across them (fee == 0), and
+# swap_utxo folds a fill order-by-order — threading EACH maker's owner (the resting
+# UTxO's staking credential, carried on ``address``) so the continuation lands at
+# the right beacon-tagged swap address, not the taker's.
+
+from decimal import Decimal
+
+from pycardano import ScriptHash
+
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderBook
+
+_PAIR = Assets(root={"lovelace": 0, TOKEN_A_UNIT: 0})
+
+_MAKER = Address(
+    payment_part=VerificationKeyHash(bytes.fromhex("55" * 28)),
+    staking_part=VerificationKeyHash(bytes.fromhex("66" * 28)),
+    network=Network.MAINNET,
+)
+_TAKER = Address(
+    payment_part=VerificationKeyHash(bytes.fromhex("77" * 28)),
+    staking_part=VerificationKeyHash(bytes.fromhex("88" * 28)),
+    network=Network.MAINNET,
+)
+
+
+def _sell_order(num: int, den: int, offer_qty: int) -> CardanoSwapsOrderState:
+    """A token-offer order (offer AAA, ask ADA) -> the SELL side (a -> b is ADA-in)."""
+    return _resting_state(
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        b"",
+        b"",
+        num,
+        den,
+        offer_qty,
+    )
+
+
+def _ada_offer_order(num: int, den: int, offer_qty: int) -> CardanoSwapsOrderState:
+    """An ADA-offer order (offer ADA, ask AAA) -> the BUY side."""
+    return _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        num,
+        den,
+        offer_qty,
+    )
+
+
+def _resting_beacon_addr(owner: Address) -> str:
+    """The on-chain resting address: swap-validator payment part + owner staking."""
+    return str(
+        Address(
+            payment_part=ScriptHash(bytes.fromhex(SWAP_VALIDATOR_HASH)),
+            staking_part=owner.staking_part,
+            network=Network.MAINNET,
+        )
+    )
+
+
+def test_orderbook_get_book_orientation_and_levels() -> None:
+    sell = _sell_order(2, 1, 100)  # token offer -> sell book, level price 2, qty 100
+    buy = _ada_offer_order(3, 1, 10_000_000)  # ADA offer -> buy book
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[sell, buy])
+
+    assert book.dex() == "CardanoSwaps"
+    assert len(book.sell_book_full) == 1
+    assert len(book.buy_book_full) == 1
+    assert book.sell_book_full[0].price == 2.0
+    assert book.sell_book_full[0].quantity == 100
+    assert book.buy_book_full[0].price == 3.0
+
+
+def test_orderbook_get_amount_out_walks_multiple_levels() -> None:
+    # Two token-offer (sell) orders at price 2 and 4; the base level-walk fills the
+    # cheaper (ask-per-offer) one first. Prices are raw base-unit rationals.
+    cheap = _sell_order(2, 1, 100)  # 100 AAA at 2 lovelace/AAA -> 200 lovelace cap
+    dear = _sell_order(4, 1, 100)  # 100 AAA at 4 lovelace/AAA -> 400 lovelace cap
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[dear, cheap])  # unordered in
+
+    out, _ = book.get_amount_out(Assets(root={"lovelace": 240}))
+    assert out.unit() == TOKEN_A_UNIT
+    # 200 lovelace fills all 100 AAA of the cheap level; the remaining 40 buys
+    # 40 / 4 = 10 AAA of the dear level. Total 110 AAA.
+    assert out.quantity() == 110
+
+
+def test_orderbook_price_one_sided_returns_zero() -> None:
+    # A book with only sell orders (no buy side) must not crash on the base
+    # price's buy_book[0] deref — the override returns (0, 0).
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[_sell_order(2, 1, 100)])
+    assert not book.buy_book_full
+    assert book.price == (Decimal(0), Decimal(0))
+
+
+def test_orderbook_swap_utxo_threads_maker_owner_not_taker(tx_builder) -> None:
+    # A fill folds through the resting order's OWN owner (from its address), so the
+    # continuation lands at the maker's beacon-tagged swap address — NOT the taker's.
+    order = _ada_offer_order(2, 1, 10_000_000)  # offer 10 ADA, ask AAA @ 2 AAA/ADA
+    order.address = _resting_beacon_addr(_MAKER)
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[order])
+
+    cont_txo, cont_datum = book.swap_utxo(
+        address_source=_TAKER,  # the filler — must NOT become the continuation owner
+        in_assets=Assets(root={TOKEN_A_UNIT: 4_000_000}),
+        out_assets=Assets(root={"lovelace": 2_000_000}),
+        tx_builder=tx_builder,
+    )
+
+    assert cont_txo is not None
+    assert bytes(cont_txo.address.payment_part).hex() == SWAP_VALIDATOR_HASH
+    assert cont_txo.address.staking_part == _MAKER.staking_part
+    assert cont_txo.address.staking_part != _TAKER.staking_part
+
+
+def test_orderbook_swap_utxo_requires_address(tx_builder) -> None:
+    # An order missing its address (owner unknown) must fail loudly, not silently
+    # build a fill owned by the taker.
+    order = _ada_offer_order(2, 1, 10_000_000)
+    assert order.address is None
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[order])
+
+    with pytest.raises(ValueError, match="address"):
+        book.swap_utxo(
+            address_source=_TAKER,
+            in_assets=Assets(root={TOKEN_A_UNIT: 4_000_000}),
+            out_assets=Assets(root={"lovelace": 2_000_000}),
+            tx_builder=tx_builder,
+        )
+
+
+def test_orderstate_retains_address_from_record() -> None:
+    # The backend UTxO record carries the resting address; the order state now
+    # retains it (it was dropped before), so an aggregate fill can recover the owner.
+    datum = _make_datum(
+        b"", b"", bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), 2, 1
+    )
+    assets = _utxo_assets(datum, {"lovelace": 10_000_000})
+    values = _values_from_datum(datum, assets)
+    values["address"] = _resting_beacon_addr(_MAKER)
+    state = CardanoSwapsOrderState.model_validate(values)
+    assert state.address == _resting_beacon_addr(_MAKER)
