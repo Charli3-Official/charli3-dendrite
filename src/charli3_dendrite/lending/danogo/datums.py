@@ -14,12 +14,7 @@ from typing import List
 from pycardano import IndefiniteList
 from pycardano import PlutusData
 
-
-def asset_unit(policy: bytes, name: bytes) -> str:
-    """Dendrite unit string for a (policy, name) asset ('lovelace' for ADA)."""
-    if not policy and not name:
-        return "lovelace"
-    return policy.hex() + name.hex()
+from charli3_dendrite.lending.units import asset_unit
 
 
 @dataclass

@@ -3,7 +3,7 @@
 A parsed Dano pool stores the *active* (carve-netted) reserves in ``assets``
 (``post_init`` subtracts the platform fee + ADA min-utxo/swap-fee). On re-ingest
 of an already-parsed representation — a dendrite ``model_dump`` OR a downstream
-consumer's net projection (steelswap silver) — the carve must NOT be applied a
+consumer's net projection (a net-reserves shape) — the carve must NOT be applied a
 second time. ``skip_init`` keys on the presence of the separate ``dex_nft``
 field (the "already parsed" signal) and skips ``post_init``, exactly like
 VyFi / WingRiders V2.
@@ -37,7 +37,7 @@ def _pool(key: str) -> DanoCLMMState:
 
 
 def _net_reingest(p: DanoCLMMState) -> DanoCLMMState:
-    """Reconstruct ``p`` from its NET reserves + dex_nft (the steelswap silver
+    """Reconstruct ``p`` from its NET reserves + dex_nft (the net-reserves
     shape): the exact case that double-subtracted before ``skip_init``.
     """
     d = p._datum
