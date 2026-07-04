@@ -17,6 +17,7 @@ from pycardano import PaymentSigningKey
 from pycardano import PaymentVerificationKey
 from pycardano import PlutusData
 from pycardano import PlutusV2Script
+from pycardano import PlutusV3Script
 from pycardano import Redeemer
 from pycardano import TransactionBuilder
 from pycardano import TransactionId
@@ -62,6 +63,12 @@ SATURNSWAP_ORDER_ADDRESS = (
 SATURNSWAP_LEGACY_ORDER_ADDRESS = (
     "addr1zyd0sj57d9lpu7cy9g9qdurpazqc9l4eaxk6j59nd2gkh4"
     "275jq4yvpskgayj55xegdp30g5rfynax66r8vgn9fldndsqzf5tn"
+)
+# V3 (PlutusV3) contract; script hash
+# 6023f59dce0064f1d6d27594dbea25bc4305a9f6a10f3a064037553a.
+SATURNSWAP_V3_ORDER_ADDRESS = (
+    "addr1z9sz8avaecqxfuwk6f6efkl2yk7yxpdf76ss7wsxgqm42w"
+    "h2l9cdyhc0eja9mxq0lgeer90edhlfymnxv2ym3szcetqsp0ume8"
 )
 
 # When the protocol shares its authorize hot-key, set this env var to the signing
@@ -200,6 +207,199 @@ class SaturnSwapSwapDatum(OrderDatum):
 
 
 @dataclass
+class SaturnSwapOutputReferenceV3(PlutusData):
+    """Flat OutputReference: Constr0[tx_id: bytes(32), index]. No TxId wrapper."""
+
+    CONSTR_ID = 0
+    tx_id: bytes
+    index: int
+
+
+@dataclass
+class SaturnSwapPaymentDatumV3(PlutusData):
+    """PaymentDatum { output_reference } with the flat V3 OutputReference."""
+
+    CONSTR_ID = 0
+    output_reference: SaturnSwapOutputReferenceV3
+
+
+@dataclass
+class SaturnSwapCoverage(PlutusData):
+    """Aegis coverage { vault, premium_bps, policy_ref }."""
+
+    CONSTR_ID = 0
+    vault: PlutusFullAddress
+    premium_bps: int
+    policy_ref: SaturnSwapOutputReferenceV3
+
+
+@dataclass
+class SaturnSwapSomeCoverage(PlutusData):
+    """Some(Coverage) wrapper for Option<Coverage>."""
+
+    CONSTR_ID = 0
+    value: SaturnSwapCoverage
+
+
+@dataclass
+class SaturnSwapSwapDatumV3(OrderDatum):
+    """V3 SwapDatum (11 fields).
+
+    Extends the V2 layout with ``min_partial_fill`` and optional Aegis
+    ``coverage``, and uses the flat :class:`SaturnSwapOutputReferenceV3`.
+    """
+
+    CONSTR_ID = 0
+    owner: PlutusFullAddress
+    policy_id_sell: bytes
+    asset_name_sell: bytes
+    amount_sell: int
+    policy_id_buy: bytes
+    asset_name_buy: bytes
+    amount_buy: int
+    valid_before_time: Union[PlutusNone, SaturnSwapSomeInt]
+    output_reference: SaturnSwapOutputReferenceV3
+    min_partial_fill: int
+    coverage: Union[SaturnSwapSomeCoverage, PlutusNone]
+
+    def pool_pair(self) -> Assets | None:
+        """Return the asset pair for this swap datum."""
+        sell_unit = (
+            "lovelace"
+            if self.policy_id_sell == b""
+            else self.policy_id_sell.hex() + self.asset_name_sell.hex()
+        )
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return Assets(**{sell_unit: 0}) + Assets(**{buy_unit: 0})
+
+    def address_source(self) -> str | None:
+        """Return the maker address as a bech32 string."""
+        return self.owner.to_address().encode()
+
+    def requested_amount(self) -> Assets:
+        """Return the requested buy asset amount."""
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return Assets(**{buy_unit: self.amount_buy})
+
+    def order_type(self) -> OrderType | None:
+        """Return the order type classification."""
+        return OrderType.swap
+
+    def is_covered(self) -> bool:
+        """Return whether the order carries Aegis coverage."""
+        return isinstance(self.coverage, SaturnSwapSomeCoverage)
+
+    def premium_bps(self) -> int | None:
+        """Coverage premium in basis points, or None when uncovered."""
+        return self.coverage.value.premium_bps if self.is_covered() else None
+
+    def coverage_vault(self) -> str | None:
+        """Aegis vault bech32 address, or None when uncovered."""
+        if not self.is_covered():
+            return None
+        return self.coverage.value.vault.to_address().encode()
+
+    def premium_for_fill(self, user_sell_amount: int) -> int:
+        """Out-of-pocket premium (buy asset) for a fill of ``user_sell_amount``.
+
+        ``max(1, user_sell_amount * premium_bps // 10000)`` for covered orders;
+        ``0`` when uncovered.
+        """
+        if not self.is_covered():
+            return 0
+        base = (user_sell_amount * self.coverage.value.premium_bps) // 10_000
+        return max(1, base)
+
+    def check_min_partial_fill(self, user_sell_amount: int) -> None:
+        """Reject a partial fill below the min_partial_fill floor.
+
+        A partial fill (``user_sell_amount < amount_buy``) must deliver at least
+        ``min_partial_fill`` of the buy asset; a full fill is always allowed.
+        """
+        is_partial = user_sell_amount < self.amount_buy
+        if is_partial and user_sell_amount < self.min_partial_fill:
+            msg = (
+                f"partial fill {user_sell_amount} below min_partial_fill "
+                f"{self.min_partial_fill}"
+            )
+            raise ValueError(msg)
+
+    def build_relist_datum(
+        self,
+        spent_tx_hash: str,
+        spent_index: int,
+        user_sell_amount: int,
+    ) -> "SaturnSwapSwapDatumV3":
+        """Continuation (relist) datum for a partial fill of ``user_sell_amount``.
+
+        Owner, pair, ``valid_before_time``, ``min_partial_fill`` and ``coverage``
+        carry forward unchanged; the flat ``output_reference`` points to the spent
+        order. Mirrors the residual-amount math in
+        :meth:`SaturnSwapV3OrderState.swap_utxo` (including the ADA-sell carve).
+        """
+        two_ada = 2_000_000
+        new_amount_buy = self.amount_buy - user_sell_amount
+        new_amount_sell = _ratio_amount(
+            self.amount_buy,
+            new_amount_buy,
+            self.amount_sell,
+        )
+        if self.policy_id_sell == b"" and new_amount_sell > two_ada:
+            new_amount_sell -= two_ada
+            new_amount_buy = _ratio_amount(
+                self.amount_sell,
+                new_amount_sell,
+                self.amount_buy,
+            )
+        return SaturnSwapSwapDatumV3(
+            owner=self.owner,
+            policy_id_sell=self.policy_id_sell,
+            asset_name_sell=self.asset_name_sell,
+            amount_sell=new_amount_sell,
+            policy_id_buy=self.policy_id_buy,
+            asset_name_buy=self.asset_name_buy,
+            amount_buy=new_amount_buy,
+            valid_before_time=self.valid_before_time,
+            output_reference=SaturnSwapOutputReferenceV3(
+                tx_id=bytes.fromhex(spent_tx_hash),
+                index=spent_index,
+            ),
+            min_partial_fill=self.min_partial_fill,
+            coverage=self.coverage,
+        )
+
+    def premium_payment(
+        self,
+        user_sell_amount: int,
+    ) -> tuple[str, Assets] | None:
+        """Aegis premium owed for a fill: ``(vault_bech32, buy-asset premium)``.
+
+        ``None`` for uncovered orders. The premium is out-of-pocket for the filler,
+        denominated in the BUY asset, and paid to the coverage vault as a real
+        output the validator requires on a covered fill.
+        """
+        if not self.is_covered():
+            return None
+        buy_unit = (
+            "lovelace"
+            if self.policy_id_buy == b""
+            else self.policy_id_buy.hex() + self.asset_name_buy.hex()
+        )
+        return (
+            self.coverage.value.vault.to_address().encode(),
+            Assets(**{buy_unit: self.premium_for_fill(user_sell_amount)}),
+        )
+
+
+@dataclass
 class SaturnSwapSwapAction(PlutusData):
     """SwapAction(user_sell_amount, input_index, output_index)."""
 
@@ -243,12 +443,20 @@ class SaturnSwapSwapAction(PlutusData):
         input_index = input_utxo.input.index
 
         for i, txo in enumerate(tx_builder.outputs):
-            if not isinstance(txo.datum, SaturnSwapPaymentDatum):
+            datum = txo.datum
+            if isinstance(datum, SaturnSwapPaymentDatum):
+                # V2: nested OutputReference -> TxId -> bytes.
+                ref_tx_id = datum.output_reference.tx_id.value
+                ref_index = datum.output_reference.index
+            elif isinstance(datum, SaturnSwapPaymentDatumV3):
+                # V3: flat OutputReference (tx_id is bare bytes).
+                ref_tx_id = datum.output_reference.tx_id
+                ref_index = datum.output_reference.index
+            else:
                 continue
-            output_ref = txo.datum.output_reference
             if (
-                output_ref.tx_id.value == bytes.fromhex(str(input_tx_id))
-                and output_ref.index == input_index
+                ref_tx_id == bytes.fromhex(str(input_tx_id))
+                and ref_index == input_index
                 and txo.address == owner_address
             ):
                 self.output_index = i
@@ -311,8 +519,8 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
         return SaturnSwapSwapDatum
 
     @classmethod
-    def default_script_class(cls) -> type[PlutusV2Script]:
-        """Return default script type."""
+    def default_script_class(cls) -> type[PlutusV2Script] | type[PlutusV3Script]:
+        """Return default script type (V2 base; the V3 leaf overrides)."""
         return PlutusV2Script
 
     @property
@@ -464,7 +672,7 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
         tx_builder: TransactionBuilder,
         sell_unit: str,
         new_amount_sell: int,
-        payment_datum: "SaturnSwapPaymentDatum",
+        payment_datum: "SaturnSwapPaymentDatum | SaturnSwapPaymentDatumV3",
     ) -> None:
         """Add the taker-fee output, or require the authorize hot-key signature.
 
@@ -699,9 +907,200 @@ class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
         return [SATURNSWAP_LEGACY_ORDER_ADDRESS]
 
 
+class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
+    """V3 (PlutusV3) SaturnSwap order state — 1% taker-fee contract.
+
+    Orders resting at :data:`SATURNSWAP_V3_ORDER_ADDRESS` (script hash
+    ``6023f59d…``). Same 1% non-auth taker fee as the live V2 contract; the datum
+    is the 11-field :class:`SaturnSwapSwapDatumV3` (flat OutputReference +
+    ``min_partial_fill`` + optional coverage) and the script is PlutusV3.
+    """
+
+    TAKER_FEE_BPS: ClassVar[int] = SATURNSWAP_TAKER_FEE_BPS
+
+    @classmethod
+    def dex(cls) -> str:
+        """Return the DEX name."""
+        return "SaturnSwap"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """Return order script addresses (V3 contract)."""
+        return [SATURNSWAP_V3_ORDER_ADDRESS]
+
+    @classmethod
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Return the V3 order datum class."""
+        return SaturnSwapSwapDatumV3
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V3 orders are spent via a PlutusV3 reference script."""
+        return PlutusV3Script
+
+    def swap_utxo(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        tx_builder: TransactionBuilder,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+    ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Build a V3 taker-fill for this order.
+
+        Uses the flat :class:`SaturnSwapPaymentDatumV3` and the V3 relist datum
+        (:meth:`SaturnSwapSwapDatumV3.build_relist_datum`), enforces the
+        ``min_partial_fill`` floor, and preserves the authorized fee-free path.
+        Covered orders require the out-of-pocket premium output and are handled
+        separately.
+
+        TODO(dry): the owner-output / fee / partial-residual scaffold mirrors the
+        V2 base ``swap_utxo``; fold the shared body into an order-book mixin so V2
+        and V3 stop duplicating it.
+        """
+        two_ada = 2_000_000
+        user_sell_amount = int(in_assets.quantity())
+
+        # Reject a partial below the on-chain min_partial_fill floor.
+        self.order_datum.check_min_partial_fill(user_sell_amount)
+
+        if self.reference_utxo is not None:
+            tx_builder.reference_inputs.add(self.reference_utxo)
+
+        order_address = (
+            get_backend()
+            .get_pool_in_tx(
+                self.tx_hash,
+                addresses=self.pool_selector().addresses,
+            )[0]
+            .address
+        )
+        input_utxo = UTxO(
+            TransactionInput(
+                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                index=self.tx_index,
+            ),
+            output=TransactionOutput(
+                address=order_address,
+                amount=asset_to_value(self.assets),
+                datum_hash=self.order_datum.hash(),
+            ),
+        )
+        script_input_lovelace = input_utxo.output.amount.coin
+
+        # Flat V3 payment datum stamped on every output (owner/fee/relist).
+        output_ref = SaturnSwapOutputReferenceV3(
+            tx_id=bytes.fromhex(self.tx_hash),
+            index=self.tx_index,
+        )
+        payment_datum = SaturnSwapPaymentDatumV3(output_reference=output_ref)
+
+        partial = user_sell_amount < self.order_datum.amount_buy
+        sell_unit = out_assets.unit()
+        buy_unit = in_assets.unit()
+        sell_is_ada = sell_unit == "lovelace"
+
+        owner_address = self.order_datum.owner.to_address()
+        owner_assets = Assets(**{buy_unit: user_sell_amount})
+        new_amount_sell = _ratio_amount(
+            self.order_datum.amount_buy,
+            user_sell_amount,
+            self.order_datum.amount_sell,
+        )
+        if partial and sell_is_ada and new_amount_sell > two_ada:
+            owner_assets.root["lovelace"] = (
+                owner_assets.root.get("lovelace", 0) + two_ada
+            )
+        elif not partial and not sell_is_ada:
+            owner_assets.root["lovelace"] = (
+                owner_assets.root.get("lovelace", 0) + script_input_lovelace
+            )
+
+        owner_output = TransactionOutput(
+            address=owner_address,
+            amount=asset_to_value(owner_assets),
+            datum=payment_datum,
+        )
+        owner_output.amount.coin = max(
+            owner_output.amount.coin,
+            min_lovelace(tx_builder.context, output=owner_output),
+        )
+        tx_builder.add_output(owner_output)
+
+        self._add_fee_or_authorize(
+            tx_builder,
+            sell_unit,
+            new_amount_sell,
+            payment_datum,
+        )
+
+        # Covered orders owe an out-of-pocket premium output (buy asset) to the
+        # Aegis vault; the validator requires it and enforces vault distinctness.
+        premium = self.order_datum.premium_payment(user_sell_amount)
+        if premium is not None:
+            vault_bech32, premium_assets = premium
+            vault_address = Address.decode(vault_bech32)
+            if vault_address.payment_part == owner_address.payment_part:
+                msg = "coverage vault must differ from the order owner"
+                raise ValueError(msg)
+            premium_output = TransactionOutput(
+                address=vault_address,
+                amount=asset_to_value(premium_assets),
+                datum=payment_datum,
+            )
+            premium_output.amount.coin = max(
+                premium_output.amount.coin,
+                min_lovelace(tx_builder.context, output=premium_output),
+            )
+            tx_builder.add_output(premium_output)
+
+        action = SaturnSwapSwapAction(
+            user_sell_amount=user_sell_amount,
+            input_index=0,
+            output_index=0,
+        )
+        redeemer = Redeemer(action)
+        tx_builder.add_script_input(
+            utxo=input_utxo,
+            script=self.reference_utxo,
+            redeemer=redeemer,
+        )
+        tx_builder.datums.update({self.order_datum.hash(): self.order_datum})
+
+        if partial:
+            new_datum = self.order_datum.build_relist_datum(
+                self.tx_hash,
+                self.tx_index,
+                user_sell_amount,
+            )
+            residual_assets = Assets(**{sell_unit: new_datum.amount_sell})
+            residual_output = TransactionOutput(
+                address=order_address,
+                amount=asset_to_value(residual_assets),
+                datum=new_datum,
+            )
+            if sell_is_ada:
+                residual_output.amount.coin = max(
+                    residual_output.amount.coin,
+                    min_lovelace(tx_builder.context, output=residual_output),
+                )
+            else:
+                residual_output.amount.coin = max(
+                    script_input_lovelace,
+                    min_lovelace(tx_builder.context, output=residual_output),
+                )
+            tx_builder.datums.update({new_datum.hash(): new_datum})
+            return residual_output, new_datum
+
+        return None, self.order_datum
+
+
 # Concrete SaturnSwap contracts, newest first. The order book walks all of these
-# so both the live 1% contract and the legacy 4% contract are aggregated.
+# so the V3, live 1%, and legacy 4% contracts are aggregated.
 _SATURNSWAP_ORDER_STATE_CLASSES: list[type[_SaturnSwapOrderStateBase]] = [
+    SaturnSwapV3OrderState,
     SaturnSwapOrderState,
     SaturnSwapLegacyOrderState,
 ]
@@ -711,7 +1110,7 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
     """SaturnSwap order book aggregating individual orders.
 
     Aggregates orders from every contract version in
-    :data:`_SATURNSWAP_ORDER_STATE_CLASSES` (live 1% + legacy 4%).
+    :data:`_SATURNSWAP_ORDER_STATE_CLASSES` (V3 1%, live 1%, legacy 4%).
     """
 
     _deposit: Assets = Assets(lovelace=0)
@@ -725,8 +1124,8 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
         """Build an order book from provided orders or backend UTxOs.
 
         When ``orders`` is not supplied, UTxOs are fetched for every contract
-        version (live 1% + legacy 4%) and validated with the matching order-state
-        class so each order carries the correct taker fee.
+        version (V3 1%, live 1%, legacy 4%) and validated with the matching
+        order-state class so each order carries the correct taker fee.
         """
         min_pair_assets = 2
         utxo_limit = 10_000
