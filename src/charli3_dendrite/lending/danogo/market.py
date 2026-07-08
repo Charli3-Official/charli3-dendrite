@@ -66,7 +66,15 @@ class DanogoMarket(DendriteBaseModel):
 
         collaterals: dict[str, int] = {}
         for key, val in fields[0].items():
-            threshold = val[0] if isinstance(val, (list, tuple)) and val else 0
+            # The threshold is the head of the inner `[threshold_bps, flag]` array.
+            # Plutus arrays decode to a `Sequence` whose concrete type varies by CBOR
+            # backend (a plain `list`, or an indefinite-length `FrozenList`), so match
+            # on `Sequence` rather than the `list`/`tuple` concrete types.
+            is_seq = isinstance(val, Sequence) and not isinstance(
+                val,
+                (str, bytes, bytearray),
+            )
+            threshold = val[0] if is_seq and val else 0
             collaterals[_unit(key)] = int(threshold)
 
         # allow_supply is the Plutus `Bool` True variant; any unexpected encoding
