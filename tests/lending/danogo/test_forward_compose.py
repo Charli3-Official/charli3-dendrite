@@ -89,9 +89,9 @@ def test_analytics_prices_cross_quote_market_byte_exact(
     # Every entry the tx builder / on-chain redeemer declares under this quote -- the
     # intermediate ada price and the composed collateral price -- is reproduced exactly.
     assert tx_prices[quote] == captured.prices[quote]
-    assert set(pm.prices) == set(captured.prices[quote])
+    assert {token for token, _q in pm.prices} == set(captured.prices[quote])
     for token, (num, denom) in captured.prices[quote].items():
-        price = pm.get(token)
+        price = pm.get(token, quote=quote)
         assert price is not None
         assert price.quote == quote
         assert (price.num, price.denom) == (num, denom)

@@ -296,10 +296,6 @@ def resolve_prices(
     Emits ``OraclePrice(token=..., quote=quote, ...)``. A pair with no recipe, a
     missing leaf, or a non-reproducing walk is simply omitted (collateral stays unpriced
     -> not-liquidatable). Never raises into the caller.
-
-    NOTE: ``PriceMap`` keys by token only, so a collateral used across markets with
-    different supply tokens can hold only one quote. That's a pre-existing PriceMap
-    constraint, not handled here.
     """
     pm = PriceMap()
     for collateral, quote in pairs:

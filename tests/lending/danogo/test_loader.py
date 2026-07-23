@@ -76,3 +76,32 @@ def test_build_book_empty_inputs():
     book = build_book(pools=[], loans=[], prices=PriceMap(), now_ms=0)
     assert isinstance(book, LendingBook)
     assert book.active_loans() == []
+
+
+def test_loan_market_name_reads_identity_nft():
+    # Bug-A core: a loan is stitched to the market its own loan-identity NFT names,
+    # not one guessed from its borrowed token or collateral. Two markets can share a
+    # supply token, so name-keying (not supply-keying) is what disambiguates.
+    from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.lending.danogo.loader import _loan_market_name
+
+    loan_policy = "cd" * 28
+    name_a, name_b = "aa" * 28, "bb" * 28
+    valid = {name_a, name_b}
+
+    carries_b = Assets(
+        root={
+            "lovelace": 2_000_000,
+            loan_policy + name_b: 1,  # loan-identity NFT for market B
+            "ff" * 28 + "0011": 5_000,  # unrelated collateral
+        }
+    )
+    assert _loan_market_name(carries_b, loan_policy, valid) == name_b
+
+    # An identity NFT whose name is not a known market -> None (loan skipped, safe).
+    unknown = Assets(root={"lovelace": 1, loan_policy + "cc" * 28: 1})
+    assert _loan_market_name(unknown, loan_policy, valid) is None
+
+    # No identity NFT at all -> None.
+    bare = Assets(root={"lovelace": 1})
+    assert _loan_market_name(bare, loan_policy, valid) is None

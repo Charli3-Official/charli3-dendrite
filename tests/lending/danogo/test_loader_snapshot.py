@@ -43,6 +43,19 @@ def _info(address, asset_rows, datum, value=2_000_000):
     )
 
 
+def _loan_rows_for_market(loan_fixture, loan_skh, market_name):
+    """Point a captured loan's identity NFT at `market_name` (the served market).
+
+    A loan is stitched to the market its loan-identity NFT (policy == loan script hash)
+    names. Captured loans carry the NFT for their OWN market; these fixtures serve a
+    single market, so retarget the identity NFT to it to exercise the name-keyed stitch.
+    """
+    return [
+        (policy, market_name if policy == loan_skh else name, qty)
+        for policy, name, qty in loan_fixture["assets"]
+    ]
+
+
 class _FakeBackend:
     """Dispatches get_pool_utxos by config-NFT (resolve) or payment credential."""
 
@@ -67,9 +80,14 @@ def _backend():
     config_pool_addr = constants._addr(pd.config_pool_skh.hex())
     loan_addr = constants._addr(pd.loan_skh.hex())
 
+    config_pool_skh = pd.config_pool_skh.hex()
+    market_name = next(
+        n for p, n, _ in FIXTURES["market_param"]["assets"] if p == config_pool_skh
+    )
+
     config_row = _info(config_pool_addr, [], FIXTURES["protocol_config"]["datum"])
     by_cred = {
-        pd.config_pool_skh.hex(): [
+        config_pool_skh: [
             _info(
                 config_pool_addr,
                 FIXTURES["market_param"]["assets"],
@@ -86,7 +104,9 @@ def _backend():
         pd.loan_skh.hex(): [
             _info(
                 loan_addr,
-                FIXTURES["ada_loan"]["assets"],
+                _loan_rows_for_market(
+                    FIXTURES["ada_loan"], pd.loan_skh.hex(), market_name
+                ),
                 FIXTURES["ada_loan"]["datum"],
             )
         ],

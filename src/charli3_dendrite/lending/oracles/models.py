@@ -13,6 +13,8 @@ from typing import Protocol
 from typing import runtime_checkable
 
 from pydantic import Field
+from pydantic import field_serializer
+from pydantic import field_validator
 
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
 from charli3_dendrite.dataclasses.models import PoolSelector
@@ -104,34 +106,68 @@ class OracleRef(DendriteBaseModel):
 
 
 class PriceMap(DendriteBaseModel):
-    """token -> freshest OraclePrice."""
+    """(token, quote) -> freshest OraclePrice.
 
-    prices: dict[str, OraclePrice] = Field(default_factory=dict)
+    A collateral can be priced under more than one market quote (e.g. ADA priced
+    into several supply tokens), so the identity is the price's own ``(token,
+    quote)`` pair, not the token alone. Keying by token alone let same-token,
+    different-quote prices collide, making reads non-deterministic; keying by the
+    pair keeps each quote's price distinct.
+    """
+
+    prices: dict[tuple[str, str], OraclePrice] = Field(default_factory=dict)
+
+    # The `(token, quote)` tuple keys have no symmetric JSON form: pydantic dumps a
+    # tuple key as ``"token,quote"`` but cannot parse it back. Encode each key as
+    # ``"token|quote"`` on dump and split it back on validate so both `model_dump`/
+    # `model_validate` and `model_dump_json`/`model_validate_json` round-trip. Units are
+    # hex or "lovelace" and never contain ``|``.
+    @field_serializer("prices")
+    def _serialize_prices(
+        self,
+        prices: dict[tuple[str, str], OraclePrice],
+    ) -> dict[str, OraclePrice]:
+        return {f"{token}|{quote}": price for (token, quote), price in prices.items()}
+
+    @field_validator("prices", mode="before")
+    @classmethod
+    def _parse_price_keys(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        parsed: dict[object, object] = {}
+        for key, price in value.items():
+            if isinstance(key, str):
+                token, quote = key.split("|", 1)
+                parsed[(token, quote)] = price
+            else:
+                parsed[key] = price
+        return parsed
 
     def add(self, price: OraclePrice) -> None:
-        """Insert `price`, keeping the one with the latest `valid_to`.
+        """Insert `price` under its ``(token, quote)``, keeping the latest `valid_to`.
 
         A `valid_to` of `None` means "no expiry" and is treated as the freshest
         possible value (`+inf`), so an open-ended price is never overwritten by
-        a dated one and always overwrites a dated one for the same token.
+        a dated one and always overwrites a dated one for the same ``(token, quote)``.
         """
 
         def _key(p: OraclePrice) -> float:
             return float("inf") if p.valid_to is None else p.valid_to
 
-        existing = self.prices.get(price.token)
+        pair = (price.token, price.quote)
+        existing = self.prices.get(pair)
         if existing is None or _key(price) >= _key(existing):
-            self.prices[price.token] = price
+            self.prices[pair] = price
 
-    def get(self, token: str) -> OraclePrice | None:
-        """Return the stored price for `token`, or None if absent."""
-        return self.prices.get(token)
+    def get(self, token: str, quote: str = "lovelace") -> OraclePrice | None:
+        """Return the stored price for ``(token, quote)``, or None if absent."""
+        return self.prices.get((token, quote))
 
-    def require(self, token: str) -> OraclePrice:
-        """Return the stored price for `token`, or raise KeyError."""
-        price = self.prices.get(token)
+    def require(self, token: str, quote: str = "lovelace") -> OraclePrice:
+        """Return the stored price for ``(token, quote)``, or raise KeyError."""
+        price = self.prices.get((token, quote))
         if price is None:
-            raise KeyError(f"no price for {token}")
+            raise KeyError(f"no price for {token} in {quote}")
         return price
 
 

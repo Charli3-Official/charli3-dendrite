@@ -58,7 +58,7 @@ def test_resolve_prices_reproduces_a_captured_price():
     pm = resolve_prices(
         backend, registry=registry, pairs=[(case["token"], case["quote"])]
     )
-    price = pm.get(case["token"])
+    price = pm.get(case["token"], quote=case["quote"])
     assert price is not None
     from fractions import Fraction
 
