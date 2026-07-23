@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "charli3_dendrite"
-version = "1.5.7"
+version = "1.5.8-dev0"
 description = ""
 authors = ["Elder Millenial <eldermillenial@protonmail.com>"]
 readme = "README.md"
@@ -50,7 +50,7 @@ module = ["pycardano", "pycardano.*", "dotenv", "nox", "uplc", "uplc.*"]
 ignore_missing_imports = true
 
 [tool.bumpversion]
-current_version = "1.5.7"
+current_version = "1.5.8-dev0"
 parse = """(?x)
     (?P<major>\\d+)\\.
     (?P<minor>\\d+)\\.
