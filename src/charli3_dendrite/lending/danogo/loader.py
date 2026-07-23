@@ -28,7 +28,10 @@ from charli3_dendrite.lending.danogo.state import DanogoLoanState
 from charli3_dendrite.lending.danogo.state import DanogoPoolState
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from charli3_dendrite.backend.backend_base import AbstractBackend
+    from charli3_dendrite.dataclasses.models import Assets
     from charli3_dendrite.dataclasses.models import PoolStateInfo
     from charli3_dendrite.lending.oracles.models import PriceMap
 
@@ -99,6 +102,29 @@ def _pool_nft_name(info: PoolStateInfo, policy: str) -> str | None:
         if unit != "lovelace" and unit.startswith(policy) and qty == 1:
             name = unit[len(policy) :]
             if name:
+                return name
+    return None
+
+
+def _loan_market_name(
+    assets: Assets,
+    loan_policy: str,
+    valid_names: Collection[str],
+) -> str | None:
+    """Pool-NFT name (hex) of the market a loan belongs to, from its loan-identity NFT.
+
+    Each loan UTxO carries a loan token minted under the loan script hash whose asset
+    name IS the pool-NFT name of the loan's market (`create_loan` mints it that way).
+    Mirroring `_pool_nft_name`, this reads that name directly off the loan rather than
+    guessing the market from the borrowed supply token (several markets can share a
+    supply token) or the collateral (several markets can accept the same collateral).
+    Returns the name only when it is a known market/pool name (in `valid_names`), else
+    None (the loan is skipped, matching the existing skip-on-parse-failure degrade).
+    """
+    for unit, qty in assets.root.items():
+        if unit != "lovelace" and unit.startswith(loan_policy) and qty == 1:
+            name = unit[len(loan_policy) :]
+            if name in valid_names:
                 return name
     return None
 
@@ -193,9 +219,22 @@ def snapshot(
     if prices is None:
         try:
             from charli3_dendrite.lending.danogo.oracles import forward
+            from charli3_dendrite.lending.danogo.oracles.locator import (
+                augment_registry_with_bond_dtokens,
+            )
             from charli3_dendrite.lending.danogo.oracles.locator import load_registry
 
             registry = load_registry()
+            # Bond dTokens (a pool's own redeemable dToken) are accepted as collateral
+            # but are not mined for every (dToken, quote); synthesize their pricing
+            # recipes from the live pool/market state before resolving, so a dToken
+            # collateral prices instead of collapsing the loan's health factor.
+            augment_registry_with_bond_dtokens(
+                registry,
+                pool_address=addresses["pool"],
+                config_pool_cred=_payment_cred_hex(addresses["config_pool"]),
+                markets=markets,
+            )
             pairs = {
                 (collateral, market.supply_token)
                 for market in markets.values()
@@ -205,28 +244,26 @@ def snapshot(
         except Exception:  # noqa: BLE001 - pricing outage must not crash the snapshot
             prices = PriceMap()
 
-    # Pair pool <-> market (same pool-NFT name) and index pools by supply token so
-    # loans (which only know their borrowed token) can find their market/pool.
+    # Pair pool <-> market (same pool-NFT name) and index BY THAT NAME. Each loan is
+    # stitched to the market its own loan-identity NFT names -- not one guessed from its
+    # borrowed supply token or collateral, both of which several markets can share.
     pools: list[DanogoPoolState] = []
-    by_supply: dict[str, tuple[DanogoPoolState, DanogoMarket]] = {}
+    by_name: dict[str, tuple[DanogoPoolState, DanogoMarket]] = {}
     for name, pool in pools_by_name.items():
         market = markets.get(name)
         if market is None:
             continue
         pool.attach_market(market)
         pools.append(pool)
-        by_supply[market.supply_token] = (pool, market)
+        by_name[name] = (pool, market)
 
+    loan_policy = _payment_cred_hex(addresses["loan"])
     stitched: list[DanogoLoanState] = []
     for loan in loans:
-        try:
-            supply = loan.borrowed_unit
-        except (ValueError, IndexError, TypeError, AttributeError):
+        loan_market = _loan_market_name(loan.assets, loan_policy, by_name)
+        if loan_market is None:
             continue
-        ctx = by_supply.get(supply)
-        if ctx is None:
-            continue
-        pool, market = ctx
+        pool, market = by_name[loan_market]
         loan.attach_context(pool=pool, market=market, now_ms=now_ms)
         stitched.append(loan)
 

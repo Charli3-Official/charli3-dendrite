@@ -118,20 +118,15 @@ class GeniusYieldOrder(OrderDatum):
         return self.offered_asset.assets + self.asked_asset.assets
 
     def address_source(self) -> str | None:
-        return None
+        return self.owner_address.to_address().encode()
 
     def requested_amount(self) -> Assets:
-        asset = self.offered_asset.assets
-        return asset
+        unit = self.asked_asset.assets.unit()
+        amount = self.offered_amount * self.price.numerator // self.price.denominator
+        return Assets(**{unit: amount})
 
     def order_type(self) -> OrderType | None:
-        order_type = None
-        if self.offered_original_amount == self.offered_amount:
-            order_type = OrderType.deposit
-        else:
-            order_type = OrderType.swap
-
-        return order_type
+        return OrderType.swap
 
 
 @dataclass

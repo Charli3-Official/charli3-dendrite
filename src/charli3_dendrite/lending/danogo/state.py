@@ -177,7 +177,7 @@ class DanogoLoanState(AbstractLoanState):
         terms: list[tuple[int, int, int, int]] = []
         has_missing = False
         for unit, amount in self._collateral_units().items():
-            price = prices.get(unit)
+            price = prices.get(unit, quote=market.supply_token)
             if price is None or price.num <= 0 or price.denom <= 0:
                 has_missing = True
                 continue

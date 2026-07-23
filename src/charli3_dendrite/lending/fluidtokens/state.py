@@ -259,7 +259,7 @@ class FluidLoanState(AbstractLoanState):
         """
         unit = self._collateral_unit()
         amount = self.assets[unit]
-        price = prices.get(unit)
+        price = prices.get(unit, quote=self.borrowed_unit)
         if price is None or price.num <= 0 or price.denom <= 0:
             return 0
         return amount * price.num // price.denom
@@ -299,7 +299,7 @@ class FluidLoanState(AbstractLoanState):
         we do NOT flag it (avoids false positives during oracle outages).
         """
         unit = self._collateral_unit()
-        price = prices.get(unit)
+        price = prices.get(unit, quote=self.borrowed_unit)
         if price is None or price.num <= 0 or price.denom <= 0:
             return False
         return self.health_factor(prices) <= 1

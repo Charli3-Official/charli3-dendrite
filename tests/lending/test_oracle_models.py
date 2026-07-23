@@ -46,6 +46,39 @@ def test_pricemap_require_missing_raises():
         pm.require("missing")
 
 
+def test_pricemap_keyed_by_token_and_quote():
+    # The same collateral priced under two different quotes must NOT collide: each
+    # (token, quote) pair keeps its own price, and reads disambiguate by quote.
+    pm = PriceMap()
+    pm.add(
+        _price(token="A", num=3, denom=2, src=OracleSource.CHARLI3)
+    )  # quote=lovelace
+    pm.add(
+        OraclePrice(
+            token="A", quote="USDM", num=7, denom=5, source=OracleSource.CHARLI3
+        )
+    )
+    assert pm.get("A", quote="lovelace").as_decimal() == Decimal("1.5")
+    assert pm.get("A", quote="USDM").as_decimal() == Decimal("1.4")
+    assert pm.get("A") is pm.get("A", quote="lovelace")  # default quote is lovelace
+    assert pm.get("A", quote="OTHER") is None
+
+
+def test_pricemap_json_roundtrip_symmetric():
+    # The (token, quote) tuple keys must survive BOTH the python and the JSON
+    # round-trips: pydantic's default tuple-key JSON form is not re-parseable, so the
+    # model encodes each key as "token|quote" on dump and splits it back on validate.
+    pm = PriceMap()
+    pm.add(_price(token="A", num=3, denom=2))  # quote=lovelace
+    pm.add(
+        OraclePrice(
+            token="A", quote="USDM", num=7, denom=5, source=OracleSource.CHARLI3
+        )
+    )
+    assert PriceMap.model_validate(pm.model_dump()) == pm
+    assert PriceMap.model_validate_json(pm.model_dump_json()) == pm
+
+
 def test_oracleref_selector_from_feed_nft():
     ref = OracleRef(
         source=OracleSource.CHARLI3,

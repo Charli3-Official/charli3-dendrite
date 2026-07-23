@@ -316,7 +316,7 @@ class DjedOrderDatum(OrderDatum):
 
     def address_source(self) -> str | None:
         """Source address (required by OrderDatum interface)."""
-        return self.owner_address.to_address().encode("bech32")
+        return self.owner_address.to_address().encode()
 
     def requested_amount(self) -> Assets:
         """Return the requested amount for this order."""
@@ -327,14 +327,14 @@ class DjedOrderDatum(OrderDatum):
             # Invert oracle rate (Djed/ADA -> ADA/Djed) and multiply
             ada_amount = (
                 self.action.djed_amount
-                * self._oracle_rate.denominator
-                // self._oracle_rate.numerator
+                * self.oracle_rate.denominator
+                // self.oracle_rate.numerator
             )
             return Assets(lovelace=ada_amount)
         if isinstance(self.action, ShenMintAction):
             return Assets(**{SHEN_TOKEN: self.action.shen_amount})
         # ShenBurnAction: exact ADA requires pool state which isn't in datum
-        return Assets(lovelace=self.action.shen_amount)
+        return Assets(**{SHEN_TOKEN: self.action.shen_amount})
 
     def order_type(self) -> OrderType | None:
         """Order type classification (required by OrderDatum interface)."""
