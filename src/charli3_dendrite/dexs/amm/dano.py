@@ -35,8 +35,10 @@ from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import Value
 from pycardano import Withdrawals
 from pycardano import plutus_script_hash
+from pycardano.serialization import ByteString
 from pycardano.serialization import CBORSerializable
 
 from charli3_dendrite.backend import get_backend
@@ -204,19 +206,44 @@ def parse_swap_redeemer_bytes(
     return first_byte, action, entries
 
 
+def _value_to_assets(value: Value) -> Assets:
+    """Convert a pycardano ``Value`` (a raw on-chain UTxO amount) to ``Assets``.
+
+    Used to seed the new pool output from the spent pool UTxO's exact value bag
+    so the swap only mutates the traded reserves + swap-fee lovelace, leaving the
+    pool's min-ADA, dex NFT, and any other assets untouched (the withdraw
+    validator requires the continuation to preserve them).
+    """
+    assets = Assets(root={"lovelace": int(value.coin)})
+    multi = getattr(value, "multi_asset", None)
+    if multi:
+        for policy, names in multi.data.items():
+            for asset_name, quantity in names.data.items():
+                unit = policy.payload.hex() + asset_name.payload.hex()
+                assets.root[unit] = int(quantity)
+    return assets
+
+
 @dataclass
 class DanoSwapRedeemer(CBORSerializable):
-    """Single-pool Dano swap redeemer (Spend or Withdraw).
+    """Dano swap redeemer (Spend or Withdraw) for a batch of >= 1 pool spends.
 
-    The on-chain redeemer Plutus Data is the raw swap payload serialized as a
-    CBOR *byte string* (``0x58<len><payload>``); :meth:`to_primitive` returns
-    the payload so it serializes that way. The pool input index and the first
-    byte (``pool_in_idx`` for Spend, the protocol-config reference index for
-    Withdraw) depend on the FINAL transaction ordering, so they are resolved
-    post-build by :meth:`set_idx`, which the tx builder calls after sorting and
-    indexing inputs (mirrors ``SSPoolRedeemer.set_idx`` and the clmm-sdk's
-    ``RedeemerArg`` callback). ``pool_out_idx`` is the pool's position in the
-    swap's batch vector — ``0`` for a single-pool swap — NOT a tx output index.
+    A Dano swap tx spends N >= 1 pool UTxOs governed by a single withdraw-zero:
+    the tx carries N Spend redeemers + one Withdraw redeemer, and EVERY redeemer
+    carries the same batch vector of per-pool ``(pool_in_idx, pool_out_idx,
+    delta)`` entries. Only the leading ``first_byte`` differs — a Spend's is its
+    own pool input index; the Withdraw's is the protocol-config reference index.
+    ``pool_in_idx`` is the pool's transaction input index; ``pool_out_idx`` is the
+    pool's position in the batch vector (its append index ``0..N-1``), NOT a tx
+    output index. The input index depends on the FINAL sorted inputs, so the
+    batch is resolved post-build by :meth:`set_idx`, which the tx builder calls
+    after sorting and indexing inputs (mirrors ``SSPoolRedeemer.set_idx`` and the
+    clmm-sdk's ``RedeemerArg`` callback).
+
+    ``swap_utxo`` accumulates the batch on ``tx_builder._dano_swap_batch`` as each
+    pool is folded in, so a single-pool call and a composed multi-pool tx share
+    one code path. The on-chain redeemer Plutus Data is the raw swap payload
+    serialized as a CBOR byte string; :meth:`to_primitive` returns the payload.
     """
 
     pool_input: TransactionInput
@@ -240,8 +267,32 @@ class DanoSwapRedeemer(CBORSerializable):
                 return i
         raise InvalidPoolError("redeemer UTxO not found in transaction during set_idx")
 
+    def _resolve_entries(
+        self,
+        tx_builder: TransactionBuilder,
+    ) -> list[tuple[int, int, int]]:
+        """Resolve the shared batch entry vector in pool-batch order.
+
+        Every Spend and the single Withdraw redeemer of a Dano tx carry the same
+        vector of ``(pool_in_idx, pool_out_idx, delta)`` entries — one per pool
+        folded into ``tx_builder._dano_swap_batch`` (append order). Mirrors the
+        clmm-sdk ``swapTokensRedeemer``: ``pool_in_idx`` is the pool's transaction
+        input index; ``pool_out_idx`` is the pool's position in the batch vector
+        (its append index ``0..N-1``), NOT a tx output index; ``delta`` is that
+        pool's signed swap amount. Order is the batch append order (no sort).
+        """
+        batch = getattr(tx_builder, "_dano_swap_batch", None)
+        if not batch:
+            batch = [(self.pool_input, self.delta_amount)]
+        inputs = list(tx_builder.inputs)
+        return [
+            (self._sorted_index(inputs, pool_input), pool_out_idx, delta)
+            for pool_out_idx, (pool_input, delta) in enumerate(batch)
+        ]
+
     def set_idx(self, tx_builder: TransactionBuilder) -> None:
-        """Resolve pool/config indices from the final (sorted) transaction."""
+        """Resolve the shared batch + this redeemer's first byte post-build."""
+        self._entries = self._resolve_entries(tx_builder)
         self.pool_in_idx = self._sorted_index(list(tx_builder.inputs), self.pool_input)
         if self.is_withdraw:
             if self.protocol_config_input is None:
@@ -255,13 +306,22 @@ class DanoSwapRedeemer(CBORSerializable):
         else:
             self.first_byte = self.pool_in_idx
 
-    def to_primitive(self) -> bytes:
-        """Serialize the redeemer as the packed swap payload bytestring."""
-        return build_swap_redeemer_bytes(
-            delta_amount=self.delta_amount,
-            pool_in_idx=self.pool_in_idx,
-            pool_out_idx=self.pool_out_idx,
-            first_byte=self.first_byte,
+    def to_primitive(self) -> ByteString:
+        """Serialize the redeemer as the packed batch swap payload bytestring.
+
+        Wrapped in :class:`ByteString` so a payload longer than 64 bytes (any
+        batch of >= 2 pools: 2 + 34*N bytes) serializes as a CBOR
+        indefinite-length chunked bytestring, as the on-chain validator requires;
+        a single-pool payload (36 bytes) stays a definite bytestring.
+        """
+        entries = getattr(self, "_entries", None)
+        if entries is None:
+            entries = [(self.pool_in_idx, self.pool_out_idx, self.delta_amount)]
+        return ByteString(
+            build_batch_swap_redeemer_bytes(
+                first_byte=self.first_byte,
+                entries=entries,
+            ),
         )
 
     @classmethod
@@ -732,15 +792,20 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
 
     def _new_pool_assets(
         self,
+        base_assets: Assets,
         pool_change_x: int,
         pool_change_y: int,
         swap_fee: int,
         staking_reward: int = 0,
     ) -> Assets:
         d = self._datum
-        # Build the new output from the GROSS bag — the on-chain UTxO must keep
-        # the platform fees + min-ADA that ``assets`` (net) no longer carries.
-        new = self._gross_assets()
+        # Copy the spent pool UTxO's exact value bag and mutate ONLY the traded
+        # reserves + swap-fee lovelace. The pool's min-ADA, dex NFT, and any other
+        # assets carry over untouched — the withdraw validator requires the
+        # continuation to preserve them, and reconstructing from the net reserves
+        # (``_gross_assets``) drops a token/token pool's real ADA (its min-ADA is
+        # not a reserve, so ``assets`` never carried it).
+        new = Assets(root=dict(base_assets.root))
         if self.dex_nft is not None:
             new.root[self.dex_nft.unit()] = 1
         new.root[d.unit_x] = new.root.get(d.unit_x, 0) + pool_change_x
@@ -834,6 +899,22 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
             raise InvalidPoolError("Could not re-fetch pool UTxO address via backend")
         pool_address = order_info[0].address
 
+        # Seed the input value + new pool output from the pool UTxO's EXACT
+        # on-chain value bag (min-ADA, dex NFT, any stray assets included) so the
+        # swap mutates only the traded reserves + swap-fee lovelace. Reconstructing
+        # from the net reserves (``_gross_assets``) drops a token/token pool's real
+        # ADA — its min-ADA is not a reserve, so ``assets`` never carried it — and
+        # the withdraw validator then rejects the continuation for not preserving
+        # it (mirrors SaturnSwap reading its input's coin). Resolve the raw UTxO by
+        # out-ref via the chain context; fall back to the reconstructed gross bag
+        # when a context cannot resolve by out-ref.
+        pool_bag = pool_in_assets
+        resolve_utxo = getattr(tx_builder.context, "utxo_by_tx_id", None)
+        if resolve_utxo is not None:
+            raw_utxo = resolve_utxo(self.tx_hash, self.tx_index)
+            if raw_utxo is not None:
+                pool_bag = _value_to_assets(raw_utxo.output.amount)
+
         # Overdue ADA pool: when curEpoch > last_withdraw_epoch the validator
         # requires the pool's accrued staking rewards to be withdrawn from the
         # per-pool stake credential in the SAME tx (a second withdrawal) and the
@@ -884,6 +965,7 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
 
         new_datum = self.compute_new_datum(delta_amount, swap_fee, cur_epoch)
         new_pool_assets = self._new_pool_assets(
+            pool_bag,
             pool_change_x,
             pool_change_y,
             swap_fee,
@@ -897,7 +979,7 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
             ),
             output=TransactionOutput(
                 address=Address.decode(pool_address),
-                amount=asset_to_value(pool_in_assets),
+                amount=asset_to_value(pool_bag),
                 datum=self._datum,
             ),
         )
@@ -914,42 +996,54 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
                 "Pool script reference UTxO unavailable from backend",
             )
 
-        # The spend + withdraw redeemers encode the pool input index and the
-        # first byte (pool input index for Spend, protocol-config reference
-        # index for Withdraw), which depend on the FINAL sorted inputs /
-        # reference inputs. The builder may still trim or reorder inputs after
-        # this call, so the indices are resolved POST-BUILD by
-        # ``DanoSwapRedeemer.set_idx`` — the tx builder runs it after assigning
-        # redeemer indices (mirrors Splash's pool redeemer + the clmm-sdk's
-        # ``RedeemerArg`` callback). ``pool_out_idx`` is the single-pool batch
-        # position (0), not a tx output index.
+        # Fold this pool into the tx's shared Dano swap batch. A Dano tx spends
+        # N >= 1 pool UTxOs under ONE withdraw-zero: every Spend redeemer and the
+        # single Withdraw redeemer carry the same batch vector, resolved
+        # POST-BUILD in ``DanoSwapRedeemer.set_idx`` (the builder runs it after
+        # assigning redeemer indices). Composing another Dano pool into the same
+        # ``tx_builder`` appends here and reuses the existing withdraw-zero — the
+        # first pool folded in owns it, later pools only extend the batch.
+        batch = getattr(tx_builder, "_dano_swap_batch", None)
+        if batch is None:
+            batch = []
+            tx_builder._dano_swap_batch = batch
+        first_dano = len(batch) == 0
+        batch.append((input_utxo.input, delta_amount))
+
         spend_redeemer = DanoSwapRedeemer(
             pool_input=input_utxo.input,
             delta_amount=delta_amount,
             is_withdraw=False,
         )
-        withdraw_redeemer = DanoSwapRedeemer(
-            pool_input=input_utxo.input,
-            delta_amount=delta_amount,
-            is_withdraw=True,
-            protocol_config_input=pc_utxo.input,
-        )
-
         tx_builder.add_script_input(
             utxo=input_utxo,
             script=script_ref,
             redeemer=Redeemer(spend_redeemer),
         )
 
+        # Add the withdraw-zero (and its batch Withdraw redeemer) exactly once per
+        # tx. Merge into any existing withdrawals rather than overwrite, so a
+        # prior Dano pool's withdraw-zero and any overdue per-pool staking
+        # withdrawal survive.
         reward_addr = Address.from_primitive(DANO_POOL_REWARD_ADDRESS_MAINNET)
-        withdrawals: dict[bytes, int] = {bytes(reward_addr): 0}
+        withdrawals: dict[bytes, int] = (
+            dict(tx_builder.withdrawals) if tx_builder.withdrawals else {}
+        )
+        withdrawals[bytes(reward_addr)] = 0
         if is_overdue and staking_reward_addr is not None:
             withdrawals[bytes(staking_reward_addr)] = reward
         tx_builder.withdrawals = Withdrawals(withdrawals)
-        tx_builder.add_withdrawal_script(
-            script_ref,
-            Redeemer(withdraw_redeemer),
-        )
+        if first_dano:
+            withdraw_redeemer = DanoSwapRedeemer(
+                pool_input=input_utxo.input,
+                delta_amount=delta_amount,
+                is_withdraw=True,
+                protocol_config_input=pc_utxo.input,
+            )
+            tx_builder.add_withdrawal_script(
+                script_ref,
+                Redeemer(withdraw_redeemer),
+            )
         if is_overdue and staking_ref_utxo is not None:
             # Per-pool staking-reward withdrawal. Its redeemer is pool-input
             # indexed (like Spend, NOT the protocol-config-indexed withdraw-zero).
@@ -994,7 +1088,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         A fresh chain parse carries the dex NFT *inside* the assets bag (extracted
         later), not as a ``dex_nft`` key, so it takes the full parse path. Mirrors
         VyFi / WingRiders V2; makes the serialize→reingest round-trip idempotent
-        for both the dendrite model_dump form and steelswap's net silver.
+        for both the dendrite model_dump form and a downstream consumer's
+        net-reserves view.
         """
         if "dex_nft" in values:
             if not isinstance(values["assets"], Assets):

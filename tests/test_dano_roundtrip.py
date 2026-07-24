@@ -134,5 +134,11 @@ def test_carve_byte_identity_with_pre_refactor() -> None:
         assert out.quantity() == g["gao_1m"], key
         pcx, pcy = p.compute_pool_change(1_000_000, 0)
         assert [pcx, pcy] == g["pool_change_1m"], key
-        npa = p._new_pool_assets(pcx, pcy, swap_fee=1_500_000, staking_reward=0)
+        # ``_new_pool_assets`` now takes the base value bag explicitly; seeding it
+        # with the gross bag reproduces the pre-refactor output byte-for-byte
+        # (the live swap path seeds the raw on-chain UTxO value instead, which
+        # additionally preserves a token/token pool's min-ADA + stray assets).
+        npa = p._new_pool_assets(
+            p._gross_assets(), pcx, pcy, swap_fee=1_500_000, staking_reward=0
+        )
         assert dict(npa.root) == g["new_pool_assets"], key
