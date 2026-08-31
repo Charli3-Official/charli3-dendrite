@@ -32,6 +32,7 @@ from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
 from charli3_dendrite.dexs.amm.sundae import SundaeV3PlutusNone
 from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverDatumHash
 from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverInlineDatum
+from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverInlineDatumHash
 from charli3_dendrite.utility import Assets
 
 
@@ -506,12 +507,14 @@ class MinswapV2OrderDatum(OrderDatum):
     refund_datum_hash: Union[
         SundaeV3PlutusNone,
         SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatumHash,
         SundaeV3ReceiverInlineDatum,
     ]
     receiver_address: PlutusFullAddress
     receiver_datum_hash: Union[
         SundaeV3PlutusNone,
         SundaeV3ReceiverDatumHash,
+        SundaeV3ReceiverInlineDatumHash,
         SundaeV3ReceiverInlineDatum,
     ]
     lp_asset: AssetClass
@@ -546,16 +549,31 @@ class MinswapV2OrderDatum(OrderDatum):
         full_address_source = PlutusFullAddress.from_address(address_source)
         step = SwapExactInV2.from_assets(in_asset=in_assets, out_asset=out_assets)
 
-        # `datum_target` is the INNER next-hop order datum (consistent with
-        # Sundae / WingRiders); wrap it as the receiver's inline datum. No
-        # target (or no datum) -> no receiver datum.
+        # Minswap V2's ExtraDatum carries only the 32-byte HASH of the datum the
+        # batcher attaches to the forwarded output (Constr 1 for a datum-hash output,
+        # Constr 2 for an inline-datum output) — never the datum itself; the validator
+        # un_b_data's the field, so an embedded datum is unspendable. `datum_target` is
+        # either a ready receiver form built by the caller (whose form encodes what the
+        # next-hop protocol expects) or a raw next-hop order datum, which is forwarded
+        # by inline-datum-hash. No target (or no datum) -> no receiver datum.
         if address_target is None:
             address_target = address_source
             receiver_datum = SundaeV3PlutusNone()
         elif datum_target is None:
             receiver_datum = SundaeV3PlutusNone()
+        elif isinstance(
+            datum_target,
+            (
+                SundaeV3PlutusNone,
+                SundaeV3ReceiverDatumHash,
+                SundaeV3ReceiverInlineDatumHash,
+            ),
+        ):
+            receiver_datum = datum_target
         else:
-            receiver_datum = SundaeV3ReceiverInlineDatum(datum=datum_target)
+            receiver_datum = SundaeV3ReceiverInlineDatumHash(
+                datum_hash=datum_target.hash().payload,
+            )
 
         full_address_target = PlutusFullAddress.from_address(address_target)
 
