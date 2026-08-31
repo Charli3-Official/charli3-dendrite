@@ -79,6 +79,7 @@ class AbstractPoolState(AbstractPairState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         """Create a swap datum for the pool.
 
@@ -92,6 +93,8 @@ class AbstractPoolState(AbstractPairState):
             Defaults to None.
             datum_target (PlutusData | None, optional): The target datum for the swap.
             Defaults to None.
+            minimum_receive (Assets | None, optional): Overrides the baked on-chain
+            minimum; fee and deposit still size from out_assets. Defaults to None.
 
         Returns:
             PlutusData: The created swap datum.
@@ -104,10 +107,14 @@ class AbstractPoolState(AbstractPairState):
                 f"{self.__class__.__name__} does not support swap forwarding.",
             )
 
+        # ``minimum_receive`` (when set) becomes the datum's baked floor; the batcher
+        # fee and deposit are still derived from the EXACT ``out_assets`` so relaxing
+        # the floor never under-fees the order — only the step's ``minimum_receive``
+        # loosens. Same output unit, so swap direction and lp_asset are unaffected.
         return self.order_datum_class().create_datum(
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             batcher_fee=self.batcher_fee(
                 in_assets=in_assets,
                 out_assets=out_assets,
@@ -127,6 +134,7 @@ class AbstractPoolState(AbstractPairState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> tuple[TransactionOutput | None, PlutusData]:
         """Create a swap UTXO for the pool.
 
@@ -141,6 +149,8 @@ class AbstractPoolState(AbstractPairState):
             Defaults to None.
             datum_target (PlutusData | None, optional): The target datum for the swap.
             Defaults to None.
+            minimum_receive (Assets | None, optional): Overrides the baked on-chain
+            minimum; fee and deposit still size from out_assets. Defaults to None.
 
         Returns:
             tuple[TransactionOutput, PlutusData]: A tuple containing the created
@@ -163,6 +173,7 @@ class AbstractPoolState(AbstractPairState):
             extra_assets=extra_assets,
             address_target=address_target,
             datum_target=datum_target,
+            minimum_receive=minimum_receive,
         )
 
         in_assets.root["lovelace"] = (
