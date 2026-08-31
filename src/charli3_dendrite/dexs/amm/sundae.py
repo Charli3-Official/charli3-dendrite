@@ -123,6 +123,19 @@ class SundaeV3ReceiverInlineDatum(PlutusData):
 
 
 @dataclass
+class SundaeV3ReceiverInlineDatumHash(PlutusData):
+    """Inline-datum receiver identified by the 32-byte hash of the datum the batcher
+    attaches inline to the forwarded output (``Constr 2 [B <hash>]``). Unlike
+    ``SundaeV3ReceiverInlineDatum``, which embeds the datum itself, receivers such as
+    Minswap V2 carry only the hash and verify the attached inline datum against it.
+    """
+
+    CONSTR_ID = 2
+
+    datum_hash: bytes
+
+
+@dataclass
 class SundaeAddressWithDatum(PlutusData):
     """SundaeSwap address with datum."""
 
@@ -602,6 +615,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         """Create a swap datum."""
         if self.swap_forward and address_target is not None:
@@ -613,7 +627,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
             ident=ident,
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
         )
 
@@ -754,6 +768,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
@@ -761,7 +776,7 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
             ident=ident,
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
             address_target=address_target,
             datum_target=datum_target,
@@ -932,6 +947,7 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
@@ -939,7 +955,7 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
             ident=ident,
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
             address_target=address_target,
             datum_target=datum_target,

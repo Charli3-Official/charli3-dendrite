@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
-from typing import List  # noqa: UP035
+from typing import List
 from typing import Union
 
 from pycardano import Address
@@ -366,6 +366,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         """Create a PlutusData object representing a swap datum.
 
@@ -400,7 +401,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         return SpectrumOrderDatum.create_datum(
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             batcher_fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets)[
                 "lovelace"
             ],

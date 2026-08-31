@@ -388,8 +388,14 @@ class WingRidersV2OrderDatum(OrderDatum):
             compensation_datum = b""
             compensation_datum_type = NoDatum()
 
+        # ``oil`` declares the lovelace the batcher passes through to the beneficiary
+        # (it swaps the rest). A forwarded order must ride the full deposit through to
+        # fund the next hop, so oil follows ``deposit``; a plain owner-paid swap keeps
+        # the standard 2-ADA buffer.
+        oil = deposit.quantity() if address_target is not None else 2000000
+
         return WingRidersV2OrderDatum(
-            oil=2000000,
+            oil=oil,
             beneficiary=beneficiary,
             owner_address=plutus_address,
             compensation_datum=compensation_datum,
@@ -833,12 +839,10 @@ class WingRidersV2CPPState(AbstractConstantProductPoolState):
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ):
-        merged_assets = in_assets + out_assets
-        if "lovelace" in merged_assets:
-            if merged_assets["lovelace"] <= 250000000:
-                return Assets(lovelace=850000)
-            elif merged_assets["lovelace"] <= 500000000:
-                return Assets(lovelace=1500000)
+        """The V2 batcher charges a flat 2 ADA regardless of swap size (an order
+        fill deducts exactly ``2_000_000`` from the order value; the V1-era ADA
+        size tiers do not apply to V2).
+        """
         return Assets(lovelace=2000000)
 
 
@@ -887,11 +891,12 @@ class WingRidersV2SSPState(AbstractStableSwapPoolState, WingRidersV2CPPState):
         extra_assets: Assets | None = None,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        minimum_receive: Assets | None = None,
     ) -> PlutusData:
         return self.order_datum_class().create_datum(
             address_source=address_source,
             in_assets=in_assets,
-            out_assets=out_assets,
+            out_assets=out_assets if minimum_receive is None else minimum_receive,
             batcher_fee=self.batcher_fee(
                 in_assets=in_assets,
                 out_assets=out_assets,
