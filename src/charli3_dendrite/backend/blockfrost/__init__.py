@@ -21,6 +21,28 @@ from charli3_dendrite.dataclasses.models import PoolStateList
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
+_NETWORK_API_URLS = {
+    "preprod": ApiUrls.preprod,
+    "preview": ApiUrls.preview,
+    "mainnet": ApiUrls.mainnet,
+}
+
+
+def api_url_from_project_id(project_id: str) -> str:
+    """Select the Blockfrost API base URL from a project id prefix.
+
+    Blockfrost project ids start with the network name (``preprod``, ``preview``,
+    or ``mainnet``). Sending a testnet token to mainnet returns HTTP 403.
+
+    Args:
+        project_id: Blockfrost project id.
+
+    Returns:
+        Matching ``ApiUrls`` value. Unknown prefixes default to mainnet.
+    """
+    api_url = _NETWORK_API_URLS.get(project_id[:7].lower(), ApiUrls.mainnet)
+    return api_url.value
+
 
 class BlockFrostBackend(AbstractBackend):
     """BlockFrostBackend class for interacting with the BlockFrost API."""
@@ -33,7 +55,7 @@ class BlockFrostBackend(AbstractBackend):
         """
         self.chain_context = BlockFrostChainContext(
             project_id,
-            base_url=ApiUrls.mainnet.value,
+            base_url=api_url_from_project_id(project_id),
         )
         self.api = self.chain_context.api
         self._block_cache: dict = {}
