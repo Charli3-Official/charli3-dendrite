@@ -288,3 +288,34 @@ def test_preprod_address_is_a_testnet_address() -> None:
 
     assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS_PREPROD).network is Network.TESTNET
     assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS).network is Network.MAINNET
+
+
+def test_a_maker_cannot_set_an_unbounded_premium_on_its_filler() -> None:
+    """The premium is paid by the filler to a vault the maker names.
+
+    ``premium_bps`` lives in the maker's own datum, so an order can ask any
+    premium it likes of whoever fills it, and the premium is out-of-pocket
+    rather than deducted from proceeds. Anything above 100% of the fill is
+    refused unless the caller raises the bound on purpose.
+    """
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_MAX_PREMIUM_BPS
+
+    covered = SaturnSwapSwapDatumV3.from_cbor(_hex(_COVERED))
+    fill = 1_000_000
+
+    # The honest order in the fixtures is 100 bps and is unaffected.
+    assert covered.coverage.value.premium_bps == _COVERED_PREMIUM_BPS
+    assert covered.premium_for_fill(fill) == _PREMIUM_ON_1M
+
+    covered.coverage.value.premium_bps = SATURNSWAP_MAX_PREMIUM_BPS + 1
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_for_fill(fill)
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_payment(fill)
+
+    # 100x the trade, which is what the bound exists to stop.
+    covered.coverage.value.premium_bps = 1_000_000
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_for_fill(fill)
+    # A caller that means it can still opt in.
+    assert covered.premium_for_fill(fill, max_premium_bps=1_000_000) == 100 * fill

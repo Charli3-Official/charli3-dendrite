@@ -81,6 +81,12 @@ SATURNSWAP_V3_ORDER_ADDRESS_PREPROD = (
 
 # Selected per order-state class. Override on a subclass, or set
 # SATURNSWAP_NETWORK=preprod, when reading a non-mainnet deployment.
+# A covered order's premium is paid by the FILLER, out of pocket, to a vault the
+# MAKER names in its own datum. `premium_bps` is therefore attacker-controlled
+# for anyone filling an order they did not create, and nothing on the wire caps
+# it. Refuse above 100% of the fill; the reference filler uses the same bound.
+SATURNSWAP_MAX_PREMIUM_BPS = 10_000
+
 SATURNSWAP_NETWORK_ENV = "SATURNSWAP_NETWORK"
 SATURNSWAP_NETWORKS = ("mainnet", "preprod")
 
@@ -333,15 +339,31 @@ class SaturnSwapSwapDatumV3(OrderDatum):
             return None
         return self.coverage.value.vault.to_address().encode()
 
-    def premium_for_fill(self, user_sell_amount: int) -> int:
+    def premium_for_fill(
+        self,
+        user_sell_amount: int,
+        max_premium_bps: int = SATURNSWAP_MAX_PREMIUM_BPS,
+    ) -> int:
         """Out-of-pocket premium (buy asset) for a fill of ``user_sell_amount``.
 
         ``max(1, user_sell_amount * premium_bps // 10000)`` for covered orders;
         ``0`` when uncovered.
+
+        Raises when the order asks for more than ``max_premium_bps``. The maker
+        writes ``premium_bps`` into its own datum and names the vault it is paid
+        to, so an order can ask any premium it likes of whoever fills it. Pass a
+        larger bound to accept one deliberately.
         """
         if not self.is_covered():
             return 0
-        base = (user_sell_amount * self.coverage.value.premium_bps) // 10_000
+        premium_bps = self.coverage.value.premium_bps
+        if premium_bps > max_premium_bps:
+            msg = (
+                f"coverage premium_bps {premium_bps} exceeds max {max_premium_bps}; "
+                "the premium is paid by the filler to a vault the maker chose"
+            )
+            raise ValueError(msg)
+        base = (user_sell_amount * premium_bps) // 10_000
         return max(1, base)
 
     def check_min_partial_fill(self, user_sell_amount: int) -> None:
