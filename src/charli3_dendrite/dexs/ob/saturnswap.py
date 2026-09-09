@@ -71,6 +71,32 @@ SATURNSWAP_V3_ORDER_ADDRESS = (
     "h2l9cdyhc0eja9mxq0lgeer90edhlfymnxv2ym3szcetqsp0ume8"
 )
 
+# SaturnSwap runs on preprod too, and only the V3 contract is deployed there. The
+# 1% and legacy 4% contracts are mainnet-only, so their selectors are empty off
+# mainnet rather than falling back to a mainnet address that a preprod backend
+# would query and report as an empty book.
+SATURNSWAP_V3_ORDER_ADDRESS_PREPROD = (
+    "addr_test1wrky2av35n66krg8q9r9trjlzu5le3wqkgcywfphhcehvfg03jugc"
+)
+
+# Selected per order-state class. Override on a subclass, or set
+# SATURNSWAP_NETWORK=preprod, when reading a non-mainnet deployment.
+SATURNSWAP_NETWORK_ENV = "SATURNSWAP_NETWORK"
+SATURNSWAP_NETWORKS = ("mainnet", "preprod")
+
+
+def saturnswap_network() -> str:
+    """Return the configured SaturnSwap network, defaulting to mainnet."""
+    network = os.environ.get(SATURNSWAP_NETWORK_ENV, "mainnet").strip().lower()
+    if network not in SATURNSWAP_NETWORKS:
+        msg = (
+            f"{SATURNSWAP_NETWORK_ENV}={network!r} is not a SaturnSwap network; "
+            f"expected one of {', '.join(SATURNSWAP_NETWORKS)}"
+        )
+        raise ValueError(msg)
+    return network
+
+
 # When the protocol shares its authorize hot-key, set this env var to the signing
 # key and dendrite builds the fee-free authorized fill on either contract.
 SATURNSWAP_AUTHORIZE_KEY_ENV = "SATURNSWAP_AUTHORIZE_KEY"
@@ -491,6 +517,11 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
     subclass-discovery walk skips it and only registers the concrete leaves.
     """
 
+    # Which deployment this class reads. None defers to SATURNSWAP_NETWORK, so a
+    # caller can select preprod by environment or by subclassing, and a subclass
+    # that pins it is unaffected by the environment.
+    network: ClassVar[str | None] = None
+
     tx_hash: str
     tx_index: int
     datum_cbor: str
@@ -881,10 +912,15 @@ class SaturnSwapOrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_ORDER_ADDRESS],
+        "preprod": [],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (live 1% contract)."""
-        return [SATURNSWAP_ORDER_ADDRESS]
+        """Return order script addresses (live 1% contract, mainnet only)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
 
 class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
@@ -901,10 +937,15 @@ class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_LEGACY_ORDER_ADDRESS],
+        "preprod": [],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (legacy 4% contract)."""
-        return [SATURNSWAP_LEGACY_ORDER_ADDRESS]
+        """Return order script addresses (legacy 4% contract, mainnet only)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
 
 class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
@@ -923,10 +964,15 @@ class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_V3_ORDER_ADDRESS],
+        "preprod": [SATURNSWAP_V3_ORDER_ADDRESS_PREPROD],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (V3 contract)."""
-        return [SATURNSWAP_V3_ORDER_ADDRESS]
+        """Return order script addresses (V3 contract, per network)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
     @classmethod
     def order_datum_class(cls) -> type[PlutusData]:

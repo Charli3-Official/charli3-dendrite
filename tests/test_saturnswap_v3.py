@@ -243,3 +243,48 @@ def test_book_price_is_a_ratio_not_an_amount() -> None:
     assert float(large.amount_buy) / float(small.amount_buy) == pytest.approx(
         int(large.amount_sell) / int(small.amount_sell)
     )
+
+
+def test_order_selector_follows_the_configured_network(monkeypatch) -> None:
+    """The V3 contract is deployed on preprod; the other two are not.
+
+    A selector that answered with a mainnet address while a preprod backend was
+    configured would query an address that cannot exist there and report the
+    empty result as an empty book, which is the failure that looks like data.
+    """
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+    from charli3_dendrite.dexs.ob.saturnswap import (
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    )
+    from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapLegacyOrderState
+    from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
+
+    monkeypatch.delenv("SATURNSWAP_NETWORK", raising=False)
+    assert SaturnSwapV3OrderState.order_selector() == [SATURNSWAP_V3_ORDER_ADDRESS]
+    assert SaturnSwapOrderState.order_selector() != []
+
+    monkeypatch.setenv("SATURNSWAP_NETWORK", "preprod")
+    assert SaturnSwapV3OrderState.order_selector() == [
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    ]
+    # Mainnet-only contracts answer with nothing rather than a mainnet address.
+    assert SaturnSwapOrderState.order_selector() == []
+    assert SaturnSwapLegacyOrderState.order_selector() == []
+
+    monkeypatch.setenv("SATURNSWAP_NETWORK", "notanetwork")
+    with pytest.raises(ValueError, match="not a SaturnSwap network"):
+        SaturnSwapV3OrderState.order_selector()
+
+
+def test_preprod_address_is_a_testnet_address() -> None:
+    """A mainnet address configured as preprod would query the wrong chain."""
+    from pycardano import Address
+    from pycardano import Network
+
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+    from charli3_dendrite.dexs.ob.saturnswap import (
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    )
+
+    assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS_PREPROD).network is Network.TESTNET
+    assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS).network is Network.MAINNET
