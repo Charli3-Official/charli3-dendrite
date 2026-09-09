@@ -1163,14 +1163,18 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
                 order.assets = Assets(**{buy_unit: 0}) + Assets(**{sell_unit: 0})
             if order.inactive:
                 continue
-            price_a, price_b = order.price
-            if price_a == 0 or price_b == 0:
+            # `order.price` is the ratio (amount_buy, amount_sell), so a price is the
+            # quotient. Taking one element alone yields a base-unit amount that scales
+            # with order size, which sorts two orders at the same price by how large
+            # they are. `cardanoswaps.py` divides here for the same reason.
+            amount_buy, amount_sell = order.price
+            if amount_buy == 0 or amount_sell == 0:
                 continue
             if order.in_unit == assets.unit() and order.out_unit == assets.unit(1):
-                price = float(price_a)
+                price = amount_buy / amount_sell
                 side = sell_orders
             elif order.in_unit == assets.unit(1) and order.out_unit == assets.unit(0):
-                price = float(price_b)
+                price = amount_sell / amount_buy
                 side = buy_orders
             else:
                 continue

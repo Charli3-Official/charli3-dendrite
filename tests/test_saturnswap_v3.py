@@ -214,3 +214,32 @@ def test_v3_order_state_is_top_level_exported() -> None:
     assert hasattr(charli3_dendrite, "SaturnSwapOrderState")
     assert hasattr(charli3_dendrite, "SaturnSwapLegacyOrderState")
     assert hasattr(charli3_dendrite, "SaturnSwapOrderBook")
+
+
+def test_book_price_is_a_ratio_not_an_amount() -> None:
+    """Two orders at the same price rank equally, whatever size they are.
+
+    ``_SaturnSwapOrderStateBase.price`` returns the ratio ``(amount_buy,
+    amount_sell)``. A book that keeps one element of that tuple is keeping a
+    base-unit amount, which grows with the size of the order, so the book sorts
+    by size wherever prices tie and is wrong by a factor of ``amount_sell``
+    everywhere else.
+
+    Both datums below are real mainnet orders from ``tests/fixtures``. They ask
+    the same price and differ only in size: ad182bcd sells 1,500 to buy
+    3,000,000, and b6bcaeb6#2 sells 3,000 to buy 6,000,000. A correct book gives
+    them one price.
+    """
+    small = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
+    large = SaturnSwapSwapDatumV3.from_cbor(_hex("order_b6bcaeb6_out2_cov_none.hex"))
+
+    def ratio(datum: SaturnSwapSwapDatumV3) -> float:
+        return int(datum.amount_buy) / int(datum.amount_sell)
+
+    assert ratio(small) == ratio(large), "fixtures no longer share a price"
+    # The defect this pins: keeping amount_buy alone separates them by their size
+    # ratio, so the cheaper-looking order is merely the smaller one.
+    assert float(small.amount_buy) != float(large.amount_buy)
+    assert float(large.amount_buy) / float(small.amount_buy) == pytest.approx(
+        int(large.amount_sell) / int(small.amount_sell)
+    )
