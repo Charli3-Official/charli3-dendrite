@@ -1,10 +1,11 @@
 """Replay real preview-testnet constant-sum swaps through ``get_amount_out``.
 
-Each fixture entry is an *actual on-chain* swap: the pool's before-reserves and
-the input the scooper received, paired with the output it actually paid. The
-dendrite constant-sum ``get_amount_out`` must reproduce the real output exactly.
-The fixture was captured from the live preview deployment, so the replay needs
-no network at test time.
+Each fixture entry is an *actual on-chain* swap step: the pool's before-reserves,
+its constant-sum price weights and fee, and the input the scooper received, paired
+with the output it actually paid. The dendrite constant-sum ``get_amount_out``
+must reproduce the real output exactly on every step, including pools whose
+price weights are not 1:1. The fixture was captured from the live preview
+deployment, so the replay needs no network at test time.
 """
 
 import json
@@ -21,7 +22,14 @@ _SWAPS = json.loads(
 
 
 def _leg(swap: dict) -> _SundaeV4CSState:
-    """Project the 2-asset constant-sum leg the swap executed against."""
+    """Project the 2-asset constant-sum leg the swap executed against.
+
+    The leg's ``price_a`` / ``price_b`` follow the canonical ``(unit_a, unit_b)``
+    ordering the state applies to its assets, so the price weights are aligned
+    to the units the fixture names rather than to the swap direction.
+    """
+    prices = {swap["in_unit"]: swap["price_in"], swap["out_unit"]: swap["price_out"]}
+    unit_a, unit_b = sorted(prices)
     return _SundaeV4CSState.model_validate(
         {
             "assets": Assets(
@@ -37,9 +45,8 @@ def _leg(swap: dict) -> _SundaeV4CSState:
             "datum_hash": "00",
             "tx_index": 0,
             "tx_hash": "00",
-            # the live constant-sum pools price the stablecoin legs 1:1
-            "price_a": 1,
-            "price_b": 1,
+            "price_a": prices[unit_a],
+            "price_b": prices[unit_b],
             "fee_numerator": swap["fee_num"],
             "fee_denominator": swap["fee_den"],
         },
@@ -48,13 +55,14 @@ def _leg(swap: dict) -> _SundaeV4CSState:
 
 def test_replay_fixture_is_non_trivial() -> None:
     """Guard against a fixture that regenerated to nothing."""
-    assert len(_SWAPS) >= 40
+    assert len(_SWAPS) >= 100
+    assert any(s["price_in"] != s["price_out"] for s in _SWAPS)
 
 
 @pytest.mark.parametrize(
     "swap",
     _SWAPS,
-    ids=[f"{s['scoop_tx'][:8]}@{s['slot']}" for s in _SWAPS],
+    ids=[f"{s['scoop_tx'][:8]}#{s['step']}" for s in _SWAPS],
 )
 def test_get_amount_out_replays_real_swap(swap: dict) -> None:
     """get_amount_out reproduces the exact output a real on-chain swap paid."""

@@ -1,59 +1,84 @@
-"""Byte-exact validation of the SundaeSwap V4 order builders.
+"""Byte-exact validation of the SundaeSwap V4 order builders and deployment manifest.
 
-``swap_datum`` builds the user's swap-order datum; this asserts the result is
-byte-identical to a real on-chain swap order pulled from preview, field by field,
-and exercises the owner-cancel redeemer. The reference datum below is public
-on-chain data (a live preview swap order at the V4 order validator).
+The reference datums are real inline datums of orders placed on the audit-final
+preview and preprod deployments (public on-chain data, captured in
+``sundae_v4_auditfinal_fixtures.json``). Each builder must re-encode
+byte-for-byte to a live order of its kind, resolving every hash and config token
+from the per-network deployment manifest rather than from constants.
 """
 
+import json
+from pathlib import Path
+
+import pytest
 from pycardano import Address
 from pycardano import IndefiniteList
 from pycardano import Network
 from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import VerificationKeyHash
+from pycardano.serialization import CBORTag
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dexs.amm.sundae_v4 import BasicConstraintKind
+from charli3_dendrite.dexs.amm.sundae_v4 import BasicDeposit
+from charli3_dendrite.dexs.amm.sundae_v4 import BasicSwap
+from charli3_dendrite.dexs.amm.sundae_v4 import BoolTrue
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationFixed
+from charli3_dendrite.dexs.amm.sundae_v4 import DestinationSelf
+from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBound
+from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundFinite
+from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundPositiveInfinity
 from charli3_dendrite.dexs.amm.sundae_v4 import MultisigSignature
+from charli3_dendrite.dexs.amm.sundae_v4 import OptionSomeInt
 from charli3_dendrite.dexs.amm.sundae_v4 import OrderCancel
+from charli3_dendrite.dexs.amm.sundae_v4 import OutputReference
+from charli3_dendrite.dexs.amm.sundae_v4 import SignedStrategyExecution
+from charli3_dendrite.dexs.amm.sundae_v4 import StrategyConstraint
+from charli3_dendrite.dexs.amm.sundae_v4 import StrategyExecution
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4OrderDatum
-from charli3_dendrite.dexs.amm.sundae_v4 import SwapConstraint
-from charli3_dendrite.dexs.amm.sundae_v4 import _SundaeV4CPPState
+from charli3_dendrite.dexs.amm.sundae_v4 import ValidityRange
+from charli3_dendrite.dexs.amm.sundae_v4 import _SundaeV4CSState
+from charli3_dendrite.dexs.amm.sundae_v4 import parse_basic_constraint
 
-# A real preview swap order datum (the inline datum of a live order UTxO at the
-# V4 order validator). Public on-chain data.
-LIVE_SWAP_ORDER_DATUM_HEX = (
-    "d8799fd8799f581cb4827ffb1a5f7a8aefb5c6f76cbd1d1db1975e24c478115a083749cbff"
-    "d8799fd8799fd8799f581cb4827ffb1a5f7a8aefb5c6f76cbd1d1db1975e24c478115a0837"
-    "49cbffd8799fd8799fd8799f581cfa5e11b4390128b6b376ed7bab4b0ffa43afe787140"
-    "8aab26bd7d67cffffffffd87a80ff1a002dc6c01927105820000d039b34ea653da4d8321"
-    "422e7942e7b621a82d24bb8d2b46b918d83e504fe9f9f581c1a38df57b59e75ad39fdb06f"
-    "df8c97ce435297ecfe5b68a3ea523053d87b9fd8799f581cd8906ca5c7ba124a0407a32da"
-    "b37b2c82b13b3dcd9111e42940dcea4455553444378ff1a11e1a3001a11e1a3009f9fd879"
-    "9f581c45df5f274b8950b512b08d10656864958659c4ecf3ffad092ef630244455534472f"
-    "f1a118f9b00ffffffff9f581cef81595b5b8cf9bc5f0adfb0b8f3a2d60edef9d33755ca87"
-    "fa86c07780ff9f581cb0df1c266988ab3bb5497bf9f6d8749a5f7726e88d43fca52efaa7f"
-    "4d87980ffffd87980ff"
+FIXTURES = json.loads(
+    (Path(__file__).parent / "sundae_v4_auditfinal_fixtures.json").read_text(),
+)
+ORDERS = {o["label"]: o for o in FIXTURES["order_datums"]}
+
+# The deployment admin wallet (payment key + stake key) that placed the
+# preview / preprod reference swaps, and the second preview wallet that placed
+# the deposit and the lovelace-offered swap (owner keyed on its stake key).
+_ADMIN_PAYMENT = "e2afcadc7b111be7b89f283e9facffbbc5292f40fd13d7613e639c35"
+_ADMIN_STAKE = "19f8f253c67c91082c43d306cd4edf825494ff8dc69b6678b83aa669"
+_USER_PAYMENT = "dc3b848b6d09999837cb1f5e6e5b0b51b27127b8046d3a910168d39e"
+_USER_STAKE = "1ce3f1c994be8ff33d2a832129b3928f28339fc01119262b1a3e5152"
+
+_TOKEN_POLICY = "09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed22771878972"
+_MINT = _TOKEN_POLICY + "4d494e54"
+_MNGO = _TOKEN_POLICY + "4d4e474f"
+_STRW = _TOKEN_POLICY + "53545257"
+_MNGO_STRW_LP = (
+    "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd"
+    "0014df1047953ac826cf9a370772bd596009bd6ed7bd7652ef20554b38a1292c"
 )
 
-# The order owner / destination (a base address: payment key + stake key).
-_OWNER_PAYMENT_VKH = "b4827ffb1a5f7a8aefb5c6f76cbd1d1db1975e24c478115a083749cb"
-_OWNER_STAKE_VKH = "fa5e11b4390128b6b376ed7bab4b0ffa43afe7871408aab26bd7d67c"
 
-# The offered asset (USDCx) and the asked asset (USDr) with the live amounts.
-_OFFERED_UNIT = "d8906ca5c7ba124a0407a32dab37b2c82b13b3dcd9111e42940dcea45553444378"
-_ASKED_UNIT = "45df5f274b8950b512b08d10656864958659c4ecf3ffad092ef6302455534472"
-_OFFERED_AMOUNT = 300_000_000
-_MIN_RECEIVED = 294_624_000
+def _address(payment: str, stake: str) -> Address:
+    return Address(
+        payment_part=VerificationKeyHash(bytes.fromhex(payment)),
+        staking_part=VerificationKeyHash(bytes.fromhex(stake)),
+        network=Network.TESTNET,
+    )
 
 
-def _swap_leg() -> _SundaeV4CPPState:
-    """A projected V4 constant-product leg (only the order builders are exercised)."""
-    return _SundaeV4CPPState.model_validate(
+def _leg() -> _SundaeV4CSState:
+    """A projected V4 constant-sum leg (only the order builders are exercised)."""
+    return _SundaeV4CSState.model_validate(
         {
-            "assets": Assets(**{"lovelace": 1_000_000, _OFFERED_UNIT: 500}),
+            "assets": Assets(**{_MINT: 1_000, _STRW: 2_000}),
             "block_time": 0,
             "block_index": 0,
             "plutus_v2": True,
@@ -61,127 +86,286 @@ def _swap_leg() -> _SundaeV4CPPState:
             "datum_hash": "00",
             "tx_index": 0,
             "tx_hash": "00",
-            "fee": 30,
         },
     )
 
 
-def _source_address() -> Address:
-    return Address(
-        payment_part=VerificationKeyHash(bytes.fromhex(_OWNER_PAYMENT_VKH)),
-        staking_part=VerificationKeyHash(bytes.fromhex(_OWNER_STAKE_VKH)),
-        network=Network.TESTNET,
+@pytest.fixture
+def preprod():
+    """Point the class family at the preprod deployment for one test."""
+    _SundaeV4CSState.select_network("preprod")
+    try:
+        yield
+    finally:
+        _SundaeV4CSState.select_network("preview")
+
+
+# ---------------------------------------------------------------------------
+# Deployment manifest
+# ---------------------------------------------------------------------------
+
+
+def test_manifest_resolves_the_preview_deployment() -> None:
+    deployment = SundaeV4Deployment.for_network("preview")
+    assert (
+        deployment.pool_hash.hex()
+        == "f577d24cfa393efdb85482554acbdd5082f99acba9c17eab916cf87a"
+    )
+    assert (
+        deployment.order_hash.hex()
+        == "8a7ecdafb3605ddf761751b391c20482b7ef42ca01575d135d484c2b"
+    )
+    assert (
+        deployment.basic_order_hash.hex()
+        == "4859acf5f46a50f383d16323a3c7eacf502ba732aa8874a7d3b7783e"
+    )
+    assert (
+        deployment.strategy_order_hash.hex()
+        == "5b67b76ff03dd497083df1450caabb3a4a99feea53ad631e700173ee"
+    )
+    assert (
+        deployment.fee_constraint_hash.hex()
+        == "d7d1c09deb8bc8e15baae7895e57e86ab6d0cb10e2faaa6d96cd691b"
+    )
+    assert (
+        deployment.pool_nft_policy.hex()
+        == "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd"
+    )
+    assert (
+        deployment.basic_config_token.hex()
+        == "0056667008c14652ef9039690587c17fa70546e3ccd62ec63ec750cfd72969ab"
+    )
+    assert (
+        deployment.strategy_config_token.hex()
+        == "00e3317090f21164a1042f9a5d0aa07d585d7fdf6e4439788955c2384d844078"
+    )
+    assert deployment.base_fee == 1_000_000
+    assert deployment.reference("order.spend") == (
+        "cfd46884fdf1b6b2a91feb6ad7252f950e5dad80ad83b2939954795c093925da",
+        0,
     )
 
 
-def _build_swap_datum() -> SundaeV4OrderDatum:
-    return _swap_leg().swap_datum(
-        address_source=_source_address(),
-        in_assets=Assets(**{_OFFERED_UNIT: _OFFERED_AMOUNT}),
-        out_assets=Assets(**{_ASKED_UNIT: _MIN_RECEIVED}),
-        budget=3_000_000,
-        share_batcher=10_000,
+def test_manifest_has_no_mainnet_deployment_yet() -> None:
+    with pytest.raises(LookupError, match="mainnet"):
+        SundaeV4Deployment.for_network("mainnet")
+
+
+def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
+    address = Address.decode(_SundaeV4CSState.pool_selector().addresses[0])
+    assert bytes(address.payment_part).hex().startswith("ae364bd4")
+    order = Address.decode(_SundaeV4CSState.order_selector()[0])
+    assert bytes(order.payment_part).hex().startswith("2d066c46")
+
+
+def test_class_family_is_back_on_preview_after_the_switch() -> None:
+    address = Address.decode(_SundaeV4CSState.pool_selector().addresses[0])
+    assert bytes(address.payment_part).hex().startswith("f577d24c")
+
+
+# ---------------------------------------------------------------------------
+# swap_datum: the routing-free basic swap (constructor 2)
+# ---------------------------------------------------------------------------
+
+
+def test_swap_datum_is_byte_exact_with_the_preview_swap() -> None:
+    reference = ORDERS["basic swap STRW->MINT (ctor 2, fee-bearing)"]["datum"]
+    built = _leg().swap_datum(
+        address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
+        in_assets=Assets(**{_STRW: 2_000_000_000}),
+        out_assets=Assets(**{_MINT: 990_000_000}),
+        owner=MultisigSignature(key_hash=bytes.fromhex(_ADMIN_PAYMENT)),
+        service_budget=3_000_000,
+        max_per_execution=3_000_000,
     )
+    assert built.to_cbor_hex() == reference
 
 
-def test_swap_datum_is_byte_exact_with_live_order() -> None:
-    """The built swap-order datum re-encodes byte-for-byte to the live order."""
-    built = _build_swap_datum().to_cbor_hex()
-    assert built == LIVE_SWAP_ORDER_DATUM_HEX
+def test_swap_datum_is_byte_exact_with_the_preprod_swap(preprod) -> None:
+    reference = ORDERS["basic swap MINT->STRW (preprod)"]["datum"]
+    built = _leg().swap_datum(
+        address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
+        in_assets=Assets(**{_MINT: 500_000_000}),
+        out_assets=Assets(**{_STRW: 990_000_000}),
+        owner=MultisigSignature(key_hash=bytes.fromhex(_ADMIN_PAYMENT)),
+        service_budget=3_000_000,
+        max_per_execution=3_000_000,
+    )
+    assert built.to_cbor_hex() == reference
 
 
-def test_swap_datum_round_trips_through_parser() -> None:
-    """The built datum parses back to the same seven-field order datum."""
-    built = _build_swap_datum()
-    reparsed = SundaeV4OrderDatum.from_cbor(built.to_cbor_hex())
-    assert reparsed.to_cbor_hex() == LIVE_SWAP_ORDER_DATUM_HEX
+def test_swap_datum_offering_lovelace_keys_the_owner_on_the_stake_key() -> None:
+    reference = ORDERS["basic swap ADA->STRW (ctor 2, ADA offered, mpe 1 ADA)"]["datum"]
+    built = _leg().swap_datum(
+        address_source=_address(_USER_PAYMENT, _USER_STAKE),
+        in_assets=Assets(lovelace=100_300_903),
+        out_assets=Assets(**{_STRW: 80_000_000}),
+        service_budget=3_000_000,
+        max_per_execution=1_000_000,
+    )
+    assert built.to_cbor_hex() == reference
+    assert built.owner == MultisigSignature(key_hash=bytes.fromhex(_USER_STAKE))
+
+
+def test_swap_datum_defaults_pay_exactly_the_base_fee() -> None:
+    built = _leg().swap_datum(
+        address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
+        in_assets=Assets(**{_STRW: 1}),
+        out_assets=Assets(**{_MINT: 1}),
+    )
+    assert built.service_budget == built.max_per_execution == 1_000_000
 
 
 def test_swap_datum_field_shape() -> None:
-    """The seven controlled fields carry the expected values."""
-    datum = _build_swap_datum()
-
-    assert isinstance(datum.owner, MultisigSignature)
-    assert datum.owner.key_hash == bytes.fromhex(_OWNER_PAYMENT_VKH)
-
-    assert isinstance(datum.destination, DestinationFixed)
-    # The destination resolves back to the owner's payment + stake credentials
-    # (``to_address`` carries no network discriminator, so compare the parts).
-    resolved = datum.destination.address.to_address()
-    source = _source_address()
-    assert bytes(resolved.payment_part) == bytes(source.payment_part)
-    assert bytes(resolved.staking_part) == bytes(source.staking_part)
-    # ``Option<Data>`` None == constructor 1.
-    assert datum.destination.datum.data.tag == 122
-
-    assert datum.budget == 3_000_000
-    assert datum.share_batcher == 10_000
-
-    # The swap-role order-config token is present (the seventh-field binding).
-    assert datum.config_token == bytes.fromhex(
-        "000d039b34ea653da4d8321422e7942e7b621a82d24bb8d2b46b918d83e504fe",
+    built = _leg().swap_datum(
+        address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
+        in_assets=Assets(**{_STRW: 2_000_000_000}),
+        out_assets=Assets(**{_MINT: 990_000_000}),
+    )
+    assert isinstance(built.destination, DestinationFixed)
+    resolved = built.destination.address.to_address()
+    assert bytes(resolved.payment_part).hex() == _ADMIN_PAYMENT
+    assert bytes(resolved.staking_part).hex() == _ADMIN_STAKE
+    assert built.destination.datum.data.tag == 122  # Option<Data> None
+    assert (
+        built.config_token
+        == SundaeV4Deployment.for_network("preview").basic_config_token
+    )
+    assert (
+        isinstance(built.extension, RawPlutusData) and built.extension.data.tag == 121
     )
 
-    assert isinstance(datum.extension, RawPlutusData)
-    assert datum.extension.data.tag == 121
+    basic_entry, fee_entry = (list(c) for c in built.constraints)
+    assert basic_entry[0] == SundaeV4Deployment.for_network("preview").basic_order_hash
+    assert isinstance(basic_entry[1], BasicSwap)
+    assert fee_entry[0] == SundaeV4Deployment.for_network("preview").fee_constraint_hash
+    assert fee_entry[1].data.tag == 121 and fee_entry[1].data.value == []
 
-
-def test_constraints_are_the_swap_role_keyed_list() -> None:
-    """``constraints`` is the keyed list of the swap role's three modules, in order."""
-    datum = _build_swap_datum()
-    constraints = list(datum.constraints)
-    assert isinstance(datum.constraints, IndefiniteList)
-    assert len(constraints) == 3
-
-    swap_entry, route_entry, fairness_entry = (list(c) for c in constraints)
-
-    assert swap_entry[0] == bytes.fromhex(
-        "1a38df57b59e75ad39fdb06fdf8c97ce435297ecfe5b68a3ea523053",
+    swap = parse_basic_constraint(RawPlutusData(basic_entry[1].to_primitive()))
+    assert swap.kind is BasicConstraintKind.SWAP
+    asset, amount = list(list(swap.offered)[0])
+    assert AssetClass.from_primitive(asset) == AssetClass(
+        policy=bytes.fromhex(_STRW[:56]),
+        asset_name=bytes.fromhex(_STRW[56:]),
     )
-    assert route_entry[0] == bytes.fromhex(
-        "ef81595b5b8cf9bc5f0adfb0b8f3a2d60edef9d33755ca87fa86c077",
+    assert amount == 2_000_000_000
+
+
+def test_swap_datum_rejects_more_than_one_asset_per_side() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        _leg().swap_datum(
+            address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
+            in_assets=Assets(**{_STRW: 1, _MNGO: 1}),
+            out_assets=Assets(**{_MINT: 1}),
+        )
+
+
+# ---------------------------------------------------------------------------
+# deposit_datum: the basic deposit (constructor 0)
+# ---------------------------------------------------------------------------
+
+
+def test_deposit_datum_is_byte_exact_with_the_preview_deposit() -> None:
+    reference = ORDERS["basic deposit MNGO+STRW -> LP (ctor 0)"]["datum"]
+    built = _leg().deposit_datum(
+        address_source=_address(_USER_PAYMENT, _USER_STAKE),
+        offered=Assets(**{_MNGO: 100_000_000, _STRW: 100_000_000}),
+        min_lp=Assets(**{_MNGO_STRW_LP: 190_520_397}),
+        service_budget=3_000_000,
+        max_per_execution=1_000_000,
     )
-    assert fairness_entry[0] == bytes.fromhex(
-        "b0df1c266988ab3bb5497bf9f6d8749a5f7726e88d43fca52efaa7f4",
+    assert built.to_cbor_hex() == reference
+    deposit = parse_basic_constraint(
+        RawPlutusData(list(built.constraints[0])[1].to_primitive())
+    )
+    assert isinstance(deposit, BasicDeposit) and len(deposit.offered) == 2
+
+
+# ---------------------------------------------------------------------------
+# strategy_datum
+# ---------------------------------------------------------------------------
+
+
+def _strategy() -> SundaeV4OrderDatum:
+    return _leg().strategy_datum(
+        address_source=_address(_USER_PAYMENT, _USER_STAKE),
+        auth=MultisigSignature(key_hash=bytes.fromhex(_ADMIN_PAYMENT)),
+        final_destinations=[_address(_USER_PAYMENT, _USER_STAKE)],
     )
 
-    # The route payload is the empty list; the fairness payload is the empty
-    # constructor-0 record — both are no-ops for a plain swap.
-    assert route_entry[1] == []
-    assert isinstance(fairness_entry[1], RawPlutusData)
-    assert fairness_entry[1].data.tag == 121
 
-
-def test_swap_constraint_payload_decodes() -> None:
-    """The swap constraint payload (constructor 2) carries the offered/ask shape."""
-    datum = _build_swap_datum()
-    swap_entry = list(list(datum.constraints)[0])
-    swap = swap_entry[1]
-    assert isinstance(swap, SwapConstraint)
-    # The constraint-tag namespace assigns 2 to a swap (CBOR tag 123).
-    assert swap.CONSTR_ID == 2
-    assert swap.to_cbor_hex().startswith("d87b")
-
-    assert swap.offered == AssetClass(
-        policy=bytes.fromhex(_OFFERED_UNIT[:56]),
-        asset_name=bytes.fromhex(_OFFERED_UNIT[56:]),
+def test_strategy_datum_carries_the_strategy_and_fee_constraints() -> None:
+    built = _strategy()
+    deployment = SundaeV4Deployment.for_network("preview")
+    assert isinstance(built.destination, DestinationSelf)
+    assert built.config_token == deployment.strategy_config_token
+    strategy_entry, fee_entry = (list(c) for c in built.constraints)
+    assert strategy_entry[0] == deployment.strategy_order_hash
+    assert isinstance(strategy_entry[1], StrategyConstraint)
+    assert strategy_entry[1].auth == MultisigSignature(
+        key_hash=bytes.fromhex(_ADMIN_PAYMENT)
     )
-    assert swap.original_offered == _OFFERED_AMOUNT
-    assert swap.remaining_offered == _OFFERED_AMOUNT
+    assert isinstance(list(strategy_entry[1].final_destinations)[0], DestinationFixed)
+    assert fee_entry[0] == deployment.fee_constraint_hash
+    assert fee_entry[1].data.tag == 121
 
-    min_received = list(swap.min_received)
-    assert len(min_received) == 1
-    asset, amount = list(min_received[0])
-    assert asset == AssetClass(
-        policy=bytes.fromhex(_ASKED_UNIT[:56]),
-        asset_name=bytes.fromhex(_ASKED_UNIT[56:]),
+
+def test_strategy_datum_round_trips_through_the_parser() -> None:
+    built = _strategy()
+    assert SundaeV4OrderDatum.from_cbor(built.to_cbor()).to_cbor() == built.to_cbor()
+
+
+def test_signed_strategy_execution_round_trips() -> None:
+    asset = AssetClass(
+        policy=bytes.fromhex(_MINT[:56]), asset_name=bytes.fromhex(_MINT[56:])
     )
-    assert amount == _MIN_RECEIVED
+    execution = StrategyExecution(
+        order_ref=OutputReference(transaction_id=bytes(32), output_index=1),
+        validity_range=ValidityRange(
+            lower_bound=IntervalBound(
+                bound_type=IntervalBoundFinite(value=1_000), is_inclusive=BoolTrue()
+            ),
+            upper_bound=IntervalBound(
+                bound_type=IntervalBoundPositiveInfinity(), is_inclusive=BoolTrue()
+            ),
+        ),
+        min_deltas=IndefiniteList(
+            [
+                IndefiniteList([asset, 42]),
+                IndefiniteList([AssetClass(policy=b"", asset_name=b""), -5_000_000]),
+            ]
+        ),
+        final=OptionSomeInt(value=0),
+        extension=RawPlutusData(CBORTag(121, [])),
+    )
+    signed = SignedStrategyExecution(
+        execution=execution,
+        signatures=IndefiniteList([IndefiniteList([bytes(32), bytes(64)])]),
+    )
+    reparsed = SignedStrategyExecution.from_cbor(signed.to_cbor())
+    assert reparsed.to_cbor() == signed.to_cbor()
+    assert list(list(reparsed.execution.min_deltas)[1])[1] == -5_000_000
+
+
+# ---------------------------------------------------------------------------
+# cancel
+# ---------------------------------------------------------------------------
 
 
 def test_cancel_redeemer_is_owner_cancel() -> None:
-    """The cancel redeemer is the order ``Cancel`` variant (constructor 0)."""
-    redeemer = _SundaeV4CPPState.cancel_redeemer()
+    redeemer = _SundaeV4CSState.cancel_redeemer()
     assert isinstance(redeemer, Redeemer)
     assert isinstance(redeemer.data, OrderCancel)
     assert redeemer.data.to_cbor_hex() == "d87980"
+
+
+def test_order_owner_prefers_the_stake_key_and_falls_back_to_payment() -> None:
+    with_stake = _SundaeV4CSState.order_owner(_address(_USER_PAYMENT, _USER_STAKE))
+    assert with_stake == MultisigSignature(key_hash=bytes.fromhex(_USER_STAKE))
+    enterprise = Address(
+        payment_part=VerificationKeyHash(bytes.fromhex(_USER_PAYMENT)),
+        network=Network.TESTNET,
+    )
+    assert _SundaeV4CSState.order_owner(enterprise) == MultisigSignature(
+        key_hash=bytes.fromhex(_USER_PAYMENT)
+    )
