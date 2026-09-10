@@ -136,6 +136,197 @@ class AbstractConstantProductPoolState(AbstractPoolState):
         return amount_in, price_impact
 
 
+class AbstractConstantSumPoolState(AbstractPoolState):
+    """State of a constant-sum AMM pool priced on a fixed integer value vector.
+
+    A constant-sum pool conserves total *value* ``V = Sum(price_i * reserve_i)`` on a
+    fixed integer price vector (positionally aligned to the pool assets), with NO
+    amplification — it is the linear-curve sibling of
+    :class:`AbstractConstantProductPoolState` (``x*y=k``) and
+    :class:`AbstractStableSwapPoolState` (the amplified Curve invariant), and is NOT a
+    stable-swap variant. Within a routable 2-asset ``(i, j)`` leg a swap of ``dx`` of
+    asset ``i`` preserves ``V`` minus the floored LP fee: the pool retains
+    ``floor(dx * p_i * fee_num / fee_den)`` of value and pays the remainder out in
+    asset ``j`` at the fixed price ratio ``p_i : p_j``. Output is bounded by the
+    out-side reserve ``reserve_j`` — a constant-sum leg cannot pay out more of an
+    asset than it holds.
+
+    The returned output is the unique maximum that satisfies the on-chain constant-sum
+    swap-step relation (the value increase ``v_increase`` is pinned to exactly
+    ``floor(input_value * fee_num / fee_den)``): a larger output over-pays (fails the
+    tightness bound) and a smaller output over-charges (fails the achievable bound).
+
+    Concrete constant-sum DEXs supply only the per-leg price weights and fee via the
+    two hooks below (:meth:`_cs_price_pair` and :meth:`_cs_fee`), mirroring how
+    :class:`AbstractStableSwapPoolState` exposes ``amp``/``_get_ann`` and
+    :class:`AbstractConstantLiquidityPoolState` exposes ``_sqrt_price_bounds`` — the
+    standard ``reserve_a`` / ``reserve_b`` / ``unit_a`` / ``unit_b`` interface drives
+    the math.
+    """
+
+    fee_basis: int = 10000
+
+    # -- per-DEX hooks (the analogue of the stable base's amp/_get_ann) --------
+    def _cs_price_pair(self) -> tuple[int, int]:
+        """Integer price weights ``(price_a, price_b)`` aligned to ``(unit_a, unit_b)``.
+
+        The constant-sum value vector restricted to this 2-asset leg. Defaults to an
+        equal-price ``(1, 1)`` leg (the common stable-pair case); override when a leg
+        carries non-unit integer price weights.
+        """
+        return (1, 1)
+
+    def _cs_fee(self) -> tuple[int, int]:
+        """LP swap fee as an exact integer ratio ``(fee_num, fee_den)``.
+
+        Defaults to ``volume_fee / fee_basis``; override to supply the on-chain
+        ``fee_num`` / ``fee_den`` directly (the on-chain check floors
+        ``input_value * fee_num / fee_den``).
+        """
+        fee = self.volume_fee
+        if fee is None:
+            return (0, self.fee_basis)
+        if isinstance(fee, (list, tuple)):
+            return (int(fee[0]), self.fee_basis)
+        return (int(fee), self.fee_basis)
+
+    # -- generic constant-sum value-conservation math -------------------------
+    def get_amount_out(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Output amount + price impact for an input ``asset`` (capped at the reserve).
+
+        Value-conservation forward quote: the pool retains the floored fee on the input
+        value and pays out the remaining value at the fixed price ratio, capped at the
+        out-side reserve. This is the unique maximum output that satisfies the on-chain
+        constant-sum step relation.
+
+        Args:
+            asset (Assets): The input asset amount for the swap.
+            precise (bool): Accepted for interface parity; the output is always the
+                integer floor.
+
+        Returns:
+            tuple[Assets, float]: The output asset and the price-impact ratio.
+        """
+        if len(asset) != 1 or asset.unit() not in (self.unit_a, self.unit_b):
+            error_msg = f"Invalid input asset for pool: {asset}"
+            raise ValueError(error_msg)
+
+        price_a, price_b = self._cs_price_pair()
+        fee_num, fee_den = self._cs_fee()
+        if asset.unit() == self.unit_a:
+            price_in, price_out, out_real, out_unit = (
+                price_a,
+                price_b,
+                self.reserve_b,
+                self.unit_b,
+            )
+        else:
+            price_in, price_out, out_real, out_unit = (
+                price_b,
+                price_a,
+                self.reserve_a,
+                self.unit_a,
+            )
+
+        amount_in = asset.quantity()
+        input_value = amount_in * price_in
+        # Floor the fee — the pool wins the dust, exactly as the on-chain check pins
+        # v_increase = floor(input_value * fee_num / fee_den).
+        fee_value = input_value * fee_num // fee_den
+        out_value = input_value - fee_value
+        expected_out = min(out_value // price_out, out_real)
+        out_assets = Assets(**{out_unit: expected_out})
+        if not precise:
+            out_assets.root[out_unit] = expected_out
+
+        if amount_in == 0 or expected_out == 0:
+            return out_assets, 0.0
+        # Spot (out per in) is the fixed ratio price_in/price_out; on an uncapped leg
+        # the only wedge is the fee, so the impact equals the fee fraction (it grows
+        # once the output saturates the reserve cap).
+        effective = (expected_out * price_out) / (amount_in * price_in)
+        return out_assets, 1.0 - effective
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Minimum input + price impact to obtain a desired output ``asset``.
+
+        Algebraic inverse of :meth:`get_amount_out`: the least input whose post-fee
+        value covers the requested output value at the fixed price ratio.
+
+        Args:
+            asset (Assets): The desired output asset amount for the swap.
+            precise (bool): Accepted for interface parity; the input is the integer
+                ceiling (the minimal whole-unit input).
+
+        Returns:
+            tuple[Assets, float]: The required input asset and the price-impact ratio.
+
+        Raises:
+            InvalidPoolError: If the desired output exceeds the leg's reserve.
+        """
+        if len(asset) != 1 or asset.unit() not in (self.unit_a, self.unit_b):
+            error_msg = f"Invalid output asset for pool: {asset}"
+            raise ValueError(error_msg)
+        desired_out = asset.quantity()
+        if desired_out <= 0:
+            error_msg = "desired output must be positive"
+            raise ValueError(error_msg)
+
+        price_a, price_b = self._cs_price_pair()
+        fee_num, fee_den = self._cs_fee()
+        if asset.unit() == self.unit_b:
+            out_real, price_in, price_out, in_unit = (
+                self.reserve_b,
+                price_a,
+                price_b,
+                self.unit_a,
+            )
+        else:
+            out_real, price_in, price_out, in_unit = (
+                self.reserve_a,
+                price_b,
+                price_a,
+                self.unit_b,
+            )
+        if desired_out >= out_real:
+            error_msg = (
+                f"Desired output {desired_out} exceeds available reserve {out_real}"
+            )
+            raise InvalidPoolError(error_msg)
+
+        out_value = desired_out * price_out
+        net = fee_den - fee_num
+
+        def _produced(amount: int) -> int:
+            value = amount * price_in
+            return (value - value * fee_num // fee_den) // price_out
+
+        # Closed-form ceil is a valid upper bound (it ignores the fee-flooring that
+        # makes small inputs cheaper); flooring can move the true minimum down a few
+        # units, so search down to the minimum, then back up to guarantee coverage.
+        amount_in = max(1, -(-(out_value * fee_den) // (price_in * net)))
+        while amount_in > 1 and _produced(amount_in - 1) >= desired_out:
+            amount_in -= 1
+        while _produced(amount_in) < desired_out:
+            amount_in += 1
+        in_assets = Assets(**{in_unit: amount_in})
+        if not precise:
+            in_assets.root[in_unit] = amount_in
+
+        if amount_in == 0:
+            return in_assets, 0.0
+        effective = (desired_out * price_out) / (amount_in * price_in)
+        return in_assets, 1.0 - effective
+
+
 class AbstractStableSwapPoolState(AbstractPoolState):
     """Represents the state of a stable swap automated market maker (AMM) pool."""
 

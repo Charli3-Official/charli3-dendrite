@@ -1,0 +1,47 @@
+{
+  "_comment": "Real preview-testnet constant-sum tag-6 deposit steps (target-pinned proportional): each reserve moves by ceil(r_i*t/V_b) and total LP by floor(lp_b*(V_b+t)/V_b).",
+  "deposits": [
+    {
+      "scoop_tx": "d2e7fc622f98bf731851b3830864c7bdf081a5c8f9f859006c60024e8593f9f8",
+      "step": 0,
+      "ident": "47953ac826cf9a370772bd596009bd6ed7bd7652ef20554b38a1292c",
+      "reserves_before": [
+        245449472097,
+        509142241140
+      ],
+      "reserves_after": [
+        245497680526,
+        509242241140
+      ],
+      "prices": [
+        2,
+        1
+      ],
+      "lp_before": 1000020434521,
+      "lp_after": 1000216847301,
+      "target_delta_v": 196416856,
+      "fee_budget": 0
+    },
+    {
+      "scoop_tx": "779bf4a71284705fc9271251d2680a1901945797079300aef2f83e1116c1aa53",
+      "step": 0,
+      "ident": "02d4780d8a47d4ce0ba8d8719b71eae2987a6640fe0e2929540d787d",
+      "reserves_before": [
+        788816027662,
+        811199565200
+      ],
+      "reserves_after": [
+        789010509036,
+        811399565200
+      ],
+      "prices": [
+        1,
+        1
+      ],
+      "lp_before": 1600007741239,
+      "lp_after": 1600402220676,
+      "target_delta_v": 394481373,
+      "fee_budget": 0
+    }
+  ]
+}
