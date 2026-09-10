@@ -12,6 +12,7 @@ from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.ob.saturnswap import _SATURNSWAP_ORDER_STATE_CLASSES
 from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderBook
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOutputReferenceV3
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapSomeCoverage
@@ -319,3 +320,42 @@ def test_a_maker_cannot_set_an_unbounded_premium_on_its_filler() -> None:
         covered.premium_for_fill(fill)
     # A caller that means it can still opt in.
     assert covered.premium_for_fill(fill, max_premium_bps=1_000_000) == 100 * fill
+
+
+def _order_state(name: str, tx_index: int) -> SaturnSwapV3OrderState:
+    """Build an order state from a fixture datum, as the backend would."""
+    from charli3_dendrite.dataclasses.models import Assets
+
+    cbor = _hex(name)
+    datum = SaturnSwapSwapDatumV3.from_cbor(cbor)
+    sell_unit = datum.policy_id_sell.hex() + datum.asset_name_sell.hex()
+    return SaturnSwapV3OrderState(
+        tx_hash="ab" * 32,
+        tx_index=tx_index,
+        datum_cbor=cbor,
+        datum_hash="cd" * 32,
+        assets=Assets(**{"lovelace": 0, sell_unit: int(datum.amount_sell)}),
+        blockTime=0,
+        blockIndex=tx_index,
+        plutusV2=False,
+    )
+
+
+def test_get_book_gives_two_same_price_orders_one_price() -> None:
+    """Two orders at the same price appear in the book at the same price.
+
+    ``order_ad182bcd`` sells 1,500 for 3,000,000 and ``order_b6bcaeb6_out2``
+    sells 3,000 for 6,000,000. Same price, one twice the size of the other. A
+    book that stores one element of the ``(amount_buy, amount_sell)`` ratio
+    reports them 3,000,000 and 6,000,000, separated by nothing but size.
+    """
+    small = _order_state("order_ad182bcd.hex", 0)
+    large = _order_state("order_b6bcaeb6_out2_cov_none.hex", 1)
+
+    book = SaturnSwapOrderBook.get_book(small.assets, orders=[small, large])
+    side = book.sell_book_full
+
+    assert len(side) == 2, "both orders belong on the same side of this pair"
+    assert {order.price for order in side} == {2000.0}
+    # Same price, and still visibly two different orders.
+    assert sorted(order.quantity for order in side) == [1500, 3000]
