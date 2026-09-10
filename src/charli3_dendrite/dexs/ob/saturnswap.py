@@ -71,6 +71,38 @@ SATURNSWAP_V3_ORDER_ADDRESS = (
     "h2l9cdyhc0eja9mxq0lgeer90edhlfymnxv2ym3szcetqsp0ume8"
 )
 
+# SaturnSwap runs on preprod too, and only the V3 contract is deployed there. The
+# 1% and legacy 4% contracts are mainnet-only, so their selectors are empty off
+# mainnet rather than falling back to a mainnet address that a preprod backend
+# would query and report as an empty book.
+SATURNSWAP_V3_ORDER_ADDRESS_PREPROD = (
+    "addr_test1wrky2av35n66krg8q9r9trjlzu5le3wqkgcywfphhcehvfg03jugc"
+)
+
+# Selected per order-state class. Override on a subclass, or set
+# SATURNSWAP_NETWORK=preprod, when reading a non-mainnet deployment.
+# A covered order's premium is paid by the FILLER, out of pocket, to a vault the
+# MAKER names in its own datum. `premium_bps` is therefore attacker-controlled
+# for anyone filling an order they did not create, and nothing on the wire caps
+# it. Refuse above 100% of the fill; the reference filler uses the same bound.
+SATURNSWAP_MAX_PREMIUM_BPS = 10_000
+
+SATURNSWAP_NETWORK_ENV = "SATURNSWAP_NETWORK"
+SATURNSWAP_NETWORKS = ("mainnet", "preprod")
+
+
+def saturnswap_network() -> str:
+    """Return the configured SaturnSwap network, defaulting to mainnet."""
+    network = os.environ.get(SATURNSWAP_NETWORK_ENV, "mainnet").strip().lower()
+    if network not in SATURNSWAP_NETWORKS:
+        msg = (
+            f"{SATURNSWAP_NETWORK_ENV}={network!r} is not a SaturnSwap network; "
+            f"expected one of {', '.join(SATURNSWAP_NETWORKS)}"
+        )
+        raise ValueError(msg)
+    return network
+
+
 # When the protocol shares its authorize hot-key, set this env var to the signing
 # key and dendrite builds the fee-free authorized fill on either contract.
 SATURNSWAP_AUTHORIZE_KEY_ENV = "SATURNSWAP_AUTHORIZE_KEY"
@@ -307,15 +339,31 @@ class SaturnSwapSwapDatumV3(OrderDatum):
             return None
         return self.coverage.value.vault.to_address().encode()
 
-    def premium_for_fill(self, user_sell_amount: int) -> int:
+    def premium_for_fill(
+        self,
+        user_sell_amount: int,
+        max_premium_bps: int = SATURNSWAP_MAX_PREMIUM_BPS,
+    ) -> int:
         """Out-of-pocket premium (buy asset) for a fill of ``user_sell_amount``.
 
         ``max(1, user_sell_amount * premium_bps // 10000)`` for covered orders;
         ``0`` when uncovered.
+
+        Raises when the order asks for more than ``max_premium_bps``. The maker
+        writes ``premium_bps`` into its own datum and names the vault it is paid
+        to, so an order can ask any premium it likes of whoever fills it. Pass a
+        larger bound to accept one deliberately.
         """
         if not self.is_covered():
             return 0
-        base = (user_sell_amount * self.coverage.value.premium_bps) // 10_000
+        premium_bps = self.coverage.value.premium_bps
+        if premium_bps > max_premium_bps:
+            msg = (
+                f"coverage premium_bps {premium_bps} exceeds max {max_premium_bps}; "
+                "the premium is paid by the filler to a vault the maker chose"
+            )
+            raise ValueError(msg)
+        base = (user_sell_amount * premium_bps) // 10_000
         return max(1, base)
 
     def check_min_partial_fill(self, user_sell_amount: int) -> None:
@@ -490,6 +538,11 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
     ``dex()``. The base intentionally leaves ``dex()`` unimplemented so the
     subclass-discovery walk skips it and only registers the concrete leaves.
     """
+
+    # Which deployment this class reads. None defers to SATURNSWAP_NETWORK, so a
+    # caller can select preprod by environment or by subclassing, and a subclass
+    # that pins it is unaffected by the environment.
+    network: ClassVar[str | None] = None
 
     tx_hash: str
     tx_index: int
@@ -881,10 +934,15 @@ class SaturnSwapOrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_ORDER_ADDRESS],
+        "preprod": [],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (live 1% contract)."""
-        return [SATURNSWAP_ORDER_ADDRESS]
+        """Return order script addresses (live 1% contract, mainnet only)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
 
 class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
@@ -901,10 +959,15 @@ class SaturnSwapLegacyOrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_LEGACY_ORDER_ADDRESS],
+        "preprod": [],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (legacy 4% contract)."""
-        return [SATURNSWAP_LEGACY_ORDER_ADDRESS]
+        """Return order script addresses (legacy 4% contract, mainnet only)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
 
 class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
@@ -923,10 +986,15 @@ class SaturnSwapV3OrderState(_SaturnSwapOrderStateBase):
         """Return the DEX name."""
         return "SaturnSwap"
 
+    ADDRESSES: ClassVar[dict[str, list[str]]] = {
+        "mainnet": [SATURNSWAP_V3_ORDER_ADDRESS],
+        "preprod": [SATURNSWAP_V3_ORDER_ADDRESS_PREPROD],
+    }
+
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Return order script addresses (V3 contract)."""
-        return [SATURNSWAP_V3_ORDER_ADDRESS]
+        """Return order script addresses (V3 contract, per network)."""
+        return cls.ADDRESSES[cls.network or saturnswap_network()]
 
     @classmethod
     def order_datum_class(cls) -> type[PlutusData]:
@@ -1163,14 +1231,18 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
                 order.assets = Assets(**{buy_unit: 0}) + Assets(**{sell_unit: 0})
             if order.inactive:
                 continue
-            price_a, price_b = order.price
-            if price_a == 0 or price_b == 0:
+            # `order.price` is the ratio (amount_buy, amount_sell), so a price is the
+            # quotient. Taking one element alone yields a base-unit amount that scales
+            # with order size, which sorts two orders at the same price by how large
+            # they are. `cardanoswaps.py` divides here for the same reason.
+            amount_buy, amount_sell = order.price
+            if amount_buy == 0 or amount_sell == 0:
                 continue
             if order.in_unit == assets.unit() and order.out_unit == assets.unit(1):
-                price = float(price_a)
+                price = amount_buy / amount_sell
                 side = sell_orders
             elif order.in_unit == assets.unit(1) and order.out_unit == assets.unit(0):
-                price = float(price_b)
+                price = amount_sell / amount_buy
                 side = buy_orders
             else:
                 continue
