@@ -12,6 +12,7 @@ from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.ob.saturnswap import _SATURNSWAP_ORDER_STATE_CLASSES
 from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderBook
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOutputReferenceV3
 from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapSomeCoverage
@@ -214,3 +215,147 @@ def test_v3_order_state_is_top_level_exported() -> None:
     assert hasattr(charli3_dendrite, "SaturnSwapOrderState")
     assert hasattr(charli3_dendrite, "SaturnSwapLegacyOrderState")
     assert hasattr(charli3_dendrite, "SaturnSwapOrderBook")
+
+
+def test_book_price_is_a_ratio_not_an_amount() -> None:
+    """Two orders at the same price rank equally, whatever size they are.
+
+    ``_SaturnSwapOrderStateBase.price`` returns the ratio ``(amount_buy,
+    amount_sell)``. A book that keeps one element of that tuple is keeping a
+    base-unit amount, which grows with the size of the order, so the book sorts
+    by size wherever prices tie and is wrong by a factor of ``amount_sell``
+    everywhere else.
+
+    Both datums below are real mainnet orders from ``tests/fixtures``. They ask
+    the same price and differ only in size: ad182bcd sells 1,500 to buy
+    3,000,000, and b6bcaeb6#2 sells 3,000 to buy 6,000,000. A correct book gives
+    them one price.
+    """
+    small = SaturnSwapSwapDatumV3.from_cbor(_hex("order_ad182bcd.hex"))
+    large = SaturnSwapSwapDatumV3.from_cbor(_hex("order_b6bcaeb6_out2_cov_none.hex"))
+
+    def ratio(datum: SaturnSwapSwapDatumV3) -> float:
+        return int(datum.amount_buy) / int(datum.amount_sell)
+
+    assert ratio(small) == ratio(large), "fixtures no longer share a price"
+    # The defect this pins: keeping amount_buy alone separates them by their size
+    # ratio, so the cheaper-looking order is merely the smaller one.
+    assert float(small.amount_buy) != float(large.amount_buy)
+    assert float(large.amount_buy) / float(small.amount_buy) == pytest.approx(
+        int(large.amount_sell) / int(small.amount_sell)
+    )
+
+
+def test_order_selector_follows_the_configured_network(monkeypatch) -> None:
+    """The V3 contract is deployed on preprod; the other two are not.
+
+    A selector that answered with a mainnet address while a preprod backend was
+    configured would query an address that cannot exist there and report the
+    empty result as an empty book, which is the failure that looks like data.
+    """
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+    from charli3_dendrite.dexs.ob.saturnswap import (
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    )
+    from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapLegacyOrderState
+    from charli3_dendrite.dexs.ob.saturnswap import SaturnSwapOrderState
+
+    monkeypatch.delenv("SATURNSWAP_NETWORK", raising=False)
+    assert SaturnSwapV3OrderState.order_selector() == [SATURNSWAP_V3_ORDER_ADDRESS]
+    assert SaturnSwapOrderState.order_selector() != []
+
+    monkeypatch.setenv("SATURNSWAP_NETWORK", "preprod")
+    assert SaturnSwapV3OrderState.order_selector() == [
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    ]
+    # Mainnet-only contracts answer with nothing rather than a mainnet address.
+    assert SaturnSwapOrderState.order_selector() == []
+    assert SaturnSwapLegacyOrderState.order_selector() == []
+
+    monkeypatch.setenv("SATURNSWAP_NETWORK", "notanetwork")
+    with pytest.raises(ValueError, match="not a SaturnSwap network"):
+        SaturnSwapV3OrderState.order_selector()
+
+
+def test_preprod_address_is_a_testnet_address() -> None:
+    """A mainnet address configured as preprod would query the wrong chain."""
+    from pycardano import Address
+    from pycardano import Network
+
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_V3_ORDER_ADDRESS
+    from charli3_dendrite.dexs.ob.saturnswap import (
+        SATURNSWAP_V3_ORDER_ADDRESS_PREPROD,
+    )
+
+    assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS_PREPROD).network is Network.TESTNET
+    assert Address.decode(SATURNSWAP_V3_ORDER_ADDRESS).network is Network.MAINNET
+
+
+def test_a_maker_cannot_set_an_unbounded_premium_on_its_filler() -> None:
+    """The premium is paid by the filler to a vault the maker names.
+
+    ``premium_bps`` lives in the maker's own datum, so an order can ask any
+    premium it likes of whoever fills it, and the premium is out-of-pocket
+    rather than deducted from proceeds. Anything above 100% of the fill is
+    refused unless the caller raises the bound on purpose.
+    """
+    from charli3_dendrite.dexs.ob.saturnswap import SATURNSWAP_MAX_PREMIUM_BPS
+
+    covered = SaturnSwapSwapDatumV3.from_cbor(_hex(_COVERED))
+    fill = 1_000_000
+
+    # The honest order in the fixtures is 100 bps and is unaffected.
+    assert covered.coverage.value.premium_bps == _COVERED_PREMIUM_BPS
+    assert covered.premium_for_fill(fill) == _PREMIUM_ON_1M
+
+    covered.coverage.value.premium_bps = SATURNSWAP_MAX_PREMIUM_BPS + 1
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_for_fill(fill)
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_payment(fill)
+
+    # 100x the trade, which is what the bound exists to stop.
+    covered.coverage.value.premium_bps = 1_000_000
+    with pytest.raises(ValueError, match="exceeds max"):
+        covered.premium_for_fill(fill)
+    # A caller that means it can still opt in.
+    assert covered.premium_for_fill(fill, max_premium_bps=1_000_000) == 100 * fill
+
+
+def _order_state(name: str, tx_index: int) -> SaturnSwapV3OrderState:
+    """Build an order state from a fixture datum, as the backend would."""
+    from charli3_dendrite.dataclasses.models import Assets
+
+    cbor = _hex(name)
+    datum = SaturnSwapSwapDatumV3.from_cbor(cbor)
+    sell_unit = datum.policy_id_sell.hex() + datum.asset_name_sell.hex()
+    return SaturnSwapV3OrderState(
+        tx_hash="ab" * 32,
+        tx_index=tx_index,
+        datum_cbor=cbor,
+        datum_hash="cd" * 32,
+        assets=Assets(**{"lovelace": 0, sell_unit: int(datum.amount_sell)}),
+        blockTime=0,
+        blockIndex=tx_index,
+        plutusV2=False,
+    )
+
+
+def test_get_book_gives_two_same_price_orders_one_price() -> None:
+    """Two orders at the same price appear in the book at the same price.
+
+    ``order_ad182bcd`` sells 1,500 for 3,000,000 and ``order_b6bcaeb6_out2``
+    sells 3,000 for 6,000,000. Same price, one twice the size of the other. A
+    book that stores one element of the ``(amount_buy, amount_sell)`` ratio
+    reports them 3,000,000 and 6,000,000, separated by nothing but size.
+    """
+    small = _order_state("order_ad182bcd.hex", 0)
+    large = _order_state("order_b6bcaeb6_out2_cov_none.hex", 1)
+
+    book = SaturnSwapOrderBook.get_book(small.assets, orders=[small, large])
+    side = book.sell_book_full
+
+    assert len(side) == 2, "both orders belong on the same side of this pair"
+    assert {order.price for order in side} == {2000.0}
+    # Same price, and still visibly two different orders.
+    assert sorted(order.quantity for order in side) == [1500, 3000]

@@ -1,0 +1,211 @@
+{
+  "_comment": "SundaeSwap V4 deployments, per Cardano network. Applied validator hashes (blake2b-224 of the parameterised PlutusV3 script), the published reference-script UTxOs, and the token-named settings nodes, as served by the Sundae API `protocols` query and verified against the chain. A network absent here has no V4 deployment.",
+  "preview": {
+    "validators": {
+      "pool.spend": "f577d24cfa393efdb85482554acbdd5082f99acba9c17eab916cf87a",
+      "pool.mint": "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd",
+      "order.spend": "8a7ecdafb3605ddf761751b391c20482b7ef42ca01575d135d484c2b",
+      "basic_order.withdraw": "4859acf5f46a50f383d16323a3c7eacf502ba732aa8874a7d3b7783e",
+      "settings.spend": "43f2ee25b54dcd8150df9e9908ae890638844cd3a748ef05d8a09d09",
+      "settings.mint": "7b576da254d745bcbbabc91f34605deaa08f4e68d216f2a67d72ee12",
+      "constant_sum.withdraw": "fa7f4860b25488fd63f2a7f5be4e8711520d288074b01286c9f14344",
+      "fee_split.withdraw": "6cec93b3ee519553eda356c36b9ef6ad91397495a4316c53fc2ce426",
+      "fairness.withdraw": "f291de3ed5b01fa102764bfca6b6e8bc503a5899fc44fbc903b752c3",
+      "strategy_order.withdraw": "5b67b76ff03dd497083df1450caabb3a4a99feea53ad631e700173ee",
+      "fee_constraint.withdraw": "d7d1c09deb8bc8e15baae7895e57e86ab6d0cb10e2faaa6d96cd691b",
+      "governance.withdraw": "4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d5246",
+      "treasury_policy.withdraw": "6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd372876"
+    },
+    "references": {
+      "settings.mint": {
+        "tx_hash": "626a652fcd652f0e4f4a66bdd61289b9aa98a0671988ff7aec9e6e092e748e79",
+        "index": 0
+      },
+      "settings.spend": {
+        "tx_hash": "d79180d547b06d6f97a042ee203172aac12204fd8e8cf48e5cbda86a1a0e6d99",
+        "index": 0
+      },
+      "pool.mint": {
+        "tx_hash": "2a7b168ccffd79876d72e0be667135f023801228f2cb3b1b1090daef4d3096c6",
+        "index": 0
+      },
+      "pool.spend": {
+        "tx_hash": "a2b26636eb37949a10a5981c650de0c74497bda2776bcf42e17e5d9402be0b15",
+        "index": 0
+      },
+      "order.spend": {
+        "tx_hash": "cfd46884fdf1b6b2a91feb6ad7252f950e5dad80ad83b2939954795c093925da",
+        "index": 0
+      },
+      "basic_order.withdraw": {
+        "tx_hash": "d7b9325e631b6e2d486271462b478550f27920f1a672da4171c7eeed4228f868",
+        "index": 0
+      },
+      "strategy_order.withdraw": {
+        "tx_hash": "3015dbd2b5571f15c900bf954674c9d42f522ba7788d48b6773c581d6dcf20c7",
+        "index": 0
+      },
+      "constant_sum.withdraw": {
+        "tx_hash": "3363062940377ce65d2775fea37b1e18e6672a42f4dc245d4161b5a343b910bf",
+        "index": 0
+      },
+      "fee_split.withdraw": {
+        "tx_hash": "fac830483b6c9d216a87da316244596887394aaeeeae413dfbea8c47aae37b52",
+        "index": 0
+      },
+      "fairness.withdraw": {
+        "tx_hash": "cff31307c7fad25428291f36c90e92eff2e5b5516f38c72944a952e6a50c8191",
+        "index": 0
+      },
+      "treasury_policy.withdraw": {
+        "tx_hash": "b84f010f953bd5166f30dcbf6ebfd346440a740cfeb81d83829e1d110b728363",
+        "index": 0
+      },
+      "fee_constraint.withdraw": {
+        "tx_hash": "04a51c07ad31edf2e8af96aa18b69afd4dabcbbcd5eb8a00a95dd4a320a242e5",
+        "index": 0
+      },
+      "governance.withdraw": {
+        "tx_hash": "a3148ea514d48587d1bb99725c97fe1570aa38e3b07354dab0575dc783f64c6f",
+        "index": 0
+      }
+    },
+    "settings_policy": "7b576da254d745bcbbabc91f34605deaa08f4e68d216f2a67d72ee12",
+    "pool_nft_policy": "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd",
+    "settings": {
+      "settings": {
+        "tx_hash": "29face89941056b01ae16fa65b8b3400f4b12381be071cdb7e347552391f4d97",
+        "index": 0
+      },
+      "migration-authority": {
+        "tx_hash": "bf1847061c3756520be9ad72cb6f5cc5a846615b5e7aef5281e1f49f7297163d",
+        "index": 0
+      },
+      "fee-settings": {
+        "tx_hash": "d22197886d63413f131c68a6687a90d7d5772b842584e6c1e407b10046c0d709",
+        "index": 0,
+        "base_fee": 1000000,
+        "fee_per_step": 0
+      },
+      "basic-order": {
+        "tx_hash": "7508c857627a90ecd06f1a3877e6019a3e9d639c7537cebd8fe3da9cc5e77470",
+        "index": 0,
+        "token": "0056667008c14652ef9039690587c17fa70546e3ccd62ec63ec750cfd72969ab"
+      },
+      "strategy-order": {
+        "tx_hash": "f60d50ddd875d4dd772a4cb543b134abc00f33078b20d6aa7efd14c9bbe525b5",
+        "index": 0,
+        "token": "00e3317090f21164a1042f9a5d0aa07d585d7fdf6e4439788955c2384d844078"
+      },
+      "cs-pool": {
+        "tx_hash": "2d046837e142376b57fb7af8d7a4defe638670df08b2cae1bc5ea134e400c3bf",
+        "index": 0,
+        "token": "0004ba14399a9e56f9bd699b7c1892213c57aa533c790a6fd06cf66c054a6325"
+      }
+    }
+  },
+  "preprod": {
+    "validators": {
+      "pool.spend": "ae364bd4888823a4c8932845a19c5b3891480a9a2e6ba068afd35ee7",
+      "pool.mint": "a7a054cbb875e4882f1f3248a078643e66f3d00271c0a74f4d85b477",
+      "order.spend": "2d066c461f37f3a41d2b2e57df0bff04cdf1ac799d06cb103f685ff2",
+      "basic_order.withdraw": "e6d77b2d7cca04e2c9b8af99ed0a798cbd69e702fa1c2d8fde989dae",
+      "settings.spend": "726a1160a888c6d08934c4e001eb166e81dda300c2500d8b53fb4130",
+      "settings.mint": "ecd76a8c8cf574d44b38a016246c1c6f9a75f5baa8417db8e59c81c5",
+      "constant_sum.withdraw": "b22b5293a1d6265a5a02564436bf35f6f3cef85654f565c2759cce4b",
+      "fee_split.withdraw": "1735ce824f52913fdae7e03a9005c35b4eb56aaa793c51d1b20e904d",
+      "fairness.withdraw": "e2a916c7a20f53970e7270dd27918b5104a3dfe06dcf47ecd0395844",
+      "strategy_order.withdraw": "3e32ea28c902aef16682b96bd7236347a55a216d7e4cc5ff7b0c5f9a",
+      "fee_constraint.withdraw": "ab835b719a82f620d5517b7fe846b4db1c8caadd024befe63efce5b6",
+      "governance.withdraw": "d0fe277f9969b57c3c265311b4dfff277588ae036fc0c408d367d515",
+      "treasury_policy.withdraw": "cb4795b8c101099e2bd0f8923c6f10f618ab1f2b552b8c18ffb25416"
+    },
+    "references": {
+      "settings.mint": {
+        "tx_hash": "afdcc9cf068b190f267f20d9be7a8257240145312e4b13f1c76074d96b4108d2",
+        "index": 0
+      },
+      "settings.spend": {
+        "tx_hash": "471002b45ecc6bf10ec403b17fe914a9d3c7d3f2221b38606d24eb5c12b31385",
+        "index": 0
+      },
+      "pool.mint": {
+        "tx_hash": "be8892e1385339d7000bed38fa2f22ed0e6b2f028e3ef7ddf39e83b89c02f748",
+        "index": 0
+      },
+      "pool.spend": {
+        "tx_hash": "d93735bd25876ca35bce28fc1307637774fc9f2023a118845dabab070f89ce9d",
+        "index": 0
+      },
+      "order.spend": {
+        "tx_hash": "b5ad7198aaca2bee2813a4568af5f21db4dfa704fa0f783359a7e4b9857efcbe",
+        "index": 0
+      },
+      "basic_order.withdraw": {
+        "tx_hash": "85f1c6a17afa243629ef066816137e02b66c8af03e5a0cb3b8d50eadcfee7a5d",
+        "index": 0
+      },
+      "strategy_order.withdraw": {
+        "tx_hash": "73b25c73846b863d94074235763f1986c8e9afdcdfbd0fae5c95d88031fbe82c",
+        "index": 0
+      },
+      "constant_sum.withdraw": {
+        "tx_hash": "e4ebd18f0f884c0f74854c2b91d3e58952075c1a174c378070057c506a8f605f",
+        "index": 0
+      },
+      "fee_split.withdraw": {
+        "tx_hash": "8afe88bcb19cccc5ebdc3666733c796fc6a0b9bfa47f233a2b15877f71686528",
+        "index": 0
+      },
+      "fairness.withdraw": {
+        "tx_hash": "40982ac55d21b7911b9fea6f39afb396aba0213501ef7bacb7a95e6cf92f6b23",
+        "index": 0
+      },
+      "treasury_policy.withdraw": {
+        "tx_hash": "fd30e3e3c9281ef1a25900e71679f3d015dd59819b7d3682c97478f2c32501b4",
+        "index": 0
+      },
+      "fee_constraint.withdraw": {
+        "tx_hash": "1a7f2feed5902d13d1b8f59a6396d27c43968cf2f1d6c163a7dcaa33e828a2fe",
+        "index": 0
+      },
+      "governance.withdraw": {
+        "tx_hash": "ee55e17391cb74b5e3be458b94459d4183d1fa583505efb6442594008e8067ef",
+        "index": 0
+      }
+    },
+    "settings_policy": "ecd76a8c8cf574d44b38a016246c1c6f9a75f5baa8417db8e59c81c5",
+    "pool_nft_policy": "a7a054cbb875e4882f1f3248a078643e66f3d00271c0a74f4d85b477",
+    "settings": {
+      "settings": {
+        "tx_hash": "941f8c36902f4ab19336d1ac06692d197e7bf8539eb3df100df6b5a4449387e2",
+        "index": 0
+      },
+      "migration-authority": {
+        "tx_hash": "cf415bdccc276338a29a404517ec04d36b09eacff89fed54316ad842aa607c7b",
+        "index": 0
+      },
+      "fee-settings": {
+        "tx_hash": "73fce38547c8f8d8724c72886562e66245940c0e92344b96444a620804987b63",
+        "index": 0,
+        "base_fee": 1000000,
+        "fee_per_step": 0
+      },
+      "basic-order": {
+        "tx_hash": "e02459de9c543e2353c79f372784fad44a0c206966c50fc045612c502dc4179a",
+        "index": 0,
+        "token": "00e9364343e08e20c13994e753b462def14bff956fd6b53245273ec5f8f0a887"
+      },
+      "strategy-order": {
+        "tx_hash": "ba3f57ae0c79e7b99bfc81aa2206f07c46e547ba92d314494392ca5ffebb39d9",
+        "index": 0,
+        "token": "0093657eeb8138c0da14ffdb49ae4fa029eea5d2903d06fd1d5a0a306fa723f5"
+      },
+      "cs-pool": {
+        "tx_hash": "7841a543cac3b2ec071c8c2cd9efe1fb1b356ebdde02016ecca8548cde53ce33",
+        "index": 0,
+        "token": "00d18c29fb9bd2d27b95a055b5c821a10aee09dc9aa8347bb4b1dca38ddbf585"
+      }
+    }
+  }
+}
