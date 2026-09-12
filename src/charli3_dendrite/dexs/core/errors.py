@@ -23,3 +23,11 @@ class NoAssetsError(Exception):
     """Error raised when no assets are in the pool, or it only contains lovelace."""
 
     pass
+
+
+class ModuleConfigUnavailableError(Exception):
+    """A module config preimage could not be resolved for a vault.
+
+    Raised when a config is neither supplied nor cached and the active backend
+    cannot serve the producing transaction's redeemers.
+    """

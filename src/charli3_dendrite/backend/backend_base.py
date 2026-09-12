@@ -10,6 +10,7 @@ from pycardano import Address  # type: ignore
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
@@ -204,6 +205,23 @@ class AbstractBackend(ABC):
             The datum associated with the address, if any.
         """
         pass
+
+    def get_redeemers(self, tx_hash: str) -> list[RedeemerRecord]:
+        """Every redeemer supplied in transaction ``tx_hash``.
+
+        Backends that cannot index redeemers leave this unimplemented.
+
+        Args:
+            tx_hash: The transaction hash (hex).
+
+        Returns:
+            The transaction's redeemers, in ``(purpose, index)`` order.
+
+        Raises:
+            NotImplementedError: if the backend has no redeemer index.
+        """
+        msg = f"{type(self).__name__} cannot read transaction redeemers."
+        raise NotImplementedError(msg)
 
     @abstractmethod
     def get_axo_target(
