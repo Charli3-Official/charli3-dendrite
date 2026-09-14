@@ -94,9 +94,6 @@ from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
 from charli3_dendrite.dataclasses.models import PoolSelector
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
@@ -1297,18 +1294,6 @@ def module_config_hash(config: PlutusData) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Per-invariant-module pricing classes (a PROJECTED 2-asset leg of a vault)
-#
-# A V4 pool UTxO is an N-asset vault; routing prices one 2-asset ``(i, j)`` leg
-# at a time. Each class below prices a single such leg with the standard
-# ``reserve_a``/``reserve_b``/``unit_a``/``unit_b`` interface its curve base
-# already drives. The pricing params (fee / prices / sqrt-band) are NOT in the
-# resting pool datum — they are committed as a hash and supplied off-datum in the
-# module's Operate redeemer — so they are carried here as explicit fields the
-# caller fills from the live module config.
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Deployment manifest
 #
 # V4 validators are parameterised (by the settings policy, the pool policy, the
@@ -1866,7 +1851,310 @@ class SundaeV4Vault(DendriteBaseModel):
         raise ModuleConfigUnavailableError(msg)
 
 
-class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
+class _SundaeV4OrderBuilders:
+    """Order builders shared by every V4 pool type: basic, strategy and cancel."""
+
+    if TYPE_CHECKING:
+        vault: SundaeV4Vault
+
+    def deployment(self) -> SundaeV4Deployment:
+        """The deployment the bound vault targets."""
+        return self.vault.deployment()
+
+    @classmethod
+    def order_owner(cls, address: Address) -> MultisigSignature:
+        """The single-signature ``owner`` an order placed from ``address`` gets.
+
+        Keyed on the address's stake key when it has one, otherwise on its
+        payment key, so a wallet's orders share one owner across its payment
+        addresses. A cancel then needs that key among the transaction's required
+        signers.
+
+        Raises:
+            ValueError: if the address has no verification-key credential.
+        """
+        for part in (address.staking_part, address.payment_part):
+            if isinstance(part, VerificationKeyHash):
+                return MultisigSignature(key_hash=bytes(part))
+        msg = "The order owner must be a verification-key credential."
+        raise ValueError(msg)
+
+    @classmethod
+    def _fixed_destination(
+        cls,
+        address: Address,
+        datum_target: PlutusData | None = None,
+    ) -> DestinationFixed:
+        """A ``DestinationFixed`` paying ``address`` with an optional inline datum."""
+        datum: RawPlutusData = (
+            RawPlutusData(CBORTag(121, [datum_target.to_primitive()]))
+            if datum_target is not None
+            else _none_option()
+        )
+        return DestinationFixed(
+            address=PlutusFullAddress.from_address(address),
+            datum=datum,
+        )
+
+    def _order_datum(
+        self,
+        *,
+        address_source: Address,
+        destination: Destination,
+        config_token: bytes,
+        constraints: list[tuple[bytes, PlutusData | RawPlutusData]],
+        owner: MultisigScript | None,
+        service_budget: int | None,
+        max_per_execution: int | None,
+    ) -> SundaeV4OrderDatum:
+        """Assemble an order datum around a constraint list.
+
+        Both fee fields default to the deployment's ``base_fee``: a single-shot
+        order then pays exactly the current fee, and any headroom above it is
+        the caller's explicit choice (a basic order's terminal fill takes
+        ``min(max_per_execution, service_budget)`` in full).
+        """
+        base_fee = self.deployment().base_fee
+        return SundaeV4OrderDatum(
+            owner=owner if owner is not None else self.order_owner(address_source),
+            destination=destination,
+            service_budget=base_fee if service_budget is None else service_budget,
+            max_per_execution=(
+                base_fee if max_per_execution is None else max_per_execution
+            ),
+            config_token=config_token,
+            constraints=IndefiniteList(
+                [IndefiniteList([key, payload]) for key, payload in constraints],
+            ),
+            extension=_void(),
+        )
+
+    def basic_datum(
+        self,
+        address_source: Address,
+        offered: Assets,
+        min_received: Assets,
+        kind: BasicConstraintKind = BasicConstraintKind.SWAP,
+        *,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        owner: MultisigScript | None = None,
+        service_budget: int | None = None,
+        max_per_execution: int | None = None,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 basic order of the given ``kind``.
+
+        A basic order offers ``offered`` and requires at least ``min_received``,
+        settled in one terminal fill to ``address_target`` (defaulting to
+        ``address_source``). It binds the ``basic-order`` config: the constraints
+        are the basic-order payload (its constructor index is ``kind``) followed
+        by the fee constraint's no-op payload.
+        """
+        deployment = self.deployment()
+        payload = _BASIC_KINDS[kind](
+            offered=_asset_amounts(offered),
+            min_received=_asset_amounts(min_received),
+        )
+        target = address_target if address_target is not None else address_source
+        return self._order_datum(
+            address_source=address_source,
+            destination=self._fixed_destination(target, datum_target),
+            config_token=deployment.basic_config_token,
+            constraints=[
+                (deployment.basic_order_hash, payload),
+                (deployment.fee_constraint_hash, _void()),
+            ],
+            owner=owner,
+            service_budget=service_budget,
+            max_per_execution=max_per_execution,
+        )
+
+    def swap_datum(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        *,
+        owner: MultisigScript | None = None,
+        service_budget: int | None = None,
+        max_per_execution: int | None = None,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 swap: a routing-free basic order.
+
+        ``in_assets`` is the single asset being sold and ``out_assets`` the single
+        asset asked for, at the minimum amount that must come back. The scooper
+        chooses the pool(s); the order only pins the floor.
+
+        Raises:
+            ValueError: if more than one asset is offered or asked.
+        """
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            msg = "A swap offers exactly one asset and asks for exactly one asset."
+            raise ValueError(msg)
+        return self.basic_datum(
+            address_source,
+            in_assets,
+            out_assets,
+            BasicConstraintKind.SWAP,
+            address_target=address_target,
+            datum_target=datum_target,
+            owner=owner,
+            service_budget=service_budget,
+            max_per_execution=max_per_execution,
+        )
+
+    def deposit_datum(
+        self,
+        address_source: Address,
+        offered: Assets,
+        min_lp: Assets,
+        *,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        owner: MultisigScript | None = None,
+        service_budget: int | None = None,
+        max_per_execution: int | None = None,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 deposit: a basic order of kind deposit.
+
+        ``offered`` holds every pool asset (a constant-sum deposit must be
+        proportional) and ``min_lp`` the floor on the pool's LP token.
+        """
+        return self.basic_datum(
+            address_source,
+            offered,
+            min_lp,
+            BasicConstraintKind.DEPOSIT,
+            address_target=address_target,
+            datum_target=datum_target,
+            owner=owner,
+            service_budget=service_budget,
+            max_per_execution=max_per_execution,
+        )
+
+    def withdraw_datum(
+        self,
+        address_source: Address,
+        lp: Assets,
+        min_received: Assets,
+        *,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        owner: MultisigScript | None = None,
+        service_budget: int | None = None,
+        max_per_execution: int | None = None,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 withdrawal: a basic order of kind withdraw.
+
+        ``lp`` is the pool's LP token being redeemed and ``min_received`` the
+        per-asset floor on the proportional payout.
+        """
+        return self.basic_datum(
+            address_source,
+            lp,
+            min_received,
+            BasicConstraintKind.WITHDRAW,
+            address_target=address_target,
+            datum_target=datum_target,
+            owner=owner,
+            service_budget=service_budget,
+            max_per_execution=max_per_execution,
+        )
+
+    def strategy_datum(
+        self,
+        address_source: Address,
+        auth: MultisigScript,
+        final_destinations: list[Address],
+        *,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        owner: MultisigScript | None = None,
+        service_budget: int | None = None,
+        max_per_execution: int | None = None,
+    ) -> SundaeV4OrderDatum:
+        """Build the order datum for a V4 strategy order.
+
+        A strategy order is a *signed delegation*: the datum carries a
+        :class:`StrategyConstraint` (the ``auth`` multisig allowed to sign fills and
+        the candidate ``final_destinations`` it may pay out to), not a concrete
+        trade. The order rests paying back to itself (a :class:`DestinationSelf`
+        continuation) unless ``address_target`` is given; at scoop time the
+        executor supplies a signed :class:`StrategyExecution` that selects the fill
+        and, when terminal, one of ``final_destinations`` by index. Deciding and
+        signing that execution is off-chain executor work and is not built here.
+
+        The order binds the ``strategy-order`` config: the constraints are the
+        strategy constraint followed by the fee constraint's no-op payload.
+        """
+        deployment = self.deployment()
+        strategy = StrategyConstraint(
+            auth=auth,
+            final_destinations=IndefiniteList(
+                [self._fixed_destination(dest) for dest in final_destinations],
+            ),
+        )
+        destination: Destination = (
+            self._fixed_destination(address_target, datum_target)
+            if address_target is not None
+            else DestinationSelf()
+        )
+        return self._order_datum(
+            address_source=address_source,
+            destination=destination,
+            config_token=deployment.strategy_config_token,
+            constraints=[
+                (deployment.strategy_order_hash, strategy),
+                (deployment.fee_constraint_hash, _void()),
+            ],
+            owner=owner,
+            service_budget=service_budget,
+            max_per_execution=max_per_execution,
+        )
+
+    @classmethod
+    def cancel_redeemer(cls) -> Redeemer:
+        """The order spend redeemer for an owner cancel (``OrderCancel``).
+
+        The order validator's ``Cancel`` branch only checks that the order
+        ``owner`` multisig is satisfied (the owner key hash among the
+        transaction's signatories), so a cancel needs no settings reference input
+        and no withdraw validator — just this redeemer on the order input and the
+        owner as a required signer.
+        """
+        return Redeemer(OrderCancel())
+
+    @classmethod
+    def cancel_tx(
+        cls,
+        order_utxo: UTxO,
+        order_ref_utxo: UTxO,
+        owner: VerificationKeyHash,
+        tx_builder: TransactionBuilder,
+    ) -> TransactionBuilder:
+        """Add an owner-cancel of ``order_utxo`` to ``tx_builder``.
+
+        Spends the live order UTxO with the :meth:`cancel_redeemer`, supplying the
+        order validator from ``order_ref_utxo`` as a reference script (so the
+        script bytes need not be embedded) and registering ``owner`` as a required
+        signer so the validator's owner-multisig check is satisfied.
+        """
+        tx_builder.add_script_input(
+            utxo=order_utxo,
+            script=order_ref_utxo,
+            redeemer=cls.cancel_redeemer(),
+        )
+        signers = list(tx_builder.required_signers or [])
+        if owner not in signers:
+            signers.append(owner)
+        tx_builder.required_signers = signers
+        return tx_builder
+
+
+class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolState):
     """The constant-sum module bound to a vault on one action tag.
 
     ``prices`` is the config's positional price vector re-keyed to units;
@@ -1969,18 +2257,6 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
     ) -> Assets:
         """The lovelace rider returned with the order's payout."""
         return self._deposit_rider
-
-    def swap_datum(
-        self,
-        address_source: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-    ) -> PlutusData:
-        """Replaced by the order builders."""
-        raise NotImplementedError
 
     # -- curve ----------------------------------------------------------------
 
@@ -2208,493 +2484,6 @@ def _asset_amounts(assets: Assets) -> IndefiniteList:
     return IndefiniteList(
         [IndefiniteList([_asset_class(unit), int(amount)]) for unit, amount in ordered],
     )
-
-
-class _SundaeV4PricingMixin:
-    """Shared DEX-contract surface for the V4 projected-leg pricing classes.
-
-    Holds everything common to the constant-product / constant-sum /
-    concentrated-liquidity leg classes — name, selectors, datum classes, the
-    active deployment (script addresses, constraint keys, config tokens, fee
-    settings) and the order builders — so the three curve classes carry only
-    their curve-specific configuration and math.
-
-    The class family targets one deployment at a time (preview by default);
-    :meth:`select_network` switches all three curve classes together.
-    """
-
-    if TYPE_CHECKING:
-        # Resolved from AbstractPoolState, which the concrete leg classes mix in
-        # alongside this mixin; declared for the type checker (used in pool_id).
-        pool_nft: Assets | None
-        unit_a: str
-        unit_b: str
-
-    _deployment: ClassVar[SundaeV4Deployment] = SundaeV4Deployment.for_network(
-        "preview",
-    )
-    _deposit: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
-
-    @classmethod
-    def select_network(cls, network: str) -> None:
-        """Point the whole V4 class family at the deployment on ``network``."""
-        _SundaeV4PricingMixin._deployment = SundaeV4Deployment.for_network(network)
-
-    @classmethod
-    def deployment(cls) -> SundaeV4Deployment:
-        """The deployment the class family currently targets."""
-        return cls._deployment
-
-    @property
-    def _batcher(self) -> Assets:
-        """The lovelace an order locks for service fees: the flat ``base_fee``."""
-        return Assets(lovelace=self._deployment.base_fee)
-
-    @classmethod
-    def dex(cls) -> str:
-        """Get the DEX name."""
-        return "SundaeSwapV4"
-
-    @classmethod
-    def order_selector(cls) -> list[str]:
-        """Get the order selector addresses (the order validator address)."""
-        return [cls._deployment.order_address.encode()]
-
-    @classmethod
-    def pool_selector(cls) -> PoolSelector:
-        """Get the pool selector (the vault validator address)."""
-        return PoolSelector(addresses=[cls._deployment.pool_address.encode()])
-
-    @classmethod
-    def default_script_class(cls) -> type[PlutusV3Script]:
-        """V4 validators are PlutusV3 scripts."""
-        return PlutusV3Script
-
-    @property
-    def swap_forward(self) -> bool:
-        """V4 order forwarding is not modelled by the pricing layer."""
-        return False
-
-    @property
-    def stake_address(self) -> Address:
-        """The order script address an order UTxO is locked at."""
-        return self._deployment.order_address
-
-    @classmethod
-    def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
-        """Get the pool datum class."""
-        return SundaeV4PoolDatum
-
-    @classmethod
-    def order_datum_class(cls) -> type[SundaeV4OrderDatum]:
-        """Get the order datum class."""
-        return SundaeV4OrderDatum
-
-    @property
-    def pool_id(self) -> str:
-        """A unique identifier for the projected leg."""
-        if self.pool_nft is not None:
-            return self.pool_nft.unit()
-        return f"{self.unit_a}.{self.unit_b}"
-
-    @classmethod
-    def skip_init(cls, values: dict[str, Any]) -> bool:  # noqa: ARG003
-        """Skip the N-asset vault datum parse; legs are constructed pre-projected.
-
-        The pricing layer is handed a ready 2-asset leg (reserves + the off-datum
-        module config), so the heavy vault datum parse is bypassed and the supplied
-        ``assets`` are used verbatim.
-        """
-        return True
-
-    # -- order builders ------------------------------------------------------
-
-    @classmethod
-    def order_owner(cls, address: Address) -> MultisigSignature:
-        """The single-signature ``owner`` an order placed from ``address`` gets.
-
-        Keyed on the address's stake key when it has one, otherwise on its
-        payment key, so a wallet's orders share one owner across its payment
-        addresses. A cancel then needs that key among the transaction's required
-        signers.
-
-        Raises:
-            ValueError: if the address has no verification-key credential.
-        """
-        for part in (address.staking_part, address.payment_part):
-            if isinstance(part, VerificationKeyHash):
-                return MultisigSignature(key_hash=bytes(part))
-        msg = "The order owner must be a verification-key credential."
-        raise ValueError(msg)
-
-    @classmethod
-    def _fixed_destination(
-        cls,
-        address: Address,
-        datum_target: PlutusData | None = None,
-    ) -> DestinationFixed:
-        """A ``DestinationFixed`` paying ``address`` with an optional inline datum."""
-        datum: RawPlutusData = (
-            RawPlutusData(CBORTag(121, [datum_target.to_primitive()]))
-            if datum_target is not None
-            else _none_option()
-        )
-        return DestinationFixed(
-            address=PlutusFullAddress.from_address(address),
-            datum=datum,
-        )
-
-    def _order_datum(
-        self,
-        *,
-        address_source: Address,
-        destination: Destination,
-        config_token: bytes,
-        constraints: list[tuple[bytes, PlutusData | RawPlutusData]],
-        owner: MultisigScript | None,
-        service_budget: int | None,
-        max_per_execution: int | None,
-    ) -> SundaeV4OrderDatum:
-        """Assemble an order datum around a constraint list.
-
-        Both fee fields default to the deployment's ``base_fee``: a single-shot
-        order then pays exactly the current fee, and any headroom above it is
-        the caller's explicit choice (a basic order's terminal fill takes
-        ``min(max_per_execution, service_budget)`` in full).
-        """
-        base_fee = self._deployment.base_fee
-        return SundaeV4OrderDatum(
-            owner=owner if owner is not None else self.order_owner(address_source),
-            destination=destination,
-            service_budget=base_fee if service_budget is None else service_budget,
-            max_per_execution=(
-                base_fee if max_per_execution is None else max_per_execution
-            ),
-            config_token=config_token,
-            constraints=IndefiniteList(
-                [IndefiniteList([key, payload]) for key, payload in constraints],
-            ),
-            extension=_void(),
-        )
-
-    def basic_datum(
-        self,
-        address_source: Address,
-        offered: Assets,
-        min_received: Assets,
-        kind: BasicConstraintKind = BasicConstraintKind.SWAP,
-        *,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        owner: MultisigScript | None = None,
-        service_budget: int | None = None,
-        max_per_execution: int | None = None,
-    ) -> SundaeV4OrderDatum:
-        """Build the order datum for a V4 basic order of the given ``kind``.
-
-        A basic order offers ``offered`` and requires at least ``min_received``,
-        settled in one terminal fill to ``address_target`` (defaulting to
-        ``address_source``). It binds the ``basic-order`` config: the constraints
-        are the basic-order payload (its constructor index is ``kind``) followed
-        by the fee constraint's no-op payload.
-        """
-        deployment = self._deployment
-        payload = _BASIC_KINDS[kind](
-            offered=_asset_amounts(offered),
-            min_received=_asset_amounts(min_received),
-        )
-        target = address_target if address_target is not None else address_source
-        return self._order_datum(
-            address_source=address_source,
-            destination=self._fixed_destination(target, datum_target),
-            config_token=deployment.basic_config_token,
-            constraints=[
-                (deployment.basic_order_hash, payload),
-                (deployment.fee_constraint_hash, _void()),
-            ],
-            owner=owner,
-            service_budget=service_budget,
-            max_per_execution=max_per_execution,
-        )
-
-    def swap_datum(
-        self,
-        address_source: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        *,
-        owner: MultisigScript | None = None,
-        service_budget: int | None = None,
-        max_per_execution: int | None = None,
-    ) -> SundaeV4OrderDatum:
-        """Build the order datum for a V4 swap: a routing-free basic order.
-
-        ``in_assets`` is the single asset being sold and ``out_assets`` the single
-        asset asked for, at the minimum amount that must come back. The scooper
-        chooses the pool(s); the order only pins the floor.
-
-        Raises:
-            ValueError: if more than one asset is offered or asked.
-        """
-        if len(in_assets) != 1 or len(out_assets) != 1:
-            msg = "A swap offers exactly one asset and asks for exactly one asset."
-            raise ValueError(msg)
-        return self.basic_datum(
-            address_source,
-            in_assets,
-            out_assets,
-            BasicConstraintKind.SWAP,
-            address_target=address_target,
-            datum_target=datum_target,
-            owner=owner,
-            service_budget=service_budget,
-            max_per_execution=max_per_execution,
-        )
-
-    def deposit_datum(
-        self,
-        address_source: Address,
-        offered: Assets,
-        min_lp: Assets,
-        *,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        owner: MultisigScript | None = None,
-        service_budget: int | None = None,
-        max_per_execution: int | None = None,
-    ) -> SundaeV4OrderDatum:
-        """Build the order datum for a V4 deposit: a basic order of kind deposit.
-
-        ``offered`` holds every pool asset (a constant-sum deposit must be
-        proportional) and ``min_lp`` the floor on the pool's LP token.
-        """
-        return self.basic_datum(
-            address_source,
-            offered,
-            min_lp,
-            BasicConstraintKind.DEPOSIT,
-            address_target=address_target,
-            datum_target=datum_target,
-            owner=owner,
-            service_budget=service_budget,
-            max_per_execution=max_per_execution,
-        )
-
-    def withdraw_datum(
-        self,
-        address_source: Address,
-        lp: Assets,
-        min_received: Assets,
-        *,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        owner: MultisigScript | None = None,
-        service_budget: int | None = None,
-        max_per_execution: int | None = None,
-    ) -> SundaeV4OrderDatum:
-        """Build the order datum for a V4 withdrawal: a basic order of kind withdraw.
-
-        ``lp`` is the pool's LP token being redeemed and ``min_received`` the
-        per-asset floor on the proportional payout.
-        """
-        return self.basic_datum(
-            address_source,
-            lp,
-            min_received,
-            BasicConstraintKind.WITHDRAW,
-            address_target=address_target,
-            datum_target=datum_target,
-            owner=owner,
-            service_budget=service_budget,
-            max_per_execution=max_per_execution,
-        )
-
-    def strategy_datum(
-        self,
-        address_source: Address,
-        auth: MultisigScript,
-        final_destinations: list[Address],
-        *,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        owner: MultisigScript | None = None,
-        service_budget: int | None = None,
-        max_per_execution: int | None = None,
-    ) -> SundaeV4OrderDatum:
-        """Build the order datum for a V4 strategy order.
-
-        A strategy order is a *signed delegation*: the datum carries a
-        :class:`StrategyConstraint` (the ``auth`` multisig allowed to sign fills and
-        the candidate ``final_destinations`` it may pay out to), not a concrete
-        trade. The order rests paying back to itself (a :class:`DestinationSelf`
-        continuation) unless ``address_target`` is given; at scoop time the
-        executor supplies a signed :class:`StrategyExecution` that selects the fill
-        and, when terminal, one of ``final_destinations`` by index. Deciding and
-        signing that execution is off-chain executor work and is not built here.
-
-        The order binds the ``strategy-order`` config: the constraints are the
-        strategy constraint followed by the fee constraint's no-op payload.
-        """
-        deployment = self._deployment
-        strategy = StrategyConstraint(
-            auth=auth,
-            final_destinations=IndefiniteList(
-                [self._fixed_destination(dest) for dest in final_destinations],
-            ),
-        )
-        destination: Destination = (
-            self._fixed_destination(address_target, datum_target)
-            if address_target is not None
-            else DestinationSelf()
-        )
-        return self._order_datum(
-            address_source=address_source,
-            destination=destination,
-            config_token=deployment.strategy_config_token,
-            constraints=[
-                (deployment.strategy_order_hash, strategy),
-                (deployment.fee_constraint_hash, _void()),
-            ],
-            owner=owner,
-            service_budget=service_budget,
-            max_per_execution=max_per_execution,
-        )
-
-    @classmethod
-    def cancel_redeemer(cls) -> Redeemer:
-        """The order spend redeemer for an owner cancel (``OrderCancel``).
-
-        The order validator's ``Cancel`` branch only checks that the order
-        ``owner`` multisig is satisfied (the owner key hash among the
-        transaction's signatories), so a cancel needs no settings reference input
-        and no withdraw validator — just this redeemer on the order input and the
-        owner as a required signer.
-        """
-        return Redeemer(OrderCancel())
-
-    @classmethod
-    def cancel_tx(
-        cls,
-        order_utxo: UTxO,
-        order_ref_utxo: UTxO,
-        owner: VerificationKeyHash,
-        tx_builder: TransactionBuilder,
-    ) -> TransactionBuilder:
-        """Add an owner-cancel of ``order_utxo`` to ``tx_builder``.
-
-        Spends the live order UTxO with the :meth:`cancel_redeemer`, supplying the
-        order validator from ``order_ref_utxo`` as a reference script (so the
-        script bytes need not be embedded) and registering ``owner`` as a required
-        signer so the validator's owner-multisig check is satisfied.
-        """
-        tx_builder.add_script_input(
-            utxo=order_utxo,
-            script=order_ref_utxo,
-            redeemer=cls.cancel_redeemer(),
-        )
-        signers = list(tx_builder.required_signers or [])
-        if owner not in signers:
-            signers.append(owner)
-        tx_builder.required_signers = signers
-        return tx_builder
-
-
-class _SundaeV4CPPState(_SundaeV4PricingMixin, AbstractConstantProductPoolState):
-    """SundaeSwap V4 constant-product module: a projected 2-asset leg.
-
-    The constant-product module is not in the deployed launch packages (no pool
-    config references it on preview or preprod), so no live pool prices through
-    this class yet; it is kept ready for the module's launch.
-
-    Clean reuse of :class:`AbstractConstantProductPoolState` — the ``x*y=k`` swap
-    math is inherited unchanged. ``fee`` is the fee numerator on ``fee_basis`` (the
-    on-chain ``fee_num`` / ``fee_den``), surfaced to the base via
-    ``volume_fee`` / ``fee_basis``.
-    """
-
-    fee: int = 0
-    fee_basis: int = 10000
-
-
-class _SundaeV4CSState(_SundaeV4PricingMixin, AbstractConstantSumPoolState):
-    """SundaeSwap V4 constant-sum module: a projected 2-asset leg.
-
-    Prices on the new :class:`AbstractConstantSumPoolState` value-conservation base.
-    ``price_a`` / ``price_b`` are the integer price weights of this leg aligned to
-    ``(unit_a, unit_b)``; ``fee_numerator`` / ``fee_denominator`` are the on-chain
-    constant-sum ``fee_num`` / ``fee_den``. Both come from the off-datum
-    :class:`ConstantSumConfig`.
-    """
-
-    price_a: int = 1
-    price_b: int = 1
-    fee_numerator: int = 0
-    fee_denominator: int = 1000
-
-    def _cs_price_pair(self) -> tuple[int, int]:
-        """The leg's integer price weights aligned to ``(unit_a, unit_b)``."""
-        return (self.price_a, self.price_b)
-
-    def _cs_fee(self) -> tuple[int, int]:
-        """The on-chain constant-sum fee ``(fee_num, fee_den)``."""
-        return (self.fee_numerator, self.fee_denominator)
-
-
-class _SundaeV4CLState(_SundaeV4PricingMixin, AbstractConstantLiquidityPoolState):
-    """SundaeSwap V4 concentrated-liquidity module: a projected 2-asset leg.
-
-    The concentrated-liquidity module is not in the deployed launch packages (no
-    pool config references it on preview or preprod), so no live pool prices
-    through this class yet; it is kept ready for the module's launch.
-
-    Reuses the single-band CLMM math of
-    :class:`AbstractConstantLiquidityPoolState`, but OVERRIDES
-    :meth:`virtual_reserves` to consume V4's EXPLICIT on-chain liquidity ``L`` (the
-    LP-token count, :attr:`total_lp`) instead of reconstructing it from the reserves
-    and band. V4's ``cl_check`` invariant is a ``>=`` on virtual reserves built from
-    ``L`` directly, and fees grow ``L`` across a transcript, so a position need not
-    sit exactly on the canonical single-band curve that the base's geometric
-    reconstruction assumes — reconstructing ``L`` from off-curve reserves would
-    misprice the leg.
-
-    ``sqrt_price_a`` / ``sqrt_price_b`` are the band bounds as exact integer ratios
-    (numerator/denominator pairs); ``fee`` is the fee numerator on ``fee_basis``.
-    These come from the off-datum :class:`ConcentratedLiquidityConfig` and the pool
-    datum's ``total_lp``.
-    """
-
-    fee: int = 0
-    fee_basis: int = 10000
-    total_lp: int = 0
-    sqrt_price_a_num: int = 1
-    sqrt_price_a_den: int = 1
-    sqrt_price_b_num: int = 1
-    sqrt_price_b_den: int = 1
-
-    def _sqrt_price_bounds(self) -> tuple[tuple[int, int], tuple[int, int]]:
-        """Band bounds ``((sqrt_Pa_num, sqrt_Pa_den), (sqrt_Pb_num, sqrt_Pb_den))``."""
-        return (
-            (self.sqrt_price_a_num, self.sqrt_price_a_den),
-            (self.sqrt_price_b_num, self.sqrt_price_b_den),
-        )
-
-    def virtual_reserves(self) -> tuple[int, int]:
-        """Virtual reserves from the EXPLICIT on-chain ``L`` (not reconstructed).
-
-        Uniswap-V3 single-band identity with ``L = total_lp`` supplied directly:
-        ``a_v = a + L / sqrt(P_b)``, ``b_v = b + L * sqrt(P_a)``, in exact integer
-        arithmetic (ceil-divided offsets, matching the base's convention).
-        """
-        a, b = self.reserve_a, self.reserve_b
-        (spa_n, spa_d), (spb_n, spb_d) = self._sqrt_price_bounds()
-        liq = self.total_lp
-        # Each offset is ceil-divided (``-(-num // den)``) to match the base.
-        a_v = a + -(-(liq * spb_d) // spb_n)
-        b_v = b + -(-(liq * spa_n) // spa_d)
-        return a_v, b_v
 
 
 SundaeV4Vault.model_rebuild()
