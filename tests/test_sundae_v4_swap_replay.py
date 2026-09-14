@@ -32,7 +32,8 @@ def _pool(swap: dict) -> SundaeV4ConstantSumPool:
         ],
         prices=[swap["price_in"], swap["price_out"]],
         fee=(swap["fee_num"], swap["fee_den"]),
-        bounty_k=(swap.get("bounty_num", 0), swap.get("bounty_den", 1)),
+        bounty_k=(swap["bounty_num"], swap["bounty_den"]),
+        balance_fee=(swap["balance_fee_num"], swap["balance_fee_den"]),
         total_lp=swap["in_reserve"] * swap["price_in"]
         + swap["out_reserve"] * swap["price_out"],
         identifier=bytes.fromhex(swap["ident"]),
@@ -48,6 +49,9 @@ def test_replay_fixture_is_non_trivial() -> None:
     """Guard against a fixture that regenerated to nothing."""
     assert len(_SWAPS) >= 100
     assert any(s["price_in"] != s["price_out"] for s in _SWAPS)
+    assert any(s["bounty_num"] > 0 for s in _SWAPS)
+    required = {"bounty_num", "bounty_den", "balance_fee_num", "balance_fee_den"}
+    assert all(required <= s.keys() for s in _SWAPS)
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1000000000,
-      "expected_out": 997000000
+      "expected_out": 997000000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "7f6bd5036ac36b1e840fd535bf6545917eb7b078ef6fc7d603c6b06ba2c46ee3",
@@ -31,7 +35,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2000000000,
-      "expected_out": 997000000
+      "expected_out": 997000000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "388f2d579c7573f57d1ae16eabbb2f302f52ae02a85cb881fea1deec52be12e0",
@@ -47,7 +55,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 79760000
+      "expected_out": 79760000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b6dffb938e0f4e30e829a2cf15506e10f931d1d19f17c2dc515b9da33c997573",
@@ -63,7 +75,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 39880000
+      "expected_out": 39880000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "898c0acc0caa31c486abdd98da6e089a42e7ca52d70559e87f145d83d21a4cbc",
@@ -79,7 +95,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 39880000
+      "expected_out": 39880000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a607f3aee5bd4caabc20e53e39c7da514c028159b90ca7f834a216892694f92c",
@@ -95,7 +115,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 1994000000
+      "expected_out": 1994000000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ba123eaeac8488cf65b7fe28c9d7cc62bb336cfae934da333795c62b6ff20ea9",
@@ -111,7 +135,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 39880000
+      "expected_out": 39880000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "185acb4182df57e5788eee9e477233588c9ccc07e52362ef402d4e27fc50fb5f",
@@ -127,7 +155,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 99700000
+      "expected_out": 99700000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1467208fcf5160573b07dff0af319dd490980d12418284cb6dce97420f56f209",
@@ -143,7 +175,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 4985000000
+      "expected_out": 4985000000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5f36386b810ed0b89e69323215ffbcf07bea7ab206bc6d0865b253c769ac017b",
@@ -159,7 +195,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 2492500000
+      "expected_out": 2492500000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "edcb6c38565b4a52ec5d2b7a5fed0903e68dc36317cdeeee079bc4108160a269",
@@ -175,7 +215,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 49850000
+      "expected_out": 49850000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1fa9f60bd83e2410da59d923459f59cfd073744726d5c7ab37c440f3d30fc05b",
@@ -191,7 +235,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 10000000,
-      "expected_out": 997000000
+      "expected_out": 997000000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "cbc1881768c4ad6a1edd2574dc1a9bce1a724370054cfece7c55d192920c95ea",
@@ -207,7 +255,11 @@
       "fee_num": 1,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 99900000
+      "expected_out": 99900000,
+      "bounty_num": 1,
+      "bounty_den": 2000,
+      "balance_fee_num": 0,
+      "balance_fee_den": 1
     },
     {
       "scoop_tx": "63c5dec770aa5ac6a1ce67e13b7b22c0301b722d921c39cc0fe03b56fdd9d78e",
@@ -223,7 +275,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 100000000,
-      "expected_out": 99700000
+      "expected_out": 99700000,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1f02054f82ef0ffda234a75c910c42538815393cded48612b22484d5ce292937",
@@ -239,7 +295,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 907131892,
-      "expected_out": 904410497
+      "expected_out": 904410497,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1f02054f82ef0ffda234a75c910c42538815393cded48612b22484d5ce292937",
@@ -255,7 +315,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1271192001,
-      "expected_out": 1267378425
+      "expected_out": 1267378425,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1f02054f82ef0ffda234a75c910c42538815393cded48612b22484d5ce292937",
@@ -271,7 +335,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1470506626,
-      "expected_out": 29321902123
+      "expected_out": 29321902123,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "d171c3dd562b32ba44d906a0384fc23c0c748af7651ad148f2beafec6252e5c2",
@@ -287,7 +355,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2089407708,
-      "expected_out": 2083139485
+      "expected_out": 2083139485,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "d171c3dd562b32ba44d906a0384fc23c0c748af7651ad148f2beafec6252e5c2",
@@ -303,7 +375,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 716697621,
-      "expected_out": 714547529
+      "expected_out": 714547529,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "d171c3dd562b32ba44d906a0384fc23c0c748af7651ad148f2beafec6252e5c2",
@@ -319,7 +395,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1684250032,
-      "expected_out": 41979932048
+      "expected_out": 41979932048,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "8921ffaf90ac850ad4b3b72442902ffd934ff5b3ce2a740b582283d1c9929b00",
@@ -335,7 +415,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 5590603657,
-      "expected_out": 111476636921
+      "expected_out": 111476636921,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "8921ffaf90ac850ad4b3b72442902ffd934ff5b3ce2a740b582283d1c9929b00",
@@ -351,7 +435,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2695701972,
-      "expected_out": 5375229733
+      "expected_out": 5375229733,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "8921ffaf90ac850ad4b3b72442902ffd934ff5b3ce2a740b582283d1c9929b00",
@@ -367,7 +455,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1108993116,
-      "expected_out": 2764165342
+      "expected_out": 2764165342,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "8921ffaf90ac850ad4b3b72442902ffd934ff5b3ce2a740b582283d1c9929b00",
@@ -383,7 +475,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1112330106,
-      "expected_out": 1108993116
+      "expected_out": 1108993116,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "cc01db179d415b9636e6baf0f3780299fead00cb241c56722315dc3fa7e9555b",
@@ -399,7 +495,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 957349900,
-      "expected_out": 954477851
+      "expected_out": 954477851,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "0d930b61839c572fc7eef9860703ed9f5ccc4ec6e2f814a96d9cc2f26408800b",
@@ -415,7 +515,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 267529236,
-      "expected_out": 13336332415
+      "expected_out": 13336332415,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "62317d4b99e51154cc4e2f3d713dba9323fa46222a27a39aa212b408cb38e564",
@@ -431,7 +535,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 384891197,
-      "expected_out": 7674730469
+      "expected_out": 7674730469,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "62317d4b99e51154cc4e2f3d713dba9323fa46222a27a39aa212b408cb38e564",
@@ -447,7 +555,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 456652111,
-      "expected_out": 910564310
+      "expected_out": 910564310,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "fe0ce96c63fb60461ee53aaca1d78749a90a783bae8b77f947a5ebac7e3b0841",
@@ -463,7 +575,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 330288458,
-      "expected_out": 6585951853
+      "expected_out": 6585951853,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "fe0ce96c63fb60461ee53aaca1d78749a90a783bae8b77f947a5ebac7e3b0841",
@@ -479,7 +595,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2883835507,
-      "expected_out": 2875184001
+      "expected_out": 2875184001,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ca631560ac04c5b341ab8b56f0a2ca12efc1d8f9f7452a40898d628bf8277e99",
@@ -495,7 +615,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 636980937,
-      "expected_out": 635069995
+      "expected_out": 635069995,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ca631560ac04c5b341ab8b56f0a2ca12efc1d8f9f7452a40898d628bf8277e99",
@@ -511,7 +635,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 635069995,
-      "expected_out": 1582911963
+      "expected_out": 1582911963,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ca631560ac04c5b341ab8b56f0a2ca12efc1d8f9f7452a40898d628bf8277e99",
@@ -527,7 +655,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 538301894,
-      "expected_out": 13417174708
+      "expected_out": 13417174708,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "725bab2335afff7ebcffba27f1095d03db5aafeb7a6ffcb77860497e5f73b086",
@@ -543,7 +675,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 3032751923,
-      "expected_out": 1209461467
+      "expected_out": 1209461467,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "725bab2335afff7ebcffba27f1095d03db5aafeb7a6ffcb77860497e5f73b086",
@@ -559,7 +695,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1153257996,
-      "expected_out": 1149798223
+      "expected_out": 1149798223,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "97145963b3d0b6750d5a3c13e8ab4963c99536a45ea5eb7094279c614fd89eb9",
@@ -575,7 +715,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 9538441548,
-      "expected_out": 4754913112
+      "expected_out": 4754913112,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "97145963b3d0b6750d5a3c13e8ab4963c99536a45ea5eb7094279c614fd89eb9",
@@ -591,7 +735,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 10867848208,
-      "expected_out": 5417622332
+      "expected_out": 5417622332,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "03b0abf2b491d3b686e1b7b8c38bb2d9693e5e68ce298c2d1be9472d0a190a8e",
@@ -607,7 +755,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 4193198668,
-      "expected_out": 83612381440
+      "expected_out": 83612381440,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "2650a36e1bf28816661c46231806f8e78f37db4d94a12e312ce4b06c594de010",
@@ -623,7 +775,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 160797604,
-      "expected_out": 400788028
+      "expected_out": 400788028,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "2650a36e1bf28816661c46231806f8e78f37db4d94a12e312ce4b06c594de010",
@@ -639,7 +795,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 161281448,
-      "expected_out": 160797604
+      "expected_out": 160797604,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "2650a36e1bf28816661c46231806f8e78f37db4d94a12e312ce4b06c594de010",
@@ -655,7 +815,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 691621450,
-      "expected_out": 1379093172
+      "expected_out": 1379093172,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "44a03aa0411949a8d599a5ae5e32c3531021c97e7501ebfcb3aa1848f4497b18",
@@ -671,7 +835,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1175000954,
-      "expected_out": 23429519023
+      "expected_out": 23429519023,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "44a03aa0411949a8d599a5ae5e32c3531021c97e7501ebfcb3aa1848f4497b18",
@@ -687,7 +855,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 524338640,
-      "expected_out": 522765625
+      "expected_out": 522765625,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "44a03aa0411949a8d599a5ae5e32c3531021c97e7501ebfcb3aa1848f4497b18",
@@ -703,7 +875,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 521197329,
-      "expected_out": 1299084343
+      "expected_out": 1299084343,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "44a03aa0411949a8d599a5ae5e32c3531021c97e7501ebfcb3aa1848f4497b18",
@@ -719,7 +895,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 522765625,
-      "expected_out": 521197329
+      "expected_out": 521197329,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "412d08996a8ed41d301673fc32ca07eaafe806fcfb68d9d3c8ffb3cd2ef769dd",
@@ -735,7 +915,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1367885734,
-      "expected_out": 68189103840
+      "expected_out": 68189103840,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "412d08996a8ed41d301673fc32ca07eaafe806fcfb68d9d3c8ffb3cd2ef769dd",
@@ -751,7 +935,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2009587295,
-      "expected_out": 2003558534
+      "expected_out": 2003558534,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "cdb4465f29372d4ddde2221a89a5d69b1c04620aa4596ca8721eda685b794b89",
@@ -767,7 +955,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2787480543,
-      "expected_out": 2779118102
+      "expected_out": 2779118102,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "cdb4465f29372d4ddde2221a89a5d69b1c04620aa4596ca8721eda685b794b89",
@@ -783,7 +975,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 6096557864,
-      "expected_out": 121565363809
+      "expected_out": 121565363809,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "cdb4465f29372d4ddde2221a89a5d69b1c04620aa4596ca8721eda685b794b89",
@@ -799,7 +995,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 968165636,
-      "expected_out": 965261140
+      "expected_out": 965261140,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "d164ce009e70a4fab66371d2a1ed547960fdb3b179c88a6b32540c8c9837269d",
@@ -815,7 +1015,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 723919763,
-      "expected_out": 36087400186
+      "expected_out": 36087400186,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "6a7fce2f361a5d8f97e7575f15f794cb15df8be4f663ec1a079e4d84560b5125",
@@ -831,7 +1035,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1112592419,
-      "expected_out": 554627321
+      "expected_out": 554627321,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "6a7fce2f361a5d8f97e7575f15f794cb15df8be4f663ec1a079e4d84560b5125",
@@ -847,7 +1055,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2208450901,
-      "expected_out": 2201825549
+      "expected_out": 2201825549,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "57493ce645cfb7167a459e83e02a2e9c8aecdd36ec94b020a5c4dfabe7445e54",
@@ -863,7 +1075,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 633791636,
-      "expected_out": 631890262
+      "expected_out": 631890262,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "957ce57d8babb75de4012195a71646544c8d06914bf4e0a2cf674f9b462c72be",
@@ -879,7 +1095,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2463012668,
-      "expected_out": 982249452
+      "expected_out": 982249452,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "957ce57d8babb75de4012195a71646544c8d06914bf4e0a2cf674f9b462c72be",
@@ -895,7 +1115,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1510257313,
-      "expected_out": 752863271
+      "expected_out": 752863271,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "957ce57d8babb75de4012195a71646544c8d06914bf4e0a2cf674f9b462c72be",
@@ -911,7 +1135,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 944937255,
-      "expected_out": 942102444
+      "expected_out": 942102444,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "14668f8e375a8a287a149fcf1edc7a6a12af321777fa53c79dc44412c1ca9823",
@@ -927,7 +1155,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 6911537,
-      "expected_out": 689080239
+      "expected_out": 689080239,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "14668f8e375a8a287a149fcf1edc7a6a12af321777fa53c79dc44412c1ca9823",
@@ -943,7 +1175,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 25234136,
-      "expected_out": 2515843360
+      "expected_out": 2515843360,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "14668f8e375a8a287a149fcf1edc7a6a12af321777fa53c79dc44412c1ca9823",
@@ -959,7 +1195,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 216466133,
-      "expected_out": 539541837
+      "expected_out": 539541837,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a1cf57245e72a66acea441f403f1c2d45ef9d1425cf070dd6a1e5e491738b14d",
@@ -975,7 +1215,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1292705766,
-      "expected_out": 3222069122
+      "expected_out": 3222069122,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a1cf57245e72a66acea441f403f1c2d45ef9d1425cf070dd6a1e5e491738b14d",
@@ -991,7 +1235,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 15521100125,
-      "expected_out": 6189814730
+      "expected_out": 6189814730,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a1cf57245e72a66acea441f403f1c2d45ef9d1425cf070dd6a1e5e491738b14d",
@@ -1007,7 +1255,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1296595552,
-      "expected_out": 1292705766
+      "expected_out": 1292705766,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a1cf57245e72a66acea441f403f1c2d45ef9d1425cf070dd6a1e5e491738b14d",
@@ -1023,7 +1275,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2600994086,
-      "expected_out": 1296595552
+      "expected_out": 1296595552,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bf75349b2e7a9c5a41bc2eb78aa778b0f8b3179c1e38c2d1fc1223992c45647d",
@@ -1039,7 +1295,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1136381146,
-      "expected_out": 1132972003
+      "expected_out": 1132972003,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bf75349b2e7a9c5a41bc2eb78aa778b0f8b3179c1e38c2d1fc1223992c45647d",
@@ -1055,7 +1315,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2194250935,
-      "expected_out": 2187668183
+      "expected_out": 2187668183,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bf75349b2e7a9c5a41bc2eb78aa778b0f8b3179c1e38c2d1fc1223992c45647d",
@@ -1071,7 +1335,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 5681206495,
-      "expected_out": 113283257511
+      "expected_out": 113283257511,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "4662361dac51d3663c03b24c9c35de901c98717cd91ec260df1ae57cd1946fa9",
@@ -1087,7 +1355,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 604167482,
-      "expected_out": 1204709960
+      "expected_out": 1204709960,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "4662361dac51d3663c03b24c9c35de901c98717cd91ec260df1ae57cd1946fa9",
@@ -1103,7 +1375,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1592395794,
-      "expected_out": 1587618607
+      "expected_out": 1587618607,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "4662361dac51d3663c03b24c9c35de901c98717cd91ec260df1ae57cd1946fa9",
@@ -1119,7 +1395,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 3196425961,
-      "expected_out": 63736733663
+      "expected_out": 63736733663,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "fa7073ad393a5fbac1cf3590b92e555b0e01fc1ef630b0e1d875f8e1419c2726",
@@ -1135,7 +1415,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2191150921,
-      "expected_out": 2184577469
+      "expected_out": 2184577469,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "fa7073ad393a5fbac1cf3590b92e555b0e01fc1ef630b0e1d875f8e1419c2726",
@@ -1151,7 +1435,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 293355121,
-      "expected_out": 292475056
+      "expected_out": 292475056,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ea821954144697076f32d4602a1d3d3f748850cdbe26e4e1dac112539d2940f2",
@@ -1167,7 +1455,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1185382442,
-      "expected_out": 472730518
+      "expected_out": 472730518,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ea821954144697076f32d4602a1d3d3f748850cdbe26e4e1dac112539d2940f2",
@@ -1183,7 +1475,11 @@
       "fee_num": 1,
       "fee_den": 1000,
       "amount_in": 11534280238,
-      "expected_out": 11522745958
+      "expected_out": 11522745958,
+      "bounty_num": 1,
+      "bounty_den": 2000,
+      "balance_fee_num": 0,
+      "balance_fee_den": 1
     },
     {
       "scoop_tx": "ea821954144697076f32d4602a1d3d3f748850cdbe26e4e1dac112539d2940f2",
@@ -1199,7 +1495,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1929430895,
-      "expected_out": 1923642603
+      "expected_out": 1923642603,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "67d8da7b2bc7abf0979394622c5f685eb1d8f0808a09cc52c94748a99b61612c",
@@ -1215,7 +1515,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 104868158,
-      "expected_out": 261383884
+      "expected_out": 261383884,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bfbdd4760bf27d1c5393e191bd39c333c50e8b83d0ef21f2ab04d4ff07a3b1e5",
@@ -1231,7 +1535,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 9390696890,
-      "expected_out": 9362524800
+      "expected_out": 9362524800,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bfbdd4760bf27d1c5393e191bd39c333c50e8b83d0ef21f2ab04d4ff07a3b1e5",
@@ -1247,7 +1555,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2919609027,
-      "expected_out": 2910850200
+      "expected_out": 2910850200,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bfbdd4760bf27d1c5393e191bd39c333c50e8b83d0ef21f2ab04d4ff07a3b1e5",
@@ -1263,7 +1575,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1163987902,
-      "expected_out": 1160495939
+      "expected_out": 1160495939,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1d7e6f2f4798d59378de28a0f45d4b9d2d04e2a45dd679ad5eaf8de87509075c",
@@ -1279,7 +1595,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 535837111,
-      "expected_out": 1068459200
+      "expected_out": 1068459200,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1d7e6f2f4798d59378de28a0f45d4b9d2d04e2a45dd679ad5eaf8de87509075c",
@@ -1295,7 +1615,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 680864655,
-      "expected_out": 339411031
+      "expected_out": 339411031,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1d7e6f2f4798d59378de28a0f45d4b9d2d04e2a45dd679ad5eaf8de87509075c",
@@ -1311,7 +1635,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1343623648,
-      "expected_out": 535837111
+      "expected_out": 535837111,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b6a4264966496011a809e3e6b7b7aac65d167a1f82d1143bc3205c7eaf8c9858",
@@ -1327,7 +1655,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1158660632,
-      "expected_out": 23103693003
+      "expected_out": 23103693003,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b6a4264966496011a809e3e6b7b7aac65d167a1f82d1143bc3205c7eaf8c9858",
@@ -1343,7 +1675,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 523021896,
-      "expected_out": 1303632076
+      "expected_out": 1303632076,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1a6ed13d5a7a33b54d5b6a613dcc0d8631b2629b0e839e2a17060e58677fd6c2",
@@ -1359,7 +1695,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2102742601,
-      "expected_out": 1048217187
+      "expected_out": 1048217187,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1a6ed13d5a7a33b54d5b6a613dcc0d8631b2629b0e839e2a17060e58677fd6c2",
@@ -1375,7 +1715,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2636337263,
-      "expected_out": 2102742601
+      "expected_out": 2102742601,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1a6ed13d5a7a33b54d5b6a613dcc0d8631b2629b0e839e2a17060e58677fd6c2",
@@ -1391,7 +1735,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1188937378,
-      "expected_out": 1185370566
+      "expected_out": 1185370566,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "1a6ed13d5a7a33b54d5b6a613dcc0d8631b2629b0e839e2a17060e58677fd6c2",
@@ -1407,7 +1755,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1655875066,
-      "expected_out": 1650907441
+      "expected_out": 1650907441,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bbfbaa3f009ac4979cc8f08d08648ae41e603d3a7cb0244cc7c41ebf1e7b523b",
@@ -1423,7 +1775,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1121587363,
-      "expected_out": 1118222601
+      "expected_out": 1118222601,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "717f18fd8f9bf1787cce149a3f2e7ca51be555b981dfe41d5c5fdb38cf4fa7bc",
@@ -1439,7 +1795,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1169365139,
-      "expected_out": 932685635
+      "expected_out": 932685635,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "717f18fd8f9bf1787cce149a3f2e7ca51be555b981dfe41d5c5fdb38cf4fa7bc",
@@ -1455,7 +1815,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 23457675807,
-      "expected_out": 1169365139
+      "expected_out": 1169365139,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "717f18fd8f9bf1787cce149a3f2e7ca51be555b981dfe41d5c5fdb38cf4fa7bc",
@@ -1471,7 +1835,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1479479543,
-      "expected_out": 1475041105
+      "expected_out": 1475041105,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "717f18fd8f9bf1787cce149a3f2e7ca51be555b981dfe41d5c5fdb38cf4fa7bc",
@@ -1487,7 +1855,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 866443229,
-      "expected_out": 863843900
+      "expected_out": 863843900,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5c10f0adfc6435e07a1f8e9b5a78c9a345da71fb7c4c16c48cb5a688d88bc7d5",
@@ -1503,7 +1875,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 962241460,
-      "expected_out": 1918709472
+      "expected_out": 1918709472,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5c10f0adfc6435e07a1f8e9b5a78c9a345da71fb7c4c16c48cb5a688d88bc7d5",
@@ -1519,7 +1895,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1051482990,
-      "expected_out": 2096657083
+      "expected_out": 2096657083,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5c10f0adfc6435e07a1f8e9b5a78c9a345da71fb7c4c16c48cb5a688d88bc7d5",
@@ -1535,7 +1915,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2547232866,
-      "expected_out": 2539591168
+      "expected_out": 2539591168,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5c10f0adfc6435e07a1f8e9b5a78c9a345da71fb7c4c16c48cb5a688d88bc7d5",
@@ -1551,7 +1935,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2096657083,
-      "expected_out": 52259177794
+      "expected_out": 52259177794,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "42031e91270c0d9cae5469f7331966af99b00fe240e123aab6da2d18daa38017",
@@ -1567,7 +1955,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 4301419,
-      "expected_out": 428851475
+      "expected_out": 428851475,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "42031e91270c0d9cae5469f7331966af99b00fe240e123aab6da2d18daa38017",
@@ -1583,7 +1975,11 @@
       "fee_num": 1,
       "fee_den": 1000,
       "amount_in": 1860835130,
-      "expected_out": 1858974295
+      "expected_out": 1858974295,
+      "bounty_num": 1,
+      "bounty_den": 2000,
+      "balance_fee_num": 0,
+      "balance_fee_den": 1
     },
     {
       "scoop_tx": "42031e91270c0d9cae5469f7331966af99b00fe240e123aab6da2d18daa38017",
@@ -1599,7 +1995,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1057691904,
-      "expected_out": 1054518829
+      "expected_out": 1054518829,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "a75b4bec02e5b00d3cbf174eccf17cbcfacf7d8753422dd331e2fb5f1edb8be2",
@@ -1615,7 +2015,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 8981652953,
-      "expected_out": 8954707995
+      "expected_out": 8954707995,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "5adb7d056e1ae72ba6f99fdbc7afa20d13ad8c438159a03a52273633762dc975",
@@ -1631,7 +2035,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1038009235,
-      "expected_out": 1034895208
+      "expected_out": 1034895208,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "172091c8e098c417d5f27ae0a321bd5102d86440a63f8ab533f4382a6edb1f3d",
@@ -1647,7 +2055,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1211733827,
-      "expected_out": 1208098626
+      "expected_out": 1208098626,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bde2bc70fab35da159ede53f8c7304d5bfe931a0f76f2fff205aac30cf07b7be",
@@ -1663,7 +2075,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2591004762,
-      "expected_out": 51664634955
+      "expected_out": 51664634955,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bde2bc70fab35da159ede53f8c7304d5bfe931a0f76f2fff205aac30cf07b7be",
@@ -1679,7 +2095,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 759044325,
-      "expected_out": 756767193
+      "expected_out": 756767193,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bde2bc70fab35da159ede53f8c7304d5bfe931a0f76f2fff205aac30cf07b7be",
@@ -1695,7 +2115,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1042648411,
-      "expected_out": 1039520466
+      "expected_out": 1039520466,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "bde2bc70fab35da159ede53f8c7304d5bfe931a0f76f2fff205aac30cf07b7be",
@@ -1711,7 +2135,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1039520466,
-      "expected_out": 2591004762
+      "expected_out": 2591004762,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "aa94c0b04a20dd15ddfe2f022a89dfa7155ab8bc97245eba51dc377b119c91eb",
@@ -1727,7 +2155,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 945837844,
-      "expected_out": 1886000661
+      "expected_out": 1886000661,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "aa94c0b04a20dd15ddfe2f022a89dfa7155ab8bc97245eba51dc377b119c91eb",
@@ -1743,7 +2175,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1886000661,
-      "expected_out": 2350428324
+      "expected_out": 2350428324,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "aa94c0b04a20dd15ddfe2f022a89dfa7155ab8bc97245eba51dc377b119c91eb",
@@ -1759,7 +2195,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 730122277,
-      "expected_out": 727931911
+      "expected_out": 727931911,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "2beb308a3bda95f6d1903db2889369110ffddb073df52345d68e45d8382853ee",
@@ -1775,7 +2215,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 782635490,
-      "expected_out": 1560575168
+      "expected_out": 1560575168,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "2beb308a3bda95f6d1903db2889369110ffddb073df52345d68e45d8382853ee",
@@ -1791,7 +2235,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1169338581,
-      "expected_out": 1165830566
+      "expected_out": 1165830566,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b546730c6dc14966658ab3cdf263356a669cf42f60fc8ccf344ada4c287d194b",
@@ -1807,7 +2255,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 3339969463,
-      "expected_out": 1331979822
+      "expected_out": 1331979822,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b546730c6dc14966658ab3cdf263356a669cf42f60fc8ccf344ada4c287d194b",
@@ -1823,7 +2275,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2715302528,
-      "expected_out": 2707156621
+      "expected_out": 2707156621,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "b546730c6dc14966658ab3cdf263356a669cf42f60fc8ccf344ada4c287d194b",
@@ -1839,7 +2295,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 603445281,
-      "expected_out": 1203269891
+      "expected_out": 1203269891,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "ed9861e49b28392b6e6fc612f3feb39199067f67a28702d4b789d8ea73b28335",
@@ -1855,7 +2315,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2978196262,
-      "expected_out": 1484630837
+      "expected_out": 1484630837,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "10f455a4e6d0cdc1db314d5258681ac74c6f3849940a0282073d667c5477d516",
@@ -1871,7 +2335,11 @@
       "fee_num": 1,
       "fee_den": 1000,
       "amount_in": 2097747915,
-      "expected_out": 2095650168
+      "expected_out": 2095650168,
+      "bounty_num": 1,
+      "bounty_den": 2000,
+      "balance_fee_num": 0,
+      "balance_fee_den": 1
     },
     {
       "scoop_tx": "10f455a4e6d0cdc1db314d5258681ac74c6f3849940a0282073d667c5477d516",
@@ -1887,7 +2355,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 2180718402,
-      "expected_out": 2174176247
+      "expected_out": 2174176247,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     },
     {
       "scoop_tx": "10f455a4e6d0cdc1db314d5258681ac74c6f3849940a0282073d667c5477d516",
@@ -1903,7 +2375,11 @@
       "fee_num": 3,
       "fee_den": 1000,
       "amount_in": 1818211815,
-      "expected_out": 1812757180
+      "expected_out": 1812757180,
+      "bounty_num": 3,
+      "bounty_den": 2000,
+      "balance_fee_num": 3,
+      "balance_fee_den": 1000
     }
   ]
 }
