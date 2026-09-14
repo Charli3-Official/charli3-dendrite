@@ -88,6 +88,7 @@ from pydantic import Field
 from pydantic import PrivateAttr
 from pydantic import model_validator
 
+from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
@@ -97,6 +98,7 @@ from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolSta
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 # ---------------------------------------------------------------------------
@@ -1426,6 +1428,52 @@ def _reserve_unit(asset_class: AssetClass) -> str:
     return (asset_class.policy.hex() + asset_class.asset_name.hex()) or "lovelace"
 
 
+_CONFIG_TYPES: dict[str, type[PlutusData]] = {
+    "constant_sum": ConstantSumConfig,
+    "constant_product": ConstantProductConfig,
+    "concentrated_liquidity": ConcentratedLiquidityConfig,
+    "fee_split": FeeSplitConfig,
+}
+_CREATE_TAG = 121  # constructor 0
+_OPERATE_TAG = 122  # constructor 1
+
+
+def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
+    """Config preimages a module redeemer may carry.
+
+    A ``Create`` redeemer (constructor 0) carries the config as its first
+    field; an ``Operate`` redeemer (constructor 1) carries one
+    ``[pool_oref, config]`` entry per pool. Known kinds are decoded to their
+    typed config; others stay :class:`~pycardano.RawPlutusData`.
+    """
+    raw = RawPlutusData.from_cbor(bytes.fromhex(data_cbor))
+    tag = raw.data
+    if not isinstance(tag, CBORTag):
+        return []
+    fields = _list_items(tag.value)
+    if tag.tag == _CREATE_TAG and fields:
+        payloads = [fields[0]]
+    elif tag.tag == _OPERATE_TAG and fields:
+        payloads = [
+            _list_items(entry.value)[1]
+            for entry in _list_items(fields[0])
+            if isinstance(entry, CBORTag) and len(_list_items(entry.value)) > 1
+        ]
+    else:
+        return []
+    typed = _CONFIG_TYPES.get(kind or "")
+    candidates: list[Any] = []
+    for payload in payloads:
+        candidate: Any = RawPlutusData(payload)
+        if typed is not None:
+            try:
+                candidate = typed.from_cbor(candidate.to_cbor())
+            except (DeserializeException, TypeError, ValueError, KeyError):
+                continue
+        candidates.append(candidate)
+    return candidates
+
+
 class SundaeV4Vault(DendriteBaseModel):
     """A SundaeSwap V4 pool UTxO: the N-asset vault every pool type is bound to.
 
@@ -1580,6 +1628,15 @@ class SundaeV4Vault(DendriteBaseModel):
             },
             surplus=assets.root.get("lovelace", 0) - reserves.get("lovelace", 0),
         )
+        module_state: dict[bytes, bytes] = values["module_state"]
+        for module_hash, config in values.get("module_configs", {}).items():
+            if module_config_hash(config) != module_state[module_hash]:
+                msg = (
+                    f"SundaeV4Vault: supplied config for module "
+                    f"{module_hash.hex()} does not match its module_state "
+                    f"commitment."
+                )
+                raise InvalidPoolError(msg)
         return values
 
     @classmethod
@@ -1655,6 +1712,87 @@ class SundaeV4Vault(DendriteBaseModel):
                 if kind in INVARIANT_MODULE_KINDS:
                     out.append((entry.tag, bytes(module), kind))
         return out
+
+    # -- module configs -------------------------------------------------------
+
+    @classmethod
+    def clear_config_cache(cls) -> None:
+        """Drop every cached module config preimage."""
+        SundaeV4Vault._config_cache.clear()
+
+    def module_config(self, module_hash: bytes) -> Any:  # noqa: ANN401
+        """The config preimage committed in ``module_state[module_hash]``.
+
+        Resolution order: supplied (constructor ``module_configs`` or
+        :meth:`supply_module_config`), then the class-level cache keyed by the
+        commitment hash, then the producing transaction's redeemers via the
+        active backend. A config-less module (its slot holds the serialised
+        empty list) resolves to ``None``. Every resolved config is hash-verified.
+
+        Raises:
+            KeyError: ``module_hash`` is not installed on this vault.
+            ModuleConfigUnavailableError: the backend cannot serve the preimage.
+            InvalidPoolError: a served preimage does not match the commitment.
+        """
+        commitment = self.module_state[module_hash]
+        if commitment == _CONFIG_LESS_COMMITMENT:
+            return None
+        if module_hash in self.module_configs:
+            return self.module_configs[module_hash]
+        config = self._config_cache.get(commitment)
+        if config is None:
+            config = self._resolve_from_backend(module_hash, commitment)
+            self._config_cache[commitment] = config
+        self.module_configs[module_hash] = config
+        return config
+
+    def supply_module_config(
+        self,
+        module_hash: bytes,
+        config: Any,  # noqa: ANN401
+    ) -> None:
+        """Attach a caller-held config preimage after verifying its commitment.
+
+        Raises:
+            KeyError: ``module_hash`` is not installed on this vault.
+            InvalidPoolError: the config does not hash to the committed value.
+        """
+        commitment = self.module_state[module_hash]
+        if module_config_hash(config) != commitment:
+            msg = (
+                f"SundaeV4Vault: config for module {module_hash.hex()} does not "
+                f"match its module_state commitment."
+            )
+            raise InvalidPoolError(msg)
+        self.module_configs[module_hash] = config
+        self._config_cache[commitment] = config
+
+    def _resolve_from_backend(
+        self,
+        module_hash: bytes,
+        commitment: bytes,
+    ) -> Any:  # noqa: ANN401
+        """Read the producing transaction's redeemers and pick the matching preimage."""
+        try:
+            records = get_backend().get_redeemers(self.tx_hash)
+        except NotImplementedError as e:
+            msg = (
+                f"SundaeV4Vault: the active backend cannot read redeemers, so the "
+                f"config for module {module_hash.hex()} must be supplied."
+            )
+            raise ModuleConfigUnavailableError(msg) from e
+        kind = self.module_kind(module_hash)
+        for record in records:
+            if bytes.fromhex(record.script_hash) != module_hash:
+                continue
+            for candidate in _config_candidates(record.data_cbor, kind):
+                if module_config_hash(candidate) == commitment:
+                    return candidate
+        msg = (
+            f"SundaeV4Vault: no redeemer of {self.tx_hash} carries the config "
+            f"committed for module {module_hash.hex()}."
+        )
+        raise ModuleConfigUnavailableError(msg)
 
 
 def _void() -> RawPlutusData:
