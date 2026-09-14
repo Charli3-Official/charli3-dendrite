@@ -70,6 +70,7 @@ from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
+from pycardano import DeserializeException
 from pycardano import IndefiniteList
 from pycardano import Network
 from pycardano import PlutusData
@@ -81,14 +82,21 @@ from pycardano import TransactionBuilder
 from pycardano import UTxO
 from pycardano import VerificationKeyHash
 from pycardano.serialization import CBORTag
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import PrivateAttr
+from pydantic import model_validator
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 # ---------------------------------------------------------------------------
 # Shared sub-types
@@ -1317,6 +1325,17 @@ class SundaeV4Deployment:
         """The ``(tx_hash, index)`` of the validator's published reference script."""
         return self.references[title]
 
+    def module_kind(self, script_hash: bytes) -> str | None:
+        """The module kind (``constant_sum``, ``fee_split``, ...) of a withdraw script.
+
+        Module validators are registered under ``<kind>.withdraw``; anything else
+        (the vault, order and settings validators) is not a module.
+        """
+        for title, applied in self.validators.items():
+            if bytes.fromhex(applied) == script_hash and title.endswith(".withdraw"):
+                return title[: -len(".withdraw")]
+        return None
+
     @property
     def pool_hash(self) -> bytes:
         """The vault (pool spend) validator hash: the pool script address."""
@@ -1386,6 +1405,249 @@ class SundaeV4Deployment:
             payment_part=ScriptHash(self.order_hash),
             network=self.cardano_network,
         )
+
+
+INVARIANT_MODULE_KINDS: frozenset[str] = frozenset(
+    {"constant_sum", "constant_product", "concentrated_liquidity"},
+)
+_CONFIG_LESS_COMMITMENT = b"\x80"
+_NFT_PREFIX = "000de140"
+_LP_PREFIX = "0014df10"
+
+
+def _list_items(value: Any) -> list:  # noqa: ANN401
+    """The elements of a decoded Plutus list (definite, indefinite, or frozen)."""
+    return list(value)
+
+
+def _reserve_unit(asset_class: AssetClass) -> str:
+    """The dendrite unit of an on-chain asset class (``lovelace`` for ADA)."""
+    return (asset_class.policy.hex() + asset_class.asset_name.hex()) or "lovelace"
+
+
+class SundaeV4Vault(DendriteBaseModel):
+    """A SundaeSwap V4 pool UTxO: the N-asset vault every pool type is bound to.
+
+    Built from a raw UTxO (value bag + inline datum). ``reserves`` is the
+    datum's reserve declaration re-keyed to dendrite units in canonical order
+    (lovelace first, then policy + name); ``datum_units`` preserves the
+    declaration order that positional module configs (constant-sum prices) are
+    aligned to. ``surplus`` is the UTxO lovelace above the declared lovelace
+    reserve. The vault prices nothing: :meth:`pools` yields one pool type per
+    invariant module bound on the action map.
+    """
+
+    model_config = ConfigDict(
+        alias_generator=None,
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
+
+    tx_hash: str
+    tx_index: int
+    datum_cbor: str
+    assets: Assets
+    block_time: int = 0
+    block_index: int = 0
+    datum_hash: str | None = None
+    identifier: bytes
+    pool_nft: Assets
+    lp_token: Assets
+    reserves: Assets
+    datum_units: list[str]
+    total_lp: int
+    circulating_lp: int
+    preminted_lp: int
+    min_surplus: int
+    actions: list[ActionEntry]
+    module_state: dict[bytes, bytes]
+    surplus: int
+    module_configs: dict[bytes, Any] = Field(default_factory=dict)
+
+    _deployment: ClassVar[SundaeV4Deployment] = SundaeV4Deployment.for_network(
+        "preview",
+    )
+    _config_cache: ClassVar[dict[bytes, Any]] = {}
+    _datum: SundaeV4PoolDatum | None = PrivateAttr(default=None)
+
+    # -- class family ---------------------------------------------------------
+
+    @classmethod
+    def select_network(cls, network: str) -> None:
+        """Point the V4 class family at the deployment on ``network``."""
+        SundaeV4Vault._deployment = SundaeV4Deployment.for_network(network)
+
+    @classmethod
+    def deployment(cls) -> SundaeV4Deployment:
+        """The deployment the class family currently targets."""
+        return cls._deployment
+
+    @classmethod
+    def dex(cls) -> str:
+        """Get the DEX name."""
+        return "SundaeSwapV4"
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """The order validator address."""
+        return [cls._deployment.order_address.encode()]
+
+    @classmethod
+    def pool_selector(cls) -> PoolSelector:
+        """The vault validator address."""
+        return PoolSelector(addresses=[cls._deployment.pool_address.encode()])
+
+    @classmethod
+    def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
+        """Get the pool datum class."""
+        return SundaeV4PoolDatum
+
+    @classmethod
+    def order_datum_class(cls) -> type[SundaeV4OrderDatum]:
+        """Get the order datum class."""
+        return SundaeV4OrderDatum
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V4 validators are PlutusV3 scripts."""
+        return PlutusV3Script
+
+    # -- parse ----------------------------------------------------------------
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_utxo(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Derive the vault fields from the UTxO value and inline datum.
+
+        Skipped when ``identifier`` is already present (a pre-parsed vault).
+
+        Raises:
+            NotAPoolError: no inline datum, a datum that is not a pool datum, or
+                a value without the pool NFT.
+            InvalidPoolError: a declared reserve missing from, or larger than,
+                the value.
+        """
+        if "identifier" in values:
+            return values
+        datum = cls._parse_datum(values)
+        assets = values["assets"]
+        if not isinstance(assets, Assets):
+            assets = Assets(**assets)
+            values["assets"] = assets
+        policy = cls._deployment.pool_nft_policy.hex()
+        nft_unit = policy + _NFT_PREFIX + datum.identifier.hex()
+        lp_unit = policy + _LP_PREFIX + datum.identifier.hex()
+        if assets.root.get(nft_unit) != 1:
+            msg = f"SundaeV4Vault: pool NFT {nft_unit} is not in the UTxO value."
+            raise NotAPoolError(msg)
+        datum_units: list[str] = []
+        reserves: dict[str, int] = {}
+        for entry in _list_items(datum.assets):
+            fields = _list_items(entry)
+            unit = _reserve_unit(AssetClass.from_primitive(fields[0]))
+            quantity = int(fields[1])
+            held = assets.root.get(unit)
+            if held is None:
+                msg = (
+                    f"SundaeV4Vault: declared reserve {unit} is not in the "
+                    "UTxO value."
+                )
+                raise InvalidPoolError(msg)
+            if held < quantity:
+                msg = (
+                    f"SundaeV4Vault: declared reserve {unit}={quantity} exceeds the "
+                    f"held {held}."
+                )
+                raise InvalidPoolError(msg)
+            datum_units.append(unit)
+            reserves[unit] = quantity
+        values.update(
+            identifier=datum.identifier,
+            pool_nft=Assets(**{nft_unit: 1}),
+            lp_token=Assets(**{lp_unit: assets.root.get(lp_unit, 0)}),
+            reserves=Assets(**reserves),
+            datum_units=datum_units,
+            total_lp=datum.total_lp,
+            circulating_lp=datum.circulating_lp,
+            preminted_lp=datum.preminted_lp,
+            min_surplus=datum.min_surplus,
+            actions=list(datum.actions),
+            module_state={
+                bytes(_list_items(slot)[0]): bytes(_list_items(slot)[1])
+                for slot in _list_items(datum.module_state)
+            },
+            surplus=assets.root.get("lovelace", 0) - reserves.get("lovelace", 0),
+        )
+        return values
+
+    @classmethod
+    def _parse_datum(cls, values: dict[str, Any]) -> SundaeV4PoolDatum:
+        """Decode the inline datum as a pool datum or raise ``NotAPoolError``."""
+        datum_cbor = values.get("datum_cbor")
+        if not datum_cbor:
+            msg = "SundaeV4Vault: the UTxO carries no inline datum."
+            raise NotAPoolError(msg)
+        try:
+            datum = SundaeV4PoolDatum.from_cbor(datum_cbor)
+        except (DeserializeException, TypeError, ValueError, KeyError) as e:
+            msg = f"SundaeV4Vault: datum is not a pool datum: {e}"
+            raise NotAPoolError(msg) from e
+        if datum.to_cbor() != bytes.fromhex(datum_cbor):
+            msg = "SundaeV4Vault: datum does not round-trip as a pool datum."
+            raise NotAPoolError(msg)
+        return datum
+
+    # -- identity + datum -----------------------------------------------------
+
+    @property
+    def pool_id(self) -> str:
+        """The pool NFT unit."""
+        return self.pool_nft.unit()
+
+    @property
+    def datum(self) -> SundaeV4PoolDatum:
+        """The decoded pool datum."""
+        if self._datum is None:
+            self._datum = SundaeV4PoolDatum.from_cbor(self.datum_cbor)
+        return self._datum
+
+    # -- action map -----------------------------------------------------------
+
+    def action(self, tag: int) -> ActionEntry | None:
+        """The action-map entry for ``tag``, if declared."""
+        for entry in self.actions:
+            if entry.tag == tag:
+                return entry
+        return None
+
+    def modules_for(self, tag: int) -> list[bytes]:
+        """The module hashes that must run for action ``tag`` (empty if none)."""
+        entry = self.action(tag)
+        if entry is None:
+            return []
+        return [bytes(module) for module in _list_items(entry.modules)]
+
+    def module_kind(self, module_hash: bytes) -> str | None:
+        """The kind of an installed module, via the deployment's validator titles."""
+        return self._deployment.module_kind(module_hash)
+
+    def invariant_modules(self) -> list[tuple[int, bytes, str]]:
+        """``(tag, module_hash, kind)`` for every enabled invariant-module binding.
+
+        One entry per (action tag, invariant module) pair, in action-map order;
+        a vault that binds the same invariant on several tags lists it once per
+        tag.
+        """
+        out: list[tuple[int, bytes, str]] = []
+        for entry in self.actions:
+            if not isinstance(entry.enabled, BoolTrue):
+                continue
+            for module in _list_items(entry.modules):
+                kind = self.module_kind(bytes(module))
+                if kind in INVARIANT_MODULE_KINDS:
+                    out.append((entry.tag, bytes(module), kind))
+        return out
 
 
 def _void() -> RawPlutusData:
