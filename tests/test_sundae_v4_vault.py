@@ -137,6 +137,15 @@ def test_foreign_datum_is_not_a_pool() -> None:
         SundaeV4Vault.model_validate(values)
 
 
+def test_truncated_datum_is_not_a_pool() -> None:
+    values, _ = build_vault_utxo(
+        [("aa" * 28 + "01", 1), ("bb" * 28 + "02", 1)], prices=[1, 1], total_lp=2
+    )
+    values["datum_cbor"] = "a1"
+    with pytest.raises(NotAPoolError):
+        SundaeV4Vault.model_validate(values)
+
+
 def test_missing_pool_nft_is_not_a_pool() -> None:
     values, _ = build_vault_utxo(
         [("aa" * 28 + "01", 1), ("bb" * 28 + "02", 1)], prices=[1, 1], total_lp=2

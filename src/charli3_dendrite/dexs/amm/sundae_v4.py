@@ -69,6 +69,7 @@ from typing import Any
 from typing import ClassVar
 from typing import Union
 
+import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
 from pycardano import DeserializeException
 from pycardano import IndefiniteList
@@ -1590,7 +1591,13 @@ class SundaeV4Vault(DendriteBaseModel):
             raise NotAPoolError(msg)
         try:
             datum = SundaeV4PoolDatum.from_cbor(datum_cbor)
-        except (DeserializeException, TypeError, ValueError, KeyError) as e:
+        except (
+            DeserializeException,
+            TypeError,
+            ValueError,
+            KeyError,
+            cbor2.CBORDecodeError,
+        ) as e:
             msg = f"SundaeV4Vault: datum is not a pool datum: {e}"
             raise NotAPoolError(msg) from e
         if datum.to_cbor() != bytes.fromhex(datum_cbor):
