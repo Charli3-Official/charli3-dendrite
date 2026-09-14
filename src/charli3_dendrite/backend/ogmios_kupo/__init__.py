@@ -51,6 +51,8 @@ class OgmiosKupoBackend(AbstractBackend):
             ogmios_url (str): URL for the Ogmios service.
             kupo_url (str): URL for the Kupo service.
             network (Network): The Cardano network to use.
+            path (str): URL path segment appended after the host:port when
+                building the Ogmios websocket connection string.
         """
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
