@@ -1231,6 +1231,60 @@ def constant_sum_pinned_deposit(
     )
 
 
+@dataclass(frozen=True)
+class PinnedWithdraw:
+    """The unique constant-sum withdrawal the vault accepts for an LP redemption.
+
+    ``target_delta_v`` is the (negative) value delta the scoop declares,
+    ``payouts`` the per-asset amounts paid out (aligned to the pool's assets),
+    ``lp_after`` the pool's total LP after the step and ``lp_burned`` the LP
+    actually consumed — at most the LP redeemed, and below it only on pools
+    whose LP is finer-grained than their value.
+    """
+
+    target_delta_v: int
+    payouts: list[int]
+    lp_after: int
+    lp_burned: int
+
+
+def constant_sum_pinned_withdraw(
+    reserves: list[int],
+    prices: list[int],
+    lp: int,
+    total_lp: int,
+) -> PinnedWithdraw:
+    """The target-pinned constant-sum withdrawal of ``lp`` against ``reserves``.
+
+    The step declares ``t = -floor(lp * V / total_lp)``; every reserve moves by
+    ``ceil(r_i * t / V)`` (a payout of ``floor(r_i * |t| / V)``) and the total
+    LP to ``floor(total_lp * (V + t) / V)``, rounding against the withdrawer.
+
+    Raises:
+        ValueError: misaligned inputs, a pool with no value, or ``lp`` outside
+            ``(0, total_lp]``.
+    """
+    if len(reserves) != len(prices):
+        msg = "reserves and prices must be aligned to the pool assets."
+        raise ValueError(msg)
+    if not 0 < lp <= total_lp:
+        msg = "lp must be positive and at most the pool's total LP."
+        raise ValueError(msg)
+    value = sum(r * p for r, p in zip(reserves, prices))
+    if value <= 0:
+        msg = "The pool holds no value."
+        raise ValueError(msg)
+    target_delta_v = -(lp * value // total_lp)
+    payouts = [r * -target_delta_v // value for r in reserves]
+    lp_after = total_lp + (total_lp * target_delta_v) // value
+    return PinnedWithdraw(
+        target_delta_v=target_delta_v,
+        payouts=payouts,
+        lp_after=lp_after,
+        lp_burned=total_lp - lp_after,
+    )
+
+
 def module_config_hash(config: PlutusData) -> bytes:
     """The ``module_state`` commitment of a module config.
 
@@ -2094,6 +2148,35 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
             self.reserves.root[unit] = self.reserves.root[unit] + quantity
         for unit, quantity in asset_out.items():
             self.reserves.root[unit] = self.reserves.root[unit] - quantity
+
+    # -- liquidity ------------------------------------------------------------
+
+    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
+        """The proportional deposit the vault accepts for ``offered``.
+
+        ``deltas`` is aligned to the vault's declaration order
+        (``vault.datum_units``). Every reserve must be offered.
+        """
+        order = self.vault.datum_units
+        return constant_sum_pinned_deposit(
+            reserves=[self.reserves.root[u] for u in order],
+            prices=[self.prices[u] for u in order],
+            offered=[offered.root.get(u, 0) for u in order],
+            total_lp=self.total_lp,
+        )
+
+    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
+        """The proportional payout for redeeming ``lp`` LP tokens.
+
+        ``payouts`` is aligned to the vault's declaration order.
+        """
+        order = self.vault.datum_units
+        return constant_sum_pinned_withdraw(
+            reserves=[self.reserves.root[u] for u in order],
+            prices=[self.prices[u] for u in order],
+            lp=lp,
+            total_lp=self.total_lp,
+        )
 
 
 def _void() -> RawPlutusData:

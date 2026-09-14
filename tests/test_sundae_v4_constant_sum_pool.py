@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import itertools
+import json
+from pathlib import Path
 
 import pytest
 
@@ -12,8 +14,14 @@ from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4ConstantSumPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from tests.sundae_v4_cs_oracle import check_deposit
 from tests.sundae_v4_cs_oracle import check_swap
+from tests.sundae_v4_cs_oracle import check_withdraw
 from tests.sundae_v4_vault_factory import build_vault_utxo
+
+_DEPOSITS = json.loads(
+    (Path(__file__).parent / "sundae_v4_deposit_fixtures.json").read_text(),
+)["deposits"]
 
 
 def _units(n: int) -> list[str]:
@@ -230,3 +238,73 @@ def test_apply_swap_moves_every_touched_reserve() -> None:
     pool.apply_swap(Assets(**{u[0]: 10, u[1]: 5}), Assets(**{u[2]: 14}))
     assert dict(pool.reserves.root) == {u[0]: 110, u[1]: 205, u[2]: 286}
     assert pool.vault.reserves[u[2]] == 300  # the vault snapshot is untouched
+
+
+@pytest.mark.parametrize("dep", _DEPOSITS, ids=[d["scoop_tx"][:8] for d in _DEPOSITS])
+def test_pinned_deposit_replays_the_real_step(dep: dict) -> None:
+    """The pool-level pinned deposit reproduces a real on-chain scoop step."""
+    u = _units(len(dep["reserves_before"]))
+    pool = _pool(
+        list(zip(u, dep["reserves_before"])),
+        dep["prices"],
+        total_lp=dep["lp_before"],
+    )
+    offered = Assets(
+        **{
+            x: a - b
+            for x, a, b in zip(u, dep["reserves_after"], dep["reserves_before"])
+        }
+    )
+    pinned = pool.pinned_deposit(offered)
+    assert pinned.target_delta_v == dep["target_delta_v"]
+    assert pinned.lp_after == dep["lp_after"]
+    after = [b + d for b, d in zip(dep["reserves_before"], pinned.deltas)]
+    assert after == dep["reserves_after"]
+
+
+@pytest.mark.parametrize("n", [3, 5, 16])
+def test_pinned_deposit_and_withdraw_pass_the_validator(n: int) -> None:
+    """Both pinned steps satisfy the on-chain deposit/withdraw predicates."""
+    u = _units(n)
+    prices = [1 + (i % 3) for i in range(n)]
+    pool = _pool([(u[i], 700_000 + 1_000 * i) for i in range(n)], prices)
+    before = [pool.reserves[x] for x in pool.vault.datum_units]
+    aligned = [pool.prices[x] for x in pool.vault.datum_units]
+
+    pinned = pool.pinned_deposit(Assets(**{x: 10_000 + i for i, x in enumerate(u)}))
+    after = [b + d for b, d in zip(before, pinned.deltas)]
+    assert check_deposit(
+        before, pool.total_lp, after, pinned.lp_after, pinned.target_delta_v, aligned
+    )
+    assert pinned.lp_minted == pinned.lp_after - pool.total_lp
+
+    withdrawn = pool.pinned_withdraw(12_345)
+    after_w = [b - p for b, p in zip(before, withdrawn.payouts)]
+    assert check_withdraw(
+        before,
+        pool.total_lp,
+        after_w,
+        withdrawn.lp_after,
+        withdrawn.target_delta_v,
+        aligned,
+    )
+    assert withdrawn.lp_burned == pool.total_lp - withdrawn.lp_after
+    assert withdrawn.lp_burned <= 12_345
+
+
+def test_pinned_deposit_requires_every_reserve() -> None:
+    """Leaving a reserve out of the offer is rejected, not partially filled."""
+    u = _units(3)
+    pool = _pool([(u[0], 100), (u[1], 100), (u[2], 100)], [1, 1, 1])
+    with pytest.raises(ValueError):
+        pool.pinned_deposit(Assets(**{u[0]: 10, u[1]: 10}))
+
+
+def test_pinned_withdraw_rejects_more_than_the_supply() -> None:
+    """Withdrawing zero or more LP than exists is rejected."""
+    u = _units(2)
+    pool = _pool([(u[0], 100), (u[1], 100)], [1, 1], total_lp=200)
+    with pytest.raises(ValueError):
+        pool.pinned_withdraw(201)
+    with pytest.raises(ValueError):
+        pool.pinned_withdraw(0)
