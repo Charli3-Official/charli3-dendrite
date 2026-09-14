@@ -44,6 +44,12 @@ def _pool(swap: dict) -> SundaeV4ConstantSumPool:
     return vault.pools()[0]
 
 
+def test_replay_fixture_is_non_trivial() -> None:
+    """Guard against a fixture that regenerated to nothing."""
+    assert len(_SWAPS) >= 100
+    assert any(s["price_in"] != s["price_out"] for s in _SWAPS)
+
+
 @pytest.mark.parametrize(
     "swap",
     _SWAPS,

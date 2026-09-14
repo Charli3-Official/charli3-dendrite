@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import itertools
-import json
-from pathlib import Path
 
 import pytest
 
@@ -16,10 +14,6 @@ from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from tests.sundae_v4_cs_oracle import check_swap
 from tests.sundae_v4_vault_factory import build_vault_utxo
-
-_FIX = json.loads(
-    (Path(__file__).parent / "sundae_v4_auditfinal_fixtures.json").read_text(),
-)
 
 
 def _units(n: int) -> list[str]:
@@ -164,7 +158,8 @@ def test_quote_is_the_exact_maximum_the_validator_admits(
             after[pool.vault.datum_units.index(a)] += amount
             after[pool.vault.datum_units.index(b)] -= out.quantity()
             if out.quantity() == 0:
-                # A dock-rejected quote: the maximum output must also be rejected.
+                # The admissible set is empty: even the smallest non-zero
+                # output must also be rejected.
                 probe = list(before)
                 probe[pool.vault.datum_units.index(a)] += amount
                 probe[pool.vault.datum_units.index(b)] -= 1
@@ -202,6 +197,31 @@ def test_get_amount_in_is_the_exact_minimum() -> None:
                 )
     with pytest.raises(InvalidPoolError):
         pool.get_amount_in(Assets(**{u[0]: 10_000_000}), u[1])
+
+
+def test_get_amount_in_raises_rather_than_loop_when_nothing_is_admissible() -> None:
+    u = _units(2)
+    pool = _pool([(u[0], 1_000), (u[1], 1_000)], [1000, 1])
+    # The minimal fillable amount already quotes above the out reserve for
+    # every larger amount too (the quote is monotone), so no input reaches
+    # 999 of u1 and the search must terminate by raising, never looping.
+    with pytest.raises(InvalidPoolError):
+        pool.get_amount_in(Assets(**{u[1]: 999}), u[0])
+
+
+def test_get_amount_in_terminates_when_bounty_dock_rejects_every_probe() -> None:
+    u = _units(2)
+    pool = _pool([(u[0], 5), (u[1], 5)], [1, 2], bounty_k=(3, 2000))
+    in_unit, out_unit = u[1], u[0]
+    # Every reachable output on this direction is dock-rejected up to the
+    # reserve ceiling; the search must still terminate, either by finding an
+    # admissible input or by raising.
+    try:
+        needed, _ = pool.get_amount_in(Assets(**{out_unit: 1}), in_unit)
+    except InvalidPoolError:
+        return
+    out = pool.get_amount_out(Assets(**{in_unit: needed.quantity()}), out_unit)
+    assert out[0].quantity() >= 1
 
 
 def test_apply_swap_moves_every_touched_reserve() -> None:

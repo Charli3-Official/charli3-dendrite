@@ -1847,13 +1847,20 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
         """Bind the constant-sum module's ``config`` to ``vault`` on action ``tag``.
 
         Raises:
-            InvalidPoolError: the config's price vector does not cover the reserves.
+            InvalidPoolError: the config's price vector does not cover the
+                reserves, or the vault's datum order and reserve units disagree.
         """
         price_list = [int(p) for p in _list_items(config.prices)]
         if len(price_list) != len(vault.datum_units):
             msg = (
                 f"SundaeV4ConstantSumPool: {len(price_list)} prices for "
                 f"{len(vault.datum_units)} reserves."
+            )
+            raise InvalidPoolError(msg)
+        if set(vault.datum_units) != set(vault.reserves.root):
+            msg = (
+                "SundaeV4ConstantSumPool: the vault's datum order and "
+                "reserve units disagree."
             )
             raise InvalidPoolError(msg)
         return cls(
@@ -2030,7 +2037,9 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
         Raises:
             ValueError: ``asset`` is not exactly one reserve, or ``in_unit`` is
                 not a reserve distinct from it, or the amount is not positive.
-            InvalidPoolError: the desired output is not below the reserve.
+            InvalidPoolError: the desired output is not below the reserve, or
+                no input amount reaches it (the fee-consistent, un-docked
+                quote outgrows the reserve before the desired output is met).
         """
         if len(asset) != 1:
             msg = "The desired output must be exactly one asset."
@@ -2040,11 +2049,22 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
         if desired <= 0:
             msg = "The desired output must be positive."
             raise ValueError(msg)
-        if desired >= self.reserves.root[out_unit]:
+        reserve = self.reserves.root[out_unit]
+        if desired >= reserve:
             msg = f"Desired output {desired} is not below the reserve."
             raise InvalidPoolError(msg)
         fee_num, fee_den = self._fee()
         p_in, p_out = self.price(in_unit, out_unit)
+
+        def quote(amount: int) -> int:
+            """The fee-consistent, un-docked quote for offering ``amount``.
+
+            Monotone non-decreasing in ``amount``, so once it outgrows the
+            out reserve no larger amount can ever be admitted either.
+            """
+            value_in = amount * p_in
+            fee_value = value_in * fee_num // fee_den
+            return (value_in - fee_value) // p_out
 
         def produced(amount: int) -> int:
             """The output the pool pays for offering ``amount`` of ``in_unit``."""
@@ -2058,6 +2078,12 @@ class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
         while amount_in > 1 and produced(amount_in - 1) >= desired:
             amount_in -= 1
         while produced(amount_in) < desired:
+            if quote(amount_in) > reserve:
+                msg = (
+                    f"SundaeV4ConstantSumPool: no amount of {in_unit} reaches "
+                    f"{desired} of {out_unit} within the reserve."
+                )
+                raise InvalidPoolError(msg)
             amount_in += 1
         in_assets = Assets(**{in_unit: amount_in})
         return in_assets, 1.0 - (desired * p_out) / (amount_in * p_in)

@@ -10,10 +10,12 @@ from __future__ import annotations
 
 
 def compute_v(reserves: list[int], prices: list[int]) -> int:
+    """The pool's total value: the reserve/price dot product."""
     return sum(r * p for r, p in zip(reserves, prices))
 
 
 def compute_q(reserves: list[int], prices: list[int], v: int) -> int:
+    """The pool's imbalance: the sum of squared per-asset value deviations."""
     n = len(prices)
     return sum((n * r * p - v) ** 2 for r, p in zip(reserves, prices))
 
@@ -21,6 +23,7 @@ def compute_q(reserves: list[int], prices: list[int], v: int) -> int:
 def dock(
     before: list[int], after: list[int], prices: list[int], bounty_k: tuple[int, int]
 ) -> int:
+    """The obligation a step accrues toward the rebalance bounty (0 if none)."""
     k_num, k_den = bounty_k
     if k_num == 0:
         return 0
@@ -42,6 +45,7 @@ def check_swap(
     fee: tuple[int, int],
     bounty_k: tuple[int, int],
 ) -> bool:
+    """Whether the on-chain tag-3 predicate admits the step's tight ``fee_budget``."""
     if len(before) != len(after) or any(a < 0 for a in after):
         return False
     fee_num, fee_den = fee
@@ -69,6 +73,7 @@ def check_swap(
 def check_pinned_reserves(
     before: list[int], after: list[int], v_b: int, t: int
 ) -> bool:
+    """Whether every reserve moved in lock-step with the value change ``t``."""
     return all(
         (a - b) * v_b >= b * t and (a - b) * v_b < b * t + v_b
         for b, a in zip(before, after)
@@ -83,6 +88,7 @@ def check_deposit(
     t: int,
     prices: list[int],
 ) -> bool:
+    """Whether the on-chain deposit predicate admits raising every reserve by ``t``."""
     v_b = compute_v(before, prices)
     return (
         t > 0
@@ -100,6 +106,7 @@ def check_withdraw(
     t: int,
     prices: list[int],
 ) -> bool:
+    """Whether the on-chain withdraw predicate admits lowering every reserve by ``t``."""
     v_b = compute_v(before, prices)
     return (
         t < 0
