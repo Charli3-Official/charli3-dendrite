@@ -97,6 +97,7 @@ from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
+from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
@@ -1713,6 +1714,22 @@ class SundaeV4Vault(DendriteBaseModel):
                     out.append((entry.tag, bytes(module), kind))
         return out
 
+    def pools(self) -> list[SundaeV4ConstantSumPool]:
+        """One pool type per enabled invariant-module binding on the action map.
+
+        Raises:
+            NotImplementedError: an invariant kind without a pool type yet.
+            ModuleConfigUnavailableError: a config could not be resolved.
+        """
+        out: list[SundaeV4ConstantSumPool] = []
+        for tag, module, kind in self.invariant_modules():
+            if kind != "constant_sum":
+                msg = f"SundaeV4Vault: no pool type for the {kind} module yet."
+                raise NotImplementedError(msg)
+            config = self.module_config(module)
+            out.append(SundaeV4ConstantSumPool.from_vault(self, tag, config))
+        return out
+
     # -- module configs -------------------------------------------------------
 
     @classmethod
@@ -1793,6 +1810,264 @@ class SundaeV4Vault(DendriteBaseModel):
             f"committed for module {module_hash.hex()}."
         )
         raise ModuleConfigUnavailableError(msg)
+
+
+class SundaeV4ConstantSumPool(AbstractMultiAssetPoolState):
+    """The constant-sum module bound to a vault on one action tag.
+
+    ``prices`` is the config's positional price vector re-keyed to units;
+    ``reserves`` and ``total_lp`` are a snapshot of the vault's at construction
+    so :meth:`apply_swap` never mutates the vault. A swap step may raise any
+    subset of the reserves and lower another; the on-chain check is on value:
+    ``out = floor((V_in - floor(V_in * fee)) / p_out)`` with the pool keeping
+    the fee and the sub-``p_out`` remainder. That value is the only output the
+    fee-band check ever admits — a lower amount fails it exactly like a higher
+    one — so a step whose out reserve cannot cover it, or (with the bounty on)
+    whose value increase cannot cover the obligation dock, quotes zero rather
+    than a partial fill.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    vault: SundaeV4Vault
+    tag: int
+    config: ConstantSumConfig
+    total_lp: int
+    prices: dict[str, int]
+
+    _deposit_rider: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
+
+    @classmethod
+    def from_vault(
+        cls,
+        vault: SundaeV4Vault,
+        tag: int,
+        config: ConstantSumConfig,
+    ) -> SundaeV4ConstantSumPool:
+        """Bind the constant-sum module's ``config`` to ``vault`` on action ``tag``.
+
+        Raises:
+            InvalidPoolError: the config's price vector does not cover the reserves.
+        """
+        price_list = [int(p) for p in _list_items(config.prices)]
+        if len(price_list) != len(vault.datum_units):
+            msg = (
+                f"SundaeV4ConstantSumPool: {len(price_list)} prices for "
+                f"{len(vault.datum_units)} reserves."
+            )
+            raise InvalidPoolError(msg)
+        return cls(
+            vault=vault,
+            tag=tag,
+            config=config,
+            reserves=Assets(**dict(vault.reserves.root)),
+            total_lp=vault.total_lp,
+            prices=dict(zip(vault.datum_units, price_list)),
+        )
+
+    # -- identity -------------------------------------------------------------
+
+    @classmethod
+    def dex(cls) -> str:
+        """Get the DEX name."""
+        return SundaeV4Vault.dex()
+
+    @classmethod
+    def pool_selector(cls) -> PoolSelector:
+        """The vault validator address."""
+        return SundaeV4Vault.pool_selector()
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """The order validator address."""
+        return SundaeV4Vault.order_selector()
+
+    @property
+    def pool_id(self) -> str:
+        """The vault's pool NFT unit qualified by the action tag."""
+        return f"{self.vault.pool_id}:{self.tag}"
+
+    @property
+    def stake_address(self) -> Address:
+        """The order script address an order UTxO is locked at."""
+        return self.vault.deployment().order_address
+
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
+    ) -> Assets:
+        """The flat ``base_fee`` an order locks for service fees."""
+        return Assets(lovelace=self.vault.deployment().base_fee)
+
+    def deposit(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ) -> Assets:
+        """The lovelace rider returned with the order's payout."""
+        return self._deposit_rider
+
+    def swap_datum(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+    ) -> PlutusData:
+        """Replaced by the order builders."""
+        raise NotImplementedError
+
+    # -- curve ----------------------------------------------------------------
+
+    def _fee(self) -> tuple[int, int]:
+        """The config's swap fee as ``(num, den)``."""
+        return (self.config.fee.num, self.config.fee.den)
+
+    def _bounty(self) -> tuple[int, int]:
+        """The config's bounty rate as ``(num, den)`` (``num == 0`` disables it)."""
+        return (self.config.bounty_k.num, self.config.bounty_k.den)
+
+    def _value(self, reserves: dict[str, int]) -> int:
+        """The pool value of a reserve vector: the reserve/price dot product."""
+        return sum(reserves[u] * p for u, p in self.prices.items())
+
+    def _imbalance(self, reserves: dict[str, int], value: int) -> int:
+        """The pool imbalance: the sum of squared per-asset value deviations."""
+        n = len(self.prices)
+        return sum((n * reserves[u] * p - value) ** 2 for u, p in self.prices.items())
+
+    def _dock(self, before: dict[str, int], after: dict[str, int]) -> int:
+        """The obligation a step accrues, ceiled to whole value units (0 if none)."""
+        k_num, k_den = self._bounty()
+        if k_num == 0:
+            return 0
+        v_b, v_a = self._value(before), self._value(after)
+        q_b, q_a = self._imbalance(before, v_b), self._imbalance(after, v_a)
+        accrual = k_num * (q_a * v_b - q_b * v_a)
+        if accrual <= 0:
+            return 0
+        n = len(self.prices)
+        den = k_den * n * n * v_a * v_b
+        return -(-accrual // den)
+
+    def _check_units(self, asset: Assets, out_unit: str) -> None:
+        """Validate that ``out_unit`` and every unit of ``asset`` are reserves.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is empty,
+                offers a non-reserve or ``out_unit`` itself, or offers a
+                negative quantity.
+        """
+        if out_unit not in self.prices:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        if len(asset) == 0:
+            msg = "The offered asset is empty."
+            raise ValueError(msg)
+        for unit, quantity in asset.items():
+            if unit not in self.prices or unit == out_unit:
+                msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
+                raise ValueError(msg)
+            if quantity < 0:
+                msg = f"Offered quantity of {unit} is negative."
+                raise ValueError(msg)
+
+    def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
+        """The fixed integer price weights ``(p_in, p_out)``."""
+        return (self.prices[unit_in], self.prices[unit_out])
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        out_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Output of ``out_unit`` for offering ``asset``, and the price impact.
+
+        The fee-consistent quote is the *only* value the tag-3 fee band ever
+        admits: the band's width is exactly the floor-division remainder the
+        quote already carries, so any smaller output fails it precisely like
+        a larger one. A step whose out reserve cannot cover the quote, or
+        whose bounty dock the quote cannot cover, is therefore unfillable in
+        one step and the output is zero rather than a partial fill.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` offers a
+                non-reserve or ``out_unit`` itself.
+        """
+        self._check_units(asset, out_unit)
+        fee_num, fee_den = self._fee()
+        value_in = sum(q * self.prices[u] for u, q in asset.items())
+        fee_value = value_in * fee_num // fee_den
+        p_out = self.prices[out_unit]
+        quote = (value_in - fee_value) // p_out
+        out = quote if quote <= self.reserves.root[out_unit] else 0
+        if out > 0 and self._bounty()[0] > 0:
+            before = dict(self.reserves.root)
+            after = dict(before)
+            for u, q in asset.items():
+                after[u] += q
+            after[out_unit] -= out
+            if value_in - out * p_out < self._dock(before, after):
+                out = 0
+        out_assets = Assets(**{out_unit: out})
+        if value_in == 0 or out == 0:
+            return out_assets, 0.0
+        return out_assets, 1.0 - (out * p_out) / value_in
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        in_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Minimum ``in_unit`` whose payout reaches the single-asset ``asset``.
+
+        Raises:
+            ValueError: ``asset`` is not exactly one reserve, or ``in_unit`` is
+                not a reserve distinct from it, or the amount is not positive.
+            InvalidPoolError: the desired output is not below the reserve.
+        """
+        if len(asset) != 1:
+            msg = "The desired output must be exactly one asset."
+            raise ValueError(msg)
+        out_unit, desired = asset.unit(), asset.quantity()
+        self._check_units(Assets(**{in_unit: 1}), out_unit)
+        if desired <= 0:
+            msg = "The desired output must be positive."
+            raise ValueError(msg)
+        if desired >= self.reserves.root[out_unit]:
+            msg = f"Desired output {desired} is not below the reserve."
+            raise InvalidPoolError(msg)
+        fee_num, fee_den = self._fee()
+        p_in, p_out = self.price(in_unit, out_unit)
+
+        def produced(amount: int) -> int:
+            """The output the pool pays for offering ``amount`` of ``in_unit``."""
+            offer = Assets(**{in_unit: amount})
+            return self.get_amount_out(offer, out_unit)[0].quantity()
+
+        amount_in = max(
+            1,
+            -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num))),
+        )
+        while amount_in > 1 and produced(amount_in - 1) >= desired:
+            amount_in -= 1
+        while produced(amount_in) < desired:
+            amount_in += 1
+        in_assets = Assets(**{in_unit: amount_in})
+        return in_assets, 1.0 - (desired * p_out) / (amount_in * p_in)
+
+    def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
+        """Move every touched reserve as if the swap settled."""
+        for unit, quantity in asset_in.items():
+            self.reserves.root[unit] = self.reserves.root[unit] + quantity
+        for unit, quantity in asset_out.items():
+            self.reserves.root[unit] = self.reserves.root[unit] - quantity
 
 
 def _void() -> RawPlutusData:
@@ -2311,3 +2586,7 @@ class _SundaeV4CLState(_SundaeV4PricingMixin, AbstractConstantLiquidityPoolState
         a_v = a + -(-(liq * spb_d) // spb_n)
         b_v = b + -(-(liq * spa_n) // spa_d)
         return a_v, b_v
+
+
+SundaeV4Vault.model_rebuild()
+SundaeV4ConstantSumPool.model_rebuild()
