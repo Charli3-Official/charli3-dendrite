@@ -388,3 +388,23 @@ def test_unknown_module_hash_is_a_key_error() -> None:
     )
     with pytest.raises(KeyError):
         SundaeV4Vault.model_validate(values).module_config(b"\x00" * 28)
+
+
+def test_public_exports() -> None:
+    """The vault and its constant-sum pool type are exported from the package root."""
+    import charli3_dendrite
+
+    assert charli3_dendrite.SundaeV4Vault is SundaeV4Vault
+    from charli3_dendrite import SundaeV4ConstantSumPool  # noqa: F401
+    import charli3_dendrite.dexs.amm.amm_types as amm_types
+
+    assert not hasattr(amm_types, "AbstractConstantSumPoolState")
+    import charli3_dendrite.dexs.amm.sundae_v4 as v4
+
+    for gone in (
+        "_SundaeV4CSState",
+        "_SundaeV4CPPState",
+        "_SundaeV4CLState",
+        "_SundaeV4PricingMixin",
+    ):
+        assert not hasattr(v4, gone)
