@@ -18,6 +18,7 @@ from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
@@ -282,6 +283,29 @@ class BlockFrostBackend(AbstractBackend):
                     script=None,
                 )
         return None
+
+    def get_redeemers(self, tx_hash: str) -> list[RedeemerRecord]:
+        """Every redeemer of ``tx_hash``, resolving each datum by its hash.
+
+        Args:
+            tx_hash: The transaction hash (hex).
+
+        Returns:
+            The redeemers in the order the API lists them.
+        """
+        records = []
+        for item in self.api.transaction_redeemers(tx_hash, gather_pages=True):
+            cbor = self.api.script_datum_cbor(item.redeemer_data_hash).cbor
+            records.append(
+                RedeemerRecord(
+                    tx_hash=tx_hash,
+                    purpose=item.purpose,
+                    index=item.tx_index,
+                    script_hash=item.script_hash,
+                    data_cbor=cbor,
+                ),
+            )
+        return records
 
     def get_axo_target(
         self,

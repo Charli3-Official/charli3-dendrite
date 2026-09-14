@@ -20,6 +20,7 @@ from charli3_dendrite.backend.dbsync.models import UTxOSelector
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
@@ -574,6 +575,30 @@ LIMIT 1
             r[0]["assets"] = None
 
         return UTxOSelector.parse(r[0])
+
+    def get_redeemers(self, tx_hash: str) -> list[RedeemerRecord]:
+        """Every redeemer of ``tx_hash`` with its datum bytes.
+
+        Args:
+            tx_hash: The transaction hash (hex).
+
+        Returns:
+            The redeemers in ``(purpose, index)`` order.
+        """
+        query = """
+SELECT encode(tx.hash, 'hex') AS tx_hash,
+       r.purpose::text AS purpose,
+       r.index AS index,
+       encode(r.script_hash, 'hex') AS script_hash,
+       encode(rd.bytes, 'hex') AS data_cbor
+FROM redeemer r
+JOIN tx ON tx.id = r.tx_id
+JOIN redeemer_data rd ON rd.id = r.redeemer_data_id
+WHERE tx.hash = %(tx_hash)b
+ORDER BY r.purpose, r.index
+"""
+        rows = self.db_query(query, {"tx_hash": bytes.fromhex(tx_hash)})
+        return [RedeemerRecord.model_validate(row) for row in rows]
 
     def _get_historical_order_utxos(
         self,

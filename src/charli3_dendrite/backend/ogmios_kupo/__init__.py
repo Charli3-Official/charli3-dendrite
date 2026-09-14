@@ -22,6 +22,7 @@ from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
@@ -477,6 +478,15 @@ class OgmiosKupoBackend(AbstractBackend):
                         script=None,
                     )
         return None
+
+    def get_redeemers(self, tx_hash: str) -> list[RedeemerRecord]:
+        """Kupo indexes outputs, not redeemers.
+
+        Raises:
+            NotImplementedError: always.
+        """
+        msg = "The Ogmios/Kupo backend has no redeemer index."
+        raise NotImplementedError(msg)
 
     def get_axo_target(
         self,
