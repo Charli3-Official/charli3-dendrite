@@ -583,13 +583,15 @@ LIMIT 1
             tx_hash: The transaction hash (hex).
 
         Returns:
-            The redeemers in ``(purpose, index)`` order.
+            The redeemers in ``(purpose, index)`` order. ``script_hash`` is
+            ``""`` for a redeemer with no script (db-sync's
+            ``redeemer.script_hash`` is nullable), never ``None``.
         """
         query = """
 SELECT encode(tx.hash, 'hex') AS tx_hash,
        r.purpose::text AS purpose,
        r.index AS index,
-       encode(r.script_hash, 'hex') AS script_hash,
+       COALESCE(encode(r.script_hash, 'hex'), '') AS script_hash,
        encode(rd.bytes, 'hex') AS data_cbor
 FROM redeemer r
 JOIN tx ON tx.id = r.tx_id

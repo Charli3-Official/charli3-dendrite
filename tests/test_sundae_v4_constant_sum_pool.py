@@ -184,6 +184,48 @@ def test_quote_is_the_exact_maximum_the_validator_admits(
             ), (a, b, amount)
 
 
+@pytest.mark.parametrize("bounty", [(0, 1), (3, 2000)])
+def test_small_reserve_exhaustive_admissible_set(bounty: tuple[int, int]) -> None:
+    """On small reserves, exhaustively confirm the admissible set is a singleton.
+
+    Rather than spot-checking the quote's immediate neighbours, this sweeps
+    every possible output ``0..reserve`` through the oracle's ``check_swap``
+    for every ordered pair and a range of input amounts: the on-chain
+    predicate must admit either nothing, or exactly ``get_amount_out``'s
+    quote.
+    """
+    u = _units(3)
+    prices = [1, 2, 3]
+    reserves = [(u[0], 10), (u[1], 20), (u[2], 30)]
+    pool = _pool(reserves, prices, bounty_k=bounty)
+    before = [pool.reserves[x] for x in pool.vault.datum_units]
+    aligned_prices = [pool.prices[x] for x in pool.vault.datum_units]
+    for a, b in itertools.permutations(u, 2):
+        a_idx = pool.vault.datum_units.index(a)
+        b_idx = pool.vault.datum_units.index(b)
+        reserve_b = before[b_idx]
+        for amount in range(1, 61):
+            admissible = []
+            for out in range(reserve_b + 1):
+                after = list(before)
+                after[a_idx] += amount
+                after[b_idx] -= out
+                if check_swap(
+                    before,
+                    after,
+                    pool.total_lp,
+                    aligned_prices,
+                    (3, 1000),
+                    bounty,
+                ):
+                    admissible.append(out)
+            quote, _ = pool.get_amount_out(Assets(**{a: amount}), b)
+            if quote.quantity() == 0:
+                assert admissible == [], (a, b, amount, admissible)
+            else:
+                assert admissible == [quote.quantity()], (a, b, amount, admissible)
+
+
 def test_get_amount_in_is_the_exact_minimum() -> None:
     u = _units(3)
     pool = _pool(
@@ -204,7 +246,18 @@ def test_get_amount_in_is_the_exact_minimum() -> None:
                     < desired
                 )
     with pytest.raises(InvalidPoolError):
-        pool.get_amount_in(Assets(**{u[0]: 10_000_000}), u[1])
+        pool.get_amount_in(Assets(**{u[0]: 10_000_001}), u[1])
+
+
+def test_get_amount_in_allows_draining_the_reserve_exactly() -> None:
+    """A full drain of the out reserve is admissible; one past it is not."""
+    u = _units(2)
+    pool = _pool([(u[0], 1_000_000), (u[1], 5_000)], [1, 1])
+    needed, _ = pool.get_amount_in(Assets(**{u[1]: 5_000}), u[0])
+    out, _ = pool.get_amount_out(Assets(**{u[0]: needed.quantity()}), u[1])
+    assert out.quantity() == 5_000
+    with pytest.raises(InvalidPoolError):
+        pool.get_amount_in(Assets(**{u[1]: 5_001}), u[0])
 
 
 def test_get_amount_in_raises_rather_than_loop_when_nothing_is_admissible() -> None:
@@ -218,18 +271,25 @@ def test_get_amount_in_raises_rather_than_loop_when_nothing_is_admissible() -> N
 
 
 def test_get_amount_in_terminates_when_bounty_dock_rejects_every_probe() -> None:
+    """The search is bounded by the closed-form ceiling, not an open-ended walk.
+
+    The price skew keeps the admissible amount range (``[1, amount_max)``) a
+    few thousand wide even though the out reserve itself is ten million, so a
+    naive walk bounded by the raw reserve would be far slower than this pool
+    actually requires. The bounty dock rejects every amount on this
+    anti-corrective direction (offering the heavily-weighted asset to drain
+    the minority one), so the whole admissible range is walked and the search
+    must still terminate by raising, not looping.
+    """
     u = _units(2)
-    pool = _pool([(u[0], 5), (u[1], 5)], [1, 2], bounty_k=(3, 2000))
+    pool = _pool(
+        [(u[0], 10_000_000), (u[1], 10_000_000)],
+        [1, 1000],
+        bounty_k=(1, 2),
+    )
     in_unit, out_unit = u[1], u[0]
-    # Every reachable output on this direction is dock-rejected up to the
-    # reserve ceiling; the search must still terminate, either by finding an
-    # admissible input or by raising.
-    try:
-        needed, _ = pool.get_amount_in(Assets(**{out_unit: 1}), in_unit)
-    except InvalidPoolError:
-        return
-    out = pool.get_amount_out(Assets(**{in_unit: needed.quantity()}), out_unit)
-    assert out[0].quantity() >= 1
+    with pytest.raises(InvalidPoolError):
+        pool.get_amount_in(Assets(**{out_unit: 1}), in_unit)
 
 
 def test_apply_swap_moves_every_touched_reserve() -> None:

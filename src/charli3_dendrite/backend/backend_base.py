@@ -215,7 +215,9 @@ class AbstractBackend(ABC):
             tx_hash: The transaction hash (hex).
 
         Returns:
-            The transaction's redeemers, in ``(purpose, index)`` order.
+            The transaction's redeemers, in implementation-defined order
+            (db-sync orders by purpose then index). ``script_hash`` is ``""``
+            for a redeemer with no script, never ``None``.
 
         Raises:
             NotImplementedError: if the backend has no redeemer index.

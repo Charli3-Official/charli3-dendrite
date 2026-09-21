@@ -1523,7 +1523,9 @@ class SundaeV4Vault(DendriteBaseModel):
     declaration order that positional module configs (constant-sum prices) are
     aligned to. ``surplus`` is the UTxO lovelace above the declared lovelace
     reserve. The vault prices nothing: :meth:`pools` yields one pool type per
-    invariant module bound on the action map.
+    invariant module bound on the action map. ``_config_cache`` grows by one
+    entry per distinct resolved module config (keyed by its commitment hash)
+    across every vault in the process; :meth:`clear_config_cache` drops it.
     """
 
     model_config = ConfigDict(
@@ -1614,8 +1616,11 @@ class SundaeV4Vault(DendriteBaseModel):
         Raises:
             NotAPoolError: no inline datum, a datum that is not a pool datum, or
                 a value without the pool NFT.
-            InvalidPoolError: a declared reserve missing from, or larger than,
-                the value.
+            InvalidPoolError: a declared reserve's quantity exceeds what is
+                held (a reserve class absent from the value counts as held 0),
+                or the datum declares the same reserve class more than once.
+            KeyError: a supplied ``module_configs`` key names a module hash
+                not installed on this vault (absent from ``module_state``).
         """
         if "identifier" in values:
             return values
@@ -1636,13 +1641,7 @@ class SundaeV4Vault(DendriteBaseModel):
             fields = _list_items(entry)
             unit = _reserve_unit(AssetClass.from_primitive(fields[0]))
             quantity = int(fields[1])
-            held = assets.root.get(unit)
-            if held is None:
-                msg = (
-                    f"SundaeV4Vault: declared reserve {unit} is not in the "
-                    "UTxO value."
-                )
-                raise InvalidPoolError(msg)
+            held = assets.root.get(unit, 0)
             if held < quantity:
                 msg = (
                     f"SundaeV4Vault: declared reserve {unit}={quantity} exceeds the "
@@ -1651,6 +1650,9 @@ class SundaeV4Vault(DendriteBaseModel):
                 raise InvalidPoolError(msg)
             datum_units.append(unit)
             reserves[unit] = quantity
+        if len(set(datum_units)) != len(datum_units):
+            msg = "SundaeV4Vault: the datum declares a reserve class more than once."
+            raise InvalidPoolError(msg)
         values.update(
             identifier=datum.identifier,
             pool_nft=Assets(**{nft_unit: 1}),
@@ -1839,6 +1841,8 @@ class SundaeV4Vault(DendriteBaseModel):
             raise ModuleConfigUnavailableError(msg) from e
         kind = self.module_kind(module_hash)
         for record in records:
+            if not record.script_hash:
+                continue
             if bytes.fromhex(record.script_hash) != module_hash:
                 continue
             for candidate in _config_candidates(record.data_cbor, kind):
@@ -1860,6 +1864,21 @@ class _SundaeV4OrderBuilders:
     def deployment(self) -> SundaeV4Deployment:
         """The deployment the bound vault targets."""
         return self.vault.deployment()
+
+    @classmethod
+    def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
+        """Get the pool datum class."""
+        return SundaeV4Vault.pool_datum_class()
+
+    @classmethod
+    def order_datum_class(cls) -> type[SundaeV4OrderDatum]:
+        """Get the order datum class."""
+        return SundaeV4Vault.order_datum_class()
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V4 validators are PlutusV3 scripts."""
+        return SundaeV4Vault.default_script_class()
 
     @classmethod
     def order_owner(cls, address: Address) -> MultisigSignature:
@@ -2314,8 +2333,22 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
                 raise ValueError(msg)
 
     def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
-        """The fixed integer price weights ``(p_in, p_out)``."""
+        """The fixed integer price weights ``(p_in, p_out)``.
+
+        Raises:
+            KeyError: ``unit_in`` or ``unit_out`` is not a reserve of this pool.
+        """
         return (self.prices[unit_in], self.prices[unit_out])
+
+    def _exact_quote(self, value_in: int, p_out: int) -> int:
+        """The unique output the fee bracket admits for a value inflow.
+
+        ``value_in`` is the offered side's value (already price-weighted);
+        the tag-3 fee band admits exactly this output for that inflow and
+        rejects every other amount, smaller or larger.
+        """
+        fee_num, fee_den = self._fee()
+        return (value_in - value_in * fee_num // fee_den) // p_out
 
     def get_amount_out(
         self,
@@ -2337,11 +2370,9 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
                 non-reserve or ``out_unit`` itself.
         """
         self._check_units(asset, out_unit)
-        fee_num, fee_den = self._fee()
         value_in = sum(q * self.prices[u] for u, q in asset.items())
-        fee_value = value_in * fee_num // fee_den
         p_out = self.prices[out_unit]
-        quote = (value_in - fee_value) // p_out
+        quote = self._exact_quote(value_in, p_out)
         out = quote if quote <= self.reserves.root[out_unit] else 0
         if out > 0 and self._bounty()[0] > 0:
             before = dict(self.reserves.root)
@@ -2367,9 +2398,10 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
         Raises:
             ValueError: ``asset`` is not exactly one reserve, or ``in_unit`` is
                 not a reserve distinct from it, or the amount is not positive.
-            InvalidPoolError: the desired output is not below the reserve, or
-                no input amount reaches it (the fee-consistent, un-docked
-                quote outgrows the reserve before the desired output is met).
+            InvalidPoolError: the desired output exceeds the reserve, or no
+                input amount reaches it (every amount admissible within the
+                reserve leaves the fee-consistent quote, or the bounty dock,
+                short of the desired output).
         """
         if len(asset) != 1:
             msg = "The desired output must be exactly one asset."
@@ -2380,46 +2412,74 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
             msg = "The desired output must be positive."
             raise ValueError(msg)
         reserve = self.reserves.root[out_unit]
-        if desired >= reserve:
-            msg = f"Desired output {desired} is not below the reserve."
+        if desired > reserve:
+            msg = f"Desired output {desired} exceeds the reserve {reserve}."
             raise InvalidPoolError(msg)
         fee_num, fee_den = self._fee()
         p_in, p_out = self.price(in_unit, out_unit)
-
-        def quote(amount: int) -> int:
-            """The fee-consistent, un-docked quote for offering ``amount``.
-
-            Monotone non-decreasing in ``amount``, so once it outgrows the
-            out reserve no larger amount can ever be admitted either.
-            """
-            value_in = amount * p_in
-            fee_value = value_in * fee_num // fee_den
-            return (value_in - fee_value) // p_out
 
         def produced(amount: int) -> int:
             """The output the pool pays for offering ``amount`` of ``in_unit``."""
             offer = Assets(**{in_unit: amount})
             return self.get_amount_out(offer, out_unit)[0].quantity()
 
+        amount_max = self._amount_ceiling(reserve, p_in, p_out, fee_num, fee_den)
         amount_in = max(
             1,
-            -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num))),
+            min(
+                amount_max - 1,
+                -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num))),
+            ),
         )
         while amount_in > 1 and produced(amount_in - 1) >= desired:
             amount_in -= 1
-        while produced(amount_in) < desired:
-            if quote(amount_in) > reserve:
-                msg = (
-                    f"SundaeV4ConstantSumPool: no amount of {in_unit} reaches "
-                    f"{desired} of {out_unit} within the reserve."
-                )
-                raise InvalidPoolError(msg)
+        while amount_in < amount_max and produced(amount_in) < desired:
             amount_in += 1
+        if produced(amount_in) < desired:
+            msg = (
+                f"SundaeV4ConstantSumPool: no amount of {in_unit} reaches "
+                f"{desired} of {out_unit} within the reserve."
+            )
+            raise InvalidPoolError(msg)
         in_assets = Assets(**{in_unit: amount_in})
         return in_assets, 1.0 - (desired * p_out) / (amount_in * p_in)
 
+    def _amount_ceiling(
+        self,
+        reserve: int,
+        p_in: int,
+        p_out: int,
+        fee_num: int,
+        fee_den: int,
+    ) -> int:
+        """The smallest ``amount`` whose exact quote exceeds ``reserve``.
+
+        ``_exact_quote(amount * p_in, p_out)`` is non-decreasing in ``amount``,
+        so this ceiling is found by binary search: an initial closed-form
+        estimate is doubled until it overshoots, then bisected down to the
+        exact boundary. No amount at or beyond this ceiling can ever be
+        admitted, so it bounds the ``get_amount_in`` search without an
+        arbitrary iteration cap.
+        """
+        hi = -(-((reserve + 1) * p_out * fee_den) // (p_in * (fee_den - fee_num))) + 1
+        while self._exact_quote(hi * p_in, p_out) <= reserve:
+            hi *= 2
+        lo = 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self._exact_quote(mid * p_in, p_out) > reserve:
+                hi = mid
+            else:
+                lo = mid + 1
+        return lo
+
     def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
-        """Move every touched reserve as if the swap settled."""
+        """Move every touched reserve as if the swap settled.
+
+        Raises:
+            KeyError: ``asset_in`` or ``asset_out`` names a unit that is not a
+                reserve of this pool.
+        """
         for unit, quantity in asset_in.items():
             self.reserves.root[unit] = self.reserves.root[unit] + quantity
         for unit, quantity in asset_out.items():

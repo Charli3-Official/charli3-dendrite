@@ -291,7 +291,9 @@ class BlockFrostBackend(AbstractBackend):
             tx_hash: The transaction hash (hex).
 
         Returns:
-            The redeemers in the order the API lists them.
+            The redeemers in the order the API lists them. ``script_hash`` is
+            ``""`` for a redeemer the API reports with no script, never
+            ``None``.
         """
         records = []
         for item in self.api.transaction_redeemers(tx_hash, gather_pages=True):
@@ -301,7 +303,7 @@ class BlockFrostBackend(AbstractBackend):
                     tx_hash=tx_hash,
                     purpose=item.purpose,
                     index=item.tx_index,
-                    script_hash=item.script_hash,
+                    script_hash=item.script_hash or "",
                     data_cbor=cbor,
                 ),
             )

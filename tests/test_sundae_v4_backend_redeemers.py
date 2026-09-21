@@ -111,6 +111,22 @@ def test_dbsync_get_redeemers_parses_rows(monkeypatch: pytest.MonkeyPatch) -> No
     assert "redeemer_data" in captured["query"]
 
 
+def test_dbsync_get_redeemers_coalesces_a_null_script_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """db-sync's ``script_hash`` is nullable; the query coalesces it to ``''``."""
+    backend = DbsyncBackend.__new__(DbsyncBackend)
+    captured: dict = {}
+
+    def fake_query(query: str, _args: dict | None = None) -> list[dict]:
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(backend, "db_query", fake_query)
+    backend.get_redeemers("ab" * 32)
+    assert "COALESCE(encode(r.script_hash, 'hex'), '')" in captured["query"]
+
+
 def test_blockfrost_get_redeemers_fetches_each_datum(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -136,6 +152,29 @@ def test_blockfrost_get_redeemers_fetches_each_datum(
         ("reward", 0, "d87980"),
         ("reward", 1, "d87981"),
     ]
+
+
+def test_blockfrost_get_redeemers_coalesces_a_none_script_hash() -> None:
+    """A redeemer the API reports with no script comes back with ``""``."""
+
+    class _Item:
+        def __init__(self) -> None:
+            self.tx_index = 0
+            self.purpose = "reward"
+            self.script_hash = None
+            self.redeemer_data_hash = "0" * 64
+
+    class _Api:
+        def transaction_redeemers(self, tx_hash: str, **_: object) -> list[_Item]:
+            return [_Item()]
+
+        def script_datum_cbor(self, datum_hash: str, **_: object) -> object:
+            return type("R", (), {"cbor": "d87980"})()
+
+    backend = BlockFrostBackend.__new__(BlockFrostBackend)
+    backend.api = _Api()
+    records = backend.get_redeemers("ab" * 32)
+    assert records[0].script_hash == ""
 
 
 @pytest.mark.skipif(

@@ -14,6 +14,7 @@ import pytest
 from pycardano import Address
 from pycardano import IndefiniteList
 from pycardano import Network
+from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import VerificationKeyHash
@@ -40,6 +41,7 @@ from charli3_dendrite.dexs.amm.sundae_v4 import StrategyExecution
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4ConstantSumPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4OrderDatum
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4PoolDatum
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.sundae_v4 import ValidityRange
 from charli3_dendrite.dexs.amm.sundae_v4 import parse_basic_constraint
@@ -162,6 +164,14 @@ def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
 def test_class_family_is_back_on_preview_after_the_switch() -> None:
     address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
     assert bytes(address.payment_part).hex().startswith("f577d24c")
+
+
+def test_order_builders_delegate_class_family_metadata_to_the_vault() -> None:
+    """The order-builder mixin resolves class-family metadata via the vault."""
+    pool = _pool()
+    assert pool.pool_datum_class() is SundaeV4PoolDatum
+    assert pool.order_datum_class() is SundaeV4OrderDatum
+    assert pool.default_script_class() is PlutusV3Script
 
 
 # ---------------------------------------------------------------------------

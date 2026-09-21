@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pycardano import IndefiniteList
 from pycardano import RawPlutusData
 
 from charli3_dendrite.backend import set_backend
@@ -174,11 +175,46 @@ def test_short_reserve_is_invalid() -> None:
         SundaeV4Vault.model_validate(values)
 
 
-def test_missing_reserve_class_is_invalid() -> None:
+def test_missing_reserve_class_is_invalid_only_when_declared_nonzero() -> None:
     values, _ = build_vault_utxo(
         [("aa" * 28 + "01", 100), ("bb" * 28 + "02", 100)], prices=[1, 1], total_lp=200
     )
     del values["assets"]["bb" * 28 + "02"]
+    with pytest.raises(InvalidPoolError):
+        SundaeV4Vault.model_validate(values)
+
+    u0, u1 = "aa" * 28 + "01", "bb" * 28 + "02"
+    zero_values, _ = build_vault_utxo(
+        [(u0, 0), (u1, 100)],
+        prices=[1, 1],
+        total_lp=100,
+    )
+    del zero_values["assets"][u0]
+    vault = SundaeV4Vault.model_validate(zero_values)
+    assert vault.reserves[u0] == 0
+
+
+def test_duplicate_reserve_declaration_is_invalid() -> None:
+    """A datum declaring the same reserve class twice is rejected, not merged."""
+    values, _ = build_vault_utxo(
+        [("aa" * 28 + "01", 100), ("bb" * 28 + "02", 100)],
+        prices=[1, 1],
+        total_lp=200,
+    )
+    datum = SundaeV4PoolDatum.from_cbor(bytes.fromhex(values["datum_cbor"]))
+    entries = [*list(datum.assets), next(iter(datum.assets))]
+    dup_datum = SundaeV4PoolDatum(
+        assets=IndefiniteList(entries),
+        total_lp=datum.total_lp,
+        circulating_lp=datum.circulating_lp,
+        preminted_lp=datum.preminted_lp,
+        identifier=datum.identifier,
+        actions=datum.actions,
+        module_state=datum.module_state,
+        min_surplus=datum.min_surplus,
+        extension=datum.extension,
+    )
+    values["datum_cbor"] = dup_datum.to_cbor().hex()
     with pytest.raises(InvalidPoolError):
         SundaeV4Vault.model_validate(values)
 
@@ -298,6 +334,37 @@ def test_constant_sum_config_resolves_from_an_operate_redeemer(rec: dict) -> Non
     config = vault.module_config(cs)
     assert isinstance(config, ConstantSumConfig)
     assert module_config_hash(config) == vault.module_state[cs]
+
+
+def test_resolve_from_backend_skips_an_empty_script_hash_record() -> None:
+    """A redeemer with no script (backends report it as ``""``) is skipped."""
+    values, config = build_vault_utxo(
+        [("aa" * 28 + "01", 100), ("bb" * 28 + "02", 100)],
+        prices=[1, 1],
+        total_lp=200,
+    )
+    cs = SundaeV4Deployment.for_network("preview").validator("constant_sum.withdraw")
+    create = ConstantSumCreate(initial_state=config, pool_output_index=0)
+    records = [
+        RedeemerRecord(
+            tx_hash=values["tx_hash"],
+            purpose="mint",
+            index=0,
+            script_hash="",
+            data_cbor="d87980",
+        ),
+        RedeemerRecord(
+            tx_hash=values["tx_hash"],
+            purpose="reward",
+            index=1,
+            script_hash=cs.hex(),
+            data_cbor=create.to_cbor().hex(),
+        ),
+    ]
+    set_backend(_RedeemerBackend({values["tx_hash"]: records}))
+    vault = SundaeV4Vault.model_validate(values)
+    resolved = vault.module_config(cs)
+    assert module_config_hash(resolved) == vault.module_state[cs]
 
 
 def test_supplied_config_is_verified_against_the_commitment() -> None:
