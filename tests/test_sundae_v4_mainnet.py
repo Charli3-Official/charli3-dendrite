@@ -10,6 +10,7 @@ recorded orders.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,7 @@ _SETTINGS_CLASSES: dict[str, type] = {
 
 
 @pytest.fixture(autouse=True)
-def _mainnet():  # noqa: ANN201
+def _mainnet() -> Iterator[None]:
     """Point the class family at mainnet for each test, restoring it after."""
     SundaeV4Vault.select_network("mainnet")
     SundaeV4Vault.clear_config_cache()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,7 @@ def _unit(entry: list) -> str:
 
 
 @pytest.fixture(autouse=True)
-def _preview():  # noqa: ANN201
+def _preview() -> Iterator[None]:
     """Point the class family at preview for each test, restoring mainnet after."""
     SundaeV4Vault.select_network("preview")
     try:

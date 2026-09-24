@@ -1752,10 +1752,15 @@ class SundaeV4Vault(DendriteBaseModel):
         is cached per network name for :data:`_BASE_FEE_TTL_S` seconds.
 
         Any failure to read or decode the node — no backend set, a backend
-        that cannot serve the datum, a missing datum, or one that fails to
-        decode as :class:`FeeSettings` — falls back to the deployment's
-        manifest-snapshot :attr:`SundaeV4Deployment.base_fee`, which is cached
-        for the same TTL and logged once as a warning.
+        that cannot serve the datum, a missing datum, one that fails to
+        decode as :class:`FeeSettings`, a backend indexing bug (e.g. an
+        unguarded ``result[0]`` on an empty row set), or a transport failure
+        (a database timeout, a connection error, an API error) — falls back
+        to the deployment's manifest-snapshot
+        :attr:`SundaeV4Deployment.base_fee`, which is cached for the same TTL
+        and logged once as a warning. The backend surface is third-party and
+        open-ended, so the catch is deliberately unbounded: no read failure
+        may ever propagate out of a fee lookup and break order building.
         """
         deployment = cls._deployment
         now = time.monotonic()
@@ -1771,14 +1776,10 @@ class SundaeV4Vault(DendriteBaseModel):
                 msg = f"no fee-settings datum found for {deployment.network}"
                 raise ValueError(msg)
             fee = FeeSettings.from_cbor(ref.datum_cbor).base_fee
-        except (
-            ValueError,
-            NotImplementedError,
-            DeserializeException,
-            cbor2.CBORDecodeError,
-            TypeError,
-            KeyError,
-        ) as e:
+        except Exception as e:  # noqa: BLE001
+            # Any read/decode failure falls back to the manifest snapshot by
+            # design: an unsupported or misbehaving backend, a missing or
+            # undecodable node, or a transport error must never surface here.
             fee = deployment.base_fee
             _logger.warning(
                 "SundaeV4Vault: falling back to the manifest base fee for %s (%s).",

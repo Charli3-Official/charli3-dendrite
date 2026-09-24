@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -32,7 +33,7 @@ _ADDRESS = Address(
 
 
 @pytest.fixture(autouse=True)
-def _isolate() -> None:
+def _isolate() -> Iterator[None]:
     """Point the class family at mainnet and clear the base-fee cache per test."""
     SundaeV4Vault.select_network("mainnet")
     SundaeV4Vault.clear_base_fee_cache()
@@ -184,6 +185,20 @@ def test_base_fee_falls_back_to_the_manifest_on_an_undecodable_datum() -> None:
     assert SundaeV4Vault.base_fee() == manifest
 
 
+def test_base_fee_falls_back_to_the_manifest_on_an_index_error() -> None:
+    """A backend indexing an empty result set unguarded (e.g. ``rows[0]``)."""
+    manifest = SundaeV4Deployment.for_network("mainnet").base_fee
+    set_backend(_FeeSettingsBackend(None, raises=IndexError))
+    assert SundaeV4Vault.base_fee() == manifest
+
+
+def test_base_fee_falls_back_to_the_manifest_on_a_connection_error() -> None:
+    """A transport failure (database timeout, dropped connection, API error)."""
+    manifest = SundaeV4Deployment.for_network("mainnet").base_fee
+    set_backend(_FeeSettingsBackend(None, raises=ConnectionError))
+    assert SundaeV4Vault.base_fee() == manifest
+
+
 def test_base_fee_falls_back_value_is_also_cached_within_the_ttl() -> None:
     manifest = SundaeV4Deployment.for_network("mainnet").base_fee
     backend = _FeeSettingsBackend(None, raises=NotImplementedError)
@@ -195,16 +210,12 @@ def test_base_fee_falls_back_value_is_also_cached_within_the_ttl() -> None:
 
 
 @pytest.mark.parametrize("network", ["preview", "preprod"])
-def test_base_fee_resolves_live_on_testnets_now_that_the_manifest_has_a_token(
-    network: str,
-) -> None:
-    """preview/preprod now carry a fee-settings token, so the live read is taken.
+def test_base_fee_reads_the_testnet_fee_settings_node(network: str) -> None:
+    """preview and preprod resolve the live fee through the backend, not the fallback.
 
-    Before the manifest recorded a ``fee-settings`` token for these networks,
-    ``fee_settings_unit`` raised ``KeyError`` before the backend was ever
-    called, so the result was always the manifest snapshot. With the token
-    recorded, the backend is actually queried (``backend.calls`` is non-empty
-    below), which is the live path, not the fallback.
+    The query's asset unit is the network's ``settings_policy`` plus its
+    ``fee-settings`` token; the non-empty ``backend.calls`` below confirms the
+    backend was actually queried, distinguishing this from the fallback path.
     """
     SundaeV4Vault.select_network(network)
     deployment = SundaeV4Deployment.for_network(network)

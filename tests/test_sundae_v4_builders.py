@@ -8,6 +8,7 @@ from the per-network deployment manifest rather than from constants.
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -99,8 +100,9 @@ def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
 
 # The base fee in effect on preview/preprod when the audit-final fixtures were
 # captured. The manifest snapshot has since been refreshed to the current
-# on-chain value (1_280_000), so a builder's *defaulted* fee fields need this
-# value served explicitly to stay byte-exact against those recorded orders.
+# on-chain value (1_280_000); this constant pins this module's *defaulted*
+# fee-field and swap_utxo-coin assertions (the ones with no explicit fee) to
+# the fee the fixtures were captured under, independent of the manifest.
 _FEE_AT_CAPTURE = 1_000_000
 
 
@@ -130,15 +132,17 @@ class _FixedFeeSettingsBackend(_Minimal):
 
 
 @pytest.fixture(autouse=True)
-def _restore_default_network():
+def _restore_default_network() -> Iterator[None]:
     """Guarantee deterministic base fees and the mainnet default for each test.
 
     Every test in this module (directly or via ``_pool()``) may point the class
     family at a testnet deployment; this restores mainnet regardless of outcome
     so no test's network choice can leak into the next. It also clears the
-    base-fee cache and installs a backend fixed at ``_FEE_AT_CAPTURE``, so every
-    byte-exact builder assertion stays keyed to the fee the fixtures were
-    captured under, independent of the deployment manifest's current snapshot.
+    base-fee cache and installs a backend fixed at ``_FEE_AT_CAPTURE``, so a
+    builder's *defaulted* fee fields (and the swap_utxo coin they feed into)
+    stay pinned to the fee the fixtures were captured under, independent of
+    the deployment manifest's current snapshot; assertions with an explicit
+    fee never call this lookup at all.
     """
     SundaeV4Vault.clear_base_fee_cache()
     set_backend(_FixedFeeSettingsBackend())
@@ -150,7 +154,7 @@ def _restore_default_network():
 
 
 @pytest.fixture
-def preprod():
+def preprod() -> Iterator[None]:
     """Point the class family at the preprod deployment for one test."""
     SundaeV4Vault.select_network("preprod")
     try:

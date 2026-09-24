@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -10,10 +11,12 @@ from pycardano import IndefiniteList
 from pycardano import RawPlutusData
 from pycardano.serialization import CBORTag
 
+from charli3_dendrite.backend import set_backend
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dexs.amm.sundae_v4 import AssetClass
+from charli3_dendrite.dexs.amm.sundae_v4 import BasicSwap
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicWithdraw
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationFixed
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationSelf
@@ -26,6 +29,7 @@ from tests.test_sundae_v4_builders import _MNGO_STRW_LP
 from tests.test_sundae_v4_builders import _USER_PAYMENT
 from tests.test_sundae_v4_builders import _USER_STAKE
 from tests.test_sundae_v4_builders import _address
+from tests.test_sundae_v4_builders import _FixedFeeSettingsBackend
 from tests.test_sundae_v4_builders import _pool
 
 _AUDITFINAL = json.loads(
@@ -37,18 +41,31 @@ _MAINNET = json.loads(
 _ORDER_DATUMS = _AUDITFINAL["order_datums"]
 _MAINNET_ORDERS = _MAINNET["orders"]
 
+_KNOWN_WALLET_CREDENTIALS = {
+    (_ADMIN_PAYMENT, _ADMIN_STAKE),
+    (_USER_PAYMENT, _USER_STAKE),
+}
+
 
 @pytest.fixture(autouse=True)
-def _restore_default_network():
-    """Guarantee the class family is back on the mainnet default after each test.
+def _restore_default_network() -> Iterator[None]:
+    """Guarantee a deterministic base fee and the mainnet default for each test.
 
     ``_pool()`` (imported from the builders test module) may point the class
-    family at a testnet deployment; this restores it regardless of outcome.
+    family at a testnet deployment, and a built strategy datum's defaulted fee
+    fields call ``SundaeV4Vault.base_fee()`` against whatever backend is
+    active; this clears the base-fee cache, installs a backend fixed at the
+    builders module's ``_FEE_AT_CAPTURE`` so that lookup can never reach a
+    real (or unset) backend, and restores mainnet regardless of outcome so no
+    test's network choice can leak into the next.
     """
+    SundaeV4Vault.clear_base_fee_cache()
+    set_backend(_FixedFeeSettingsBackend())
     try:
         yield
     finally:
         SundaeV4Vault.select_network("mainnet")
+        SundaeV4Vault.clear_base_fee_cache()
 
 
 def _decode(cbor_hex: str) -> SundaeV4OrderDatum:
@@ -163,12 +180,55 @@ def test_order_type_and_requested_amount_raise_when_no_known_constraint_key_matc
     "entry",
     [pytest.param(o, id=o["label"]) for o in _ORDER_DATUMS],
 )
-def test_fixed_destination_address_source_round_trips_to_the_destination_bech32(
-    entry: dict,
-) -> None:
+def test_auditfinal_fixed_destination_matches_a_known_wallet(entry: dict) -> None:
+    """``address_source()`` resolves to one of the two known auditfinal wallets.
+
+    Checked against the admin/user payment+stake key hashes the builder
+    tests independently know, not re-derived from the same destination field
+    the method under test reads, so this is not circular.
+    """
     datum = _decode(entry["datum"])
     if not isinstance(datum.destination, DestinationFixed):
         pytest.skip("not a fixed-destination order")
     resolved = datum.address_source()
     assert resolved is not None
-    assert resolved.encode() == datum.destination.address.to_address().encode()
+    payment_hex = bytes(resolved.payment_part).hex()
+    stake_hex = bytes(resolved.staking_part).hex() if resolved.staking_part else None
+    assert (payment_hex, stake_hex) in _KNOWN_WALLET_CREDENTIALS
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [pytest.param(o, id=f"mainnet:{i}") for i, o in enumerate(_MAINNET_ORDERS)],
+)
+def test_mainnet_fixed_destination_matches_the_orders_own_owner_credential(
+    entry: dict,
+) -> None:
+    """``address_source()`` carries the same key hash as the order's own owner.
+
+    Cross-checked against the datum's ``owner`` field — a different field
+    from ``destination`` — rather than re-deriving the expected value from
+    the same expression ``address_source()`` itself evaluates.
+    """
+    datum = _decode(entry["datum"])
+    assert isinstance(datum.destination, DestinationFixed)
+    assert isinstance(datum.owner, MultisigSignature)
+    resolved = datum.address_source()
+    assert resolved is not None
+    payment_hex = bytes(resolved.payment_part).hex()
+    stake_hex = bytes(resolved.staking_part).hex() if resolved.staking_part else None
+    assert datum.owner.key_hash.hex() in (payment_hex, stake_hex)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [pytest.param(o, id=f"mainnet:{i}") for i, o in enumerate(_MAINNET_ORDERS)],
+)
+def test_every_mainnet_basic_swap_requested_amount_matches_min_received(
+    entry: dict,
+) -> None:
+    datum = _decode(entry["datum"])
+    basic = datum.basic_constraint()
+    if not isinstance(basic, BasicSwap):
+        pytest.skip("not a basic swap")
+    assert datum.requested_amount() == _assets_from_pairs(list(basic.min_received))

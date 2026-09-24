@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ _SWAPS = json.loads(
 
 
 @pytest.fixture(autouse=True)
-def _restore_default_network():
+def _restore_default_network() -> Iterator[None]:
     """Guarantee the class family is back on the mainnet default after each test.
 
     ``_pool()`` points the class family at preview for the recorded replay; this
