@@ -13,17 +13,22 @@ constant-sum binding; each quotes with explicit units:
 from charli3_dendrite import SundaeV4Vault
 from charli3_dendrite.dataclasses.models import Assets
 
-SundaeV4Vault.select_network("preview")
 vault = SundaeV4Vault.model_validate(utxo.model_dump())   # a PoolStateInfo
 pool = vault.pools()[0]
 out, impact = pool.get_amount_out(Assets(**{unit_in: 1_000_000}), unit_out)
 ```
 
+V4 is deployed on `mainnet`, `preprod` and `preview`; the class family targets
+`mainnet` by default, and `SundaeV4Vault.select_network("preview")` points it at
+a testnet deployment the same way `"preprod"` does.
+
 Module configs are committed by hash in the datum. They resolve from a
 caller-supplied preimage (`module_configs=` at construction or
-`supply_module_config`), a cache keyed by the commitment, or the producing
-transaction's redeemers through `backend.get_redeemers` (db-sync and
-Blockfrost). Every resolved config is hash-verified.
+`supply_module_config`), a cache keyed by the commitment, or the last
+transaction that ran the module through `backend.get_redeemers` (db-sync and
+Blockfrost) — usually the producing transaction, else found by walking the
+pool NFT's UTxO history via `backend.get_pool_utxos`. Every resolved config is
+hash-verified.
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4Vault
 

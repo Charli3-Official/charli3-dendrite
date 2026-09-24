@@ -8,6 +8,7 @@ from the per-network deployment manifest rather than from constants.
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,14 +21,17 @@ from pycardano import Redeemer
 from pycardano import VerificationKeyHash
 from pycardano.serialization import CBORTag
 
+from charli3_dendrite.backend import set_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicConstraintKind
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicDeposit
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicSwap
 from charli3_dendrite.dexs.amm.sundae_v4 import BoolTrue
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationFixed
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationSelf
+from charli3_dendrite.dexs.amm.sundae_v4 import FeeSettings
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBound
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundFinite
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundPositiveInfinity
@@ -46,6 +50,7 @@ from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.sundae_v4 import ValidityRange
 from charli3_dendrite.dexs.amm.sundae_v4 import parse_basic_constraint
 from tests.sundae_v4_vault_factory import build_vault_utxo
+from tests.test_sundae_v4_backend_redeemers import _Minimal
 
 FIXTURES = json.loads(
     (Path(__file__).parent / "sundae_v4_auditfinal_fixtures.json").read_text(),
@@ -93,14 +98,69 @@ def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
     return vault.pools()[0]
 
 
+# The base fee in effect on preview/preprod when the audit-final fixtures were
+# captured. The manifest snapshot has since been refreshed to the current
+# on-chain value (1_280_000); this constant pins this module's *defaulted*
+# fee-field and swap_utxo-coin assertions (the ones with no explicit fee) to
+# the fee the fixtures were captured under, independent of the manifest.
+_FEE_AT_CAPTURE = 1_000_000
+
+
+class _FixedFeeSettingsBackend(_Minimal):
+    """Serves a fee-settings datum fixed at ``_FEE_AT_CAPTURE``.
+
+    Installed for every test so a builder's defaulted fee fields resolve
+    deterministically to the fee the fixtures were captured under, regardless
+    of the deployment manifest's current (possibly different) snapshot.
+    """
+
+    def get_datum_from_address(
+        self,
+        address,  # noqa: ANN001
+        asset=None,  # noqa: ANN001
+    ) -> ScriptReference:
+        """Serve a ``FeeSettings(base_fee=_FEE_AT_CAPTURE)`` datum unconditionally."""
+        return ScriptReference(
+            tx_hash=None,
+            tx_index=None,
+            address=None,
+            assets=None,
+            datum_hash=None,
+            datum_cbor=FeeSettings(base_fee=_FEE_AT_CAPTURE).to_cbor_hex(),
+            script=None,
+        )
+
+
+@pytest.fixture(autouse=True)
+def _restore_default_network() -> Iterator[None]:
+    """Guarantee deterministic base fees and the mainnet default for each test.
+
+    Every test in this module (directly or via ``_pool()``) may point the class
+    family at a testnet deployment; this restores mainnet regardless of outcome
+    so no test's network choice can leak into the next. It also clears the
+    base-fee cache and installs a backend fixed at ``_FEE_AT_CAPTURE``, so a
+    builder's *defaulted* fee fields (and the swap_utxo coin they feed into)
+    stay pinned to the fee the fixtures were captured under, independent of
+    the deployment manifest's current snapshot; assertions with an explicit
+    fee never call this lookup at all.
+    """
+    SundaeV4Vault.clear_base_fee_cache()
+    set_backend(_FixedFeeSettingsBackend())
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
+        SundaeV4Vault.clear_base_fee_cache()
+
+
 @pytest.fixture
-def preprod():
+def preprod() -> Iterator[None]:
     """Point the class family at the preprod deployment for one test."""
     SundaeV4Vault.select_network("preprod")
     try:
         yield
     finally:
-        SundaeV4Vault.select_network("preview")
+        SundaeV4Vault.select_network("mainnet")
 
 
 # ---------------------------------------------------------------------------
@@ -142,28 +202,44 @@ def test_manifest_resolves_the_preview_deployment() -> None:
         deployment.strategy_config_token.hex()
         == "00e3317090f21164a1042f9a5d0aa07d585d7fdf6e4439788955c2384d844078"
     )
-    assert deployment.base_fee == 1_000_000
+    assert deployment.base_fee == 1_280_000
     assert deployment.reference("order.spend") == (
         "cfd46884fdf1b6b2a91feb6ad7252f950e5dad80ad83b2939954795c093925da",
         0,
     )
 
 
-def test_manifest_has_no_mainnet_deployment_yet() -> None:
-    with pytest.raises(LookupError, match="mainnet"):
-        SundaeV4Deployment.for_network("mainnet")
+def test_manifest_resolves_the_mainnet_deployment() -> None:
+    deployment = SundaeV4Deployment.for_network("mainnet")
+    assert len(deployment.validators) == 13
+    assert deployment.base_fee == 1_280_000
+    assert deployment.pool_address.encode().startswith("addr1wysundaev4")
+    assert deployment.cardano_network == Network.MAINNET
+    assert "cs-pool" in deployment.settings
+    assert "cs-pool#2" in deployment.settings
+    assert deployment.config_token("cs-pool") != deployment.config_token("cs-pool#2")
 
 
-def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
+def test_class_family_defaults_to_mainnet_and_can_switch() -> None:
+    mainnet = SundaeV4Deployment.for_network("mainnet")
     address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
-    assert bytes(address.payment_part).hex().startswith("ae364bd4")
+    assert address.payment_part == mainnet.pool_address.payment_part
     order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
-    assert bytes(order.payment_part).hex().startswith("2d066c46")
+    assert order.payment_part == mainnet.order_address.payment_part
 
+    SundaeV4Vault.select_network("preview")
+    preview = SundaeV4Deployment.for_network("preview")
+    preview_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert preview_pool.payment_part == preview.pool_address.payment_part
 
-def test_class_family_is_back_on_preview_after_the_switch() -> None:
-    address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
-    assert bytes(address.payment_part).hex().startswith("f577d24c")
+    SundaeV4Vault.select_network("preprod")
+    preprod = SundaeV4Deployment.for_network("preprod")
+    preprod_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert preprod_pool.payment_part == preprod.pool_address.payment_part
+
+    SundaeV4Vault.select_network("mainnet")
+    back = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert back.payment_part == mainnet.pool_address.payment_part
 
 
 def test_order_builders_delegate_class_family_metadata_to_the_vault() -> None:
@@ -224,7 +300,7 @@ def test_swap_datum_defaults_pay_exactly_the_base_fee() -> None:
         in_assets=Assets(**{_STRW: 1}),
         out_assets=Assets(**{_MINT: 1}),
     )
-    assert built.service_budget == built.max_per_execution == 1_000_000
+    assert built.service_budget == built.max_per_execution == _FEE_AT_CAPTURE
 
 
 def test_swap_datum_field_shape() -> None:
@@ -393,5 +469,7 @@ def test_swap_utxo_locks_input_plus_fee_plus_rider_at_the_order_address() -> Non
         out_assets=Assets(**{"bb" * 28 + "02": 4_900}),
     )
     assert output.address == pool.stake_address
-    assert output.amount.coin == pool.vault.deployment().base_fee + 2_000_000
+    # The live fee (this module's backend fixes it at _FEE_AT_CAPTURE), not the
+    # deployment manifest snapshot, is what swap_utxo's coin is built from.
+    assert output.amount.coin == _FEE_AT_CAPTURE + 2_000_000
     assert output.datum == datum

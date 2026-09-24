@@ -62,6 +62,8 @@ import functools
 import hashlib
 import importlib.resources
 import json
+import logging
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -90,10 +92,13 @@ from pydantic import model_validator
 
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
@@ -420,7 +425,7 @@ PoolRedeemer = Union[EscapeHatch, Upgrade, EmergencyDisable, PoolAction, Destroy
 
 
 @dataclass
-class SundaeV4OrderDatum(PlutusData):
+class SundaeV4OrderDatum(OrderDatum):
     """An order's constraints (constructor 0); never an executed trade.
 
     This models the *deployed* order datum, which carries seven fields. An order
@@ -460,6 +465,13 @@ class SundaeV4OrderDatum(PlutusData):
     modelled as a CBOR array, which matches the deployed modular-order shape; an
     order whose ``constraints`` body were instead a non-list ``Data`` value would
     need this field relaxed to :class:`~pycardano.RawPlutusData`.
+
+    Implements dendrite's :class:`~charli3_dendrite.dataclasses.datums.OrderDatum`
+    interface: :meth:`basic_constraint` and :meth:`is_strategy` identify a
+    ``constraints`` entry by its module-hash KEY (never by payload shape — a
+    :class:`StrategyConstraint` and a :class:`BasicDeposit` are both
+    constructor 0 with two fields), and :meth:`order_type`,
+    :meth:`requested_amount`, :meth:`address_source` build on that.
     """
 
     CONSTR_ID = 0
@@ -470,6 +482,83 @@ class SundaeV4OrderDatum(PlutusData):
     config_token: bytes
     constraints: IndefiniteList
     extension: RawPlutusData
+
+    def basic_constraint(self) -> BasicConstraint | None:
+        """This order's basic-order constraint payload, if it carries one.
+
+        Identified by KEY: the ``constraints`` entry whose module hash is the
+        ``basic_order.withdraw`` hash of any deployed network.
+        """
+        for entry in _list_items(self.constraints):
+            key, payload = _list_items(entry)
+            if bytes(key) in _BASIC_ORDER_HASHES:
+                return parse_basic_constraint(payload)
+        return None
+
+    def is_strategy(self) -> bool:
+        """Whether this order carries the strategy-order constraint, by KEY."""
+        return any(
+            bytes(_list_items(entry)[0]) in _STRATEGY_ORDER_HASHES
+            for entry in _list_items(self.constraints)
+        )
+
+    def order_type(self) -> OrderType:
+        """The dendrite order kind.
+
+        A basic deposit/withdraw maps directly; a basic swap or claim, and
+        every strategy order (its signed executions are the actual swaps),
+        map to ``swap``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if isinstance(basic, BasicDeposit):
+            return OrderType.deposit
+        if isinstance(basic, BasicWithdraw):
+            return OrderType.withdraw
+        if isinstance(basic, (BasicSwap, BasicClaim)):
+            return OrderType.swap
+        if self.is_strategy():
+            return OrderType.swap
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def requested_amount(self) -> Assets:
+        """The floor this order requires.
+
+        A basic order's ``min_received`` as dendrite :class:`Assets`. A
+        strategy order commits to no floor in its datum — its signed
+        executions carry the floor per fill — so it requests the empty
+        ``Assets``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if basic is not None:
+            out: dict[str, int] = {}
+            for entry in _list_items(basic.min_received):
+                asset_class, amount = _list_items(entry)
+                unit = _reserve_unit(AssetClass.from_primitive(asset_class))
+                out[unit] = int(amount)
+            return Assets(**out)
+        if self.is_strategy():
+            return Assets({})
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def address_source(self) -> Address | None:
+        """The order's own source address, if the datum names one.
+
+        A :class:`DestinationFixed` resolves to its destination address. A
+        :class:`DestinationSelf` continuation pays back to the order's own
+        script address rather than a wallet, so it has no source address and
+        returns ``None``.
+        """
+        if isinstance(self.destination, DestinationFixed):
+            return self.destination.address.to_address()
+        return None
 
 
 @dataclass
@@ -1310,12 +1399,38 @@ _DEPLOYMENTS_RESOURCE = "sundae_v4_deployments.json"
 # payout output and is returned with the fill (or the cancel).
 _ORDER_RIDER = 2_000_000
 
+# How long a live (or fallback) SundaeV4Vault.base_fee() reading is cached, per
+# network, before the fee-settings node is read again.
+_BASE_FEE_TTL_S = 300
+
+_logger = logging.getLogger(__name__)
+
 
 @functools.lru_cache(maxsize=1)
 def _load_deployments() -> dict[str, Any]:
     resource = importlib.resources.files(__package__) / _DEPLOYMENTS_RESOURCE
     data = json.loads(resource.read_text())
     return {key: value for key, value in data.items() if not key.startswith("_")}
+
+
+def _validator_hashes(title: str) -> frozenset[bytes]:
+    """The applied hash of the validator ``title`` on every deployed network.
+
+    Used to identify an order datum's constraint entries by KEY rather than by
+    network, so decoding one is network-independent.
+    """
+    return frozenset(
+        bytes.fromhex(data["validators"][title])
+        for data in _load_deployments().values()
+    )
+
+
+# The basic-order / strategy-order constraint module hashes across every
+# deployed network: an order datum's constraint KEY is checked against these,
+# never against the class family's currently selected deployment, so decoding
+# a recorded order never depends on which network is selected.
+_BASIC_ORDER_HASHES: frozenset[bytes] = _validator_hashes("basic_order.withdraw")
+_STRATEGY_ORDER_HASHES: frozenset[bytes] = _validator_hashes("strategy_order.withdraw")
 
 
 @dataclass(frozen=True)
@@ -1326,7 +1441,10 @@ class SundaeV4Deployment:
     ``basic_order.withdraw``, ...) to its applied script hash; ``references``
     maps the same titles to the published reference-script UTxO; ``settings``
     maps a settings-node label (``basic-order``, ``strategy-order``,
-    ``cs-pool``, ``fee-settings``, ...) to its UTxO and decoded values.
+    ``cs-pool``, ``fee-settings``, ``migration-authority``, ``stake-list``,
+    ...) to its UTxO and decoded values. A network whose API lists more than
+    one node under the same label stores the duplicate under ``<label>#2``
+    (mainnet's two ``cs-pool`` nodes are ``cs-pool`` and ``cs-pool#2``).
     """
 
     network: str
@@ -1424,8 +1542,19 @@ class SundaeV4Deployment:
         return self.config_token("strategy-order")
 
     @property
+    def fee_settings_unit(self) -> str:
+        """The dendrite unit of the fee-settings node's token."""
+        return self.settings_policy.hex() + self.settings["fee-settings"]["token"]
+
+    @property
     def base_fee(self) -> int:
-        """The flat service fee (lovelace) charged per order execution."""
+        """The manifest-snapshot flat service fee (lovelace) per order execution.
+
+        This is the value captured in the manifest at build time, not a live
+        read; a governance change to the fee-settings node would leave it
+        stale. For the current on-chain value, see :meth:`SundaeV4Vault.base_fee`,
+        which reads the fee-settings node and falls back to this snapshot.
+        """
         return int(self.settings["fee-settings"]["base_fee"])
 
     @property
@@ -1446,6 +1575,14 @@ class SundaeV4Deployment:
         """The order script address (enterprise)."""
         return Address(
             payment_part=ScriptHash(self.order_hash),
+            network=self.cardano_network,
+        )
+
+    @property
+    def settings_address(self) -> Address:
+        """The settings validator address (enterprise) holding the settings nodes."""
+        return Address(
+            payment_part=ScriptHash(self.validator("settings.spend")),
             network=self.cardano_network,
         )
 
@@ -1514,6 +1651,29 @@ def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
     return candidates
 
 
+def _matching_config(
+    records: list[RedeemerRecord],
+    module_hash: bytes,
+    kind: str | None,
+    commitment: bytes,
+) -> Any | None:  # noqa: ANN401
+    """The first config among ``records`` for ``module_hash`` hashing to ``commitment``.
+
+    Shared by both legs of :meth:`SundaeV4Vault._resolve_from_backend`: the
+    producing transaction's own redeemers and, failing that, each past
+    transaction's redeemers visited while walking the pool NFT's history.
+    """
+    for record in records:
+        if not record.script_hash:
+            continue
+        if bytes.fromhex(record.script_hash) != module_hash:
+            continue
+        for candidate in _config_candidates(record.data_cbor, kind):
+            if module_config_hash(candidate) == commitment:
+                return candidate
+    return None
+
+
 class SundaeV4Vault(DendriteBaseModel):
     """A SundaeSwap V4 pool UTxO: the N-asset vault every pool type is bound to.
 
@@ -1557,9 +1717,10 @@ class SundaeV4Vault(DendriteBaseModel):
     module_configs: dict[bytes, Any] = Field(default_factory=dict)
 
     _deployment: ClassVar[SundaeV4Deployment] = SundaeV4Deployment.for_network(
-        "preview",
+        "mainnet",
     )
     _config_cache: ClassVar[dict[bytes, Any]] = {}
+    _base_fee_cache: ClassVar[dict[str, tuple[int, float]]] = {}
     _datum: SundaeV4PoolDatum | None = PrivateAttr(default=None)
 
     # -- class family ---------------------------------------------------------
@@ -1573,6 +1734,60 @@ class SundaeV4Vault(DendriteBaseModel):
     def deployment(cls) -> SundaeV4Deployment:
         """The deployment the class family currently targets."""
         return cls._deployment
+
+    @classmethod
+    def clear_base_fee_cache(cls) -> None:
+        """Drop every cached live (or fallback) base-fee reading."""
+        SundaeV4Vault._base_fee_cache.clear()
+
+    @classmethod
+    def base_fee(cls) -> int:
+        """The live per-execution base fee, manifest snapshot as the fallback.
+
+        Reads the deployment's fee-settings node (an unspent UTxO at
+        :attr:`SundaeV4Deployment.settings_address` holding
+        :attr:`SundaeV4Deployment.fee_settings_unit`) through the active
+        backend and decodes its :class:`FeeSettings.base_fee`, so a governance
+        change to the fee is picked up without a manifest refresh. The result
+        is cached per network name for :data:`_BASE_FEE_TTL_S` seconds.
+
+        Any failure to read or decode the node — no backend set, a backend
+        that cannot serve the datum, a missing datum, one that fails to
+        decode as :class:`FeeSettings`, a backend indexing bug (e.g. an
+        unguarded ``result[0]`` on an empty row set), or a transport failure
+        (a database timeout, a connection error, an API error) — falls back
+        to the deployment's manifest-snapshot
+        :attr:`SundaeV4Deployment.base_fee`, which is cached for the same TTL
+        and logged once as a warning. The backend surface is third-party and
+        open-ended, so the catch is deliberately unbounded: no read failure
+        may ever propagate out of a fee lookup and break order building.
+        """
+        deployment = cls._deployment
+        now = time.monotonic()
+        cached = cls._base_fee_cache.get(deployment.network)
+        if cached is not None and now - cached[1] < _BASE_FEE_TTL_S:
+            return cached[0]
+        try:
+            ref = get_backend().get_datum_from_address(
+                address=deployment.settings_address,
+                asset=deployment.fee_settings_unit,
+            )
+            if ref is None or not ref.datum_cbor:
+                msg = f"no fee-settings datum found for {deployment.network}"
+                raise ValueError(msg)
+            fee = FeeSettings.from_cbor(ref.datum_cbor).base_fee
+        except Exception as e:  # noqa: BLE001
+            # Any read/decode failure falls back to the manifest snapshot by
+            # design: an unsupported or misbehaving backend, a missing or
+            # undecodable node, or a transport error must never surface here.
+            fee = deployment.base_fee
+            _logger.warning(
+                "SundaeV4Vault: falling back to the manifest base fee for %s (%s).",
+                deployment.network,
+                e,
+            )
+        cls._base_fee_cache[deployment.network] = (fee, now)
+        return fee
 
     @classmethod
     def dex(cls) -> str:
@@ -1783,9 +1998,12 @@ class SundaeV4Vault(DendriteBaseModel):
 
         Resolution order: supplied (constructor ``module_configs`` or
         :meth:`supply_module_config`), then the class-level cache keyed by the
-        commitment hash, then the producing transaction's redeemers via the
-        active backend. A config-less module (its slot holds the serialised
-        empty list) resolves to ``None``. Every resolved config is hash-verified.
+        commitment hash, then the last transaction that ran the module via the
+        active backend — usually the transaction that produced this vault's own
+        UTxO, else found by walking the pool NFT's UTxO history (see
+        :meth:`_resolve_from_backend`). A config-less module (its slot holds the
+        serialised empty list) resolves to ``None``. Every resolved config is
+        hash-verified.
 
         Raises:
             KeyError: ``module_hash`` is not installed on this vault.
@@ -1830,29 +2048,80 @@ class SundaeV4Vault(DendriteBaseModel):
         module_hash: bytes,
         commitment: bytes,
     ) -> Any:  # noqa: ANN401
-        """Read the producing transaction's redeemers and pick the matching preimage."""
+        """Find the config preimage in the last transaction that ran this module.
+
+        The transaction that produced this vault's own UTxO carries the
+        module's redeemer whenever that spend was itself a scoop (an
+        ``Operate`` entry) or the pool's own creation (a ``Create``). A purely
+        administrative spend — a treasury sweep, an upgrade, an
+        emergency-disable — need not touch a given module at all, so when the
+        producing transaction carries no matching redeemer the pool NFT's UTxO
+        history is walked newest to oldest, via the active backend's
+        ``get_pool_utxos``, until a past transaction's redeemers commit to this
+        config; the pool's creation transaction, at the bottom of that history,
+        always carries the module's ``Create`` redeemer.
+
+        Raises:
+            ModuleConfigUnavailableError: the active backend cannot read
+                redeemers or pool history, or no transaction in the pool's
+                history carries a redeemer committing to ``commitment``.
+        """
+        kind = self.module_kind(module_hash)
+        records = self._redeemers_or_unavailable(self.tx_hash, module_hash)
+        config = _matching_config(records, module_hash, kind, commitment)
+        if config is not None:
+            return config
+        for tx_hash in self._history_tx_hashes(module_hash):
+            records = self._redeemers_or_unavailable(tx_hash, module_hash)
+            config = _matching_config(records, module_hash, kind, commitment)
+            if config is not None:
+                return config
+        msg = (
+            f"SundaeV4Vault: no transaction in {self.pool_nft.unit()}'s history "
+            f"carries the config committed for module {module_hash.hex()}."
+        )
+        raise ModuleConfigUnavailableError(msg)
+
+    @staticmethod
+    def _redeemers_or_unavailable(
+        tx_hash: str,
+        module_hash: bytes,
+    ) -> list[RedeemerRecord]:
+        """``get_redeemers(tx_hash)``, translating a backend that can't serve them."""
         try:
-            records = get_backend().get_redeemers(self.tx_hash)
+            return get_backend().get_redeemers(tx_hash)
         except NotImplementedError as e:
             msg = (
                 f"SundaeV4Vault: the active backend cannot read redeemers, so the "
                 f"config for module {module_hash.hex()} must be supplied."
             )
             raise ModuleConfigUnavailableError(msg) from e
-        kind = self.module_kind(module_hash)
-        for record in records:
-            if not record.script_hash:
-                continue
-            if bytes.fromhex(record.script_hash) != module_hash:
-                continue
-            for candidate in _config_candidates(record.data_cbor, kind):
-                if module_config_hash(candidate) == commitment:
-                    return candidate
-        msg = (
-            f"SundaeV4Vault: no redeemer of {self.tx_hash} carries the config "
-            f"committed for module {module_hash.hex()}."
+
+    def _history_tx_hashes(self, module_hash: bytes) -> list[str]:
+        """This pool NFT's past producing transactions, newest first.
+
+        Excludes this vault's own ``tx_hash``. Raises
+        ``ModuleConfigUnavailableError`` if the active backend cannot list
+        historical pool UTxOs.
+        """
+        try:
+            states = get_backend().get_pool_utxos(
+                addresses=[self._deployment.pool_address.encode()],
+                assets=[self.pool_nft.unit()],
+                historical=True,
+            )
+        except NotImplementedError as e:
+            msg = (
+                f"SundaeV4Vault: the active backend cannot read pool history, so "
+                f"the config for module {module_hash.hex()} must be supplied."
+            )
+            raise ModuleConfigUnavailableError(msg) from e
+        history = sorted(
+            states,
+            key=lambda state: (state.block_time, state.block_index),
+            reverse=True,
         )
-        raise ModuleConfigUnavailableError(msg)
+        return [state.tx_hash for state in history if state.tx_hash != self.tx_hash]
 
 
 class _SundaeV4OrderBuilders:
@@ -1928,19 +2197,24 @@ class _SundaeV4OrderBuilders:
     ) -> SundaeV4OrderDatum:
         """Assemble an order datum around a constraint list.
 
-        Both fee fields default to the deployment's ``base_fee``: a single-shot
-        order then pays exactly the current fee, and any headroom above it is
-        the caller's explicit choice (a basic order's terminal fill takes
-        ``min(max_per_execution, service_budget)`` in full).
+        Both fee fields default to the live base fee (fee-settings node,
+        manifest fallback): a single-shot order then pays exactly the current
+        fee, and any headroom above it is the caller's explicit choice (a
+        basic order's terminal fill takes ``min(max_per_execution,
+        service_budget)`` in full). The live lookup runs only when at least
+        one fee field is left to default.
         """
-        base_fee = self.deployment().base_fee
+        resolved_budget = service_budget
+        resolved_max = max_per_execution
+        if resolved_budget is None or resolved_max is None:
+            base_fee = SundaeV4Vault.base_fee()
+            resolved_budget = base_fee if resolved_budget is None else resolved_budget
+            resolved_max = base_fee if resolved_max is None else resolved_max
         return SundaeV4OrderDatum(
             owner=owner if owner is not None else self.order_owner(address_source),
             destination=destination,
-            service_budget=base_fee if service_budget is None else service_budget,
-            max_per_execution=(
-                base_fee if max_per_execution is None else max_per_execution
-            ),
+            service_budget=resolved_budget,
+            max_per_execution=resolved_max,
             config_token=config_token,
             constraints=IndefiniteList(
                 [IndefiniteList([key, payload]) for key, payload in constraints],
@@ -2266,8 +2540,8 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ) -> Assets:
-        """The flat ``base_fee`` an order locks for service fees."""
-        return Assets(lovelace=self.vault.deployment().base_fee)
+        """The live base fee (fee-settings node, manifest fallback) an order locks."""
+        return Assets(lovelace=SundaeV4Vault.base_fee())
 
     def deposit(
         self,

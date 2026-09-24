@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -56,8 +57,13 @@ def _pool(
 
 
 @pytest.fixture(autouse=True)
-def _preview() -> None:
+def _preview() -> Iterator[None]:
+    """Point the class family at preview for each test, restoring mainnet after."""
     SundaeV4Vault.select_network("preview")
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
 
 
 def test_pools_yields_one_constant_sum_pool_on_tag_100() -> None:

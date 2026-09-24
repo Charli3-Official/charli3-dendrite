@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,19 @@ from tests.sundae_v4_vault_factory import build_vault_utxo
 _SWAPS = json.loads(
     (Path(__file__).parent / "sundae_v4_swap_replay_fixtures.json").read_text(),
 )["swaps"]
+
+
+@pytest.fixture(autouse=True)
+def _restore_default_network() -> Iterator[None]:
+    """Guarantee the class family is back on the mainnet default after each test.
+
+    ``_pool()`` points the class family at preview for the recorded replay; this
+    restores it regardless of outcome so it cannot leak into the next test.
+    """
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
 
 
 def _unit(raw: str) -> str:
