@@ -149,9 +149,15 @@ def test_manifest_resolves_the_preview_deployment() -> None:
     )
 
 
-def test_manifest_has_no_mainnet_deployment_yet() -> None:
-    with pytest.raises(LookupError, match="mainnet"):
-        SundaeV4Deployment.for_network("mainnet")
+def test_manifest_resolves_the_mainnet_deployment() -> None:
+    deployment = SundaeV4Deployment.for_network("mainnet")
+    assert len(deployment.validators) == 13
+    assert deployment.base_fee == 1_280_000
+    assert deployment.pool_address.encode().startswith("addr1wysundaev4")
+    assert deployment.cardano_network == Network.MAINNET
+    assert "cs-pool" in deployment.settings
+    assert "cs-pool#2" in deployment.settings
+    assert deployment.config_token("cs-pool") != deployment.config_token("cs-pool#2")
 
 
 def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
@@ -159,6 +165,13 @@ def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
     assert bytes(address.payment_part).hex().startswith("ae364bd4")
     order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
     assert bytes(order.payment_part).hex().startswith("2d066c46")
+
+    SundaeV4Vault.select_network("mainnet")
+    mainnet = SundaeV4Deployment.for_network("mainnet")
+    mainnet_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert mainnet_pool.payment_part == mainnet.pool_address.payment_part
+    mainnet_order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
+    assert mainnet_order.payment_part == mainnet.order_address.payment_part
 
 
 def test_class_family_is_back_on_preview_after_the_switch() -> None:

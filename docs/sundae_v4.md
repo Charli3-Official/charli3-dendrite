@@ -19,11 +19,17 @@ pool = vault.pools()[0]
 out, impact = pool.get_amount_out(Assets(**{unit_in: 1_000_000}), unit_out)
 ```
 
+V4 is deployed on `mainnet`, `preprod` and `preview`; `SundaeV4Vault.select_network("mainnet")`
+points the class family at the mainnet deployment the same way `"preview"` and
+`"preprod"` do.
+
 Module configs are committed by hash in the datum. They resolve from a
 caller-supplied preimage (`module_configs=` at construction or
-`supply_module_config`), a cache keyed by the commitment, or the producing
-transaction's redeemers through `backend.get_redeemers` (db-sync and
-Blockfrost). Every resolved config is hash-verified.
+`supply_module_config`), a cache keyed by the commitment, or the last
+transaction that ran the module through `backend.get_redeemers` (db-sync and
+Blockfrost) — usually the producing transaction, else found by walking the
+pool NFT's UTxO history via `backend.get_pool_utxos`. Every resolved config is
+hash-verified.
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4Vault
 

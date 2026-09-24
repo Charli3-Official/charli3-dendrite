@@ -94,6 +94,7 @@ from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
 from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
@@ -1326,7 +1327,10 @@ class SundaeV4Deployment:
     ``basic_order.withdraw``, ...) to its applied script hash; ``references``
     maps the same titles to the published reference-script UTxO; ``settings``
     maps a settings-node label (``basic-order``, ``strategy-order``,
-    ``cs-pool``, ``fee-settings``, ...) to its UTxO and decoded values.
+    ``cs-pool``, ``fee-settings``, ``migration-authority``, ``stake-list``,
+    ...) to its UTxO and decoded values. A network whose API lists more than
+    one node under the same label stores the duplicate under ``<label>#2``
+    (mainnet's two ``cs-pool`` nodes are ``cs-pool`` and ``cs-pool#2``).
     """
 
     network: str
@@ -1512,6 +1516,29 @@ def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
                 continue
         candidates.append(candidate)
     return candidates
+
+
+def _matching_config(
+    records: list[RedeemerRecord],
+    module_hash: bytes,
+    kind: str | None,
+    commitment: bytes,
+) -> Any | None:  # noqa: ANN401
+    """The first config among ``records`` for ``module_hash`` hashing to ``commitment``.
+
+    Shared by both legs of :meth:`SundaeV4Vault._resolve_from_backend`: the
+    producing transaction's own redeemers and, failing that, each past
+    transaction's redeemers visited while walking the pool NFT's history.
+    """
+    for record in records:
+        if not record.script_hash:
+            continue
+        if bytes.fromhex(record.script_hash) != module_hash:
+            continue
+        for candidate in _config_candidates(record.data_cbor, kind):
+            if module_config_hash(candidate) == commitment:
+                return candidate
+    return None
 
 
 class SundaeV4Vault(DendriteBaseModel):
@@ -1783,9 +1810,12 @@ class SundaeV4Vault(DendriteBaseModel):
 
         Resolution order: supplied (constructor ``module_configs`` or
         :meth:`supply_module_config`), then the class-level cache keyed by the
-        commitment hash, then the producing transaction's redeemers via the
-        active backend. A config-less module (its slot holds the serialised
-        empty list) resolves to ``None``. Every resolved config is hash-verified.
+        commitment hash, then the last transaction that ran the module via the
+        active backend — usually the transaction that produced this vault's own
+        UTxO, else found by walking the pool NFT's UTxO history (see
+        :meth:`_resolve_from_backend`). A config-less module (its slot holds the
+        serialised empty list) resolves to ``None``. Every resolved config is
+        hash-verified.
 
         Raises:
             KeyError: ``module_hash`` is not installed on this vault.
@@ -1830,29 +1860,80 @@ class SundaeV4Vault(DendriteBaseModel):
         module_hash: bytes,
         commitment: bytes,
     ) -> Any:  # noqa: ANN401
-        """Read the producing transaction's redeemers and pick the matching preimage."""
+        """Find the config preimage in the last transaction that ran this module.
+
+        The transaction that produced this vault's own UTxO carries the
+        module's redeemer whenever that spend was itself a scoop (an
+        ``Operate`` entry) or the pool's own creation (a ``Create``). A purely
+        administrative spend — a treasury sweep, an upgrade, an
+        emergency-disable — need not touch a given module at all, so when the
+        producing transaction carries no matching redeemer the pool NFT's UTxO
+        history is walked newest to oldest, via the active backend's
+        ``get_pool_utxos``, until a past transaction's redeemers commit to this
+        config; the pool's creation transaction, at the bottom of that history,
+        always carries the module's ``Create`` redeemer.
+
+        Raises:
+            ModuleConfigUnavailableError: the active backend cannot read
+                redeemers or pool history, or no transaction in the pool's
+                history carries a redeemer committing to ``commitment``.
+        """
+        kind = self.module_kind(module_hash)
+        records = self._redeemers_or_unavailable(self.tx_hash, module_hash)
+        config = _matching_config(records, module_hash, kind, commitment)
+        if config is not None:
+            return config
+        for tx_hash in self._history_tx_hashes(module_hash):
+            records = self._redeemers_or_unavailable(tx_hash, module_hash)
+            config = _matching_config(records, module_hash, kind, commitment)
+            if config is not None:
+                return config
+        msg = (
+            f"SundaeV4Vault: no transaction in {self.pool_nft.unit()}'s history "
+            f"carries the config committed for module {module_hash.hex()}."
+        )
+        raise ModuleConfigUnavailableError(msg)
+
+    @staticmethod
+    def _redeemers_or_unavailable(
+        tx_hash: str,
+        module_hash: bytes,
+    ) -> list[RedeemerRecord]:
+        """``get_redeemers(tx_hash)``, translating a backend that can't serve them."""
         try:
-            records = get_backend().get_redeemers(self.tx_hash)
+            return get_backend().get_redeemers(tx_hash)
         except NotImplementedError as e:
             msg = (
                 f"SundaeV4Vault: the active backend cannot read redeemers, so the "
                 f"config for module {module_hash.hex()} must be supplied."
             )
             raise ModuleConfigUnavailableError(msg) from e
-        kind = self.module_kind(module_hash)
-        for record in records:
-            if not record.script_hash:
-                continue
-            if bytes.fromhex(record.script_hash) != module_hash:
-                continue
-            for candidate in _config_candidates(record.data_cbor, kind):
-                if module_config_hash(candidate) == commitment:
-                    return candidate
-        msg = (
-            f"SundaeV4Vault: no redeemer of {self.tx_hash} carries the config "
-            f"committed for module {module_hash.hex()}."
+
+    def _history_tx_hashes(self, module_hash: bytes) -> list[str]:
+        """This pool NFT's past producing transactions, newest first.
+
+        Excludes this vault's own ``tx_hash``. Raises
+        ``ModuleConfigUnavailableError`` if the active backend cannot list
+        historical pool UTxOs.
+        """
+        try:
+            states = get_backend().get_pool_utxos(
+                addresses=[self._deployment.pool_address.encode()],
+                assets=[self.pool_nft.unit()],
+                historical=True,
+            )
+        except NotImplementedError as e:
+            msg = (
+                f"SundaeV4Vault: the active backend cannot read pool history, so "
+                f"the config for module {module_hash.hex()} must be supplied."
+            )
+            raise ModuleConfigUnavailableError(msg) from e
+        history = sorted(
+            states,
+            key=lambda state: (state.block_time, state.block_index),
+            reverse=True,
         )
-        raise ModuleConfigUnavailableError(msg)
+        return [state.tx_hash for state in history if state.tx_hash != self.tx_hash]
 
 
 class _SundaeV4OrderBuilders:
