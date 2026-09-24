@@ -20,6 +20,7 @@ from pycardano import Redeemer
 from pycardano import VerificationKeyHash
 from pycardano.serialization import CBORTag
 
+from charli3_dendrite.backend import set_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicConstraintKind
@@ -46,6 +47,7 @@ from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.sundae_v4 import ValidityRange
 from charli3_dendrite.dexs.amm.sundae_v4 import parse_basic_constraint
 from tests.sundae_v4_vault_factory import build_vault_utxo
+from tests.test_sundae_v4_backend_redeemers import _Minimal
 
 FIXTURES = json.loads(
     (Path(__file__).parent / "sundae_v4_auditfinal_fixtures.json").read_text(),
@@ -93,18 +95,37 @@ def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
     return vault.pools()[0]
 
 
+class _NoFeeSettingsBackend(_Minimal):
+    """A backend that cannot serve the fee-settings datum.
+
+    Installed for every test so a builder's defaulted fee fields fall back to
+    the deterministic manifest snapshot the fixtures were captured under,
+    rather than depending on whatever backend the environment configures.
+    """
+
+    def get_datum_from_address(self, *a, **k):  # noqa: ANN002, ANN003, ANN201
+        """Refuse to serve any datum, forcing the manifest-fallback path."""
+        raise NotImplementedError
+
+
 @pytest.fixture(autouse=True)
 def _restore_default_network():
-    """Guarantee the class family is back on the mainnet default after each test.
+    """Guarantee deterministic base fees and the mainnet default for each test.
 
     Every test in this module (directly or via ``_pool()``) may point the class
-    family at a testnet deployment; this restores it regardless of outcome so no
-    test's network choice can leak into the next.
+    family at a testnet deployment; this restores mainnet regardless of outcome
+    so no test's network choice can leak into the next. It also clears the
+    base-fee cache and installs a backend that cannot serve the fee-settings
+    datum, so every byte-exact builder assertion stays keyed to the manifest
+    fee the fixtures were captured under.
     """
+    SundaeV4Vault.clear_base_fee_cache()
+    set_backend(_NoFeeSettingsBackend())
     try:
         yield
     finally:
         SundaeV4Vault.select_network("mainnet")
+        SundaeV4Vault.clear_base_fee_cache()
 
 
 @pytest.fixture

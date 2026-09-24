@@ -62,6 +62,8 @@ import functools
 import hashlib
 import importlib.resources
 import json
+import logging
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -1311,6 +1313,12 @@ _DEPLOYMENTS_RESOURCE = "sundae_v4_deployments.json"
 # payout output and is returned with the fill (or the cancel).
 _ORDER_RIDER = 2_000_000
 
+# How long a live (or fallback) SundaeV4Vault.base_fee() reading is cached, per
+# network, before the fee-settings node is read again.
+_BASE_FEE_TTL_S = 300
+
+_logger = logging.getLogger(__name__)
+
 
 @functools.lru_cache(maxsize=1)
 def _load_deployments() -> dict[str, Any]:
@@ -1428,8 +1436,19 @@ class SundaeV4Deployment:
         return self.config_token("strategy-order")
 
     @property
+    def fee_settings_unit(self) -> str:
+        """The dendrite unit of the fee-settings node's token."""
+        return self.settings_policy.hex() + self.settings["fee-settings"]["token"]
+
+    @property
     def base_fee(self) -> int:
-        """The flat service fee (lovelace) charged per order execution."""
+        """The manifest-snapshot flat service fee (lovelace) per order execution.
+
+        This is the value captured in the manifest at build time, not a live
+        read; a governance change to the fee-settings node would leave it
+        stale. For the current on-chain value, see :meth:`SundaeV4Vault.base_fee`,
+        which reads the fee-settings node and falls back to this snapshot.
+        """
         return int(self.settings["fee-settings"]["base_fee"])
 
     @property
@@ -1450,6 +1469,14 @@ class SundaeV4Deployment:
         """The order script address (enterprise)."""
         return Address(
             payment_part=ScriptHash(self.order_hash),
+            network=self.cardano_network,
+        )
+
+    @property
+    def settings_address(self) -> Address:
+        """The settings validator address (enterprise) holding the settings nodes."""
+        return Address(
+            payment_part=ScriptHash(self.validator("settings.spend")),
             network=self.cardano_network,
         )
 
@@ -1587,6 +1614,7 @@ class SundaeV4Vault(DendriteBaseModel):
         "mainnet",
     )
     _config_cache: ClassVar[dict[bytes, Any]] = {}
+    _base_fee_cache: ClassVar[dict[str, tuple[int, float]]] = {}
     _datum: SundaeV4PoolDatum | None = PrivateAttr(default=None)
 
     # -- class family ---------------------------------------------------------
@@ -1600,6 +1628,59 @@ class SundaeV4Vault(DendriteBaseModel):
     def deployment(cls) -> SundaeV4Deployment:
         """The deployment the class family currently targets."""
         return cls._deployment
+
+    @classmethod
+    def clear_base_fee_cache(cls) -> None:
+        """Drop every cached live (or fallback) base-fee reading."""
+        SundaeV4Vault._base_fee_cache.clear()
+
+    @classmethod
+    def base_fee(cls) -> int:
+        """The live per-execution base fee, manifest snapshot as the fallback.
+
+        Reads the deployment's fee-settings node (an unspent UTxO at
+        :attr:`SundaeV4Deployment.settings_address` holding
+        :attr:`SundaeV4Deployment.fee_settings_unit`) through the active
+        backend and decodes its :class:`FeeSettings.base_fee`, so a governance
+        change to the fee is picked up without a manifest refresh. The result
+        is cached per network name for :data:`_BASE_FEE_TTL_S` seconds.
+
+        Any failure to read or decode the node — no backend set, a backend
+        that cannot serve the datum, a missing datum, or one that fails to
+        decode as :class:`FeeSettings` — falls back to the deployment's
+        manifest-snapshot :attr:`SundaeV4Deployment.base_fee`, which is cached
+        for the same TTL and logged once as a warning.
+        """
+        deployment = cls._deployment
+        now = time.monotonic()
+        cached = cls._base_fee_cache.get(deployment.network)
+        if cached is not None and now - cached[1] < _BASE_FEE_TTL_S:
+            return cached[0]
+        try:
+            ref = get_backend().get_datum_from_address(
+                address=deployment.settings_address,
+                asset=deployment.fee_settings_unit,
+            )
+            if ref is None or not ref.datum_cbor:
+                msg = f"no fee-settings datum found for {deployment.network}"
+                raise ValueError(msg)
+            fee = FeeSettings.from_cbor(ref.datum_cbor).base_fee
+        except (
+            ValueError,
+            NotImplementedError,
+            DeserializeException,
+            cbor2.CBORDecodeError,
+            TypeError,
+            KeyError,
+        ) as e:
+            fee = deployment.base_fee
+            _logger.warning(
+                "SundaeV4Vault: falling back to the manifest base fee for %s (%s).",
+                deployment.network,
+                e,
+            )
+        cls._base_fee_cache[deployment.network] = (fee, now)
+        return fee
 
     @classmethod
     def dex(cls) -> str:
@@ -2009,19 +2090,24 @@ class _SundaeV4OrderBuilders:
     ) -> SundaeV4OrderDatum:
         """Assemble an order datum around a constraint list.
 
-        Both fee fields default to the deployment's ``base_fee``: a single-shot
-        order then pays exactly the current fee, and any headroom above it is
-        the caller's explicit choice (a basic order's terminal fill takes
-        ``min(max_per_execution, service_budget)`` in full).
+        Both fee fields default to the live base fee (fee-settings node,
+        manifest fallback): a single-shot order then pays exactly the current
+        fee, and any headroom above it is the caller's explicit choice (a
+        basic order's terminal fill takes ``min(max_per_execution,
+        service_budget)`` in full). The live lookup runs only when at least
+        one fee field is left to default.
         """
-        base_fee = self.deployment().base_fee
+        resolved_budget = service_budget
+        resolved_max = max_per_execution
+        if resolved_budget is None or resolved_max is None:
+            base_fee = SundaeV4Vault.base_fee()
+            resolved_budget = base_fee if resolved_budget is None else resolved_budget
+            resolved_max = base_fee if resolved_max is None else resolved_max
         return SundaeV4OrderDatum(
             owner=owner if owner is not None else self.order_owner(address_source),
             destination=destination,
-            service_budget=base_fee if service_budget is None else service_budget,
-            max_per_execution=(
-                base_fee if max_per_execution is None else max_per_execution
-            ),
+            service_budget=resolved_budget,
+            max_per_execution=resolved_max,
             config_token=config_token,
             constraints=IndefiniteList(
                 [IndefiniteList([key, payload]) for key, payload in constraints],
@@ -2347,8 +2433,8 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ) -> Assets:
-        """The flat ``base_fee`` an order locks for service fees."""
-        return Assets(lovelace=self.vault.deployment().base_fee)
+        """The live base fee (fee-settings node, manifest fallback) an order locks."""
+        return Assets(lovelace=SundaeV4Vault.base_fee())
 
     def deposit(
         self,
