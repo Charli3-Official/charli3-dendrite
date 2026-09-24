@@ -92,9 +92,11 @@ from pydantic import model_validator
 
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
@@ -423,7 +425,7 @@ PoolRedeemer = Union[EscapeHatch, Upgrade, EmergencyDisable, PoolAction, Destroy
 
 
 @dataclass
-class SundaeV4OrderDatum(PlutusData):
+class SundaeV4OrderDatum(OrderDatum):
     """An order's constraints (constructor 0); never an executed trade.
 
     This models the *deployed* order datum, which carries seven fields. An order
@@ -463,6 +465,13 @@ class SundaeV4OrderDatum(PlutusData):
     modelled as a CBOR array, which matches the deployed modular-order shape; an
     order whose ``constraints`` body were instead a non-list ``Data`` value would
     need this field relaxed to :class:`~pycardano.RawPlutusData`.
+
+    Implements dendrite's :class:`~charli3_dendrite.dataclasses.datums.OrderDatum`
+    interface: :meth:`basic_constraint` and :meth:`is_strategy` identify a
+    ``constraints`` entry by its module-hash KEY (never by payload shape — a
+    :class:`StrategyConstraint` and a :class:`BasicDeposit` are both
+    constructor 0 with two fields), and :meth:`order_type`,
+    :meth:`requested_amount`, :meth:`address_source` build on that.
     """
 
     CONSTR_ID = 0
@@ -473,6 +482,83 @@ class SundaeV4OrderDatum(PlutusData):
     config_token: bytes
     constraints: IndefiniteList
     extension: RawPlutusData
+
+    def basic_constraint(self) -> BasicConstraint | None:
+        """This order's basic-order constraint payload, if it carries one.
+
+        Identified by KEY: the ``constraints`` entry whose module hash is the
+        ``basic_order.withdraw`` hash of any deployed network.
+        """
+        for entry in _list_items(self.constraints):
+            key, payload = _list_items(entry)
+            if bytes(key) in _BASIC_ORDER_HASHES:
+                return parse_basic_constraint(payload)
+        return None
+
+    def is_strategy(self) -> bool:
+        """Whether this order carries the strategy-order constraint, by KEY."""
+        return any(
+            bytes(_list_items(entry)[0]) in _STRATEGY_ORDER_HASHES
+            for entry in _list_items(self.constraints)
+        )
+
+    def order_type(self) -> OrderType:
+        """The dendrite order kind.
+
+        A basic deposit/withdraw maps directly; a basic swap or claim, and
+        every strategy order (its signed executions are the actual swaps),
+        map to ``swap``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if isinstance(basic, BasicDeposit):
+            return OrderType.deposit
+        if isinstance(basic, BasicWithdraw):
+            return OrderType.withdraw
+        if isinstance(basic, (BasicSwap, BasicClaim)):
+            return OrderType.swap
+        if self.is_strategy():
+            return OrderType.swap
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def requested_amount(self) -> Assets:
+        """The floor this order requires.
+
+        A basic order's ``min_received`` as dendrite :class:`Assets`. A
+        strategy order commits to no floor in its datum — its signed
+        executions carry the floor per fill — so it requests the empty
+        ``Assets``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if basic is not None:
+            out: dict[str, int] = {}
+            for entry in _list_items(basic.min_received):
+                asset_class, amount = _list_items(entry)
+                unit = _reserve_unit(AssetClass.from_primitive(asset_class))
+                out[unit] = int(amount)
+            return Assets(**out)
+        if self.is_strategy():
+            return Assets({})
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def address_source(self) -> Address | None:
+        """The order's own source address, if the datum names one.
+
+        A :class:`DestinationFixed` resolves to its destination address. A
+        :class:`DestinationSelf` continuation pays back to the order's own
+        script address rather than a wallet, so it has no source address and
+        returns ``None``.
+        """
+        if isinstance(self.destination, DestinationFixed):
+            return self.destination.address.to_address()
+        return None
 
 
 @dataclass
@@ -1325,6 +1411,26 @@ def _load_deployments() -> dict[str, Any]:
     resource = importlib.resources.files(__package__) / _DEPLOYMENTS_RESOURCE
     data = json.loads(resource.read_text())
     return {key: value for key, value in data.items() if not key.startswith("_")}
+
+
+def _validator_hashes(title: str) -> frozenset[bytes]:
+    """The applied hash of the validator ``title`` on every deployed network.
+
+    Used to identify an order datum's constraint entries by KEY rather than by
+    network, so decoding one is network-independent.
+    """
+    return frozenset(
+        bytes.fromhex(data["validators"][title])
+        for data in _load_deployments().values()
+    )
+
+
+# The basic-order / strategy-order constraint module hashes across every
+# deployed network: an order datum's constraint KEY is checked against these,
+# never against the class family's currently selected deployment, so decoding
+# a recorded order never depends on which network is selected.
+_BASIC_ORDER_HASHES: frozenset[bytes] = _validator_hashes("basic_order.withdraw")
+_STRATEGY_ORDER_HASHES: frozenset[bytes] = _validator_hashes("strategy_order.withdraw")
 
 
 @dataclass(frozen=True)
