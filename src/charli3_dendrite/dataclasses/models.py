@@ -310,6 +310,22 @@ class ScriptReference(DendriteBaseModel):
             return None
 
 
+class RedeemerRecord(DendriteBaseModel):
+    """One redeemer of a transaction.
+
+    ``purpose`` is the ledger purpose (``spend`` / ``mint`` / ``cert`` /
+    ``reward`` / ``vote`` / ``propose``), ``index`` the redeemer's index within
+    that purpose, ``script_hash`` the hex script it was supplied for and
+    ``data_cbor`` the hex CBOR of the redeemer datum.
+    """
+
+    tx_hash: str
+    purpose: str
+    index: int
+    script_hash: str
+    data_cbor: str
+
+
 class BlockInfo(DendriteBaseModel):
     epoch_slot_no: int
     block_no: int

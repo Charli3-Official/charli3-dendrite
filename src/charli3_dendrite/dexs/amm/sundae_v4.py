@@ -62,6 +62,8 @@ import functools
 import hashlib
 import importlib.resources
 import json
+import logging
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -69,7 +71,9 @@ from typing import Any
 from typing import ClassVar
 from typing import Union
 
+import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
+from pycardano import DeserializeException
 from pycardano import IndefiniteList
 from pycardano import Network
 from pycardano import PlutusData
@@ -81,14 +85,24 @@ from pycardano import TransactionBuilder
 from pycardano import UTxO
 from pycardano import VerificationKeyHash
 from pycardano.serialization import CBORTag
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import PrivateAttr
+from pydantic import model_validator
 
+from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
+from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusFullAddress
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import DendriteBaseModel
+from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantProductPoolState
-from charli3_dendrite.dexs.amm.amm_types import AbstractConstantSumPoolState
+from charli3_dendrite.dataclasses.models import RedeemerRecord
+from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
+from charli3_dendrite.dexs.core.errors import NotAPoolError
 
 # ---------------------------------------------------------------------------
 # Shared sub-types
@@ -411,7 +425,7 @@ PoolRedeemer = Union[EscapeHatch, Upgrade, EmergencyDisable, PoolAction, Destroy
 
 
 @dataclass
-class SundaeV4OrderDatum(PlutusData):
+class SundaeV4OrderDatum(OrderDatum):
     """An order's constraints (constructor 0); never an executed trade.
 
     This models the *deployed* order datum, which carries seven fields. An order
@@ -451,6 +465,13 @@ class SundaeV4OrderDatum(PlutusData):
     modelled as a CBOR array, which matches the deployed modular-order shape; an
     order whose ``constraints`` body were instead a non-list ``Data`` value would
     need this field relaxed to :class:`~pycardano.RawPlutusData`.
+
+    Implements dendrite's :class:`~charli3_dendrite.dataclasses.datums.OrderDatum`
+    interface: :meth:`basic_constraint` and :meth:`is_strategy` identify a
+    ``constraints`` entry by its module-hash KEY (never by payload shape — a
+    :class:`StrategyConstraint` and a :class:`BasicDeposit` are both
+    constructor 0 with two fields), and :meth:`order_type`,
+    :meth:`requested_amount`, :meth:`address_source` build on that.
     """
 
     CONSTR_ID = 0
@@ -461,6 +482,83 @@ class SundaeV4OrderDatum(PlutusData):
     config_token: bytes
     constraints: IndefiniteList
     extension: RawPlutusData
+
+    def basic_constraint(self) -> BasicConstraint | None:
+        """This order's basic-order constraint payload, if it carries one.
+
+        Identified by KEY: the ``constraints`` entry whose module hash is the
+        ``basic_order.withdraw`` hash of any deployed network.
+        """
+        for entry in _list_items(self.constraints):
+            key, payload = _list_items(entry)
+            if bytes(key) in _BASIC_ORDER_HASHES:
+                return parse_basic_constraint(payload)
+        return None
+
+    def is_strategy(self) -> bool:
+        """Whether this order carries the strategy-order constraint, by KEY."""
+        return any(
+            bytes(_list_items(entry)[0]) in _STRATEGY_ORDER_HASHES
+            for entry in _list_items(self.constraints)
+        )
+
+    def order_type(self) -> OrderType:
+        """The dendrite order kind.
+
+        A basic deposit/withdraw maps directly; a basic swap or claim, and
+        every strategy order (its signed executions are the actual swaps),
+        map to ``swap``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if isinstance(basic, BasicDeposit):
+            return OrderType.deposit
+        if isinstance(basic, BasicWithdraw):
+            return OrderType.withdraw
+        if isinstance(basic, (BasicSwap, BasicClaim)):
+            return OrderType.swap
+        if self.is_strategy():
+            return OrderType.swap
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def requested_amount(self) -> Assets:
+        """The floor this order requires.
+
+        A basic order's ``min_received`` as dendrite :class:`Assets`. A
+        strategy order commits to no floor in its datum — its signed
+        executions carry the floor per fill — so it requests the empty
+        ``Assets``.
+
+        Raises:
+            ValueError: no recognised basic or strategy constraint is present.
+        """
+        basic = self.basic_constraint()
+        if basic is not None:
+            out: dict[str, int] = {}
+            for entry in _list_items(basic.min_received):
+                asset_class, amount = _list_items(entry)
+                unit = _reserve_unit(AssetClass.from_primitive(asset_class))
+                out[unit] = int(amount)
+            return Assets(**out)
+        if self.is_strategy():
+            return Assets({})
+        msg = "SundaeV4OrderDatum: no recognised basic or strategy constraint."
+        raise ValueError(msg)
+
+    def address_source(self) -> Address | None:
+        """The order's own source address, if the datum names one.
+
+        A :class:`DestinationFixed` resolves to its destination address. A
+        :class:`DestinationSelf` continuation pays back to the order's own
+        script address rather than a wallet, so it has no source address and
+        returns ``None``.
+        """
+        if isinstance(self.destination, DestinationFixed):
+            return self.destination.address.to_address()
+        return None
 
 
 @dataclass
@@ -1219,6 +1317,60 @@ def constant_sum_pinned_deposit(
     )
 
 
+@dataclass(frozen=True)
+class PinnedWithdraw:
+    """The unique constant-sum withdrawal the vault accepts for an LP redemption.
+
+    ``target_delta_v`` is the (negative) value delta the scoop declares,
+    ``payouts`` the per-asset amounts paid out (aligned to the pool's assets),
+    ``lp_after`` the pool's total LP after the step and ``lp_burned`` the LP
+    actually consumed — at most the LP redeemed, and below it only on pools
+    whose LP is finer-grained than their value.
+    """
+
+    target_delta_v: int
+    payouts: list[int]
+    lp_after: int
+    lp_burned: int
+
+
+def constant_sum_pinned_withdraw(
+    reserves: list[int],
+    prices: list[int],
+    lp: int,
+    total_lp: int,
+) -> PinnedWithdraw:
+    """The target-pinned constant-sum withdrawal of ``lp`` against ``reserves``.
+
+    The step declares ``t = -floor(lp * V / total_lp)``; every reserve moves by
+    ``ceil(r_i * t / V)`` (a payout of ``floor(r_i * |t| / V)``) and the total
+    LP to ``floor(total_lp * (V + t) / V)``, rounding against the withdrawer.
+
+    Raises:
+        ValueError: misaligned inputs, a pool with no value, or ``lp`` outside
+            ``(0, total_lp]``.
+    """
+    if len(reserves) != len(prices):
+        msg = "reserves and prices must be aligned to the pool assets."
+        raise ValueError(msg)
+    if not 0 < lp <= total_lp:
+        msg = "lp must be positive and at most the pool's total LP."
+        raise ValueError(msg)
+    value = sum(r * p for r, p in zip(reserves, prices))
+    if value <= 0:
+        msg = "The pool holds no value."
+        raise ValueError(msg)
+    target_delta_v = -(lp * value // total_lp)
+    payouts = [r * -target_delta_v // value for r in reserves]
+    lp_after = total_lp + (total_lp * target_delta_v) // value
+    return PinnedWithdraw(
+        target_delta_v=target_delta_v,
+        payouts=payouts,
+        lp_after=lp_after,
+        lp_burned=total_lp - lp_after,
+    )
+
+
 def module_config_hash(config: PlutusData) -> bytes:
     """The ``module_state`` commitment of a module config.
 
@@ -1229,18 +1381,6 @@ def module_config_hash(config: PlutusData) -> bytes:
     """
     return hashlib.blake2b(config.to_cbor(), digest_size=32).digest()
 
-
-# ---------------------------------------------------------------------------
-# Per-invariant-module pricing classes (a PROJECTED 2-asset leg of a vault)
-#
-# A V4 pool UTxO is an N-asset vault; routing prices one 2-asset ``(i, j)`` leg
-# at a time. Each class below prices a single such leg with the standard
-# ``reserve_a``/``reserve_b``/``unit_a``/``unit_b`` interface its curve base
-# already drives. The pricing params (fee / prices / sqrt-band) are NOT in the
-# resting pool datum — they are committed as a hash and supplied off-datum in the
-# module's Operate redeemer — so they are carried here as explicit fields the
-# caller fills from the live module config.
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Deployment manifest
@@ -1259,12 +1399,38 @@ _DEPLOYMENTS_RESOURCE = "sundae_v4_deployments.json"
 # payout output and is returned with the fill (or the cancel).
 _ORDER_RIDER = 2_000_000
 
+# How long a live (or fallback) SundaeV4Vault.base_fee() reading is cached, per
+# network, before the fee-settings node is read again.
+_BASE_FEE_TTL_S = 300
+
+_logger = logging.getLogger(__name__)
+
 
 @functools.lru_cache(maxsize=1)
 def _load_deployments() -> dict[str, Any]:
     resource = importlib.resources.files(__package__) / _DEPLOYMENTS_RESOURCE
     data = json.loads(resource.read_text())
     return {key: value for key, value in data.items() if not key.startswith("_")}
+
+
+def _validator_hashes(title: str) -> frozenset[bytes]:
+    """The applied hash of the validator ``title`` on every deployed network.
+
+    Used to identify an order datum's constraint entries by KEY rather than by
+    network, so decoding one is network-independent.
+    """
+    return frozenset(
+        bytes.fromhex(data["validators"][title])
+        for data in _load_deployments().values()
+    )
+
+
+# The basic-order / strategy-order constraint module hashes across every
+# deployed network: an order datum's constraint KEY is checked against these,
+# never against the class family's currently selected deployment, so decoding
+# a recorded order never depends on which network is selected.
+_BASIC_ORDER_HASHES: frozenset[bytes] = _validator_hashes("basic_order.withdraw")
+_STRATEGY_ORDER_HASHES: frozenset[bytes] = _validator_hashes("strategy_order.withdraw")
 
 
 @dataclass(frozen=True)
@@ -1275,7 +1441,10 @@ class SundaeV4Deployment:
     ``basic_order.withdraw``, ...) to its applied script hash; ``references``
     maps the same titles to the published reference-script UTxO; ``settings``
     maps a settings-node label (``basic-order``, ``strategy-order``,
-    ``cs-pool``, ``fee-settings``, ...) to its UTxO and decoded values.
+    ``cs-pool``, ``fee-settings``, ``migration-authority``, ``stake-list``,
+    ...) to its UTxO and decoded values. A network whose API lists more than
+    one node under the same label stores the duplicate under ``<label>#2``
+    (mainnet's two ``cs-pool`` nodes are ``cs-pool`` and ``cs-pool#2``).
     """
 
     network: str
@@ -1316,6 +1485,17 @@ class SundaeV4Deployment:
     def reference(self, title: str) -> tuple[str, int]:
         """The ``(tx_hash, index)`` of the validator's published reference script."""
         return self.references[title]
+
+    def module_kind(self, script_hash: bytes) -> str | None:
+        """The module kind (``constant_sum``, ``fee_split``, ...) of a withdraw script.
+
+        Module validators are registered under ``<kind>.withdraw``; anything else
+        (the vault, order and settings validators) is not a module.
+        """
+        for title, applied in self.validators.items():
+            if bytes.fromhex(applied) == script_hash and title.endswith(".withdraw"):
+                return title[: -len(".withdraw")]
+        return None
 
     @property
     def pool_hash(self) -> bytes:
@@ -1362,8 +1542,19 @@ class SundaeV4Deployment:
         return self.config_token("strategy-order")
 
     @property
+    def fee_settings_unit(self) -> str:
+        """The dendrite unit of the fee-settings node's token."""
+        return self.settings_policy.hex() + self.settings["fee-settings"]["token"]
+
+    @property
     def base_fee(self) -> int:
-        """The flat service fee (lovelace) charged per order execution."""
+        """The manifest-snapshot flat service fee (lovelace) per order execution.
+
+        This is the value captured in the manifest at build time, not a live
+        read; a governance change to the fee-settings node would leave it
+        stale. For the current on-chain value, see :meth:`SundaeV4Vault.base_fee`,
+        which reads the fee-settings node and falls back to this snapshot.
+        """
         return int(self.settings["fee-settings"]["base_fee"])
 
     @property
@@ -1387,77 +1578,216 @@ class SundaeV4Deployment:
             network=self.cardano_network,
         )
 
-
-def _void() -> RawPlutusData:
-    """The empty constructor-0 record: the no-op payload and default extension."""
-    return RawPlutusData(CBORTag(121, []))
-
-
-def _none_option() -> RawPlutusData:
-    """An ``Option<Data>`` ``None`` (constructor 1): a bare destination datum."""
-    return RawPlutusData(CBORTag(122, []))
+    @property
+    def settings_address(self) -> Address:
+        """The settings validator address (enterprise) holding the settings nodes."""
+        return Address(
+            payment_part=ScriptHash(self.validator("settings.spend")),
+            network=self.cardano_network,
+        )
 
 
-def _asset_class(unit: str) -> AssetClass:
-    """The on-chain asset class of a dendrite unit (``lovelace`` is empty/empty)."""
-    if unit == "lovelace":
-        return AssetClass(policy=b"", asset_name=b"")
-    return AssetClass(
-        policy=bytes.fromhex(unit[:56]),
-        asset_name=bytes.fromhex(unit[56:]),
-    )
+INVARIANT_MODULE_KINDS: frozenset[str] = frozenset(
+    {"constant_sum", "constant_product", "concentrated_liquidity"},
+)
+_CONFIG_LESS_COMMITMENT = b"\x80"
+_NFT_PREFIX = "000de140"
+_LP_PREFIX = "0014df10"
 
 
-def _asset_amounts(assets: Assets) -> IndefiniteList:
-    """An Aiken ``List<(AssetClass, Int)>`` in canonical (policy, name) order."""
-    ordered = sorted(
-        assets.root.items(),
-        key=lambda item: "" if item[0] == "lovelace" else item[0],
-    )
-    return IndefiniteList(
-        [IndefiniteList([_asset_class(unit), int(amount)]) for unit, amount in ordered],
-    )
+def _list_items(value: Any) -> list:  # noqa: ANN401
+    """The elements of a decoded Plutus list (definite, indefinite, or frozen)."""
+    return list(value)
 
 
-class _SundaeV4PricingMixin:
-    """Shared DEX-contract surface for the V4 projected-leg pricing classes.
+def _reserve_unit(asset_class: AssetClass) -> str:
+    """The dendrite unit of an on-chain asset class (``lovelace`` for ADA)."""
+    return (asset_class.policy.hex() + asset_class.asset_name.hex()) or "lovelace"
 
-    Holds everything common to the constant-product / constant-sum /
-    concentrated-liquidity leg classes — name, selectors, datum classes, the
-    active deployment (script addresses, constraint keys, config tokens, fee
-    settings) and the order builders — so the three curve classes carry only
-    their curve-specific configuration and math.
 
-    The class family targets one deployment at a time (preview by default);
-    :meth:`select_network` switches all three curve classes together.
+_CONFIG_TYPES: dict[str, type[PlutusData]] = {
+    "constant_sum": ConstantSumConfig,
+    "constant_product": ConstantProductConfig,
+    "concentrated_liquidity": ConcentratedLiquidityConfig,
+    "fee_split": FeeSplitConfig,
+}
+_CREATE_TAG = 121  # constructor 0
+_OPERATE_TAG = 122  # constructor 1
+
+
+def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
+    """Config preimages a module redeemer may carry.
+
+    A ``Create`` redeemer (constructor 0) carries the config as its first
+    field; an ``Operate`` redeemer (constructor 1) carries one
+    ``[pool_oref, config]`` entry per pool. Known kinds are decoded to their
+    typed config; others stay :class:`~pycardano.RawPlutusData`.
+    """
+    raw = RawPlutusData.from_cbor(bytes.fromhex(data_cbor))
+    tag = raw.data
+    if not isinstance(tag, CBORTag):
+        return []
+    fields = _list_items(tag.value)
+    if tag.tag == _CREATE_TAG and fields:
+        payloads = [fields[0]]
+    elif tag.tag == _OPERATE_TAG and fields:
+        payloads = [
+            _list_items(entry.value)[1]
+            for entry in _list_items(fields[0])
+            if isinstance(entry, CBORTag) and len(_list_items(entry.value)) > 1
+        ]
+    else:
+        return []
+    typed = _CONFIG_TYPES.get(kind or "")
+    candidates: list[Any] = []
+    for payload in payloads:
+        candidate: Any = RawPlutusData(payload)
+        if typed is not None:
+            try:
+                candidate = typed.from_cbor(candidate.to_cbor())
+            except (DeserializeException, TypeError, ValueError, KeyError):
+                continue
+        candidates.append(candidate)
+    return candidates
+
+
+def _matching_config(
+    records: list[RedeemerRecord],
+    module_hash: bytes,
+    kind: str | None,
+    commitment: bytes,
+) -> Any | None:  # noqa: ANN401
+    """The first config among ``records`` for ``module_hash`` hashing to ``commitment``.
+
+    Shared by both legs of :meth:`SundaeV4Vault._resolve_from_backend`: the
+    producing transaction's own redeemers and, failing that, each past
+    transaction's redeemers visited while walking the pool NFT's history.
+    """
+    for record in records:
+        if not record.script_hash:
+            continue
+        if bytes.fromhex(record.script_hash) != module_hash:
+            continue
+        for candidate in _config_candidates(record.data_cbor, kind):
+            if module_config_hash(candidate) == commitment:
+                return candidate
+    return None
+
+
+class SundaeV4Vault(DendriteBaseModel):
+    """A SundaeSwap V4 pool UTxO: the N-asset vault every pool type is bound to.
+
+    Built from a raw UTxO (value bag + inline datum). ``reserves`` is the
+    datum's reserve declaration re-keyed to dendrite units in canonical order
+    (lovelace first, then policy + name); ``datum_units`` preserves the
+    declaration order that positional module configs (constant-sum prices) are
+    aligned to. ``surplus`` is the UTxO lovelace above the declared lovelace
+    reserve. The vault prices nothing: :meth:`pools` yields one pool type per
+    invariant module bound on the action map. ``_config_cache`` grows by one
+    entry per distinct resolved module config (keyed by its commitment hash)
+    across every vault in the process; :meth:`clear_config_cache` drops it.
     """
 
-    if TYPE_CHECKING:
-        # Resolved from AbstractPoolState, which the concrete leg classes mix in
-        # alongside this mixin; declared for the type checker (used in pool_id).
-        pool_nft: Assets | None
-        unit_a: str
-        unit_b: str
+    model_config = ConfigDict(
+        alias_generator=None,
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="ignore",
+    )
+
+    tx_hash: str
+    tx_index: int
+    datum_cbor: str
+    assets: Assets
+    block_time: int = 0
+    block_index: int = 0
+    datum_hash: str | None = None
+    identifier: bytes
+    pool_nft: Assets
+    lp_token: Assets
+    reserves: Assets
+    datum_units: list[str]
+    total_lp: int
+    circulating_lp: int
+    preminted_lp: int
+    min_surplus: int
+    actions: list[ActionEntry]
+    module_state: dict[bytes, bytes]
+    surplus: int
+    module_configs: dict[bytes, Any] = Field(default_factory=dict)
 
     _deployment: ClassVar[SundaeV4Deployment] = SundaeV4Deployment.for_network(
-        "preview",
+        "mainnet",
     )
-    _deposit: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
+    _config_cache: ClassVar[dict[bytes, Any]] = {}
+    _base_fee_cache: ClassVar[dict[str, tuple[int, float]]] = {}
+    _datum: SundaeV4PoolDatum | None = PrivateAttr(default=None)
+
+    # -- class family ---------------------------------------------------------
 
     @classmethod
     def select_network(cls, network: str) -> None:
-        """Point the whole V4 class family at the deployment on ``network``."""
-        _SundaeV4PricingMixin._deployment = SundaeV4Deployment.for_network(network)
+        """Point the V4 class family at the deployment on ``network``."""
+        SundaeV4Vault._deployment = SundaeV4Deployment.for_network(network)
 
     @classmethod
     def deployment(cls) -> SundaeV4Deployment:
         """The deployment the class family currently targets."""
         return cls._deployment
 
-    @property
-    def _batcher(self) -> Assets:
-        """The lovelace an order locks for service fees: the flat ``base_fee``."""
-        return Assets(lovelace=self._deployment.base_fee)
+    @classmethod
+    def clear_base_fee_cache(cls) -> None:
+        """Drop every cached live (or fallback) base-fee reading."""
+        SundaeV4Vault._base_fee_cache.clear()
+
+    @classmethod
+    def base_fee(cls) -> int:
+        """The live per-execution base fee, manifest snapshot as the fallback.
+
+        Reads the deployment's fee-settings node (an unspent UTxO at
+        :attr:`SundaeV4Deployment.settings_address` holding
+        :attr:`SundaeV4Deployment.fee_settings_unit`) through the active
+        backend and decodes its :class:`FeeSettings.base_fee`, so a governance
+        change to the fee is picked up without a manifest refresh. The result
+        is cached per network name for :data:`_BASE_FEE_TTL_S` seconds.
+
+        Any failure to read or decode the node — no backend set, a backend
+        that cannot serve the datum, a missing datum, one that fails to
+        decode as :class:`FeeSettings`, a backend indexing bug (e.g. an
+        unguarded ``result[0]`` on an empty row set), or a transport failure
+        (a database timeout, a connection error, an API error) — falls back
+        to the deployment's manifest-snapshot
+        :attr:`SundaeV4Deployment.base_fee`, which is cached for the same TTL
+        and logged once as a warning. The backend surface is third-party and
+        open-ended, so the catch is deliberately unbounded: no read failure
+        may ever propagate out of a fee lookup and break order building.
+        """
+        deployment = cls._deployment
+        now = time.monotonic()
+        cached = cls._base_fee_cache.get(deployment.network)
+        if cached is not None and now - cached[1] < _BASE_FEE_TTL_S:
+            return cached[0]
+        try:
+            ref = get_backend().get_datum_from_address(
+                address=deployment.settings_address,
+                asset=deployment.fee_settings_unit,
+            )
+            if ref is None or not ref.datum_cbor:
+                msg = f"no fee-settings datum found for {deployment.network}"
+                raise ValueError(msg)
+            fee = FeeSettings.from_cbor(ref.datum_cbor).base_fee
+        except Exception as e:  # noqa: BLE001
+            # Any read/decode failure falls back to the manifest snapshot by
+            # design: an unsupported or misbehaving backend, a missing or
+            # undecodable node, or a transport error must never surface here.
+            fee = deployment.base_fee
+            _logger.warning(
+                "SundaeV4Vault: falling back to the manifest base fee for %s (%s).",
+                deployment.network,
+                e,
+            )
+        cls._base_fee_cache[deployment.network] = (fee, now)
+        return fee
 
     @classmethod
     def dex(cls) -> str:
@@ -1466,28 +1796,13 @@ class _SundaeV4PricingMixin:
 
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Get the order selector addresses (the order validator address)."""
+        """The order validator address."""
         return [cls._deployment.order_address.encode()]
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
-        """Get the pool selector (the vault validator address)."""
+        """The vault validator address."""
         return PoolSelector(addresses=[cls._deployment.pool_address.encode()])
-
-    @classmethod
-    def default_script_class(cls) -> type[PlutusV3Script]:
-        """V4 validators are PlutusV3 scripts."""
-        return PlutusV3Script
-
-    @property
-    def swap_forward(self) -> bool:
-        """V4 order forwarding is not modelled by the pricing layer."""
-        return False
-
-    @property
-    def stake_address(self) -> Address:
-        """The order script address an order UTxO is locked at."""
-        return self._deployment.order_address
 
     @classmethod
     def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
@@ -1499,24 +1814,340 @@ class _SundaeV4PricingMixin:
         """Get the order datum class."""
         return SundaeV4OrderDatum
 
-    @property
-    def pool_id(self) -> str:
-        """A unique identifier for the projected leg."""
-        if self.pool_nft is not None:
-            return self.pool_nft.unit()
-        return f"{self.unit_a}.{self.unit_b}"
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V4 validators are PlutusV3 scripts."""
+        return PlutusV3Script
+
+    # -- parse ----------------------------------------------------------------
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_utxo(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Derive the vault fields from the UTxO value and inline datum.
+
+        Skipped when ``identifier`` is already present (a pre-parsed vault).
+
+        Raises:
+            NotAPoolError: no inline datum, a datum that is not a pool datum, or
+                a value without the pool NFT.
+            InvalidPoolError: a declared reserve's quantity exceeds what is
+                held (a reserve class absent from the value counts as held 0),
+                or the datum declares the same reserve class more than once.
+            KeyError: a supplied ``module_configs`` key names a module hash
+                not installed on this vault (absent from ``module_state``).
+        """
+        if "identifier" in values:
+            return values
+        datum = cls._parse_datum(values)
+        assets = values["assets"]
+        if not isinstance(assets, Assets):
+            assets = Assets(**assets)
+            values["assets"] = assets
+        policy = cls._deployment.pool_nft_policy.hex()
+        nft_unit = policy + _NFT_PREFIX + datum.identifier.hex()
+        lp_unit = policy + _LP_PREFIX + datum.identifier.hex()
+        if assets.root.get(nft_unit) != 1:
+            msg = f"SundaeV4Vault: pool NFT {nft_unit} is not in the UTxO value."
+            raise NotAPoolError(msg)
+        datum_units: list[str] = []
+        reserves: dict[str, int] = {}
+        for entry in _list_items(datum.assets):
+            fields = _list_items(entry)
+            unit = _reserve_unit(AssetClass.from_primitive(fields[0]))
+            quantity = int(fields[1])
+            held = assets.root.get(unit, 0)
+            if held < quantity:
+                msg = (
+                    f"SundaeV4Vault: declared reserve {unit}={quantity} exceeds the "
+                    f"held {held}."
+                )
+                raise InvalidPoolError(msg)
+            datum_units.append(unit)
+            reserves[unit] = quantity
+        if len(set(datum_units)) != len(datum_units):
+            msg = "SundaeV4Vault: the datum declares a reserve class more than once."
+            raise InvalidPoolError(msg)
+        values.update(
+            identifier=datum.identifier,
+            pool_nft=Assets(**{nft_unit: 1}),
+            lp_token=Assets(**{lp_unit: assets.root.get(lp_unit, 0)}),
+            reserves=Assets(**reserves),
+            datum_units=datum_units,
+            total_lp=datum.total_lp,
+            circulating_lp=datum.circulating_lp,
+            preminted_lp=datum.preminted_lp,
+            min_surplus=datum.min_surplus,
+            actions=list(datum.actions),
+            module_state={
+                bytes(_list_items(slot)[0]): bytes(_list_items(slot)[1])
+                for slot in _list_items(datum.module_state)
+            },
+            surplus=assets.root.get("lovelace", 0) - reserves.get("lovelace", 0),
+        )
+        module_state: dict[bytes, bytes] = values["module_state"]
+        for module_hash, config in values.get("module_configs", {}).items():
+            if module_config_hash(config) != module_state[module_hash]:
+                msg = (
+                    f"SundaeV4Vault: supplied config for module "
+                    f"{module_hash.hex()} does not match its module_state "
+                    f"commitment."
+                )
+                raise InvalidPoolError(msg)
+        return values
 
     @classmethod
-    def skip_init(cls, values: dict[str, Any]) -> bool:  # noqa: ARG003
-        """Skip the N-asset vault datum parse; legs are constructed pre-projected.
+    def _parse_datum(cls, values: dict[str, Any]) -> SundaeV4PoolDatum:
+        """Decode the inline datum as a pool datum or raise ``NotAPoolError``."""
+        datum_cbor = values.get("datum_cbor")
+        if not datum_cbor:
+            msg = "SundaeV4Vault: the UTxO carries no inline datum."
+            raise NotAPoolError(msg)
+        try:
+            datum = SundaeV4PoolDatum.from_cbor(datum_cbor)
+        except (
+            DeserializeException,
+            TypeError,
+            ValueError,
+            KeyError,
+            cbor2.CBORDecodeError,
+        ) as e:
+            msg = f"SundaeV4Vault: datum is not a pool datum: {e}"
+            raise NotAPoolError(msg) from e
+        if datum.to_cbor() != bytes.fromhex(datum_cbor):
+            msg = "SundaeV4Vault: datum does not round-trip as a pool datum."
+            raise NotAPoolError(msg)
+        return datum
 
-        The pricing layer is handed a ready 2-asset leg (reserves + the off-datum
-        module config), so the heavy vault datum parse is bypassed and the supplied
-        ``assets`` are used verbatim.
+    # -- identity + datum -----------------------------------------------------
+
+    @property
+    def pool_id(self) -> str:
+        """The pool NFT unit."""
+        return self.pool_nft.unit()
+
+    @property
+    def datum(self) -> SundaeV4PoolDatum:
+        """The decoded pool datum."""
+        if self._datum is None:
+            self._datum = SundaeV4PoolDatum.from_cbor(self.datum_cbor)
+        return self._datum
+
+    # -- action map -----------------------------------------------------------
+
+    def action(self, tag: int) -> ActionEntry | None:
+        """The action-map entry for ``tag``, if declared."""
+        for entry in self.actions:
+            if entry.tag == tag:
+                return entry
+        return None
+
+    def modules_for(self, tag: int) -> list[bytes]:
+        """The module hashes that must run for action ``tag`` (empty if none)."""
+        entry = self.action(tag)
+        if entry is None:
+            return []
+        return [bytes(module) for module in _list_items(entry.modules)]
+
+    def module_kind(self, module_hash: bytes) -> str | None:
+        """The kind of an installed module, via the deployment's validator titles."""
+        return self._deployment.module_kind(module_hash)
+
+    def invariant_modules(self) -> list[tuple[int, bytes, str]]:
+        """``(tag, module_hash, kind)`` for every enabled invariant-module binding.
+
+        One entry per (action tag, invariant module) pair, in action-map order;
+        a vault that binds the same invariant on several tags lists it once per
+        tag.
         """
-        return True
+        out: list[tuple[int, bytes, str]] = []
+        for entry in self.actions:
+            if not isinstance(entry.enabled, BoolTrue):
+                continue
+            for module in _list_items(entry.modules):
+                kind = self.module_kind(bytes(module))
+                if kind in INVARIANT_MODULE_KINDS:
+                    out.append((entry.tag, bytes(module), kind))
+        return out
 
-    # -- order builders ------------------------------------------------------
+    def pools(self) -> list[SundaeV4ConstantSumPool]:
+        """One pool type per enabled invariant-module binding on the action map.
+
+        Raises:
+            NotImplementedError: an invariant kind without a pool type yet.
+            ModuleConfigUnavailableError: a config could not be resolved.
+        """
+        out: list[SundaeV4ConstantSumPool] = []
+        for tag, module, kind in self.invariant_modules():
+            if kind != "constant_sum":
+                msg = f"SundaeV4Vault: no pool type for the {kind} module yet."
+                raise NotImplementedError(msg)
+            config = self.module_config(module)
+            out.append(SundaeV4ConstantSumPool.from_vault(self, tag, config))
+        return out
+
+    # -- module configs -------------------------------------------------------
+
+    @classmethod
+    def clear_config_cache(cls) -> None:
+        """Drop every cached module config preimage."""
+        SundaeV4Vault._config_cache.clear()
+
+    def module_config(self, module_hash: bytes) -> Any:  # noqa: ANN401
+        """The config preimage committed in ``module_state[module_hash]``.
+
+        Resolution order: supplied (constructor ``module_configs`` or
+        :meth:`supply_module_config`), then the class-level cache keyed by the
+        commitment hash, then the last transaction that ran the module via the
+        active backend — usually the transaction that produced this vault's own
+        UTxO, else found by walking the pool NFT's UTxO history (see
+        :meth:`_resolve_from_backend`). A config-less module (its slot holds the
+        serialised empty list) resolves to ``None``. Every resolved config is
+        hash-verified.
+
+        Raises:
+            KeyError: ``module_hash`` is not installed on this vault.
+            ModuleConfigUnavailableError: the backend cannot serve the preimage.
+            InvalidPoolError: a served preimage does not match the commitment.
+        """
+        commitment = self.module_state[module_hash]
+        if commitment == _CONFIG_LESS_COMMITMENT:
+            return None
+        if module_hash in self.module_configs:
+            return self.module_configs[module_hash]
+        config = self._config_cache.get(commitment)
+        if config is None:
+            config = self._resolve_from_backend(module_hash, commitment)
+            self._config_cache[commitment] = config
+        self.module_configs[module_hash] = config
+        return config
+
+    def supply_module_config(
+        self,
+        module_hash: bytes,
+        config: Any,  # noqa: ANN401
+    ) -> None:
+        """Attach a caller-held config preimage after verifying its commitment.
+
+        Raises:
+            KeyError: ``module_hash`` is not installed on this vault.
+            InvalidPoolError: the config does not hash to the committed value.
+        """
+        commitment = self.module_state[module_hash]
+        if module_config_hash(config) != commitment:
+            msg = (
+                f"SundaeV4Vault: config for module {module_hash.hex()} does not "
+                f"match its module_state commitment."
+            )
+            raise InvalidPoolError(msg)
+        self.module_configs[module_hash] = config
+        self._config_cache[commitment] = config
+
+    def _resolve_from_backend(
+        self,
+        module_hash: bytes,
+        commitment: bytes,
+    ) -> Any:  # noqa: ANN401
+        """Find the config preimage in the last transaction that ran this module.
+
+        The transaction that produced this vault's own UTxO carries the
+        module's redeemer whenever that spend was itself a scoop (an
+        ``Operate`` entry) or the pool's own creation (a ``Create``). A purely
+        administrative spend — a treasury sweep, an upgrade, an
+        emergency-disable — need not touch a given module at all, so when the
+        producing transaction carries no matching redeemer the pool NFT's UTxO
+        history is walked newest to oldest, via the active backend's
+        ``get_pool_utxos``, until a past transaction's redeemers commit to this
+        config; the pool's creation transaction, at the bottom of that history,
+        always carries the module's ``Create`` redeemer.
+
+        Raises:
+            ModuleConfigUnavailableError: the active backend cannot read
+                redeemers or pool history, or no transaction in the pool's
+                history carries a redeemer committing to ``commitment``.
+        """
+        kind = self.module_kind(module_hash)
+        records = self._redeemers_or_unavailable(self.tx_hash, module_hash)
+        config = _matching_config(records, module_hash, kind, commitment)
+        if config is not None:
+            return config
+        for tx_hash in self._history_tx_hashes(module_hash):
+            records = self._redeemers_or_unavailable(tx_hash, module_hash)
+            config = _matching_config(records, module_hash, kind, commitment)
+            if config is not None:
+                return config
+        msg = (
+            f"SundaeV4Vault: no transaction in {self.pool_nft.unit()}'s history "
+            f"carries the config committed for module {module_hash.hex()}."
+        )
+        raise ModuleConfigUnavailableError(msg)
+
+    @staticmethod
+    def _redeemers_or_unavailable(
+        tx_hash: str,
+        module_hash: bytes,
+    ) -> list[RedeemerRecord]:
+        """``get_redeemers(tx_hash)``, translating a backend that can't serve them."""
+        try:
+            return get_backend().get_redeemers(tx_hash)
+        except NotImplementedError as e:
+            msg = (
+                f"SundaeV4Vault: the active backend cannot read redeemers, so the "
+                f"config for module {module_hash.hex()} must be supplied."
+            )
+            raise ModuleConfigUnavailableError(msg) from e
+
+    def _history_tx_hashes(self, module_hash: bytes) -> list[str]:
+        """This pool NFT's past producing transactions, newest first.
+
+        Excludes this vault's own ``tx_hash``. Raises
+        ``ModuleConfigUnavailableError`` if the active backend cannot list
+        historical pool UTxOs.
+        """
+        try:
+            states = get_backend().get_pool_utxos(
+                addresses=[self._deployment.pool_address.encode()],
+                assets=[self.pool_nft.unit()],
+                historical=True,
+            )
+        except NotImplementedError as e:
+            msg = (
+                f"SundaeV4Vault: the active backend cannot read pool history, so "
+                f"the config for module {module_hash.hex()} must be supplied."
+            )
+            raise ModuleConfigUnavailableError(msg) from e
+        history = sorted(
+            states,
+            key=lambda state: (state.block_time, state.block_index),
+            reverse=True,
+        )
+        return [state.tx_hash for state in history if state.tx_hash != self.tx_hash]
+
+
+class _SundaeV4OrderBuilders:
+    """Order builders shared by every V4 pool type: basic, strategy and cancel."""
+
+    if TYPE_CHECKING:
+        vault: SundaeV4Vault
+
+    def deployment(self) -> SundaeV4Deployment:
+        """The deployment the bound vault targets."""
+        return self.vault.deployment()
+
+    @classmethod
+    def pool_datum_class(cls) -> type[SundaeV4PoolDatum]:
+        """Get the pool datum class."""
+        return SundaeV4Vault.pool_datum_class()
+
+    @classmethod
+    def order_datum_class(cls) -> type[SundaeV4OrderDatum]:
+        """Get the order datum class."""
+        return SundaeV4Vault.order_datum_class()
+
+    @classmethod
+    def default_script_class(cls) -> type[PlutusV3Script]:
+        """V4 validators are PlutusV3 scripts."""
+        return SundaeV4Vault.default_script_class()
 
     @classmethod
     def order_owner(cls, address: Address) -> MultisigSignature:
@@ -1566,19 +2197,24 @@ class _SundaeV4PricingMixin:
     ) -> SundaeV4OrderDatum:
         """Assemble an order datum around a constraint list.
 
-        Both fee fields default to the deployment's ``base_fee``: a single-shot
-        order then pays exactly the current fee, and any headroom above it is
-        the caller's explicit choice (a basic order's terminal fill takes
-        ``min(max_per_execution, service_budget)`` in full).
+        Both fee fields default to the live base fee (fee-settings node,
+        manifest fallback): a single-shot order then pays exactly the current
+        fee, and any headroom above it is the caller's explicit choice (a
+        basic order's terminal fill takes ``min(max_per_execution,
+        service_budget)`` in full). The live lookup runs only when at least
+        one fee field is left to default.
         """
-        base_fee = self._deployment.base_fee
+        resolved_budget = service_budget
+        resolved_max = max_per_execution
+        if resolved_budget is None or resolved_max is None:
+            base_fee = SundaeV4Vault.base_fee()
+            resolved_budget = base_fee if resolved_budget is None else resolved_budget
+            resolved_max = base_fee if resolved_max is None else resolved_max
         return SundaeV4OrderDatum(
             owner=owner if owner is not None else self.order_owner(address_source),
             destination=destination,
-            service_budget=base_fee if service_budget is None else service_budget,
-            max_per_execution=(
-                base_fee if max_per_execution is None else max_per_execution
-            ),
+            service_budget=resolved_budget,
+            max_per_execution=resolved_max,
             config_token=config_token,
             constraints=IndefiniteList(
                 [IndefiniteList([key, payload]) for key, payload in constraints],
@@ -1607,7 +2243,7 @@ class _SundaeV4PricingMixin:
         are the basic-order payload (its constructor index is ``kind``) followed
         by the fee constraint's no-op payload.
         """
-        deployment = self._deployment
+        deployment = self.deployment()
         payload = _BASIC_KINDS[kind](
             offered=_asset_amounts(offered),
             min_received=_asset_amounts(min_received),
@@ -1747,7 +2383,7 @@ class _SundaeV4PricingMixin:
         The order binds the ``strategy-order`` config: the constraints are the
         strategy constraint followed by the fee constraint's no-op payload.
         """
-        deployment = self._deployment
+        deployment = self.deployment()
         strategy = StrategyConstraint(
             auth=auth,
             final_destinations=IndefiniteList(
@@ -1811,96 +2447,378 @@ class _SundaeV4PricingMixin:
         return tx_builder
 
 
-class _SundaeV4CPPState(_SundaeV4PricingMixin, AbstractConstantProductPoolState):
-    """SundaeSwap V4 constant-product module: a projected 2-asset leg.
+class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolState):
+    """The constant-sum module bound to a vault on one action tag.
 
-    The constant-product module is not in the deployed launch packages (no pool
-    config references it on preview or preprod), so no live pool prices through
-    this class yet; it is kept ready for the module's launch.
-
-    Clean reuse of :class:`AbstractConstantProductPoolState` — the ``x*y=k`` swap
-    math is inherited unchanged. ``fee`` is the fee numerator on ``fee_basis`` (the
-    on-chain ``fee_num`` / ``fee_den``), surfaced to the base via
-    ``volume_fee`` / ``fee_basis``.
+    ``prices`` is the config's positional price vector re-keyed to units;
+    ``reserves`` and ``total_lp`` are a snapshot of the vault's at construction
+    so :meth:`apply_swap` never mutates the vault. A swap step may raise any
+    subset of the reserves and lower another; the on-chain check is on value:
+    ``out = floor((V_in - floor(V_in * fee)) / p_out)`` with the pool keeping
+    the fee and the sub-``p_out`` remainder. That value is the only output the
+    fee-band check ever admits — a lower amount fails it exactly like a higher
+    one — so a step whose out reserve cannot cover it, or (with the bounty on)
+    whose value increase cannot cover the obligation dock, quotes zero rather
+    than a partial fill.
     """
 
-    fee: int = 0
-    fee_basis: int = 10000
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    vault: SundaeV4Vault
+    tag: int
+    config: ConstantSumConfig
+    total_lp: int
+    prices: dict[str, int]
 
-class _SundaeV4CSState(_SundaeV4PricingMixin, AbstractConstantSumPoolState):
-    """SundaeSwap V4 constant-sum module: a projected 2-asset leg.
+    _deposit_rider: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
 
-    Prices on the new :class:`AbstractConstantSumPoolState` value-conservation base.
-    ``price_a`` / ``price_b`` are the integer price weights of this leg aligned to
-    ``(unit_a, unit_b)``; ``fee_numerator`` / ``fee_denominator`` are the on-chain
-    constant-sum ``fee_num`` / ``fee_den``. Both come from the off-datum
-    :class:`ConstantSumConfig`.
-    """
+    @classmethod
+    def from_vault(
+        cls,
+        vault: SundaeV4Vault,
+        tag: int,
+        config: ConstantSumConfig,
+    ) -> SundaeV4ConstantSumPool:
+        """Bind the constant-sum module's ``config`` to ``vault`` on action ``tag``.
 
-    price_a: int = 1
-    price_b: int = 1
-    fee_numerator: int = 0
-    fee_denominator: int = 1000
-
-    def _cs_price_pair(self) -> tuple[int, int]:
-        """The leg's integer price weights aligned to ``(unit_a, unit_b)``."""
-        return (self.price_a, self.price_b)
-
-    def _cs_fee(self) -> tuple[int, int]:
-        """The on-chain constant-sum fee ``(fee_num, fee_den)``."""
-        return (self.fee_numerator, self.fee_denominator)
-
-
-class _SundaeV4CLState(_SundaeV4PricingMixin, AbstractConstantLiquidityPoolState):
-    """SundaeSwap V4 concentrated-liquidity module: a projected 2-asset leg.
-
-    The concentrated-liquidity module is not in the deployed launch packages (no
-    pool config references it on preview or preprod), so no live pool prices
-    through this class yet; it is kept ready for the module's launch.
-
-    Reuses the single-band CLMM math of
-    :class:`AbstractConstantLiquidityPoolState`, but OVERRIDES
-    :meth:`virtual_reserves` to consume V4's EXPLICIT on-chain liquidity ``L`` (the
-    LP-token count, :attr:`total_lp`) instead of reconstructing it from the reserves
-    and band. V4's ``cl_check`` invariant is a ``>=`` on virtual reserves built from
-    ``L`` directly, and fees grow ``L`` across a transcript, so a position need not
-    sit exactly on the canonical single-band curve that the base's geometric
-    reconstruction assumes — reconstructing ``L`` from off-curve reserves would
-    misprice the leg.
-
-    ``sqrt_price_a`` / ``sqrt_price_b`` are the band bounds as exact integer ratios
-    (numerator/denominator pairs); ``fee`` is the fee numerator on ``fee_basis``.
-    These come from the off-datum :class:`ConcentratedLiquidityConfig` and the pool
-    datum's ``total_lp``.
-    """
-
-    fee: int = 0
-    fee_basis: int = 10000
-    total_lp: int = 0
-    sqrt_price_a_num: int = 1
-    sqrt_price_a_den: int = 1
-    sqrt_price_b_num: int = 1
-    sqrt_price_b_den: int = 1
-
-    def _sqrt_price_bounds(self) -> tuple[tuple[int, int], tuple[int, int]]:
-        """Band bounds ``((sqrt_Pa_num, sqrt_Pa_den), (sqrt_Pb_num, sqrt_Pb_den))``."""
-        return (
-            (self.sqrt_price_a_num, self.sqrt_price_a_den),
-            (self.sqrt_price_b_num, self.sqrt_price_b_den),
+        Raises:
+            InvalidPoolError: the config's price vector does not cover the
+                reserves, or the vault's datum order and reserve units disagree.
+        """
+        price_list = [int(p) for p in _list_items(config.prices)]
+        if len(price_list) != len(vault.datum_units):
+            msg = (
+                f"SundaeV4ConstantSumPool: {len(price_list)} prices for "
+                f"{len(vault.datum_units)} reserves."
+            )
+            raise InvalidPoolError(msg)
+        if set(vault.datum_units) != set(vault.reserves.root):
+            msg = (
+                "SundaeV4ConstantSumPool: the vault's datum order and "
+                "reserve units disagree."
+            )
+            raise InvalidPoolError(msg)
+        return cls(
+            vault=vault,
+            tag=tag,
+            config=config,
+            reserves=Assets(**dict(vault.reserves.root)),
+            total_lp=vault.total_lp,
+            prices=dict(zip(vault.datum_units, price_list)),
         )
 
-    def virtual_reserves(self) -> tuple[int, int]:
-        """Virtual reserves from the EXPLICIT on-chain ``L`` (not reconstructed).
+    # -- identity -------------------------------------------------------------
 
-        Uniswap-V3 single-band identity with ``L = total_lp`` supplied directly:
-        ``a_v = a + L / sqrt(P_b)``, ``b_v = b + L * sqrt(P_a)``, in exact integer
-        arithmetic (ceil-divided offsets, matching the base's convention).
+    @classmethod
+    def dex(cls) -> str:
+        """Get the DEX name."""
+        return SundaeV4Vault.dex()
+
+    @classmethod
+    def pool_selector(cls) -> PoolSelector:
+        """The vault validator address."""
+        return SundaeV4Vault.pool_selector()
+
+    @classmethod
+    def order_selector(cls) -> list[str]:
+        """The order validator address."""
+        return SundaeV4Vault.order_selector()
+
+    @property
+    def pool_id(self) -> str:
+        """The vault's pool NFT unit qualified by the action tag."""
+        return f"{self.vault.pool_id}:{self.tag}"
+
+    @property
+    def stake_address(self) -> Address:
+        """The order script address an order UTxO is locked at."""
+        return self.vault.deployment().order_address
+
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
+    ) -> Assets:
+        """The live base fee (fee-settings node, manifest fallback) an order locks."""
+        return Assets(lovelace=SundaeV4Vault.base_fee())
+
+    def deposit(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+    ) -> Assets:
+        """The lovelace rider returned with the order's payout."""
+        return self._deposit_rider
+
+    # -- curve ----------------------------------------------------------------
+
+    def _fee(self) -> tuple[int, int]:
+        """The config's swap fee as ``(num, den)``."""
+        return (self.config.fee.num, self.config.fee.den)
+
+    def _bounty(self) -> tuple[int, int]:
+        """The config's bounty rate as ``(num, den)`` (``num == 0`` disables it)."""
+        return (self.config.bounty_k.num, self.config.bounty_k.den)
+
+    def _value(self, reserves: dict[str, int]) -> int:
+        """The pool value of a reserve vector: the reserve/price dot product."""
+        return sum(reserves[u] * p for u, p in self.prices.items())
+
+    def _imbalance(self, reserves: dict[str, int], value: int) -> int:
+        """The pool imbalance: the sum of squared per-asset value deviations."""
+        n = len(self.prices)
+        return sum((n * reserves[u] * p - value) ** 2 for u, p in self.prices.items())
+
+    def _dock(self, before: dict[str, int], after: dict[str, int]) -> int:
+        """The obligation a step accrues, ceiled to whole value units (0 if none)."""
+        k_num, k_den = self._bounty()
+        if k_num == 0:
+            return 0
+        v_b, v_a = self._value(before), self._value(after)
+        q_b, q_a = self._imbalance(before, v_b), self._imbalance(after, v_a)
+        accrual = k_num * (q_a * v_b - q_b * v_a)
+        if accrual <= 0:
+            return 0
+        n = len(self.prices)
+        den = k_den * n * n * v_a * v_b
+        return -(-accrual // den)
+
+    def _check_units(self, asset: Assets, out_unit: str) -> None:
+        """Validate that ``out_unit`` and every unit of ``asset`` are reserves.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is empty,
+                offers a non-reserve or ``out_unit`` itself, or offers a
+                negative quantity.
         """
-        a, b = self.reserve_a, self.reserve_b
-        (spa_n, spa_d), (spb_n, spb_d) = self._sqrt_price_bounds()
-        liq = self.total_lp
-        # Each offset is ceil-divided (``-(-num // den)``) to match the base.
-        a_v = a + -(-(liq * spb_d) // spb_n)
-        b_v = b + -(-(liq * spa_n) // spa_d)
-        return a_v, b_v
+        if out_unit not in self.prices:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        if len(asset) == 0:
+            msg = "The offered asset is empty."
+            raise ValueError(msg)
+        for unit, quantity in asset.items():
+            if unit not in self.prices or unit == out_unit:
+                msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
+                raise ValueError(msg)
+            if quantity < 0:
+                msg = f"Offered quantity of {unit} is negative."
+                raise ValueError(msg)
+
+    def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
+        """The fixed integer price weights ``(p_in, p_out)``.
+
+        Raises:
+            KeyError: ``unit_in`` or ``unit_out`` is not a reserve of this pool.
+        """
+        return (self.prices[unit_in], self.prices[unit_out])
+
+    def _exact_quote(self, value_in: int, p_out: int) -> int:
+        """The unique output the fee bracket admits for a value inflow.
+
+        ``value_in`` is the offered side's value (already price-weighted);
+        the tag-3 fee band admits exactly this output for that inflow and
+        rejects every other amount, smaller or larger.
+        """
+        fee_num, fee_den = self._fee()
+        return (value_in - value_in * fee_num // fee_den) // p_out
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        out_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Output of ``out_unit`` for offering ``asset``, and the price impact.
+
+        The fee-consistent quote is the *only* value the tag-3 fee band ever
+        admits: the band's width is exactly the floor-division remainder the
+        quote already carries, so any smaller output fails it precisely like
+        a larger one. A step whose out reserve cannot cover the quote, or
+        whose bounty dock the quote cannot cover, is therefore unfillable in
+        one step and the output is zero rather than a partial fill.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` offers a
+                non-reserve or ``out_unit`` itself.
+        """
+        self._check_units(asset, out_unit)
+        value_in = sum(q * self.prices[u] for u, q in asset.items())
+        p_out = self.prices[out_unit]
+        quote = self._exact_quote(value_in, p_out)
+        out = quote if quote <= self.reserves.root[out_unit] else 0
+        if out > 0 and self._bounty()[0] > 0:
+            before = dict(self.reserves.root)
+            after = dict(before)
+            for u, q in asset.items():
+                after[u] += q
+            after[out_unit] -= out
+            if value_in - out * p_out < self._dock(before, after):
+                out = 0
+        out_assets = Assets(**{out_unit: out})
+        if value_in == 0 or out == 0:
+            return out_assets, 0.0
+        return out_assets, 1.0 - (out * p_out) / value_in
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        in_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """Minimum ``in_unit`` whose payout reaches the single-asset ``asset``.
+
+        Raises:
+            ValueError: ``asset`` is not exactly one reserve, or ``in_unit`` is
+                not a reserve distinct from it, or the amount is not positive.
+            InvalidPoolError: the desired output exceeds the reserve, or no
+                input amount reaches it (every amount admissible within the
+                reserve leaves the fee-consistent quote, or the bounty dock,
+                short of the desired output).
+        """
+        if len(asset) != 1:
+            msg = "The desired output must be exactly one asset."
+            raise ValueError(msg)
+        out_unit, desired = asset.unit(), asset.quantity()
+        self._check_units(Assets(**{in_unit: 1}), out_unit)
+        if desired <= 0:
+            msg = "The desired output must be positive."
+            raise ValueError(msg)
+        reserve = self.reserves.root[out_unit]
+        if desired > reserve:
+            msg = f"Desired output {desired} exceeds the reserve {reserve}."
+            raise InvalidPoolError(msg)
+        fee_num, fee_den = self._fee()
+        p_in, p_out = self.price(in_unit, out_unit)
+
+        def produced(amount: int) -> int:
+            """The output the pool pays for offering ``amount`` of ``in_unit``."""
+            offer = Assets(**{in_unit: amount})
+            return self.get_amount_out(offer, out_unit)[0].quantity()
+
+        amount_max = self._amount_ceiling(reserve, p_in, p_out, fee_num, fee_den)
+        amount_in = max(
+            1,
+            min(
+                amount_max - 1,
+                -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num))),
+            ),
+        )
+        while amount_in > 1 and produced(amount_in - 1) >= desired:
+            amount_in -= 1
+        while amount_in < amount_max and produced(amount_in) < desired:
+            amount_in += 1
+        if produced(amount_in) < desired:
+            msg = (
+                f"SundaeV4ConstantSumPool: no amount of {in_unit} reaches "
+                f"{desired} of {out_unit} within the reserve."
+            )
+            raise InvalidPoolError(msg)
+        in_assets = Assets(**{in_unit: amount_in})
+        return in_assets, 1.0 - (desired * p_out) / (amount_in * p_in)
+
+    def _amount_ceiling(
+        self,
+        reserve: int,
+        p_in: int,
+        p_out: int,
+        fee_num: int,
+        fee_den: int,
+    ) -> int:
+        """The smallest ``amount`` whose exact quote exceeds ``reserve``.
+
+        ``_exact_quote(amount * p_in, p_out)`` is non-decreasing in ``amount``,
+        so this ceiling is found by binary search: an initial closed-form
+        estimate is doubled until it overshoots, then bisected down to the
+        exact boundary. No amount at or beyond this ceiling can ever be
+        admitted, so it bounds the ``get_amount_in`` search without an
+        arbitrary iteration cap.
+        """
+        hi = -(-((reserve + 1) * p_out * fee_den) // (p_in * (fee_den - fee_num))) + 1
+        while self._exact_quote(hi * p_in, p_out) <= reserve:
+            hi *= 2
+        lo = 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self._exact_quote(mid * p_in, p_out) > reserve:
+                hi = mid
+            else:
+                lo = mid + 1
+        return lo
+
+    def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
+        """Move every touched reserve as if the swap settled.
+
+        Raises:
+            KeyError: ``asset_in`` or ``asset_out`` names a unit that is not a
+                reserve of this pool.
+        """
+        for unit, quantity in asset_in.items():
+            self.reserves.root[unit] = self.reserves.root[unit] + quantity
+        for unit, quantity in asset_out.items():
+            self.reserves.root[unit] = self.reserves.root[unit] - quantity
+
+    # -- liquidity ------------------------------------------------------------
+
+    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
+        """The proportional deposit the vault accepts for ``offered``.
+
+        ``deltas`` is aligned to the vault's declaration order
+        (``vault.datum_units``). Every reserve must be offered.
+        """
+        order = self.vault.datum_units
+        return constant_sum_pinned_deposit(
+            reserves=[self.reserves.root[u] for u in order],
+            prices=[self.prices[u] for u in order],
+            offered=[offered.root.get(u, 0) for u in order],
+            total_lp=self.total_lp,
+        )
+
+    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
+        """The proportional payout for redeeming ``lp`` LP tokens.
+
+        ``payouts`` is aligned to the vault's declaration order.
+        """
+        order = self.vault.datum_units
+        return constant_sum_pinned_withdraw(
+            reserves=[self.reserves.root[u] for u in order],
+            prices=[self.prices[u] for u in order],
+            lp=lp,
+            total_lp=self.total_lp,
+        )
+
+
+def _void() -> RawPlutusData:
+    """The empty constructor-0 record: the no-op payload and default extension."""
+    return RawPlutusData(CBORTag(121, []))
+
+
+def _none_option() -> RawPlutusData:
+    """An ``Option<Data>`` ``None`` (constructor 1): a bare destination datum."""
+    return RawPlutusData(CBORTag(122, []))
+
+
+def _asset_class(unit: str) -> AssetClass:
+    """The on-chain asset class of a dendrite unit (``lovelace`` is empty/empty)."""
+    if unit == "lovelace":
+        return AssetClass(policy=b"", asset_name=b"")
+    return AssetClass(
+        policy=bytes.fromhex(unit[:56]),
+        asset_name=bytes.fromhex(unit[56:]),
+    )
+
+
+def _asset_amounts(assets: Assets) -> IndefiniteList:
+    """An Aiken ``List<(AssetClass, Int)>`` in canonical (policy, name) order."""
+    ordered = sorted(
+        assets.root.items(),
+        key=lambda item: "" if item[0] == "lovelace" else item[0],
+    )
+    return IndefiniteList(
+        [IndefiniteList([_asset_class(unit), int(amount)]) for unit, amount in ordered],
+    )
+
+
+SundaeV4Vault.model_rebuild()
+SundaeV4ConstantSumPool.model_rebuild()
