@@ -458,5 +458,32 @@ class VyFiCPPState(AbstractConstantProductPoolState):
             if assets["lovelace"] == 0:
                 assets.pop("lovelace")
 
-        assets.root[assets.unit(0)] -= datum.token_a_fees
-        assets.root[assets.unit(1)] -= datum.token_b_fees
+        # Subtract each accumulated fee from the reserve of VyFi's own
+        # a_asset / b_asset (from the pool definition), not the canonical sort
+        # position: VyFi's a/b order need not match the sorted asset order, and
+        # a mismatch lands the fee on the wrong reserve (underflowing negative).
+        pool_def = cls.pools()[values["pool_nft"].unit()]
+        unit_a = (
+            cls._encode_asset(
+                pool_def.json_.a_asset.currency_symbol,
+                pool_def.json_.a_asset.token_name,
+            )
+            or "lovelace"
+        )
+        unit_b = (
+            cls._encode_asset(
+                pool_def.json_.b_asset.currency_symbol,
+                pool_def.json_.b_asset.token_name,
+            )
+            or "lovelace"
+        )
+        fees = {unit_a: datum.token_a_fees, unit_b: datum.token_b_fees}
+        for unit in list(assets.root):
+            assets.root[unit] -= fees.get(unit, 0)
+        for unit, qty in assets.root.items():
+            if qty < 0:
+                msg = (
+                    f"{cls.__name__}: negative reserve after fee "
+                    f"subtraction ({unit}={qty})"
+                )
+                raise NotAPoolError(msg)
