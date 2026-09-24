@@ -14,6 +14,7 @@ import pytest
 from pycardano import Address
 from pycardano import IndefiniteList
 from pycardano import Network
+from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import VerificationKeyHash
@@ -37,11 +38,14 @@ from charli3_dendrite.dexs.amm.sundae_v4 import OutputReference
 from charli3_dendrite.dexs.amm.sundae_v4 import SignedStrategyExecution
 from charli3_dendrite.dexs.amm.sundae_v4 import StrategyConstraint
 from charli3_dendrite.dexs.amm.sundae_v4 import StrategyExecution
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4ConstantSumPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4OrderDatum
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4PoolDatum
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.sundae_v4 import ValidityRange
-from charli3_dendrite.dexs.amm.sundae_v4 import _SundaeV4CSState
 from charli3_dendrite.dexs.amm.sundae_v4 import parse_basic_constraint
+from tests.sundae_v4_vault_factory import build_vault_utxo
 
 FIXTURES = json.loads(
     (Path(__file__).parent / "sundae_v4_auditfinal_fixtures.json").read_text(),
@@ -74,30 +78,29 @@ def _address(payment: str, stake: str) -> Address:
     )
 
 
-def _leg() -> _SundaeV4CSState:
-    """A projected V4 constant-sum leg (only the order builders are exercised)."""
-    return _SundaeV4CSState.model_validate(
-        {
-            "assets": Assets(**{_MINT: 1_000, _STRW: 2_000}),
-            "block_time": 0,
-            "block_index": 0,
-            "plutus_v2": True,
-            "datum_cbor": "00",
-            "datum_hash": "00",
-            "tx_index": 0,
-            "tx_hash": "00",
-        },
+def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
+    """Any live-shaped constant-sum pool; the builders only need the deployment."""
+    SundaeV4Vault.select_network(network)
+    values, config = build_vault_utxo(
+        [("aa" * 28 + "01", 1_000), ("bb" * 28 + "02", 1_000)],
+        prices=[1, 1],
+        total_lp=2_000,
+        network=network,
     )
+    vault = SundaeV4Vault.model_validate(values)
+    cs = SundaeV4Deployment.for_network(network).validator("constant_sum.withdraw")
+    vault.supply_module_config(cs, config)
+    return vault.pools()[0]
 
 
 @pytest.fixture
 def preprod():
     """Point the class family at the preprod deployment for one test."""
-    _SundaeV4CSState.select_network("preprod")
+    SundaeV4Vault.select_network("preprod")
     try:
         yield
     finally:
-        _SundaeV4CSState.select_network("preview")
+        SundaeV4Vault.select_network("preview")
 
 
 # ---------------------------------------------------------------------------
@@ -152,15 +155,23 @@ def test_manifest_has_no_mainnet_deployment_yet() -> None:
 
 
 def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
-    address = Address.decode(_SundaeV4CSState.pool_selector().addresses[0])
+    address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
     assert bytes(address.payment_part).hex().startswith("ae364bd4")
-    order = Address.decode(_SundaeV4CSState.order_selector()[0])
+    order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
     assert bytes(order.payment_part).hex().startswith("2d066c46")
 
 
 def test_class_family_is_back_on_preview_after_the_switch() -> None:
-    address = Address.decode(_SundaeV4CSState.pool_selector().addresses[0])
+    address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
     assert bytes(address.payment_part).hex().startswith("f577d24c")
+
+
+def test_order_builders_delegate_class_family_metadata_to_the_vault() -> None:
+    """The order-builder mixin resolves class-family metadata via the vault."""
+    pool = _pool()
+    assert pool.pool_datum_class() is SundaeV4PoolDatum
+    assert pool.order_datum_class() is SundaeV4OrderDatum
+    assert pool.default_script_class() is PlutusV3Script
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +181,7 @@ def test_class_family_is_back_on_preview_after_the_switch() -> None:
 
 def test_swap_datum_is_byte_exact_with_the_preview_swap() -> None:
     reference = ORDERS["basic swap STRW->MINT (ctor 2, fee-bearing)"]["datum"]
-    built = _leg().swap_datum(
+    built = _pool().swap_datum(
         address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
         in_assets=Assets(**{_STRW: 2_000_000_000}),
         out_assets=Assets(**{_MINT: 990_000_000}),
@@ -183,7 +194,7 @@ def test_swap_datum_is_byte_exact_with_the_preview_swap() -> None:
 
 def test_swap_datum_is_byte_exact_with_the_preprod_swap(preprod) -> None:
     reference = ORDERS["basic swap MINT->STRW (preprod)"]["datum"]
-    built = _leg().swap_datum(
+    built = _pool("preprod").swap_datum(
         address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
         in_assets=Assets(**{_MINT: 500_000_000}),
         out_assets=Assets(**{_STRW: 990_000_000}),
@@ -196,7 +207,7 @@ def test_swap_datum_is_byte_exact_with_the_preprod_swap(preprod) -> None:
 
 def test_swap_datum_offering_lovelace_keys_the_owner_on_the_stake_key() -> None:
     reference = ORDERS["basic swap ADA->STRW (ctor 2, ADA offered, mpe 1 ADA)"]["datum"]
-    built = _leg().swap_datum(
+    built = _pool().swap_datum(
         address_source=_address(_USER_PAYMENT, _USER_STAKE),
         in_assets=Assets(lovelace=100_300_903),
         out_assets=Assets(**{_STRW: 80_000_000}),
@@ -208,7 +219,7 @@ def test_swap_datum_offering_lovelace_keys_the_owner_on_the_stake_key() -> None:
 
 
 def test_swap_datum_defaults_pay_exactly_the_base_fee() -> None:
-    built = _leg().swap_datum(
+    built = _pool().swap_datum(
         address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
         in_assets=Assets(**{_STRW: 1}),
         out_assets=Assets(**{_MINT: 1}),
@@ -217,7 +228,7 @@ def test_swap_datum_defaults_pay_exactly_the_base_fee() -> None:
 
 
 def test_swap_datum_field_shape() -> None:
-    built = _leg().swap_datum(
+    built = _pool().swap_datum(
         address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
         in_assets=Assets(**{_STRW: 2_000_000_000}),
         out_assets=Assets(**{_MINT: 990_000_000}),
@@ -253,7 +264,7 @@ def test_swap_datum_field_shape() -> None:
 
 def test_swap_datum_rejects_more_than_one_asset_per_side() -> None:
     with pytest.raises(ValueError, match="exactly one"):
-        _leg().swap_datum(
+        _pool().swap_datum(
             address_source=_address(_ADMIN_PAYMENT, _ADMIN_STAKE),
             in_assets=Assets(**{_STRW: 1, _MNGO: 1}),
             out_assets=Assets(**{_MINT: 1}),
@@ -267,7 +278,7 @@ def test_swap_datum_rejects_more_than_one_asset_per_side() -> None:
 
 def test_deposit_datum_is_byte_exact_with_the_preview_deposit() -> None:
     reference = ORDERS["basic deposit MNGO+STRW -> LP (ctor 0)"]["datum"]
-    built = _leg().deposit_datum(
+    built = _pool().deposit_datum(
         address_source=_address(_USER_PAYMENT, _USER_STAKE),
         offered=Assets(**{_MNGO: 100_000_000, _STRW: 100_000_000}),
         min_lp=Assets(**{_MNGO_STRW_LP: 190_520_397}),
@@ -287,7 +298,7 @@ def test_deposit_datum_is_byte_exact_with_the_preview_deposit() -> None:
 
 
 def _strategy() -> SundaeV4OrderDatum:
-    return _leg().strategy_datum(
+    return _pool().strategy_datum(
         address_source=_address(_USER_PAYMENT, _USER_STAKE),
         auth=MultisigSignature(key_hash=bytes.fromhex(_ADMIN_PAYMENT)),
         final_destinations=[_address(_USER_PAYMENT, _USER_STAKE)],
@@ -353,19 +364,34 @@ def test_signed_strategy_execution_round_trips() -> None:
 
 
 def test_cancel_redeemer_is_owner_cancel() -> None:
-    redeemer = _SundaeV4CSState.cancel_redeemer()
+    redeemer = SundaeV4ConstantSumPool.cancel_redeemer()
     assert isinstance(redeemer, Redeemer)
     assert isinstance(redeemer.data, OrderCancel)
     assert redeemer.data.to_cbor_hex() == "d87980"
 
 
 def test_order_owner_prefers_the_stake_key_and_falls_back_to_payment() -> None:
-    with_stake = _SundaeV4CSState.order_owner(_address(_USER_PAYMENT, _USER_STAKE))
+    with_stake = SundaeV4ConstantSumPool.order_owner(
+        _address(_USER_PAYMENT, _USER_STAKE)
+    )
     assert with_stake == MultisigSignature(key_hash=bytes.fromhex(_USER_STAKE))
     enterprise = Address(
         payment_part=VerificationKeyHash(bytes.fromhex(_USER_PAYMENT)),
         network=Network.TESTNET,
     )
-    assert _SundaeV4CSState.order_owner(enterprise) == MultisigSignature(
+    assert SundaeV4ConstantSumPool.order_owner(enterprise) == MultisigSignature(
         key_hash=bytes.fromhex(_USER_PAYMENT)
     )
+
+
+def test_swap_utxo_locks_input_plus_fee_plus_rider_at_the_order_address() -> None:
+    pool = _pool()
+    source = _address(_ADMIN_PAYMENT, _ADMIN_STAKE)
+    output, datum = pool.swap_utxo(
+        address_source=source,
+        in_assets=Assets(**{"aa" * 28 + "01": 5_000}),
+        out_assets=Assets(**{"bb" * 28 + "02": 4_900}),
+    )
+    assert output.address == pool.stake_address
+    assert output.amount.coin == pool.vault.deployment().base_fee + 2_000_000
+    assert output.datum == datum

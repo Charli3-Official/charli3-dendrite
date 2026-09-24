@@ -22,6 +22,7 @@ from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dataclasses.models import SwapTransactionList
 
@@ -50,6 +51,8 @@ class OgmiosKupoBackend(AbstractBackend):
             ogmios_url (str): URL for the Ogmios service.
             kupo_url (str): URL for the Kupo service.
             network (Network): The Cardano network to use.
+            path (str): URL path segment appended after the host:port when
+                building the Ogmios websocket connection string.
         """
         _, ws_string = ogmios_url.split("ws://")
         self.ws_url, self.port = ws_string.split(":")
@@ -477,6 +480,15 @@ class OgmiosKupoBackend(AbstractBackend):
                         script=None,
                     )
         return None
+
+    def get_redeemers(self, tx_hash: str) -> list[RedeemerRecord]:
+        """Kupo indexes outputs, not redeemers.
+
+        Raises:
+            NotImplementedError: always.
+        """
+        msg = "The Ogmios/Kupo backend has no redeemer index."
+        raise NotImplementedError(msg)
 
     def get_axo_target(
         self,
