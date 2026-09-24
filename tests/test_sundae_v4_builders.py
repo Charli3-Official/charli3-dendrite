@@ -23,12 +23,14 @@ from pycardano.serialization import CBORTag
 from charli3_dendrite.backend import set_backend
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicConstraintKind
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicDeposit
 from charli3_dendrite.dexs.amm.sundae_v4 import BasicSwap
 from charli3_dendrite.dexs.amm.sundae_v4 import BoolTrue
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationFixed
 from charli3_dendrite.dexs.amm.sundae_v4 import DestinationSelf
+from charli3_dendrite.dexs.amm.sundae_v4 import FeeSettings
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBound
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundFinite
 from charli3_dendrite.dexs.amm.sundae_v4 import IntervalBoundPositiveInfinity
@@ -95,17 +97,36 @@ def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
     return vault.pools()[0]
 
 
-class _NoFeeSettingsBackend(_Minimal):
-    """A backend that cannot serve the fee-settings datum.
+# The base fee in effect on preview/preprod when the audit-final fixtures were
+# captured. The manifest snapshot has since been refreshed to the current
+# on-chain value (1_280_000), so a builder's *defaulted* fee fields need this
+# value served explicitly to stay byte-exact against those recorded orders.
+_FEE_AT_CAPTURE = 1_000_000
 
-    Installed for every test so a builder's defaulted fee fields fall back to
-    the deterministic manifest snapshot the fixtures were captured under,
-    rather than depending on whatever backend the environment configures.
+
+class _FixedFeeSettingsBackend(_Minimal):
+    """Serves a fee-settings datum fixed at ``_FEE_AT_CAPTURE``.
+
+    Installed for every test so a builder's defaulted fee fields resolve
+    deterministically to the fee the fixtures were captured under, regardless
+    of the deployment manifest's current (possibly different) snapshot.
     """
 
-    def get_datum_from_address(self, *a, **k):  # noqa: ANN002, ANN003, ANN201
-        """Refuse to serve any datum, forcing the manifest-fallback path."""
-        raise NotImplementedError
+    def get_datum_from_address(
+        self,
+        address,  # noqa: ANN001
+        asset=None,  # noqa: ANN001
+    ) -> ScriptReference:
+        """Serve a ``FeeSettings(base_fee=_FEE_AT_CAPTURE)`` datum unconditionally."""
+        return ScriptReference(
+            tx_hash=None,
+            tx_index=None,
+            address=None,
+            assets=None,
+            datum_hash=None,
+            datum_cbor=FeeSettings(base_fee=_FEE_AT_CAPTURE).to_cbor_hex(),
+            script=None,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -115,12 +136,12 @@ def _restore_default_network():
     Every test in this module (directly or via ``_pool()``) may point the class
     family at a testnet deployment; this restores mainnet regardless of outcome
     so no test's network choice can leak into the next. It also clears the
-    base-fee cache and installs a backend that cannot serve the fee-settings
-    datum, so every byte-exact builder assertion stays keyed to the manifest
-    fee the fixtures were captured under.
+    base-fee cache and installs a backend fixed at ``_FEE_AT_CAPTURE``, so every
+    byte-exact builder assertion stays keyed to the fee the fixtures were
+    captured under, independent of the deployment manifest's current snapshot.
     """
     SundaeV4Vault.clear_base_fee_cache()
-    set_backend(_NoFeeSettingsBackend())
+    set_backend(_FixedFeeSettingsBackend())
     try:
         yield
     finally:
@@ -177,7 +198,7 @@ def test_manifest_resolves_the_preview_deployment() -> None:
         deployment.strategy_config_token.hex()
         == "00e3317090f21164a1042f9a5d0aa07d585d7fdf6e4439788955c2384d844078"
     )
-    assert deployment.base_fee == 1_000_000
+    assert deployment.base_fee == 1_280_000
     assert deployment.reference("order.spend") == (
         "cfd46884fdf1b6b2a91feb6ad7252f950e5dad80ad83b2939954795c093925da",
         0,
@@ -275,7 +296,7 @@ def test_swap_datum_defaults_pay_exactly_the_base_fee() -> None:
         in_assets=Assets(**{_STRW: 1}),
         out_assets=Assets(**{_MINT: 1}),
     )
-    assert built.service_budget == built.max_per_execution == 1_000_000
+    assert built.service_budget == built.max_per_execution == _FEE_AT_CAPTURE
 
 
 def test_swap_datum_field_shape() -> None:
@@ -444,5 +465,7 @@ def test_swap_utxo_locks_input_plus_fee_plus_rider_at_the_order_address() -> Non
         out_assets=Assets(**{"bb" * 28 + "02": 4_900}),
     )
     assert output.address == pool.stake_address
-    assert output.amount.coin == pool.vault.deployment().base_fee + 2_000_000
+    # The live fee (this module's backend fixes it at _FEE_AT_CAPTURE), not the
+    # deployment manifest snapshot, is what swap_utxo's coin is built from.
+    assert output.amount.coin == _FEE_AT_CAPTURE + 2_000_000
     assert output.datum == datum

@@ -192,3 +192,27 @@ def test_base_fee_falls_back_value_is_also_cached_within_the_ttl() -> None:
     assert SundaeV4Vault.base_fee() == manifest
     assert SundaeV4Vault.base_fee() == manifest
     assert len(backend.calls) == 1
+
+
+@pytest.mark.parametrize("network", ["preview", "preprod"])
+def test_base_fee_resolves_live_on_testnets_now_that_the_manifest_has_a_token(
+    network: str,
+) -> None:
+    """preview/preprod now carry a fee-settings token, so the live read is taken.
+
+    Before the manifest recorded a ``fee-settings`` token for these networks,
+    ``fee_settings_unit`` raised ``KeyError`` before the backend was ever
+    called, so the result was always the manifest snapshot. With the token
+    recorded, the backend is actually queried (``backend.calls`` is non-empty
+    below), which is the live path, not the fallback.
+    """
+    SundaeV4Vault.select_network(network)
+    deployment = SundaeV4Deployment.for_network(network)
+    backend = _FeeSettingsBackend(FeeSettings(base_fee=1_280_000).to_cbor_hex())
+    set_backend(backend)
+
+    assert SundaeV4Vault.base_fee() == 1_280_000
+    expected_unit = (
+        deployment.settings_policy.hex() + deployment.settings["fee-settings"]["token"]
+    )
+    assert backend.calls == [(deployment.settings_address, expected_unit)]

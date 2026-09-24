@@ -82,9 +82,10 @@
         "index": 0
       },
       "fee-settings": {
-        "tx_hash": "d22197886d63413f131c68a6687a90d7d5772b842584e6c1e407b10046c0d709",
+        "tx_hash": "d9f8a3f4f66565ce81031d5fedeea0ba741c8833223741f06b1ee7970a67ac95",
         "index": 0,
-        "base_fee": 1000000,
+        "token": "007e873372b3f5f3f8c6c70866acdf2644e7c9af64fa6aa4cff3ff094b417264",
+        "base_fee": 1280000,
         "fee_per_step": 0
       },
       "basic-order": {
@@ -186,9 +187,10 @@
         "index": 0
       },
       "fee-settings": {
-        "tx_hash": "73fce38547c8f8d8724c72886562e66245940c0e92344b96444a620804987b63",
+        "tx_hash": "020c28f4669e881499d21af8269eac57293d983317048062925e2b7309f0d569",
         "index": 0,
-        "base_fee": 1000000,
+        "token": "00c319c0435c4eaf30da4efe0251c9e715766d90840582a64969f10350222b3e",
+        "base_fee": 1280000,
         "fee_per_step": 0
       },
       "basic-order": {
