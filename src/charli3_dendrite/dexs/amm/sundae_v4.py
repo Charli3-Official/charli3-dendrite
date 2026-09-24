@@ -1584,7 +1584,7 @@ class SundaeV4Vault(DendriteBaseModel):
     module_configs: dict[bytes, Any] = Field(default_factory=dict)
 
     _deployment: ClassVar[SundaeV4Deployment] = SundaeV4Deployment.for_network(
-        "preview",
+        "mainnet",
     )
     _config_cache: ClassVar[dict[bytes, Any]] = {}
     _datum: SundaeV4PoolDatum | None = PrivateAttr(default=None)

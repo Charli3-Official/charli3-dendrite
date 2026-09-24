@@ -13,15 +13,14 @@ constant-sum binding; each quotes with explicit units:
 from charli3_dendrite import SundaeV4Vault
 from charli3_dendrite.dataclasses.models import Assets
 
-SundaeV4Vault.select_network("preview")
 vault = SundaeV4Vault.model_validate(utxo.model_dump())   # a PoolStateInfo
 pool = vault.pools()[0]
 out, impact = pool.get_amount_out(Assets(**{unit_in: 1_000_000}), unit_out)
 ```
 
-V4 is deployed on `mainnet`, `preprod` and `preview`; `SundaeV4Vault.select_network("mainnet")`
-points the class family at the mainnet deployment the same way `"preview"` and
-`"preprod"` do.
+V4 is deployed on `mainnet`, `preprod` and `preview`; the class family targets
+`mainnet` by default, and `SundaeV4Vault.select_network("preview")` points it at
+a testnet deployment the same way `"preprod"` does.
 
 Module configs are committed by hash in the datum. They resolve from a
 caller-supplied preimage (`module_configs=` at construction or

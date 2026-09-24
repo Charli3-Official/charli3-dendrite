@@ -51,13 +51,13 @@ _SETTINGS_CLASSES: dict[str, type] = {
 
 @pytest.fixture(autouse=True)
 def _mainnet():  # noqa: ANN201
-    """Point the class family at mainnet for each test, restoring preview after."""
+    """Point the class family at mainnet for each test, restoring it after."""
     SundaeV4Vault.select_network("mainnet")
     SundaeV4Vault.clear_config_cache()
     try:
         yield
     finally:
-        SundaeV4Vault.select_network("preview")
+        SundaeV4Vault.select_network("mainnet")
         SundaeV4Vault.clear_config_cache()
 
 

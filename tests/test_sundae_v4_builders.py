@@ -93,6 +93,20 @@ def _pool(network: str = "preview") -> SundaeV4ConstantSumPool:
     return vault.pools()[0]
 
 
+@pytest.fixture(autouse=True)
+def _restore_default_network():
+    """Guarantee the class family is back on the mainnet default after each test.
+
+    Every test in this module (directly or via ``_pool()``) may point the class
+    family at a testnet deployment; this restores it regardless of outcome so no
+    test's network choice can leak into the next.
+    """
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
+
+
 @pytest.fixture
 def preprod():
     """Point the class family at the preprod deployment for one test."""
@@ -100,7 +114,7 @@ def preprod():
     try:
         yield
     finally:
-        SundaeV4Vault.select_network("preview")
+        SundaeV4Vault.select_network("mainnet")
 
 
 # ---------------------------------------------------------------------------
@@ -160,23 +174,26 @@ def test_manifest_resolves_the_mainnet_deployment() -> None:
     assert deployment.config_token("cs-pool") != deployment.config_token("cs-pool#2")
 
 
-def test_class_family_defaults_to_preview_and_can_switch(preprod) -> None:
+def test_class_family_defaults_to_mainnet_and_can_switch() -> None:
+    mainnet = SundaeV4Deployment.for_network("mainnet")
     address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
-    assert bytes(address.payment_part).hex().startswith("ae364bd4")
+    assert address.payment_part == mainnet.pool_address.payment_part
     order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
-    assert bytes(order.payment_part).hex().startswith("2d066c46")
+    assert order.payment_part == mainnet.order_address.payment_part
+
+    SundaeV4Vault.select_network("preview")
+    preview = SundaeV4Deployment.for_network("preview")
+    preview_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert preview_pool.payment_part == preview.pool_address.payment_part
+
+    SundaeV4Vault.select_network("preprod")
+    preprod = SundaeV4Deployment.for_network("preprod")
+    preprod_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert preprod_pool.payment_part == preprod.pool_address.payment_part
 
     SundaeV4Vault.select_network("mainnet")
-    mainnet = SundaeV4Deployment.for_network("mainnet")
-    mainnet_pool = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
-    assert mainnet_pool.payment_part == mainnet.pool_address.payment_part
-    mainnet_order = Address.decode(SundaeV4ConstantSumPool.order_selector()[0])
-    assert mainnet_order.payment_part == mainnet.order_address.payment_part
-
-
-def test_class_family_is_back_on_preview_after_the_switch() -> None:
-    address = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
-    assert bytes(address.payment_part).hex().startswith("f577d24c")
+    back = Address.decode(SundaeV4ConstantSumPool.pool_selector().addresses[0])
+    assert back.payment_part == mainnet.pool_address.payment_part
 
 
 def test_order_builders_delegate_class_family_metadata_to_the_vault() -> None:

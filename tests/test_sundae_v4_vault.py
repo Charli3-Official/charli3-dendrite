@@ -39,8 +39,13 @@ def _unit(entry: list) -> str:
 
 
 @pytest.fixture(autouse=True)
-def _preview() -> None:
+def _preview():  # noqa: ANN201
+    """Point the class family at preview for each test, restoring mainnet after."""
     SundaeV4Vault.select_network("preview")
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
 
 
 def _vault(rec: dict) -> SundaeV4Vault:

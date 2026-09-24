@@ -18,6 +18,19 @@ _SWAPS = json.loads(
 )["swaps"]
 
 
+@pytest.fixture(autouse=True)
+def _restore_default_network():
+    """Guarantee the class family is back on the mainnet default after each test.
+
+    ``_pool()`` points the class family at preview for the recorded replay; this
+    restores it regardless of outcome so it cannot leak into the next test.
+    """
+    try:
+        yield
+    finally:
+        SundaeV4Vault.select_network("mainnet")
+
+
 def _unit(raw: str) -> str:
     """The dendrite unit for a fixture's on-chain unit string (``""`` is ADA)."""
     return raw or "lovelace"
