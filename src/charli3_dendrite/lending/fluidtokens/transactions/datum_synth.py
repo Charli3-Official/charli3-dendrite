@@ -14,30 +14,17 @@ from dataclasses import dataclass
 from pycardano import Datum
 from pycardano import PlutusData
 
+from charli3_dendrite.lending.fluidtokens.datums import ORIGIN_POOL_TAG
+from charli3_dendrite.lending.fluidtokens.datums import ORIGIN_REQUEST_TAG
 from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
 from charli3_dendrite.lending.fluidtokens.datums import CommonData
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
-
-# Origin-id tag a pool-origin loan datum carries: the loan's ``origin_id`` is this tag
-# followed by the originating pool's NFT asset name (`b"POOL" + pool_id`).
-ORIGIN_POOL_TAG = b"POOL"
-
-# Origin-id tag a request-origin loan datum carries: ``b"REQUEST" + request_id``.
-ORIGIN_REQUEST_TAG = b"REQUEST"
+from charli3_dendrite.lending.fluidtokens.datums import TxOutRef
 
 # The receipt's tag bytestring identifying an installment repayment.
 INSTALLMENT_REPAYMENT_TAG = b"installment_repayment"
-
-
-@dataclass
-class TxOutRef(PlutusData):
-    """A transaction output reference == Constr0([tx_id_bytes, index])."""
-
-    CONSTR_ID = 0
-    tx_id: bytes
-    index: int
 
 
 @dataclass

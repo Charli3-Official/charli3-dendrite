@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import cbor2  # type: ignore[import-not-found]
+from pycardano import Address
+from pycardano import Network
 from pycardano import RawPlutusData
+from pycardano import ScriptHash
 
 # CBOR constructor tags map to Plutus alternative indices: tags 121..127 cover
 # alts 0..6; tags 1280+ cover alts 7+ (alt = tag - 1280 + 7). The general form
@@ -20,6 +23,18 @@ def asset_unit(policy: bytes, name: bytes) -> str:
     if not policy and not name:
         return "lovelace"
     return policy.hex() + name.hex()
+
+
+def script_payment_address(script_hash_hex: str) -> str:
+    """Mainnet enterprise address whose payment credential is ``script_hash_hex``.
+
+    Protocol UTxOs sit at base addresses whose stake part varies per user, but backends
+    discover UTxOs by payment credential only, so this address is a stable selector.
+    """
+    return Address(
+        payment_part=ScriptHash(bytes.fromhex(script_hash_hex)),
+        network=Network.MAINNET,
+    ).encode()
 
 
 def constr_alt(tag: int) -> int:

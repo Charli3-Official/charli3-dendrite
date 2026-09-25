@@ -336,11 +336,18 @@ class FluidRequestState(DendriteBaseModel):
 
     _request_datum_parsed: RequestDatum | None = PrivateAttr(default=None)
 
+    @classmethod
+    def request_datum_class(cls) -> type[RequestDatum]:
+        """Request datum type."""
+        return RequestDatum
+
     @property
     def request_datum(self) -> RequestDatum:
         """Parsed request datum (lazily decoded from CBOR)."""
         if self._request_datum_parsed is None:
-            self._request_datum_parsed = RequestDatum.from_cbor(self.datum_cbor)
+            self._request_datum_parsed = self.request_datum_class().from_cbor(
+                self.datum_cbor,
+            )
         return self._request_datum_parsed
 
     @property

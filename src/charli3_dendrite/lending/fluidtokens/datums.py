@@ -1,19 +1,38 @@
-"""pycardano mirrors of the deployed FluidTokens V3 datums (mainnet)."""
+"""pycardano mirrors of the deployed FluidTokens V3 datums (mainnet).
+
+Every class decodes strictly: a constructor with more or fewer fields than the class
+raises ``DeserializeException`` instead of decoding a different layout silently.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List
 from typing import TypeAlias
+from typing import Union
 
 from pycardano import Datum
 from pycardano import IndefiniteList
-from pycardano import PlutusData
 
+from charli3_dendrite.lending.plutus import StrictPlutusData
 from charli3_dendrite.lending.units import asset_unit
+
+# A loan datum's ``origin_id`` is one of these tags followed by the originating pool's
+# or request's NFT asset name.
+ORIGIN_POOL_TAG = b"POOL"
+ORIGIN_REQUEST_TAG = b"REQUEST"
 
 
 @dataclass
-class Asset(PlutusData):
+class TxOutRef(StrictPlutusData):
+    """A transaction output reference == Constr0([tx_id_bytes, index])."""
+
+    CONSTR_ID = 0
+    tx_id: bytes
+    index: int
+
+
+@dataclass
+class Asset(StrictPlutusData):
     """(policy_id, asset_name) as a `Constr`; ADA is (b"", b"")."""
 
     CONSTR_ID = 0
@@ -26,7 +45,7 @@ class Asset(PlutusData):
 
 
 @dataclass
-class CollateralAsset(PlutusData):
+class CollateralAsset(StrictPlutusData):
     """A collateral type: policy, optional asset name, and its oracle token."""
 
     CONSTR_ID = 0
@@ -36,21 +55,21 @@ class CollateralAsset(PlutusData):
 
 
 @dataclass
-class NoLiquidationFullCollateralClaim(PlutusData):
+class NoLiquidationFullCollateralClaim(StrictPlutusData):
     """LiquidationMode variant: on default the lender claims all collateral."""
 
     CONSTR_ID = 0
 
 
 @dataclass
-class NoLiquidationDutchAuctionClaim(PlutusData):
+class NoLiquidationDutchAuctionClaim(StrictPlutusData):
     """LiquidationMode variant: on default the collateral is dutch-auctioned."""
 
     CONSTR_ID = 1
 
 
 @dataclass
-class Liquidation(PlutusData):
+class Liquidation(StrictPlutusData):
     """LiquidationMode variant: liquidate against a loan-to-value threshold.
 
     Three fields, matching the deployed datum and `ft-cardano-loans-v3` lib
@@ -67,7 +86,7 @@ class Liquidation(PlutusData):
 
 
 @dataclass
-class InterestOnRemainingPrincipal(PlutusData):
+class InterestOnRemainingPrincipal(StrictPlutusData):
     """RepaymentMode variant: interest accrues on the remaining principal."""
 
     CONSTR_ID = 0
@@ -75,14 +94,14 @@ class InterestOnRemainingPrincipal(PlutusData):
 
 
 @dataclass
-class PrincipalAndInterestOnInstallments(PlutusData):
+class PrincipalAndInterestOnInstallments(StrictPlutusData):
     """RepaymentMode variant: principal and interest split across installments."""
 
     CONSTR_ID = 1
 
 
 @dataclass
-class PerpetualLoan(PlutusData):
+class PerpetualLoan(StrictPlutusData):
     """RepaymentMode variant: perpetual loan with a linear APY increase."""
 
     CONSTR_ID = 2
@@ -90,13 +109,18 @@ class PerpetualLoan(PlutusData):
     max_possible_recasts: int
 
 
-# Unions; parse via from_primitive dispatch where needed.
-LiquidationMode: TypeAlias = Datum
+# LiquidationMode is typed so a constructor with another layout (such as the V4
+# four-field Liquidation) fails to decode. RepaymentMode stays an untyped Datum.
+LiquidationMode: TypeAlias = Union[
+    NoLiquidationFullCollateralClaim,
+    NoLiquidationDutchAuctionClaim,
+    Liquidation,
+]
 RepaymentMode: TypeAlias = Datum
 
 
 @dataclass
-class CommonData(PlutusData):
+class CommonData(StrictPlutusData):
     """Loan terms shared by pool, request, and loan datums."""
 
     CONSTR_ID = 0
@@ -114,7 +138,7 @@ class CommonData(PlutusData):
 
 
 @dataclass
-class AuthCardanoSignature(PlutusData):
+class AuthCardanoSignature(StrictPlutusData):
     """AuthorizationMethod variant: authorize by a verification-key hash."""
 
     CONSTR_ID = 0
@@ -122,7 +146,7 @@ class AuthCardanoSignature(PlutusData):
 
 
 @dataclass
-class AuthCardanoSpendScript(PlutusData):
+class AuthCardanoSpendScript(StrictPlutusData):
     """AuthorizationMethod variant: authorize by a spending script hash."""
 
     CONSTR_ID = 1
@@ -130,7 +154,7 @@ class AuthCardanoSpendScript(PlutusData):
 
 
 @dataclass
-class AuthCardanoWithdrawScript(PlutusData):
+class AuthCardanoWithdrawScript(StrictPlutusData):
     """AuthorizationMethod variant: authorize by a withdrawal script hash."""
 
     CONSTR_ID = 2
@@ -138,7 +162,7 @@ class AuthCardanoWithdrawScript(PlutusData):
 
 
 @dataclass
-class AuthCardanoMintScript(PlutusData):
+class AuthCardanoMintScript(StrictPlutusData):
     """AuthorizationMethod variant: authorize by a minting script hash."""
 
     CONSTR_ID = 3
@@ -146,7 +170,7 @@ class AuthCardanoMintScript(PlutusData):
 
 
 @dataclass
-class PoolDatum(PlutusData):
+class PoolDatum(StrictPlutusData):
     """Deployed PoolDatum — Constr0, 10 fields.
 
     ``collateral_options``, ``min_collateral``, and ``min_collateral_divider`` follow
@@ -190,7 +214,7 @@ class PoolDatum(PlutusData):
 
 
 @dataclass
-class LoanDatum(PlutusData):
+class LoanDatum(StrictPlutusData):
     """Deployed LoanDatum — Constr0, 17 fields."""
 
     CONSTR_ID = 0
@@ -214,7 +238,7 @@ class LoanDatum(PlutusData):
 
 
 @dataclass
-class RequestDatum(PlutusData):
+class RequestDatum(StrictPlutusData):
     """Deployed RequestDatum — Constr0, 12 fields."""
 
     CONSTR_ID = 0
