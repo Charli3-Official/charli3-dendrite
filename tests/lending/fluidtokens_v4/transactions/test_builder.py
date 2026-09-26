@@ -20,6 +20,16 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.builder import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral import (
     ChangeCollateralSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
+    PoolCancelSnapshot,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_create import (
+    PoolCreateSnapshot,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_edit import PoolEdit
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_edit import (
+    PoolEditSnapshot,
+)
 from charli3_dendrite.lending.fluidtokens_v4.transactions.recast import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens_v4.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.registry import get_lending_builder
@@ -41,6 +51,9 @@ def test_registered_as_fluidtokens_v4() -> None:
         LendingAction.REPAY,
         LendingAction.MODIFY_COLLATERAL,
         LendingAction.RECAST,
+        LendingAction.POOL_CREATE,
+        LendingAction.POOL_EDIT,
+        LendingAction.POOL_CANCEL,
     }
 
 
@@ -54,6 +67,9 @@ def test_registered_as_fluidtokens_v4() -> None:
             ChangeCollateralSnapshot,
             "change_collateral_single",
         ),
+        (LendingAction.POOL_CREATE, PoolCreateSnapshot, "pool_create"),
+        (LendingAction.POOL_EDIT, PoolEditSnapshot, "pool_edit"),
+        (LendingAction.POOL_CANCEL, PoolCancelSnapshot, "pool_cancel"),
     ],
 )
 def test_contribute_builds_the_action(
@@ -139,6 +155,37 @@ def test_resolve_recast_pays_the_amount(monkeypatch: pytest.MonkeyPatch) -> None
     calls = _record(monkeypatch, RecastSnapshot)
     _resolve(LendingAction.RECAST, loan_utxo=f"{_REF}#0", amount=7)
     assert calls == {"recasts": [((_REF, 0), 7)], "borrower_address": _WALLET}
+
+
+def test_resolve_pool_edit_moves_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch, PoolEditSnapshot)
+    _resolve(LendingAction.POOL_EDIT, loan_utxo=f"{_REF}#0", amount=-5)
+    assert calls == {
+        "edits": [PoolEdit((_REF, 0), principal_change=-5)],
+        "lender_address": _WALLET,
+    }
+
+
+def test_resolve_pool_edit_needs_a_principal_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record(monkeypatch, PoolEditSnapshot)
+    with pytest.raises(ValueError, match="params.amount must be non-zero"):
+        _resolve(LendingAction.POOL_EDIT, loan_utxo=f"{_REF}#0")
+    assert calls == {}
+
+
+def test_resolve_pool_cancel_cancels_the_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch, PoolCancelSnapshot)
+    _resolve(LendingAction.POOL_CANCEL, loan_utxo=f"{_REF}#2")
+    assert calls == {"pools": [(_REF, 2)], "lender_address": _WALLET}
+    with pytest.raises(ValueError, match="must name the pool"):
+        _resolve(LendingAction.POOL_CANCEL)
+
+
+def test_resolve_pool_create_points_to_the_snapshot() -> None:
+    with pytest.raises(ValueError, match="PoolCreateSnapshot.from_backend"):
+        _resolve(LendingAction.POOL_CREATE)
 
 
 def test_resolve_needs_the_loan(monkeypatch: pytest.MonkeyPatch) -> None:
