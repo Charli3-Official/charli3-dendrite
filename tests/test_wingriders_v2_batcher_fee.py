@@ -16,6 +16,7 @@ TARGET = Address.from_primitive(
     "addr1q9ld26v2lv8wvrxxmvg90pn8n8n5k6tdst06q2s856rwmvnueldzuuqmnsye359fqrk8hwvenjnqultn7djtrlft7jnq7dy7wv",
 )
 FOUR_ADA = 4_000_000
+STANDARD_OIL = 2_000_000
 TOP_TIER_FEE = 2_000_000
 TIERS = [
     (1_000_000, 850_000),
@@ -72,15 +73,12 @@ def test_token_to_token_order_pays_the_top_tier() -> None:
     assert fee == TOP_TIER_FEE
 
 
-@pytest.mark.parametrize(("lovelace", "fee"), TIERS)
-def test_forwarded_order_passes_on_what_the_batcher_does_not_keep(
-    lovelace: int,
-    fee: int,
-) -> None:
-    """A forwarded order's oil is the attachment minus the fee the batcher keeps."""
-    pool = WingRidersV2CPPState.model_construct()
-    in_assets, out_assets = Assets(lovelace=lovelace), Assets(root={TOKEN: 1})
-    datum = WingRidersV2OrderDatum.create_datum(
+def _forwarded_datum(
+    pool: WingRidersV2CPPState,
+    in_assets: Assets,
+    out_assets: Assets,
+) -> WingRidersV2OrderDatum:
+    return WingRidersV2OrderDatum.create_datum(
         address_source=SOURCE,
         in_assets=in_assets,
         out_assets=out_assets,
@@ -88,7 +86,26 @@ def test_forwarded_order_passes_on_what_the_batcher_does_not_keep(
         deposit=pool.deposit(in_assets=in_assets, out_assets=out_assets),
         address_target=TARGET,
     )
-    assert datum.oil == FOUR_ADA - fee
+
+
+@pytest.mark.parametrize("lovelace", [lovelace for lovelace, _ in TIERS])
+def test_forwarded_ada_order_keeps_two_ada_of_oil(lovelace: int) -> None:
+    """The batcher swaps the order's ADA less oil and the 2 ADA agent fee.
+
+    Oil above 2 ADA would come out of the swap, so a forwarded order keeps 2 ADA of
+    oil at every tier; the fee the batcher does not keep reaches the target anyway.
+    """
+    pool = WingRidersV2CPPState.model_construct()
+    in_assets, out_assets = Assets(lovelace=lovelace), Assets(root={TOKEN: 1})
+    assert _forwarded_datum(pool, in_assets, out_assets).oil == STANDARD_OIL
+
+
+def test_forwarded_token_order_carries_its_whole_deposit_as_oil() -> None:
+    """With no ADA swapped, everything attached above the agent fee is oil."""
+    pool = WingRidersV2CPPState.model_construct()
+    pool._deposit = Assets(lovelace=5_000_000)
+    in_assets, out_assets = Assets(root={TOKEN: 1}), Assets(root={OTHER: 1})
+    assert _forwarded_datum(pool, in_assets, out_assets).oil == 5_000_000
 
 
 def test_fee_without_order_assets_is_the_top_tier() -> None:

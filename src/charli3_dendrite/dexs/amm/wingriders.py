@@ -308,6 +308,10 @@ class WithdrawProtocolAction(PlutusData):
     CONSTR_ID = 4
 
 
+# Every WingRiders V2 order attaches this agent fee (the pools' ``agent_fee_ada``).
+_V2_AGENT_FEE_LOVELACE = 2_000_000
+
+
 @dataclass
 class WingRidersV2OrderDatum(OrderDatum):
     """WingRiders order datum."""
@@ -388,11 +392,18 @@ class WingRidersV2OrderDatum(OrderDatum):
             compensation_datum = b""
             compensation_datum_type = NoDatum()
 
-        # ``oil`` declares the lovelace the batcher passes through to the beneficiary
-        # (it swaps the rest). A forwarded order must ride the full deposit through to
-        # fund the next hop, so oil follows ``deposit``; a plain owner-paid swap keeps
-        # the standard 2-ADA buffer.
-        oil = deposit.quantity() if address_target is not None else 2000000
+        # ``oil`` declares the lovelace the batcher passes through to the beneficiary.
+        # The batcher swaps the order's ADA less ``oil`` and the flat agent fee, keeps
+        # its tiered fee out of the agent fee and returns the rest of it with the
+        # swap output. So a forwarded order's oil is what it attaches above the agent
+        # fee: 2 ADA when ADA is swapped (oil above that would come out of the swap),
+        # the whole cascaded deposit on a token-to-token order. A plain owner-paid
+        # swap keeps the standard 2-ADA buffer.
+        oil = (
+            batcher_fee.quantity() + deposit.quantity() - _V2_AGENT_FEE_LOVELACE
+            if address_target is not None
+            else 2000000
+        )
 
         return WingRidersV2OrderDatum(
             oil=oil,
