@@ -84,8 +84,9 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
 
         - BORROW: ``loan_utxo`` is the pool, ``borrow_amount`` the principal and
           ``collateral`` the one ``{unit: amount}`` to lock (``0`` locks the least
-          the pool accepts; empty uses the first option). The collateral's signed
-          price is fetched from the FluidTokens registry.
+          the pool accepts; empty uses the first option; ADA is ``"lovelace"``).
+          The signed prices the pool reads (collateral and principal, except ADA)
+          are fetched from the FluidTokens registry.
         - REPAY: ``loan_utxo`` is the loan; it repays in full where the loan allows,
           else its next installment, at the exact amount due (``amount`` must be 0:
           the amount is computed, not chosen).

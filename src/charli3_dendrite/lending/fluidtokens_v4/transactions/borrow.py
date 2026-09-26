@@ -5,7 +5,8 @@ address with the same datum and its principal reduced; a loan UTxO is created at
 loan spend script under the borrower's stake credential; and the loan NFT, the lender
 bond and the borrower bond are minted, all named after the hash of the spent pool
 out-ref. One pool dispatch withdraw and one borrow-action withdraw (one entry per
-leg) carry the checks, and each oracle-priced collateral adds its signed oracle
+leg) carry the checks. An oracle-priced pool prices both the collateral and the
+principal, each ADA side 1:1 and every other through its token's signed oracle
 withdraw.
 
 The pool validator reads the continuing pool of the i-th spent pool from output ``i``,
@@ -125,11 +126,13 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
         FluidTokensProviderClient,
     )
+    from charli3_dendrite.lending.fluidtokens_v4.datums import Asset as DatumAsset
 
-# An ADA principal is priced 1:1 without reading its oracle reference input, and a
-# permissionless pool ignores the permissioned-condition withdraw index; FluidTokens'
-# own transactions carry these placeholder values.
-PRINCIPAL_ORACLE_PLACEHOLDER = 0
+# An ADA side (principal or collateral) is priced 1:1 without reading its oracle
+# reference input, though its index must still name one, and a permissionless pool
+# ignores the permissioned-condition withdraw index; FluidTokens' own transactions
+# carry these placeholder values.
+ADA_ORACLE_PLACEHOLDER = 0
 PERMISSIONLESS_WITHDRAW_PLACEHOLDER = 1
 
 _BOOL_TRUE = 1
@@ -185,14 +188,38 @@ class BorrowLeg:
         return option_unit(self.pool_datum, self.chosen_collateral_index)
 
     @property
-    def is_oracle_priced(self) -> bool:
-        """True if the pool re-prices the collateral through its oracle."""
-        return constr(self.pool_datum.dynamic_collateral_price)[0] == _BOOL_TRUE
+    def collateral_oracle_token(self) -> DatumAsset | None:
+        """The oracle token pricing the collateral (None if no price is read)."""
+        return priced_sides(self.pool_datum, self.chosen_collateral_index)[0]
+
+    @property
+    def principal_oracle_token(self) -> DatumAsset | None:
+        """The oracle token pricing the principal (None if no price is read)."""
+        return priced_sides(self.pool_datum, self.chosen_collateral_index)[1]
 
 
 def option_unit(pool_datum: PoolDatum, index: int) -> str:
     """The unit of the pool's ``index``-th collateral option ("lovelace" for ADA)."""
     return collateral_asset_unit(list(pool_datum.collateral_options)[index])
+
+
+def priced_sides(
+    pool_datum: PoolDatum,
+    chosen_collateral_index: int,
+) -> tuple[DatumAsset | None, DatumAsset | None]:
+    """The oracle tokens of the (collateral, principal) prices a borrow reads.
+
+    Only an oracle-priced pool reads prices, and it prices an ADA side 1:1 without
+    reading an oracle; such a side is None.
+    """
+    if constr(pool_datum.dynamic_collateral_price)[0] != _BOOL_TRUE:
+        return None, None
+    option = list(pool_datum.collateral_options)[chosen_collateral_index]
+    common = pool_datum.common_data
+    return (
+        option.oracle_token_asset if option.policy_id else None,
+        common.principal_oracle_asset if common.principal_asset.policy_id else None,
+    )
 
 
 def pool_nft_name(pool: Utxo) -> bytes:
@@ -244,10 +271,13 @@ class BorrowSnapshot(PoolActionSnapshot):
 
     def oracle_for(self, leg: BorrowLeg) -> OracleWitness | None:
         """The witness pricing the leg's collateral (None if the pool reads none)."""
-        if not leg.is_oracle_priced:
-            return None
-        option = list(leg.pool_datum.collateral_options)[leg.chosen_collateral_index]
-        return witness_for(self.oracles, option.oracle_token_asset)
+        token = leg.collateral_oracle_token
+        return None if token is None else witness_for(self.oracles, token)
+
+    def principal_oracle_for(self, leg: BorrowLeg) -> OracleWitness | None:
+        """The witness pricing the leg's principal (None if the pool reads none)."""
+        token = leg.principal_oracle_token
+        return None if token is None else witness_for(self.oracles, token)
 
     @classmethod
     def from_capture(cls, fix: dict) -> BorrowSnapshot:
@@ -282,9 +312,9 @@ class BorrowSnapshot(PoolActionSnapshot):
                     pool=pool,
                     principal_amount=data.wanted_principal_amount,
                     chosen_collateral_index=data.chosen_collateral_index,
-                    collateral_amount=next(
-                        q for p, n, q in loan.assets if p + n == unit
-                    ),
+                    collateral_amount=loan.lovelace
+                    if unit == "lovelace"
+                    else next(q for p, n, q in loan.assets if p + n == unit),
                     lender_bond_datum=lender_bond.datum or "",
                     loan_lovelace=loan.lovelace,
                     lender_bond_lovelace=lender_bond.lovelace,
@@ -341,15 +371,16 @@ class BorrowSnapshot(PoolActionSnapshot):
         Each pool is resolved by out-ref (``allow_spent`` replays a spent one), and its
         lender-bond datum is rebuilt from the pool and its pool manager. The scripts
         come from the live config. An oracle-priced pool needs a signed price for its
-        collateral: pass ``oracles``, or leave them out to fetch each from the
-        FluidTokens registry through ``provider`` (a default client reads the API key
-        from the environment). The validity window defaults to one hour from the tip,
-        inside every signed price. Every output carries the least ADA it needs; the
-        loan carries enough for the largest output later actions can turn it into.
-        Refuses permissioned pools, pools that send borrower bonds to a script, pools
-        that lend a token rather than ADA, ADA and policy-wide collateral, a principal
-        the pool cannot lend, and a borrow that would leave the continuing pool below
-        its minimum ADA.
+        collateral and for its principal, unless that side is ADA: pass ``oracles``,
+        or leave them out to fetch each from the FluidTokens registry through
+        ``provider`` (a default client reads the API key from the environment). The
+        validity window defaults to one hour from the tip, inside every signed price.
+        Every output carries the least ADA it needs; the loan carries enough for the
+        largest output later actions can turn it into, and an ADA collateral is the
+        loan's ADA. Refuses permissioned pools, pools that send borrower bonds to a
+        script, policy-wide collateral, a collateral option the pool does not offer,
+        a principal the pool cannot lend, and a borrow that would leave the
+        continuing pool below its minimum ADA.
         """
         from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
             FluidTokensProviderClient,
@@ -386,20 +417,24 @@ class BorrowSnapshot(PoolActionSnapshot):
         witnesses = list(oracles or [])
         for borrow, pool in zip(borrows, pools):
             datum = PoolDatum.from_cbor(pool.datum or "")
-            option = list(datum.collateral_options)[borrow.chosen_collateral_index]
-            if constr(datum.dynamic_collateral_price)[0] != _BOOL_TRUE:
-                continue
-            if any(w.serves(option.oracle_token_asset) for w in witnesses):
-                continue
-            if oracles is not None or not has_oracle(option.oracle_token_asset):
-                raise ValueError(
-                    f"no oracle witness prices the collateral of {borrow.pool_out_ref}",
-                )
-            provider = provider or FluidTokensProviderClient()
-            bundle = provider.fetch_oracle_witness(
-                collateral_unit=option_unit(datum, borrow.chosen_collateral_index),
-            )
-            witnesses.append(OracleWitness.from_bundle(backend, bundle))
+            collateral, principal = priced_sides(datum, borrow.chosen_collateral_index)
+            for side, token, unit in (
+                (
+                    "collateral",
+                    collateral,
+                    option_unit(datum, borrow.chosen_collateral_index),
+                ),
+                ("principal", principal, datum.common_data.principal_asset.unit()),
+            ):
+                if token is None or any(w.serves(token) for w in witnesses):
+                    continue
+                if oracles is not None or not has_oracle(token):
+                    raise ValueError(
+                        f"no oracle witness prices the {side} of {borrow.pool_out_ref}",
+                    )
+                provider = provider or FluidTokensProviderClient()
+                bundle = provider.fetch_oracle_witness(collateral_unit=unit)
+                witnesses.append(OracleWitness.from_bundle(backend, bundle))
 
         tip = current_slot(backend) if valid_from is None or valid_to is None else 0
         window = signed_window(
@@ -479,15 +514,14 @@ def _check_borrowable(pool: Utxo, borrow: PoolBorrow) -> None:
             f"pool {borrow.pool_out_ref} has no collateral option "
             f"{borrow.chosen_collateral_index}",
         )
-    if datum.common_data.principal_asset.unit() != "lovelace":
-        raise NotImplementedError(
-            "pools that lend a token rather than ADA are not supported",
-        )
-    if option_unit(datum, borrow.chosen_collateral_index) == "lovelace":
-        raise NotImplementedError("ADA collateral is not supported")
     if is_policy_wide(list(datum.collateral_options)[borrow.chosen_collateral_index]):
         raise NotImplementedError("policy-wide collateral is not supported")
-    available = pool.lovelace
+    principal = datum.common_data.principal_asset.unit()
+    available = (
+        pool.lovelace
+        if principal == "lovelace"
+        else sum(q for p, n, q in pool.assets if p + n == principal)
+    )
     if borrow.principal_amount > available:
         raise ValueError(
             f"pool {borrow.pool_out_ref} lends at most {available}, "
@@ -516,17 +550,16 @@ def _size_leg(
         borrower_bond_lovelace=0,
     )
     datum = leg.pool_datum
-    price_num, price_den = 1, 1
-    if leg.is_oracle_priced:
-        option = list(datum.collateral_options)[leg.chosen_collateral_index]
-        reward = witness_for(witnesses, option.oracle_token_asset).reward
-        price_num, price_den = reward.price_num, reward.price_den
+    price_num, price_den = _price(witnesses, leg.collateral_oracle_token)
+    principal_num, principal_den = _price(witnesses, leg.principal_oracle_token)
     minimum = min_collateral_amount(
         datum,
         chosen_collateral_index=leg.chosen_collateral_index,
         principal_amount=leg.principal_amount,
         price_num=price_num,
         price_den=price_den,
+        principal_price_num=principal_num,
+        principal_price_den=principal_den,
     )
     if borrow.collateral_amount is not None and borrow.collateral_amount < minimum:
         raise ValueError(
@@ -538,7 +571,8 @@ def _size_leg(
     # Repay and recast must keep the loan's value unchanged, and change collateral can
     # top up only a token-collateral loan's ADA, so the loan carries the ADA of the
     # largest output it can become: its counters and collateral at their widest. The
-    # placeholder coin encodes at the width of the minimum it sizes.
+    # placeholder coin encodes at the width of the minimum it sizes. An ADA collateral
+    # is the loan's ADA, so that loan holds the larger of the two.
     widest = replace(
         leg,
         collateral_amount=_WIDEST_QUANTITY,
@@ -550,6 +584,8 @@ def _size_leg(
         done_recasts=_WIDEST_COUNT,
     )
     leg.loan_lovelace = min_ada(_loan_output(widest, borrower_address, widest_datum))
+    if leg.collateral_unit == "lovelace":
+        leg.loan_lovelace = max(leg.loan_lovelace, leg.collateral_amount)
     leg.borrower_bond_lovelace = min_output_lovelace(
         address=borrower_bond_address(leg, borrower_address),
         assets={c.BORROWER_BOND_POLICY + leg.loan_id.hex(): 1},
@@ -575,6 +611,17 @@ def _size_leg(
             f"{floor} lovelace an output needs",
         )
     return leg
+
+
+def _price(
+    witnesses: Sequence[OracleWitness],
+    token: DatumAsset | None,
+) -> tuple[int, int]:
+    """Lovelace per smallest unit as ``(num, den)``: 1:1 where no price is read."""
+    if token is None:
+        return 1, 1
+    reward = witness_for(witnesses, token).reward
+    return reward.price_num, reward.price_den
 
 
 def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) -> None:
@@ -608,7 +655,8 @@ def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) ->
         snapshot.add_actor_additional_utxo(ogmios_entry(funding))
 
     tx_builder.reference_inputs.add(to_pycardano_utxo(snapshot.config))
-    leg_oracles = [snapshot.oracle_for(leg) for leg in legs]
+    collateral_oracles = [snapshot.oracle_for(leg) for leg in legs]
+    principal_oracles = [snapshot.principal_oracle_for(leg) for leg in legs]
 
     loan_mint = LoanMintRedeemer(
         config_ref_input_index=0,
@@ -648,9 +696,9 @@ def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) ->
             borrower_address=plutus_address(Address.decode(snapshot.borrower_address)),
             output_with_lender_token_index=0,
             output_with_borrower_token_index=0,
-            principal_oracle_ref_input_index=PRINCIPAL_ORACLE_PLACEHOLDER,
+            principal_oracle_ref_input_index=ADA_ORACLE_PLACEHOLDER,
             chosen_collateral_index=leg.chosen_collateral_index,
-            chosen_collateral_oracle_ref_input_index=0,
+            chosen_collateral_oracle_ref_input_index=ADA_ORACLE_PLACEHOLDER,
             wanted_principal_amount=leg.principal_amount,
             pool_id=leg.pool_id,
             permissioned_condition_withdraw_index=PERMISSIONLESS_WITHDRAW_PLACEHOLDER,
@@ -673,7 +721,10 @@ def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) ->
         tx_builder,
         [c.POOL_POLICY, script_hash_of(snapshot.borrow_action_script_ref)],
     )
-    add_oracles(tx_builder, [o for o in leg_oracles if o is not None])
+    add_oracles(
+        tx_builder,
+        [o for o in collateral_oracles + principal_oracles if o is not None],
+    )
 
     lend_date = slot_to_posix_ms(snapshot.valid_to)
     for leg in legs:
@@ -695,13 +746,17 @@ def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) ->
         tx_builder,
         c.POOL_POLICY,
     )
-    for index, (data, oracle) in enumerate(zip(borrow_data, leg_oracles)):
+    for index, (data, collateral, principal) in enumerate(
+        zip(borrow_data, collateral_oracles, principal_oracles),
+    ):
         data.output_with_borrower_token_index = len(legs) * 2 + index
         data.output_with_lender_token_index = len(legs) * 3 + index
-        if oracle is not None:
+        if collateral is not None:
             data.chosen_collateral_oracle_ref_input_index = refs[
-                out_ref_of(oracle.feed)
+                out_ref_of(collateral.feed)
             ]
+        if principal is not None:
+            data.principal_oracle_ref_input_index = refs[out_ref_of(principal.feed)]
 
 
 def _pool_assets(leg: BorrowLeg) -> dict[str, int]:
@@ -741,18 +796,16 @@ def _loan_output(
     borrower_address: str,
     datum: LoanDatum,
 ) -> TransactionOutput:
-    """The new loan UTxO: loan NFT and collateral under the borrower's stake."""
+    """The new loan UTxO: loan NFT and collateral under the borrower's stake.
+
+    An ADA collateral is the loan's ADA, so that loan holds only ADA and its NFT.
+    """
+    assets = {"lovelace": leg.loan_lovelace, c.LOAN_POLICY + leg.loan_id.hex(): 1}
+    if leg.collateral_unit != "lovelace":
+        assets[leg.collateral_unit] = leg.collateral_amount
     return TransactionOutput(
         Address.decode(loan_address(borrower_address)),
-        asset_to_value(
-            Assets(
-                **{
-                    "lovelace": leg.loan_lovelace,
-                    c.LOAN_POLICY + leg.loan_id.hex(): 1,
-                    leg.collateral_unit: leg.collateral_amount,
-                },
-            ),
-        ),
+        asset_to_value(Assets(**assets)),
         datum=datum,
     )
 

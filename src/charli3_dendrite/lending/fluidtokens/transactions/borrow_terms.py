@@ -74,29 +74,39 @@ def min_collateral_amount(
     principal_amount: int,
     price_num: int,
     price_den: int,
+    principal_price_num: int | None = None,
+    principal_price_den: int | None = None,
 ) -> int:
-    """Minimum collateral units required to back ``principal_amount`` (ADA principal).
+    """Minimum collateral units required to back ``principal_amount``.
 
     Mirrors the pool validator's collateral floor. For a dynamically-priced pool the
-    principal is first expressed in lovelace (1:1 for an ADA principal), scaled by the
-    option's ``min_collateral_divider / min_collateral`` ratio, and converted to
-    collateral units at the oracle price ``price_num / price_den``
-    (``ceil(collateral_lovelace * price_den / price_num)``). For a statically-priced
-    pool the floor is ``ceil(principal_amount * min_collateral / min_collateral_div)``.
-    Non-ADA principal pools would additionally price the principal via their own oracle
-    and are out of scope.
+    principal is first expressed in lovelace at its price
+    ``principal_price_num / principal_price_den`` (1:1 for an ADA principal, which
+    ignores the principal price), scaled by the option's
+    ``min_collateral_divider / min_collateral`` ratio, and converted to collateral units
+    at the collateral price ``price_num / price_den``:
+    ``ceil(principal * principal_price * divider / min_collateral / price)``. For a
+    statically-priced pool the floor is
+    ``ceil(principal_amount * min_collateral / min_collateral_div)``. Prices are
+    lovelace per smallest unit. A non-ADA principal needs its price and raises
+    ``NotImplementedError`` without it.
     """
     principal_asset = pool_datum.common_data.principal_asset
+    principal_price = Fraction(1)
     if principal_asset.policy_id or principal_asset.asset_name:
-        raise NotImplementedError(
-            "min-collateral for a non-ADA principal pool needs the principal oracle "
-            "price; only ADA-principal pools are supported",
-        )
+        if principal_price_num is None or principal_price_den is None:
+            raise NotImplementedError(
+                "min-collateral for a non-ADA principal pool needs the principal "
+                "oracle price",
+            )
+        principal_price = Fraction(principal_price_num, principal_price_den)
     min_collateral = int(list(pool_datum.min_collateral)[chosen_collateral_index])
     divider = int(list(pool_datum.min_collateral_divider)[chosen_collateral_index])
     dynamic_alt, _ = constr(pool_datum.dynamic_collateral_price)
     if dynamic_alt == _BOOL_TRUE:
-        collateral_in_lovelace = Fraction(principal_amount * divider, min_collateral)
+        collateral_in_lovelace = (
+            Fraction(principal_amount * divider, min_collateral) * principal_price
+        )
         return ceil(collateral_in_lovelace * Fraction(price_den, price_num))
     return ceil(Fraction(principal_amount * min_collateral, divider))
 

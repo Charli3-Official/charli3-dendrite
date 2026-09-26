@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from pycardano import TransactionBuilder
 
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
@@ -25,6 +26,7 @@ from charli3_dendrite.lending.registry import get_lending_builder
 from charli3_dendrite.lending.transactions.base import ActionParams
 from charli3_dendrite.lending.transactions.base import LendingAction
 from charli3_dendrite.lending.transactions.infra import EvalContext
+from tests.lending.fluidtokens_v4.records import FIX
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 
@@ -203,3 +205,36 @@ def test_resolve_borrow_picks_the_collateral_option(
         )
     with pytest.raises(ValueError, match="borrow_amount"):
         _resolve(LendingAction.BORROW, loan_utxo=f"{pool.out_ref[0]}#0")
+
+
+def test_resolve_borrow_takes_ada_collateral_as_lovelace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def units(rec: dict[str, Any]) -> list[str]:
+        datum = PoolDatum.from_cbor(rec["datum_cbor"])
+        return [collateral_asset_unit(option) for option in datum.collateral_options]
+
+    # A pool whose ADA option is not its first, so the default index cannot pass.
+    rec = next(rec for rec in FIX["pool"] if "lovelace" in units(rec)[1:])
+    tx_hash, index = rec["out_ref"].split("#")
+    pool = Utxo(
+        address=rec["address"],
+        lovelace=rec["assets"]["lovelace"],
+        assets=[],
+        datum=rec["datum_cbor"],
+        out_ref=(tx_hash, int(index)),
+    )
+    calls = _record(monkeypatch, BorrowSnapshot)
+    monkeypatch.setattr(
+        "charli3_dendrite.lending.fluidtokens_v4.transactions.resolve." "resolve_utxo",
+        lambda _backend, *_: pool,
+    )
+    _resolve(
+        LendingAction.BORROW,
+        loan_utxo=rec["out_ref"],
+        borrow_amount=1_000_000,
+        collateral={"lovelace": 0},
+    )
+    assert calls["borrows"] == [
+        PoolBorrow(pool.out_ref, 1_000_000, units(rec).index("lovelace"), None),
+    ]
