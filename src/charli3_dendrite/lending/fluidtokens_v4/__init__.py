@@ -1,1 +1,4 @@
-"""FluidTokens V4 lending protocol integration (read side and indexing)."""
+"""FluidTokens V4 lending protocol integration.
+
+Read side, indexing, and borrower and lender transaction builders.
+"""
