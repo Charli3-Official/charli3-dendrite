@@ -14,30 +14,17 @@ from dataclasses import dataclass
 from pycardano import Datum
 from pycardano import PlutusData
 
+from charli3_dendrite.lending.fluidtokens.datums import ORIGIN_POOL_TAG
+from charli3_dendrite.lending.fluidtokens.datums import ORIGIN_REQUEST_TAG
 from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
 from charli3_dendrite.lending.fluidtokens.datums import CommonData
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
-
-# Origin-id tag a pool-origin loan datum carries: the loan's ``origin_id`` is this tag
-# followed by the originating pool's NFT asset name (`b"POOL" + pool_id`).
-ORIGIN_POOL_TAG = b"POOL"
-
-# Origin-id tag a request-origin loan datum carries: ``b"REQUEST" + request_id``.
-ORIGIN_REQUEST_TAG = b"REQUEST"
+from charli3_dendrite.lending.fluidtokens.datums import TxOutRef
 
 # The receipt's tag bytestring identifying an installment repayment.
 INSTALLMENT_REPAYMENT_TAG = b"installment_repayment"
-
-
-@dataclass
-class TxOutRef(PlutusData):
-    """A transaction output reference == Constr0([tx_id_bytes, index])."""
-
-    CONSTR_ID = 0
-    tx_id: bytes
-    index: int
 
 
 @dataclass
@@ -129,6 +116,7 @@ def synth_loan_datum(
     principal_amount: int,
     lend_date: int,
     chosen_collateral_index: int,
+    loan_datum_cls: type[LoanDatum] = LoanDatum,
 ) -> LoanDatum:
     """Build the continuing loan's :class:`LoanDatum` for a pool-origin borrow.
 
@@ -137,14 +125,15 @@ def synth_loan_datum(
     borrowed ``principal_amount`` and a ``lend_date`` equal to the validity upper bound
     (POSIX ms), and inherits every loan term from the pool's ``common_data``. The
     ``origin_id`` is ``b"POOL"`` + the pool NFT name, and the collateral is the chosen
-    pool collateral option carried through verbatim.
+    pool collateral option carried through verbatim. ``loan_datum_cls`` selects the
+    protocol version's loan datum class (the fields are the same).
     """
     common = pool_datum.common_data
     options = list(pool_datum.collateral_options)
     chosen = options[chosen_collateral_index]
     if not isinstance(chosen, CollateralAsset):
         chosen = CollateralAsset.from_primitive(chosen)
-    return LoanDatum(
+    return loan_datum_cls(
         done_recasts=0,
         principal_amount=principal_amount,
         lend_date=lend_date,

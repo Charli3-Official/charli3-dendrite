@@ -14,9 +14,8 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 
 import cbor2  # type: ignore[import-not-found]
-from pycardano import Address
-from pycardano import Network
-from pycardano import ScriptHash
+
+from charli3_dendrite.lending.units import script_payment_address
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -156,19 +155,6 @@ class FluidConfig:
         )
 
 
-def _payment_address(script_hash_hex: str) -> str:
-    """A mainnet payment-credential (enterprise) address for a spend script hash.
-
-    Entity UTxOs sit at base addresses whose stake part is not carried by the config
-    datum, but the backend discovers them by payment credential only, so a
-    payment-credential address is the stable, redeploy-proof identity to match on.
-    """
-    return Address(
-        payment_part=ScriptHash(bytes.fromhex(script_hash_hex)),
-        network=Network.MAINNET,
-    ).encode()
-
-
 def resolve_config(backend: AbstractBackend) -> FluidConfig:
     """Read the live config NFT datum into a :class:`FluidConfig`.
 
@@ -183,7 +169,7 @@ def resolve_config(backend: AbstractBackend) -> FluidConfig:
         )
 
         utxo = resolve_config_utxo(backend)
-        return FluidConfig.parse(utxo.datum)
+        return FluidConfig.parse(utxo.datum or "")
     except (TypeError, ValueError, IndexError, KeyError, AttributeError):
         return FluidConfig.defaults()
 
@@ -194,13 +180,13 @@ def resolve_addresses(backend: AbstractBackend) -> FluidScriptAddresses:
     Re-reads the config datum through `backend` so pool / loan / request discovery
     self-heals across a protocol redeploy (new spend scripts / policies); falls back to
     the static mainnet constants when the datum cannot be read. Addresses are
-    payment-credential identities (see :func:`_payment_address`).
+    payment-credential identities (see :func:`script_payment_address`).
     """
     config = resolve_config(backend)
     return FluidScriptAddresses(
-        pool=_payment_address(config.pool_spend_skh),
-        loan=_payment_address(config.loan_spend_skh),
-        request=_payment_address(config.request_spend_skh),
+        pool=script_payment_address(config.pool_spend_skh),
+        loan=script_payment_address(config.loan_spend_skh),
+        request=script_payment_address(config.request_spend_skh),
         pool_policy=config.pool_policy,
         loan_policy=config.loan_policy,
         request_policy=config.request_policy,

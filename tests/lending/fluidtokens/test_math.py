@@ -2,9 +2,15 @@ from decimal import Decimal
 from fractions import Fraction
 from math import ceil
 
+import pytest
+
 from charli3_dendrite.lending.fluidtokens.math import amortization_installment
+from charli3_dendrite.lending.fluidtokens.math import amortized_remaining_principal
 from charli3_dendrite.lending.fluidtokens.math import health_factor
 from charli3_dendrite.lending.fluidtokens.math import installments_pi_amount
+from charli3_dendrite.lending.fluidtokens.math import is_repayment_late
+from charli3_dendrite.lending.fluidtokens.math import liquidation_min_collateral
+from charli3_dendrite.lending.fluidtokens.math import perpetual_debt
 from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
 from charli3_dendrite.lending.math import ceil_div
 
@@ -138,3 +144,159 @@ def test_health_factor_non_positive_divider_is_infinite():
         l_tv_divider=0,
     )
     assert hf == Decimal("Infinity")
+
+
+def test_perpetual_debt_matches_mainnet_repayments():
+    # A repay 107 s after lend date and a collateral change 4.5 h after it.
+    assert (
+        perpetual_debt(
+            principal=20_000_000,
+            interest_rate=452,
+            apy_coef=28,
+            elapsed_ms=107_000,
+        )
+        == 20_000_004
+    )
+    assert (
+        perpetual_debt(
+            principal=2_200_000_000,
+            interest_rate=450,
+            apy_coef=28,
+            elapsed_ms=16_200_000,
+        )
+        == 2_200_050_999
+    )
+
+
+def test_perpetual_debt_before_lend_date_follows_the_contract():
+    # A loan's lend date is its borrow's validity upper bound, so an action can
+    # precede it; the contract's formula then dips below the principal.
+    assert (
+        perpetual_debt(
+            principal=5_000_000_000,
+            interest_rate=777,
+            apy_coef=28,
+            elapsed_ms=-20 * 60_000,
+        )
+        == 4_999_985_219
+    )
+    assert (
+        perpetual_outstanding_debt(
+            principal=5_000_000_000,
+            interest_rate=777,
+            apy_coef=28,
+            lend_date_ms=1_200_000,
+            now_ms=0,
+        )
+        == 5_000_000_000
+    )
+
+
+def test_perpetual_outstanding_debt_delegates_after_lend_date():
+    assert perpetual_outstanding_debt(
+        principal=2_200_000_000,
+        interest_rate=450,
+        apy_coef=28,
+        lend_date_ms=0,
+        now_ms=16_200_000,
+    ) == perpetual_debt(
+        principal=2_200_000_000,
+        interest_rate=450,
+        apy_coef=28,
+        elapsed_ms=16_200_000,
+    )
+
+
+def test_repayment_is_late_strictly_after_its_window():
+    terms = dict(
+        is_perpetual=False,
+        lend_date_ms=0,
+        initial_grace_period=24,
+        repaid_installments=1,
+        installment_period=720,
+        repayment_time_window=48,
+    )
+    deadline = (24 + 2 * 720 + 48) * _MS_PER_HOUR
+    assert not is_repayment_late(now_ms=deadline, **terms)
+    assert is_repayment_late(now_ms=deadline + 1, **terms)
+
+
+def test_perpetual_loan_without_installments_is_never_late():
+    assert not is_repayment_late(
+        is_perpetual=True,
+        now_ms=10**15,
+        lend_date_ms=0,
+        initial_grace_period=0,
+        repaid_installments=0,
+        installment_period=0,
+        repayment_time_window=0,
+    )
+
+
+def test_amortized_remaining_principal():
+    principal, rate, n = 20_000_000, 1200, 6
+    assert (
+        amortized_remaining_principal(
+            principal=principal,
+            interest_rate=rate,
+            total_installments=n,
+            repaid_installments=0,
+        )
+        == principal
+    )
+    installment = amortization_installment(
+        principal=principal,
+        interest_rate=rate,
+        total_installments=n,
+    )
+    after_one = amortized_remaining_principal(
+        principal=principal,
+        interest_rate=rate,
+        total_installments=n,
+        repaid_installments=1,
+    )
+    assert after_one == ceil(principal * Fraction(102, 100) - installment)
+    assert (
+        amortized_remaining_principal(
+            principal=principal,
+            interest_rate=rate,
+            total_installments=n,
+            repaid_installments=n,
+        )
+        <= 0
+    )
+
+
+def test_amortized_remaining_principal_rejects_what_the_contract_cannot_compute():
+    with pytest.raises(ValueError, match="non-zero rate"):
+        amortized_remaining_principal(
+            principal=1,
+            interest_rate=0,
+            total_installments=6,
+            repaid_installments=1,
+        )
+
+
+def test_liquidation_min_collateral_matches_a_mainnet_loan():
+    # 0.8 liquidation LTV, collateral priced at 2.25419077 lovelace per unit.
+    assert (
+        liquidation_min_collateral(
+            debt=2_200_050_999,
+            principal_price=Fraction(1),
+            collateral_price=Fraction(225419077, 100000000),
+            l_tv=100,
+            l_tv_divider=125,
+        )
+        == 1_219_978_267
+    )
+
+
+def test_liquidation_min_collateral_rejects_a_worthless_collateral():
+    with pytest.raises(ValueError, match="must be positive"):
+        liquidation_min_collateral(
+            debt=1,
+            principal_price=Fraction(1),
+            collateral_price=Fraction(0),
+            l_tv=100,
+            l_tv_divider=125,
+        )

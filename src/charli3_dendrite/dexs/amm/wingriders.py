@@ -308,6 +308,10 @@ class WithdrawProtocolAction(PlutusData):
     CONSTR_ID = 4
 
 
+# Every WingRiders V2 order attaches this agent fee (the pools' ``agent_fee_ada``).
+_V2_AGENT_FEE_LOVELACE = 2_000_000
+
+
 @dataclass
 class WingRidersV2OrderDatum(OrderDatum):
     """WingRiders order datum."""
@@ -388,11 +392,18 @@ class WingRidersV2OrderDatum(OrderDatum):
             compensation_datum = b""
             compensation_datum_type = NoDatum()
 
-        # ``oil`` declares the lovelace the batcher passes through to the beneficiary
-        # (it swaps the rest). A forwarded order must ride the full deposit through to
-        # fund the next hop, so oil follows ``deposit``; a plain owner-paid swap keeps
-        # the standard 2-ADA buffer.
-        oil = deposit.quantity() if address_target is not None else 2000000
+        # ``oil`` declares the lovelace the batcher passes through to the beneficiary.
+        # The batcher swaps the order's ADA less ``oil`` and the flat agent fee, keeps
+        # its tiered fee out of the agent fee and returns the rest of it with the
+        # swap output. So a forwarded order's oil is what it attaches above the agent
+        # fee: 2 ADA when ADA is swapped (oil above that would come out of the swap),
+        # the whole cascaded deposit on a token-to-token order. A plain owner-paid
+        # swap keeps the standard 2-ADA buffer.
+        oil = (
+            batcher_fee.quantity() + deposit.quantity() - _V2_AGENT_FEE_LOVELACE
+            if address_target is not None
+            else 2000000
+        )
 
         return WingRidersV2OrderDatum(
             oil=oil,
@@ -696,6 +707,12 @@ class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):
         return ["980e8c567670d34d4ec13a0c3b6de6199f260ae5dc9dc9e867bc5c934c"]
 
 
+# WingRiders V2 agent fee tiers: the most ADA an order can move and still pay the
+# small (0.85 ADA) or medium (1.5 ADA) fee.
+_V2_SMALL_ORDER_MAX_LOVELACE = 250_000_000
+_V2_MEDIUM_ORDER_MAX_LOVELACE = 500_000_000
+
+
 class WingRidersV2CPPState(AbstractConstantProductPoolState):
     """WingRiders CPP state."""
 
@@ -839,10 +856,22 @@ class WingRidersV2CPPState(AbstractConstantProductPoolState):
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ):
-        """The V2 batcher charges a flat 2 ADA regardless of swap size (an order
-        fill deducts exactly ``2_000_000`` from the order value; the V1-era ADA
-        size tiers do not apply to V2).
+        """The agent fee the batcher keeps, tiered by the order's ADA amount.
+
+        An order always attaches 4 ADA on top of the swap: this fee plus the
+        refundable :meth:`deposit`. The batcher keeps 0.85 ADA when the order moves
+        at most 250 ADA, 1.5 ADA up to 500 ADA, and 2 ADA above that or when no ADA
+        is swapped, and returns the rest of the 4 ADA with the swap output.
         """
+        if in_assets is None or out_assets is None:
+            return Assets(lovelace=2000000)
+        merged_assets = in_assets + out_assets
+        if "lovelace" in merged_assets:
+            lovelace = merged_assets["lovelace"]
+            if lovelace <= _V2_SMALL_ORDER_MAX_LOVELACE:
+                return Assets(lovelace=850000)
+            if lovelace <= _V2_MEDIUM_ORDER_MAX_LOVELACE:
+                return Assets(lovelace=1500000)
         return Assets(lovelace=2000000)
 
 
