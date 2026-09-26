@@ -696,6 +696,12 @@ class WingRidersSSPState(AbstractStableSwapPoolState, WingRidersCPPState):
         return ["980e8c567670d34d4ec13a0c3b6de6199f260ae5dc9dc9e867bc5c934c"]
 
 
+# WingRiders V2 agent fee tiers: the most ADA an order can move and still pay the
+# small (0.85 ADA) or medium (1.5 ADA) fee.
+_V2_SMALL_ORDER_MAX_LOVELACE = 250_000_000
+_V2_MEDIUM_ORDER_MAX_LOVELACE = 500_000_000
+
+
 class WingRidersV2CPPState(AbstractConstantProductPoolState):
     """WingRiders CPP state."""
 
@@ -839,10 +845,22 @@ class WingRidersV2CPPState(AbstractConstantProductPoolState):
         out_assets: Assets | None = None,
         extra_assets: Assets | None = None,
     ):
-        """The V2 batcher charges a flat 2 ADA regardless of swap size (an order
-        fill deducts exactly ``2_000_000`` from the order value; the V1-era ADA
-        size tiers do not apply to V2).
+        """The agent fee the batcher keeps, tiered by the order's ADA amount.
+
+        An order always attaches 4 ADA on top of the swap: this fee plus the
+        refundable :meth:`deposit`. The batcher keeps 0.85 ADA when the order moves
+        at most 250 ADA, 1.5 ADA up to 500 ADA, and 2 ADA above that or when no ADA
+        is swapped, and returns the rest of the 4 ADA with the swap output.
         """
+        if in_assets is None or out_assets is None:
+            return Assets(lovelace=2000000)
+        merged_assets = in_assets + out_assets
+        if "lovelace" in merged_assets:
+            lovelace = merged_assets["lovelace"]
+            if lovelace <= _V2_SMALL_ORDER_MAX_LOVELACE:
+                return Assets(lovelace=850000)
+            if lovelace <= _V2_MEDIUM_ORDER_MAX_LOVELACE:
+                return Assets(lovelace=1500000)
         return Assets(lovelace=2000000)
 
 
