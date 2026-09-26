@@ -1,4 +1,4 @@
-"""Dev-only: capture real FluidTokens V4 borrower txs from dbsync into JSON fixtures.
+"""Dev-only: capture real FluidTokens V4 borrower and lender txs into JSON fixtures.
 
 Reuses the V3 capture (same JSON schema: validity window, spent inputs, outputs,
 canonically-sorted reference inputs with their scripts, mints and every redeemer),
@@ -40,6 +40,21 @@ JOBS = {
     "change_collateral_multi": (
         "cfd68920417356bc3005a3471b39b09bb85f2971447de673d322c4a2ee4d9a17"
     ),
+    # A pool lending ADA against STRIKE, created from twelve wallet inputs; the pool
+    # names derive from an input that is not the first.
+    "pool_create": "16d4066f4489bb4bcc987983c2d748bdc48b92257f3d3bc5127931ba9b494f08",
+    # A pool lending USDCx.
+    "pool_create_token": (
+        "315e5101d7e7cbe5f800de7fcf6807d34236318d8adaa22621a69b3dfa7310a3"
+    ),
+    # Two collateral options appended to a pool lending USDM.
+    "pool_edit": "6e3b3af7fc7e5d5c0c9057ed296be6d1c9bcc2e0bcf93704b3a7bb26e36f61d8",
+    # 10 ADA added to a pool lending ADA, with two collateral options appended.
+    "pool_edit_deposit": (
+        "f42535b4fc9d844857c4a4596d44f583571c5279f9a295ec864165930e4bb959"
+    ),
+    # A pool lending ADA cancelled; its pool manager sorts before the pool.
+    "pool_cancel": "a39195b6bc6f4d07d2c06b8c021600fe4512549c0d80cd12f7832e0e80eda684",
 }
 
 REFERENCE_SCRIPTS = {

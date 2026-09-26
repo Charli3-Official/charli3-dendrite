@@ -49,6 +49,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import script_hash_of
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import sole_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     withdraw_redeemer_position,
 )
@@ -78,10 +79,7 @@ _BOOL_TRUE = 1
 
 def loan_nft_name(loan: Utxo) -> bytes:
     """The name of the one loan NFT a loan UTxO holds."""
-    names = [n for p, n, q in loan.assets if p == c.LOAN_POLICY and q == 1]
-    if len(names) != 1:
-        raise ValueError("loan UTxO must hold exactly one loan NFT")
-    return bytes.fromhex(names[0])
+    return sole_nft_name(loan, c.LOAN_POLICY, "loan")
 
 
 @dataclass
