@@ -21,7 +21,13 @@ from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
 from charli3_dendrite.lending.fluidtokens_v4.transactions.lender_bond import (
+    lender_bond_commitment,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.lender_bond import (
     lender_bond_datum,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.lender_bond import (
+    lender_manager_datum,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.lender_bond import (
     sends_bonds_to_lender_manager,
@@ -58,6 +64,21 @@ def test_every_live_pool_commits_a_reconstructible_datum() -> None:
             pool_manager=managers[pool_id],
         )
         assert lender_bond_datum_matches(datum, preimage)
+
+
+def test_every_live_pool_commits_to_the_usual_settings() -> None:
+    managers = _managers()
+    for rec in _ENTITIES["pool"]:
+        datum = PoolDatum.from_cbor(rec["datum_cbor"])
+        pool_id = _pool_id(rec["assets"])
+        committed = lender_manager_datum(
+            datum,
+            pool_id=bytes.fromhex(pool_id),
+            pool_manager=managers[pool_id],
+            convert_liquidations=True,
+            liquidation_fee_per_mille=40,
+        )
+        assert lender_bond_commitment(committed) == datum.lender_bond_inline_datum_hash
 
 
 @pytest.mark.parametrize("name", ["borrow_single", "borrow_multi"])

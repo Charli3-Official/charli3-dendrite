@@ -1,1 +1,1 @@
-"""FluidTokens V4 borrower transaction builders."""
+"""FluidTokens V4 transaction builders: borrower and lender actions."""

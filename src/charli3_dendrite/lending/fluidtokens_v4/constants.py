@@ -11,6 +11,10 @@ The lender-manager spend script is not listed in the config datum: pools opt int
 by pointing ``lender_bond_address`` at it, and it ships as a constant here. Its own
 action scripts are listed in the lender-manager config datum, held with a separate
 config NFT.
+
+The pool manager's owner-check scripts are not listed either: they are parameters of
+the pool-manager policy, so they change only with a new pool-manager policy, which
+the config datum would name.
 """
 
 from __future__ import annotations
@@ -68,6 +72,20 @@ LOCKED_BORROWER_MANAGER_SPEND_SKH = (
 
 # Not carried by the config datum (see the module docstring).
 LENDER_MANAGER_SPEND_SKH = "6743f4b69446b4e066cfb89daa3d01ef041b6d2646968993be4cec09"
+
+# The pool manager's owner checks for a pool edit and a pool cancel: the
+# ``pm_edit_pool`` and ``pm_cancel_pool_manager`` validators of
+# ``ft-cardano-loans-v4`` at ``04b6e70``, applied to the config NFT, the pool spend
+# script, the pool policy and the smart-tokens spend script, and applied in turn to
+# :data:`POOL_MANAGER_POLICY`. That build pairs the i-th spent pool with the i-th
+# spent pool manager by input position; ``a8bb3f4d`` pairs them by NFT and hashes
+# differently.
+POOL_MANAGER_EDIT_POOL_ACTION_SKH = (
+    "df8247f95cf81bf662c38a95f43851022a58f1f0fcbb7b453544afae"
+)
+POOL_MANAGER_CANCEL_ACTION_SKH = (
+    "e39f6aac5e71c42edc7e190456483086dfdd94c73c0e352234cc3d1b"
+)
 
 # Plutus ``Credential``: ``ScriptCredential`` is constructor alternative 1 (tag 122).
 _SCRIPT_CREDENTIAL_TAG = 122

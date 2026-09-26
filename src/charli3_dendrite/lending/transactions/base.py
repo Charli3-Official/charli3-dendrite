@@ -41,6 +41,7 @@ class LendingAction(str, Enum):
     REQUEST_CANCEL = "request_cancel"
     LEND = "lend"
     POOL_CREATE = "pool_create"
+    POOL_EDIT = "pool_edit"
     POOL_CANCEL = "pool_cancel"
 
 
@@ -66,6 +67,9 @@ class ActionParams:
     (a full repay closes the loan and releases all collateral). For MODIFY_COLLATERAL,
     `collateral` is the TARGET absolute collateral the loan output should lock (the
     same semantics as the repay target), and the loan debt is unchanged.
+
+    POOL_EDIT and POOL_CANCEL are lender actions on the pool out-ref in `loan_utxo`;
+    each protocol's builder documents the other fields it reads.
     """
 
     actor_address: str

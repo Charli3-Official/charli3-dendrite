@@ -1,15 +1,20 @@
-"""FluidTokens V4 borrower-action redeemers as pycardano PlutusData (byte-exact).
+"""FluidTokens V4 action redeemers as pycardano PlutusData (byte-exact).
 
-Mirrors ``lib/fluidtokens/types/{pool,loan}.ak`` of ``ft-cardano-loans-v4`` at
-``a8bb3f4d``. Layouts V4 kept from V3 are re-exported from the V3 module: the empty
-spend redeemer, the loan mint and loan withdraw (dispatch) redeemers, the loan action
-constructors (V4 ``Action`` keeps V3's ``ActionType`` numbering), the change-collateral
-action data and the bond mint redeemer.
+Mirrors ``lib/fluidtokens/types/{pool,pool_manager,loan}.ak`` of
+``ft-cardano-loans-v4`` at ``a8bb3f4d``. Layouts V4 kept from V3 are re-exported from
+the V3 module: the empty spend redeemer, the loan mint and loan withdraw (dispatch)
+redeemers, the loan action constructors (V4 ``Action`` keeps V3's ``ActionType``
+numbering), the change-collateral action data, the bond mint redeemer, the pool mint
+redeemer, and the pool-cancel list (V4's ``PoolCancelActionWithdrawRedeemer`` of
+``CancelData`` has the layout of V3's :class:`PoolCancelWithdrawRedeemer` of
+:class:`PoolCancelAction`).
 
 V4 splits every pool action into a dispatch withdraw (:class:`PoolWithdrawRedeemer`,
 one action) plus a per-action withdraw script; the borrow action carries one
-:class:`BorrowData` per spent pool. Repay and recast data drop V3's lender-bond
-reference-input fields.
+:class:`BorrowData` per spent pool. A pool edit or cancel also runs the pool
+manager: its dispatch withdraw (:class:`PoolManagerWithdrawRedeemer`) names the
+owner-check script, whose redeemer lists the pool NFT names. Repay and recast data
+drop V3's lender-bond reference-input fields.
 
 Every list field is an untyped ``IndefiniteList`` rebuilt element by element in
 ``__post_init__``: that is how the contracts' serialiser encodes them, and decoded raw
@@ -48,6 +53,11 @@ from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
 from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
     LoanWithdrawRedeemer,
 )
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import PoolCancelAction
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import (
+    PoolCancelWithdrawRedeemer,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.redeemers import PoolMintRedeemer
 
 __all__ = [
     "ActionTypeChangeCollateral",
@@ -66,7 +76,19 @@ __all__ = [
     "LoanSpendRedeemer",
     "LoanWithdrawRedeemer",
     "PoolActionBorrow",
+    "PoolActionCancel",
+    "PoolActionEdit",
     "PoolBorrowActionWithdrawRedeemer",
+    "PoolCancelAction",
+    "PoolCancelWithdrawRedeemer",
+    "PoolEditActionWithdrawRedeemer",
+    "PoolEditData",
+    "PoolManagerActionCancel",
+    "PoolManagerActionEditPool",
+    "PoolManagerActionWithdrawRedeemer",
+    "PoolManagerMintRedeemer",
+    "PoolManagerWithdrawRedeemer",
+    "PoolMintRedeemer",
     "PoolWithdrawRedeemer",
     "RecastData",
     "RepayData",
@@ -83,10 +105,24 @@ def typed_indefinite(items: Iterable, cls: type[_P]) -> IndefiniteList:
 
 
 @dataclass
+class PoolActionCancel(PlutusData):
+    """Pool ``Action.Cancel`` == Constr0[]."""
+
+    CONSTR_ID = 0
+
+
+@dataclass
 class PoolActionBorrow(PlutusData):
-    """Pool ``Action.Borrow`` == Constr1[] (``Cancel`` is Constr0)."""
+    """Pool ``Action.Borrow`` == Constr1[]."""
 
     CONSTR_ID = 1
+
+
+@dataclass
+class PoolActionEdit(PlutusData):
+    """Pool ``Action.Edit`` == Constr4[]."""
+
+    CONSTR_ID = 4
 
 
 @dataclass
@@ -213,3 +249,94 @@ class AssetManagerMintRedeemer(PlutusData):
     input_ref: TxOutRef
     loan_withdraw_redeemer_index: int
     loan_claim_action_withdraw_redeemer_index: int
+
+
+@dataclass
+class PoolEditData(PlutusData):
+    """One pool's edit == ``EditData`` in pool.ak: the pool NFT name."""
+
+    CONSTR_ID = 0
+    pool_id: bytes
+
+
+@dataclass
+class PoolEditActionWithdrawRedeemer(PlutusData):
+    """Edit-action withdraw redeemer: one :class:`PoolEditData` per spent pool.
+
+    == Constr0[config_ref_input_index, IndefiniteList[PoolEditData]], in the order the
+    pools appear among the transaction's sorted inputs.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    actions_for_each_input: IndefiniteList
+
+    def __post_init__(self) -> None:
+        """Coerce decoded entries back into :class:`PoolEditData`."""
+        self.actions_for_each_input = typed_indefinite(
+            self.actions_for_each_input,
+            PoolEditData,
+        )
+
+
+@dataclass
+class PoolManagerMintRedeemer(PlutusData):
+    """Pool-manager policy mint and burn redeemer == ``PoolManagerMintRedeemer``.
+
+    ``pool_withdraw_redeemer_index`` is the pool dispatch withdraw's position in the
+    transaction's redeemers; the policy reads it only when it burns.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    pool_withdraw_redeemer_index: int
+
+
+@dataclass
+class PoolManagerActionCancel(PlutusData):
+    """Pool-manager ``Action.CancelPoolManager`` == Constr0[]."""
+
+    CONSTR_ID = 0
+
+
+@dataclass
+class PoolManagerActionEditPool(PlutusData):
+    """Pool-manager ``Action.EditPool`` == Constr3[]."""
+
+    CONSTR_ID = 3
+
+
+@dataclass
+class PoolManagerWithdrawRedeemer(PlutusData):
+    """Pool-manager dispatch withdraw redeemer == ``PoolManagerWithdrawRedeemer``.
+
+    == Constr0[config_ref_input_index, action]. The dispatch reads no config; the
+    index is filled like every other config index.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    action: Datum
+
+
+@dataclass
+class PoolManagerActionWithdrawRedeemer(PlutusData):
+    """Owner-check withdraw redeemer of a pool-manager edit or cancel.
+
+    == ``CancelPoolManagerActionWithdrawRedeemer``, which both actions use:
+    Constr0[config_ref_input_index, pool_withdraw_redeemer_index, names]. ``names[i]``
+    is the NFT name of the i-th spent pool and of the i-th spent pool manager, each in
+    the transaction's sorted input order; ``pool_withdraw_redeemer_index`` is the pool
+    dispatch withdraw's position in the transaction's redeemers.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    pool_withdraw_redeemer_index: int
+    pool_manager_nft_names: IndefiniteList
+
+    def __post_init__(self) -> None:
+        """Keep the names an ``IndefiniteList`` of bytes."""
+        self.pool_manager_nft_names = IndefiniteList(
+            [bytes(name) for name in self.pool_manager_nft_names],
+        )
