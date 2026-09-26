@@ -116,6 +116,7 @@ def synth_loan_datum(
     principal_amount: int,
     lend_date: int,
     chosen_collateral_index: int,
+    loan_datum_cls: type[LoanDatum] = LoanDatum,
 ) -> LoanDatum:
     """Build the continuing loan's :class:`LoanDatum` for a pool-origin borrow.
 
@@ -124,14 +125,15 @@ def synth_loan_datum(
     borrowed ``principal_amount`` and a ``lend_date`` equal to the validity upper bound
     (POSIX ms), and inherits every loan term from the pool's ``common_data``. The
     ``origin_id`` is ``b"POOL"`` + the pool NFT name, and the collateral is the chosen
-    pool collateral option carried through verbatim.
+    pool collateral option carried through verbatim. ``loan_datum_cls`` selects the
+    protocol version's loan datum class (the fields are the same).
     """
     common = pool_datum.common_data
     options = list(pool_datum.collateral_options)
     chosen = options[chosen_collateral_index]
     if not isinstance(chosen, CollateralAsset):
         chosen = CollateralAsset.from_primitive(chosen)
-    return LoanDatum(
+    return loan_datum_cls(
         done_recasts=0,
         principal_amount=principal_amount,
         lend_date=lend_date,

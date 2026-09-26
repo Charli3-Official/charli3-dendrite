@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
 
 
-def _db_query(
+def db_query_rows(
     backend: AbstractBackend,
     sql: str,
     args: dict[str, Any],
@@ -51,7 +51,7 @@ def _assets(backend: AbstractBackend, tx_out_id: int) -> list[tuple[str, str, in
     Mirrors the capture tool's asset ordering so a resolved `Utxo` compares equal to a
     captured one byte-for-byte.
     """
-    rows = _db_query(
+    rows = db_query_rows(
         backend,
         """SELECT encode(ma.policy, 'hex') AS policy,
                   encode(ma.name, 'hex') AS name,
@@ -79,7 +79,7 @@ def resolve_utxo_by_outref(
     retains consumed rows. Raises :class:`ValueError` when no matching output is found.
     """
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = _db_query(
+    rows = db_query_rows(
         backend,
         f"""SELECT o.id AS id,
                    o.value AS lovelace,
@@ -142,7 +142,7 @@ def resolve_utxo_by_asset(
     matching output is found.
     """
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = _db_query(
+    rows = db_query_rows(
         backend,
         f"""SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
             FROM tx_out o
@@ -175,7 +175,7 @@ def resolve_script_ref(
 ) -> Utxo:
     """Resolve the UTxO carrying the reference script with hash ``script_hash``."""
     spent_filter = "" if allow_spent else "AND o.consumed_by_tx_id IS NULL"
-    rows = _db_query(
+    rows = db_query_rows(
         backend,
         f"""SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
             FROM tx_out o
@@ -205,7 +205,7 @@ def resolve_funding(
     limit: int = 20,
 ) -> list[Utxo]:
     """Resolve the unspent UTxOs at ``address`` (most-recent first, up to ``limit``)."""
-    rows = _db_query(
+    rows = db_query_rows(
         backend,
         """SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
            FROM tx_out o

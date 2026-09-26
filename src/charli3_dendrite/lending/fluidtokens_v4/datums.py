@@ -53,6 +53,7 @@ __all__ = [
     "Liquidation",
     "LiquidationMode",
     "LoanDatum",
+    "LoanRepaymentData",
     "LockedBorrowerManagerDatum",
     "NoLiquidationDutchAuctionClaim",
     "NoLiquidationFullCollateralClaim",
@@ -190,6 +191,23 @@ class AssetManagerDatumWithHash(StrictPlutusData):
     action: bytes
     data: Datum
     owner_auth: Datum  # AuthorizationMethod union
+
+
+@dataclass
+class LoanRepaymentData(StrictPlutusData):
+    """The ``data`` of an installment repayment's asset-manager datum.
+
+    Records the repaid loan's terms, with ``repaid_installments`` already counting the
+    installment this payment settles.
+    """
+
+    CONSTR_ID = 0
+    loan_id: bytes
+    principal_amount: int
+    interest_rate: int
+    repaid_installments: int
+    total_installments: int
+    repayment_mode: Datum
 
 
 def decode_asset_manager_datum(

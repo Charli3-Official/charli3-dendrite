@@ -14,23 +14,14 @@ the lender-bond UTxO as reference inputs.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
-from fractions import Fraction
-from math import ceil
 from typing import TYPE_CHECKING
-from typing import Any
 
 import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
-from pycardano import PlutusV3Script
 from pycardano import RawCBOR
-from pycardano import TransactionId
-from pycardano import TransactionInput
 from pycardano import TransactionOutput
-from pycardano import UTxO
-from pycardano import Value
 
 from charli3_dendrite.lending.fluidtokens.constants import BORROWER_BOND_POLICY
 from charli3_dendrite.lending.fluidtokens.constants import LENDER_BOND_POLICY
@@ -52,138 +43,56 @@ from charli3_dendrite.lending.fluidtokens.constants import REQUEST_SPEND_SKH
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens.datums import RequestDatum
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (  # noqa: F401
+    BORROW_VALIDITY_SLOTS,  # re-exported: existing callers import it from this module
+)
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import borrow_window
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
+    collateral_unit,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
+    lender_bond_address,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
+    lender_bond_datum_matches,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
+    min_collateral_amount,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
+    min_output_lovelace,
+)
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import SCRIPT_LANG
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import loan_id_from_out_ref
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import (  # noqa: F401
+    ogmios_entry,  # re-exported: existing callers import it from this module
+)
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import script_ref_by_hash
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import to_pycardano_utxo
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_value
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
-    from charli3_dendrite.lending.fluidtokens.oracles.witness import OracleReward
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import PoolTerms
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
         RequestTerms,
     )
 
 
-@dataclass
-class Utxo:
-    """A resolved UTxO (transaction output or [reference] input)."""
-
-    address: str
-    lovelace: int
-    assets: list[tuple[str, str, int]]  # (policy_hex, name_hex, qty)
-    datum: str | None
-    ref_script: str | None = None
-    ref_script_type: str | None = None
-    out_ref: tuple[str, int] | None = None
-
-    def holds(self, policy: str, name: str, qty: int | None = None) -> bool:
-        """True if this UTxO holds the given asset (optionally at an exact qty)."""
-        return any(
-            a[0] == policy and a[1] == name and (qty is None or a[2] == qty)
-            for a in self.assets
-        )
-
-    def holds_policy(self, policy: str) -> bool:
-        """True if this UTxO holds any asset under the given policy."""
-        return any(a[0] == policy for a in self.assets)
-
-
-def _value(lovelace: int, assets: list[tuple[str, str, int]]) -> Value:
-    """A pycardano `Value` from a lovelace balance + (policy, name, qty) leaves."""
-    from charli3_dendrite.dataclasses.models import Assets
-
-    root: dict[str, int] = {"lovelace": lovelace}
-    for policy, name, qty in assets:
-        unit = "lovelace" if not policy and not name else policy + name
-        root[unit] = root.get(unit, 0) + qty
-    return asset_to_value(Assets(**root))
-
-
-def _to_utxo(u: Utxo) -> UTxO:
-    """Convert a resolved `Utxo` into a pycardano `UTxO` (inline datum + ref script).
-
-    The inline-datum bytes are preserved exactly (wrapped as `RawCBOR`): these UTxOs are
-    only referenced by out-ref, so the datum is not re-serialized into the tx body.
-    """
-    if u.out_ref is None:
-        raise ValueError("cannot build a UTxO without an out-ref")
-    tx_id_hex, out_idx = u.out_ref
-    datum = RawCBOR(bytes.fromhex(u.datum)) if u.datum else None
-    script = PlutusV3Script(bytes.fromhex(u.ref_script)) if u.ref_script else None
-    return UTxO(
-        input=TransactionInput(
-            transaction_id=TransactionId(bytes.fromhex(tx_id_hex)),
-            index=out_idx,
-        ),
-        output=TransactionOutput(
-            address=Address.decode(u.address),
-            amount=_value(u.lovelace, u.assets),
-            datum=datum,
-            script=script,
-        ),
-    )
-
-
-_SCRIPT_LANG = {
-    "plutusV1": "plutus:v1",
-    "plutusV2": "plutus:v2",
-    "plutusV3": "plutus:v3",
-}
-
-
-def ogmios_entry(u: Utxo) -> dict[str, Any]:
-    """Serialize any resolved `Utxo` into its Ogmios ``additionalUtxo`` entry.
-
-    Used both for funding (actor) inputs when building a tx and, in the e2e replays, for
-    spent/reference inputs. Funding inputs may already be spent / freshly created, so
-    Ogmios cannot resolve them from its own ledger snapshot; they are supplied here for
-    evaluation.
-    """
-    if u.out_ref is None:
-        raise ValueError("cannot build an additionalUtxo entry without an out-ref")
-    value: dict[str, Any] = {"ada": {"lovelace": u.lovelace}}
-    for policy, name, qty in u.assets:
-        value.setdefault(policy, {})[name] = qty
-    entry: dict[str, Any] = {
-        "transaction": {"id": u.out_ref[0]},
-        "index": u.out_ref[1],
-        "address": u.address,
-        "value": value,
-    }
-    if u.datum:
-        entry["datum"] = u.datum
-    if u.ref_script:
-        entry["script"] = {
-            "language": _SCRIPT_LANG.get(u.ref_script_type or "", "plutus:v3"),
-            "cbor": u.ref_script,
-        }
-    return entry
-
-
-def _as_utxo(d: dict) -> Utxo:
-    return Utxo(
-        address=d["address"],
-        lovelace=int(d["lovelace"]),
-        assets=[(p, n, int(q)) for p, n, q in d["assets"]],
-        datum=d.get("datum"),
-        ref_script=d.get("ref_script"),
-        ref_script_type=d.get("ref_script_type"),
-        out_ref=tuple(d["out_ref"]) if d.get("out_ref") else None,
-    )
-
-
-def _script_ref_by_hash(ref_inputs: list[Utxo], script_hash: str) -> Utxo:
-    """The reference-input UTxO whose PlutusV3 script hashes to `script_hash`."""
-    from pycardano import plutus_script_hash
-
-    target = bytes.fromhex(script_hash)
-    for u in ref_inputs:
-        if not u.ref_script:
-            continue
-        h = plutus_script_hash(PlutusV3Script(bytes.fromhex(u.ref_script))).payload
-        if h == target:
-            return u
-    raise ValueError(f"no reference script for hash {script_hash}")
+# Resolved-UTxO plumbing lives in ``utxos``; these names are kept for existing callers.
+_value = utxo_value
+_to_utxo = to_pycardano_utxo
+_SCRIPT_LANG = SCRIPT_LANG
+_as_utxo = utxo_from_dict
+_script_ref_by_hash = script_ref_by_hash
+_address_from_pool_datum = lender_bond_address
+_collateral_unit = collateral_unit
+_min_collateral_amount = min_collateral_amount
+_resolve_borrow_window = borrow_window
 
 
 @dataclass
@@ -963,90 +872,14 @@ class ChangeCollateralSnapshot(PoolActionSnapshot):
         )
 
 
-# The FluidTokens borrow validator caps the transaction's validity window at one hour
-# (3600 slots), a distinct, wider bound than the 360-slot ``LOAN_ACTION_VALIDITY_SLOTS``
-# the loan-action validators use. The window additionally must fall inside the signed
-# oracle witness's ms window.
-BORROW_VALIDITY_SLOTS = 3600
-
 # The Plutus ``Unit`` datum (``Constr0([])``); the default lender-bond output datum when
 # the pool commits its hash.
 _UNIT_DATUM_HEX = "d87980"
 
 
 def loan_id_from_pool_outref(pool_out_ref: tuple[str, int]) -> bytes:
-    """The loan id a pool-origin borrow mints: ``blake2b_224`` of the pool out-ref.
-
-    The bond policy names each minted NFT (loan / borrower bond / lender bond) after
-    this id, derived by hashing the serialized ``OutputReference`` of the spent pool
-    UTxO. The out-ref is encoded exactly as the bond-mint redeemer encodes it (a
-    ``TxOutRef`` ``Constr0([tx_id, index])``) so the derived name matches the mint.
-    """
-    from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import TxOutRef
-
-    tx_ref = TxOutRef(tx_id=bytes.fromhex(pool_out_ref[0]), index=pool_out_ref[1])
-    return hashlib.blake2b(tx_ref.to_cbor(), digest_size=28).digest()
-
-
-def _address_from_pool_datum(pool_datum: PoolDatum) -> Address:
-    """Decode the pool's committed ``lender_bond_address`` to a pycardano `Address`."""
-    from charli3_dendrite.lending.fluidtokens.transactions._common import (
-        address_from_plutus,
-    )
-
-    raw = pool_datum.lender_bond_address
-    data = raw.data if hasattr(raw, "data") else raw
-    return address_from_plutus(data)
-
-
-def _collateral_unit(pool_datum: PoolDatum, chosen_collateral_index: int) -> str:
-    """The unit (``policy_hex`` ++ ``name_hex``) of the chosen collateral option."""
-    from charli3_dendrite.lending.fluidtokens.datums import CollateralAsset
-    from charli3_dendrite.lending.units import constr
-
-    options = list(pool_datum.collateral_options)
-    chosen = options[chosen_collateral_index]
-    if not isinstance(chosen, CollateralAsset):
-        chosen = CollateralAsset.from_primitive(chosen)
-    alt, fields = constr(chosen.maybe_asset_name)
-    name = bytes(fields[0]) if alt == 0 and fields else b""
-    return chosen.policy_id.hex() + name.hex()
-
-
-def _min_collateral_amount(
-    pool_datum: PoolDatum,
-    *,
-    chosen_collateral_index: int,
-    principal_amount: int,
-    price_num: int,
-    price_den: int,
-) -> int:
-    """Minimum collateral units required to back ``principal_amount`` (ADA principal).
-
-    Mirrors the pool validator's collateral floor. For a dynamically-priced pool the
-    principal is first expressed in lovelace (1:1 for an ADA principal), scaled by the
-    option's ``min_collateral_divider / min_collateral`` ratio, and converted to
-    collateral units at the oracle price ``price_num / price_den``
-    (``ceil(collateral_lovelace * price_den / price_num)``). For a statically-priced
-    pool the floor is ``ceil(principal_amount * min_collateral / min_collateral_div)``.
-    Non-ADA principal pools would additionally price the principal via their own oracle
-    and are out of scope.
-    """
-    principal_asset = pool_datum.common_data.principal_asset
-    if principal_asset.policy_id or principal_asset.asset_name:
-        raise NotImplementedError(
-            "min-collateral for a non-ADA principal pool needs the principal oracle "
-            "price; only ADA-principal pools are supported",
-        )
-    from charli3_dendrite.lending.units import constr
-
-    min_collateral = int(list(pool_datum.min_collateral)[chosen_collateral_index])
-    divider = int(list(pool_datum.min_collateral_divider)[chosen_collateral_index])
-    dynamic_alt, _ = constr(pool_datum.dynamic_collateral_price)
-    if dynamic_alt == 1:  # Bool True -> dynamic (oracle) pricing
-        collateral_in_lovelace = Fraction(principal_amount * divider, min_collateral)
-        return ceil(collateral_in_lovelace * Fraction(price_den, price_num))
-    return ceil(Fraction(principal_amount * min_collateral, divider))
+    """The loan id a pool-origin borrow mints (``utxos.loan_id_from_out_ref``)."""
+    return loan_id_from_out_ref(pool_out_ref)
 
 
 def _resolve_lender_bond_datum(
@@ -1061,15 +894,13 @@ def _resolve_lender_bond_datum(
     if it hashes to the committed value; else the caller must inject the preimage. The
     chosen preimage is ALWAYS re-hashed and checked before it is returned.
     """
-    committed = bytes(pool_datum.lender_bond_inline_datum_hash)
     if lender_bond_datum is None:
         candidate = _UNIT_DATUM_HEX
     elif isinstance(lender_bond_datum, bytes):
         candidate = lender_bond_datum.hex()
     else:
         candidate = lender_bond_datum
-    digest = hashlib.blake2b(bytes.fromhex(candidate), digest_size=32).digest()
-    if digest != committed:
+    if not lender_bond_datum_matches(pool_datum, candidate):
         if lender_bond_datum is None:
             raise ValueError(
                 "lender_bond_datum is required: the pool commits a non-Unit "
@@ -1081,48 +912,6 @@ def _resolve_lender_bond_datum(
             "lender_bond_inline_datum_hash",
         )
     return candidate
-
-
-def _resolve_borrow_window(
-    oracle: OracleReward,
-    *,
-    valid_from: int | None,
-    valid_to: int | None,
-    tip: int,
-) -> tuple[int, int]:
-    """The borrow's ``(valid_from, valid_to)`` slot window, covered by the witness.
-
-    A fully pinned window (byte-exact replay) is accepted only if it is inside the
-    one-hour cap AND covered by the signed oracle witness. Otherwise the window is
-    derived from the backend ``tip`` (lower bound) and the witness's covered slot
-    range, capped at :data:`BORROW_VALIDITY_SLOTS`; a window that cannot be fit inside
-    the witness raises (the witness is stale relative to the tip).
-    """
-    if valid_from is not None and valid_to is not None:
-        if valid_to - valid_from > BORROW_VALIDITY_SLOTS:
-            raise ValueError(
-                f"borrow validity window exceeds {BORROW_VALIDITY_SLOTS} slots",
-            )
-        if not oracle.contains_slot_window(valid_from, valid_to):
-            raise ValueError(
-                "pinned validity window is not covered by the oracle witness",
-            )
-        return valid_from, valid_to
-    witness_from, witness_to = oracle.tx_validity_slots()
-    lower = valid_from if valid_from is not None else max(tip, witness_from)
-    upper = (
-        valid_to
-        if valid_to is not None
-        else min(lower + BORROW_VALIDITY_SLOTS, witness_to)
-    )
-    if upper - lower > BORROW_VALIDITY_SLOTS:
-        upper = lower + BORROW_VALIDITY_SLOTS
-    if not oracle.contains_slot_window(lower, upper):
-        raise ValueError(
-            "could not fit a validity window inside the oracle witness; the witness "
-            "may be stale relative to the backend tip",
-        )
-    return lower, upper
 
 
 def _resolve_borrow_loan_lovelace(
@@ -1138,21 +927,10 @@ def _resolve_borrow_loan_lovelace(
     valid_from: int,
     valid_to: int,
 ) -> int:
-    """The loan output's min-UTxO coin (loan NFT + collateral + synthesized datum).
-
-    ``build_borrow`` writes this onto the loan output verbatim (balancing does not
-    raise a fixed output's coin), so the default is the output's real protocol min-ADA
-    computed via ``pycardano.min_lovelace`` over the actual loan output -- not the flat
-    5-ADA ``OUTPUT_MIN_ADA``. Mirrors the request-fill loan floor.
-    """
-    from pycardano import min_lovelace
-
-    from charli3_dendrite.dataclasses.models import Assets
+    """The loan output's min-UTxO coin (loan NFT + collateral + synthesized datum)."""
     from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
         synth_loan_datum,
     )
-    from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
-    from charli3_dendrite.lending.transactions.infra import EvalContext
     from charli3_dendrite.utility import slot_to_posix_ms
 
     loan_datum = synth_loan_datum(
@@ -1162,20 +940,12 @@ def _resolve_borrow_loan_lovelace(
         lend_date=slot_to_posix_ms(valid_to),
         chosen_collateral_index=chosen_collateral_index,
     )
-    loan_output = TransactionOutput(
-        Address.decode(loan_address),
-        asset_to_value(
-            Assets(
-                **{
-                    "lovelace": OUTPUT_MIN_ADA,
-                    LOAN_POLICY + loan_id.hex(): 1,
-                    collateral_unit: collateral_amount,
-                },
-            ),
-        ),
+    return min_output_lovelace(
+        address=loan_address,
+        assets={LOAN_POLICY + loan_id.hex(): 1, collateral_unit: collateral_amount},
         datum=loan_datum,
+        slot=valid_from,
     )
-    return min_lovelace(EvalContext(last_block_slot=valid_from), output=loan_output)
 
 
 def _resolve_lender_bond_lovelace(
@@ -1186,27 +956,11 @@ def _resolve_lender_bond_lovelace(
     valid_from: int,
 ) -> int:
     """The lender-bond output's min-UTxO coin (lender-bond NFT + the injected datum)."""
-    from pycardano import min_lovelace
-
-    from charli3_dendrite.dataclasses.models import Assets
-    from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
-    from charli3_dendrite.lending.transactions.infra import EvalContext
-
-    lender_bond_output = TransactionOutput(
-        Address.decode(lender_bond_address),
-        asset_to_value(
-            Assets(
-                **{
-                    "lovelace": OUTPUT_MIN_ADA,
-                    LENDER_BOND_POLICY + loan_id.hex(): 1,
-                },
-            ),
-        ),
+    return min_output_lovelace(
+        address=lender_bond_address,
+        assets={LENDER_BOND_POLICY + loan_id.hex(): 1},
         datum=RawCBOR(bytes.fromhex(lender_bond_datum)),
-    )
-    return min_lovelace(
-        EvalContext(last_block_slot=valid_from),
-        output=lender_bond_output,
+        slot=valid_from,
     )
 
 

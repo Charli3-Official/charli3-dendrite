@@ -64,9 +64,13 @@ def _register_builtin() -> None:
     from charli3_dendrite.lending.fluidtokens.transactions.builder import (
         FluidTokensTxBuilder,
     )
+    from charli3_dendrite.lending.fluidtokens_v4.transactions.builder import (
+        FluidTokensV4TxBuilder,
+    )
 
     register_lending_builder("danogo", DanogoTxBuilder)
     register_lending_builder("fluidtokens", FluidTokensTxBuilder)
+    register_lending_builder("fluidtokens_v4", FluidTokensV4TxBuilder)
 
 
 _register_builtin()
