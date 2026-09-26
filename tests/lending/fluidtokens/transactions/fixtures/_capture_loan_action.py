@@ -19,6 +19,8 @@ from pathlib import Path
 
 import psycopg
 
+from pycardano import PlutusData
+
 from charli3_dendrite.lending.fluidtokens.datums import LoanDatum
 
 CONN = dict(
@@ -65,17 +67,22 @@ def _utxo(cur, tx_out_id: int) -> dict:
     )
 
 
-def _is_loan(datum_hex: str | None) -> bool:
+def _is_loan(datum_hex: str | None, loan_datum_cls: type[PlutusData]) -> bool:
     if not datum_hex:
         return False
     try:
-        LoanDatum.from_cbor(bytes.fromhex(datum_hex))
+        loan_datum_cls.from_cbor(bytes.fromhex(datum_hex))
         return True
     except Exception:  # noqa: BLE001
         return False
 
 
-def capture(tx_hash: str, *, label: str) -> dict:
+def capture(
+    tx_hash: str,
+    *,
+    label: str,
+    loan_datum_cls: type[PlutusData] = LoanDatum,
+) -> dict:
     conn = psycopg.connect(**CONN)
     cur = conn.cursor()
     cur.execute(
@@ -126,8 +133,11 @@ def capture(tx_hash: str, *, label: str) -> dict:
     ]
     conn.close()
 
-    loan_in = next((u for u in inputs if _is_loan(u["datum"])), None)
-    loan_out = next((u for u in outputs if _is_loan(u["datum"])), None)
+    loan_in = next((u for u in inputs if _is_loan(u["datum"], loan_datum_cls)), None)
+    loan_out = next(
+        (u for u in outputs if _is_loan(u["datum"], loan_datum_cls)),
+        None,
+    )
 
     return dict(
         label=label,
