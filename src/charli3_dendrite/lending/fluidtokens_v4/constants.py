@@ -8,9 +8,9 @@ policy id and script hash. The constants below are the live mainnet values:
 follows a config update.
 
 The lender-manager spend script is not listed in the config datum: pools opt into it
-by pointing ``lender_bond_address`` at it, and it ships as a constant here. Its own
-action scripts are listed in the lender-manager config datum, held with a separate
-config NFT.
+by pointing ``lender_bond_address`` at it, and it ships as a constant here, as does
+its dispatch withdraw script, a parameter of the spend script. Its own action scripts
+are listed in the lender-manager config datum, held with a separate config NFT.
 
 The pool manager's owner-check scripts are not listed either: they are parameters of
 the pool-manager policy, so they change only with a new pool-manager policy, which
@@ -72,6 +72,9 @@ LOCKED_BORROWER_MANAGER_SPEND_SKH = (
 
 # Not carried by the config datum (see the module docstring).
 LENDER_MANAGER_SPEND_SKH = "6743f4b69446b4e066cfb89daa3d01ef041b6d2646968993be4cec09"
+# The lender-manager dispatch: its withdraw redeemer names the action, and it requires
+# the withdrawal of that action's script from the lender-manager config.
+LENDER_MANAGER_WITHDRAW_SKH = "247065fa7d0f8c5bce2bb379aa76d2cd79ad4e6a7ab207627039a804"
 
 # The pool manager's owner checks for a pool edit and a pool cancel: the
 # ``pm_edit_pool`` and ``pm_cancel_pool_manager`` validators of

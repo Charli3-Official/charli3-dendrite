@@ -19,6 +19,7 @@ from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.datums import AuthCardanoSignature
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.units import constr
 from charli3_dendrite.utility import asset_to_value
@@ -70,6 +71,18 @@ def settled_min_ada(address: Address, assets: dict[str, int], datum: Datum) -> i
         if needed <= lovelace:
             return lovelace
         lovelace = needed
+
+
+def signing_key(auth: Datum, what: str) -> bytes:
+    """The key hash of an ``AuthorizationMethod`` that is a signature.
+
+    Raises ``NotImplementedError`` for any other authorisation: this library signs
+    with wallet keys only. ``what`` names the owned thing in the message.
+    """
+    alt, fields = constr(auth)
+    if alt != AuthCardanoSignature.CONSTR_ID:
+        raise NotImplementedError(f"only a {what} owned by a key is supported")
+    return bytes(fields[0])
 
 
 def sole_nft_name(utxo: Utxo, policy: str, what: str) -> bytes:

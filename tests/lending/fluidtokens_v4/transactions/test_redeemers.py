@@ -9,6 +9,7 @@ from charli3_dendrite.lending.fluidtokens.datums import TxOutRef
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import script_ref_by_hash
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerConfigDatum
 from charli3_dendrite.lending.fluidtokens_v4.transactions import redeemers as r
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 
@@ -24,7 +25,18 @@ CAPTURES = [
     "pool_edit",
     "pool_edit_deposit",
     "pool_cancel",
+    "claim",
+    "claim_bond_first",
 ]
+
+# The lender manager's WithdrawBonds action, named by its config.
+_WITHDRAW_BONDS = LenderManagerConfigDatum.from_cbor(
+    next(
+        u["datum"]
+        for u in fixture("claim")["ref_inputs"]
+        if any(p == c.LENDER_MANAGER_CONFIG_NFT_POLICY for p, _, _ in u["assets"])
+    ),
+).withdraw_bonds_action_script_hash.hex()
 
 # (purpose, script hash) -> the class of that redeemer. Oracle rewards are signed
 # messages replayed verbatim and have no class here.
@@ -56,6 +68,12 @@ _CLASS: dict[tuple[str, str], type[PlutusData]] = {
         "reward",
         c.POOL_MANAGER_CANCEL_ACTION_SKH,
     ): r.PoolManagerActionWithdrawRedeemer,
+    ("spend", c.LENDER_MANAGER_SPEND_SKH): r.LoanSpendRedeemer,
+    ("spend", c.ASSET_MANAGER_SPEND_SKH): r.LoanSpendRedeemer,
+    ("reward", c.LENDER_MANAGER_WITHDRAW_SKH): r.LenderManagerWithdrawRedeemer,
+    ("reward", c.REPAYMENT_POLICY): r.AssetManagerWithdrawRedeemer,
+    # The WithdrawBonds action reads no redeemer; FluidTokens sends the empty one.
+    ("reward", _WITHDRAW_BONDS): r.LoanSpendRedeemer,
 }
 
 
@@ -92,7 +110,7 @@ def test_every_non_oracle_redeemer_has_a_class() -> None:
         "81dd5229d086ea5f3a9e3a8133f2e1b7a4d0020cc67063f8c21cdc3b",
         "4a48df8eac9f3abb39bfcd15e8cc82e8f465ece322a45ed47ef7ebb9",
     }
-    assert len(_typed_redeemers()) == 59  # noqa: PLR2004
+    assert len(_typed_redeemers()) == 69  # noqa: PLR2004
 
 
 def test_recast_redeemer_layout() -> None:
@@ -148,3 +166,22 @@ def test_the_pool_manager_policy_carries_both_owner_checks() -> None:
     script = bytes.fromhex(script_ref_by_hash(refs, c.POOL_MANAGER_POLICY).ref_script)
     assert bytes.fromhex(c.POOL_MANAGER_EDIT_POOL_ACTION_SKH) in script
     assert bytes.fromhex(c.POOL_MANAGER_CANCEL_ACTION_SKH) in script
+
+
+def test_lender_manager_redeemer_layouts() -> None:
+    assert (
+        r.LenderManagerWithdrawRedeemer(4, r.LenderManagerActionWithdrawBonds())
+        .to_cbor()
+        .hex()
+        == "d8799f04d87980ff"
+    )
+    assert r.AssetManagerWithdrawRedeemer(3).to_cbor().hex() == "d8799f03ff"
+
+
+def test_the_lender_manager_spend_script_carries_its_dispatch() -> None:
+    # The dispatch is a parameter applied to the lender-manager spend script.
+    refs = [utxo_from_dict(u) for u in fixture("claim")["ref_inputs"]]
+    script = bytes.fromhex(
+        script_ref_by_hash(refs, c.LENDER_MANAGER_SPEND_SKH).ref_script,
+    )
+    assert bytes.fromhex(c.LENDER_MANAGER_WITHDRAW_SKH) in script
