@@ -20,6 +20,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.builder import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral import (
     ChangeCollateralSnapshot,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.claim import ClaimSnapshot
 from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
     PoolCancelSnapshot,
 )
@@ -54,6 +55,7 @@ def test_registered_as_fluidtokens_v4() -> None:
         LendingAction.POOL_CREATE,
         LendingAction.POOL_EDIT,
         LendingAction.POOL_CANCEL,
+        LendingAction.CLAIM_REPAYMENTS,
     }
 
 
@@ -70,6 +72,7 @@ def test_registered_as_fluidtokens_v4() -> None:
         (LendingAction.POOL_CREATE, PoolCreateSnapshot, "pool_create"),
         (LendingAction.POOL_EDIT, PoolEditSnapshot, "pool_edit"),
         (LendingAction.POOL_CANCEL, PoolCancelSnapshot, "pool_cancel"),
+        (LendingAction.CLAIM_REPAYMENTS, ClaimSnapshot, "claim"),
     ],
 )
 def test_contribute_builds_the_action(
@@ -181,6 +184,28 @@ def test_resolve_pool_cancel_cancels_the_pool(monkeypatch: pytest.MonkeyPatch) -
     assert calls == {"pools": [(_REF, 2)], "lender_address": _WALLET}
     with pytest.raises(ValueError, match="must name the pool"):
         _resolve(LendingAction.POOL_CANCEL)
+
+
+def test_resolve_claim_collects_every_repayment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record(monkeypatch, ClaimSnapshot)
+    _resolve(LendingAction.CLAIM_REPAYMENTS)
+    assert calls == {"lender_address": _WALLET}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"loan_utxo": f"{_REF}#0"}, {"amount": 5}, {"collateral": {"lovelace": 1}}],
+)
+def test_resolve_claim_takes_only_the_lender(
+    monkeypatch: pytest.MonkeyPatch,
+    params: dict,
+) -> None:
+    calls = _record(monkeypatch, ClaimSnapshot)
+    with pytest.raises(ValueError, match="takes only params.actor_address"):
+        _resolve(LendingAction.CLAIM_REPAYMENTS, **params)
+    assert calls == {}
 
 
 def test_resolve_pool_create_points_to_the_snapshot() -> None:

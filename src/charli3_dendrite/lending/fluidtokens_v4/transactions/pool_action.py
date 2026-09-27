@@ -32,7 +32,6 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
-from charli3_dendrite.lending.fluidtokens_v4.datums import AuthCardanoSignature
 from charli3_dendrite.lending.fluidtokens_v4.datums import AuthCardanoWithdrawScript
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
@@ -42,6 +41,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import pool_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import script_hash_of
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import signing_key
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import sole_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     withdraw_redeemer_position,
@@ -77,10 +77,7 @@ def owner_pkh(manager: PoolManagerDatum) -> bytes:
     Raises ``NotImplementedError`` for an owner that is not a key: such a pool cannot
     be edited or cancelled with a wallet signature.
     """
-    alt, fields = constr(manager.pool_owner_auth)
-    if alt != AuthCardanoSignature.CONSTR_ID:
-        raise NotImplementedError("only a pool manager owned by a key is supported")
-    return bytes(fields[0])
+    return signing_key(manager.pool_owner_auth, "pool manager")
 
 
 @dataclass

@@ -69,7 +69,7 @@ _STATE_CLASS: dict[EntityKind, type[FluidV4State]] = {
 
 # Everything a malformed record can raise while its datum is decoded. Truncated CBOR
 # raises cbor2's end-of-stream error, which is not a ValueError.
-_DECODE_ERRORS = (
+DECODE_ERRORS = (
     cbor2.CBORDecodeError,
     DeserializeException,
     ValueError,
@@ -187,5 +187,5 @@ def parse_utxo(
         return None
     try:
         return _STATE_CLASS[selector.kind].from_record(info)
-    except _DECODE_ERRORS:
+    except DECODE_ERRORS:
         return None
