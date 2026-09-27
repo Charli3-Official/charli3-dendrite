@@ -242,6 +242,38 @@ class AbstractOrderState(AbstractPairState):
         return values
 
 
+def fill_within_budget(
+    state: AbstractOrderState,
+    budget: Assets,
+    precise: bool = True,
+) -> tuple[Assets, Assets]:
+    """The largest fill of ``state`` whose input fits ``budget``: ``(out, in)``.
+
+    An order prices the output a budget buys and then the input that output costs,
+    each rounded up, so on a partial fill the input can exceed the budget. The output
+    is then shrunk to the largest amount whose input still fits (zero when not even
+    one unit fits).
+    """
+    order_out, _ = state.get_amount_out(budget, precise=precise)
+    order_in, _ = state.get_amount_in(order_out, precise=precise)
+    if order_in.quantity() <= budget.quantity():
+        return order_out, order_in
+    unit = order_out.unit()
+    low, high = 0, order_out.quantity() - 1
+    while low < high:
+        mid = (low + high + 1) // 2
+        need, _ = state.get_amount_in(Assets(**{unit: mid}), precise=precise)
+        if need.quantity() <= budget.quantity():
+            low = mid
+        else:
+            high = mid - 1
+    if low == 0:
+        return Assets(**{unit: 0}), Assets(**{budget.unit(): 0})
+    order_out = Assets(**{unit: low})
+    order_in, _ = state.get_amount_in(order_out, precise=precise)
+    return order_out, order_in
+
+
 class OrderBookOrder(DendriteBaseModel):
     """Represents an order in the order book."""
 
