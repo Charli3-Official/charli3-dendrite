@@ -43,6 +43,7 @@ class LendingAction(str, Enum):
     POOL_CREATE = "pool_create"
     POOL_EDIT = "pool_edit"
     POOL_CANCEL = "pool_cancel"
+    CLAIM_REPAYMENTS = "claim_repayments"
 
 
 @dataclass
@@ -69,7 +70,8 @@ class ActionParams:
     same semantics as the repay target), and the loan debt is unchanged.
 
     POOL_EDIT and POOL_CANCEL are lender actions on the pool out-ref in `loan_utxo`;
-    each protocol's builder documents the other fields it reads.
+    CLAIM_REPAYMENTS collects the repayments owed to `actor_address` as a lender.
+    Each protocol's builder documents the other fields it reads.
     """
 
     actor_address: str

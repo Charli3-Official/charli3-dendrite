@@ -217,3 +217,63 @@ def pool_fixture_backend(
             h.hex() if isinstance(h, bytes) else h,
         ),
     )
+
+
+def utxo_record(utxo: Utxo) -> Any:  # noqa: ANN401
+    """The backend record of ``utxo``, as the V4 indexer reads it."""
+    from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.dataclasses.models import PoolStateInfo
+
+    tx_hash, index = utxo.out_ref or ("", 0)
+    return PoolStateInfo(
+        address=utxo.address,
+        tx_hash=tx_hash,
+        tx_index=index,
+        block_time=0,
+        block_index=0,
+        block_hash="",
+        datum_hash="",
+        datum_cbor=utxo.datum or "",
+        assets=Assets(
+            root={"lovelace": utxo.lovelace} | {p + n: q for p, n, q in utxo.assets},
+        ),
+        plutus_v2=False,
+    )
+
+
+def claim_fixture_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    fix: dict[str, Any],
+    *,
+    extra: Iterable[Utxo] = (),
+) -> None:
+    """Resolve a claim from ``fix`` (+ ``extra``): configs, scripts, UTxOs, the index."""
+    from charli3_dendrite.lending.fluidtokens_v4.indexing import parse_utxo
+    from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
+
+    pool_fixture_backend(monkeypatch, fix, extra=extra)
+    utxos = [utxo_from_dict(u) for u in fix["inputs"]] + list(extra)
+    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+    monkeypatch.setattr(
+        resolve,
+        "resolve_lender_manager_config_utxo",
+        lambda _backend: next(
+            u
+            for u in refs
+            if u.holds(
+                c.LENDER_MANAGER_CONFIG_NFT_POLICY,
+                c.LENDER_MANAGER_CONFIG_NFT_NAME,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        resolve,
+        "fetch_entities",
+        lambda _backend, selector: [
+            state
+            for state in (
+                parse_utxo(utxo_record(u), {selector.kind: selector}) for u in utxos
+            )
+            if state is not None
+        ],
+    )

@@ -14,7 +14,9 @@ one action) plus a per-action withdraw script; the borrow action carries one
 :class:`BorrowData` per spent pool. A pool edit or cancel also runs the pool
 manager: its dispatch withdraw (:class:`PoolManagerWithdrawRedeemer`) names the
 owner-check script, whose redeemer lists the pool NFT names. Repay and recast data
-drop V3's lender-bond reference-input fields.
+drop V3's lender-bond reference-input fields. A lender's claim runs the lender-manager
+dispatch (:class:`LenderManagerWithdrawRedeemer`) and the asset-manager withdraw
+(:class:`AssetManagerWithdrawRedeemer`).
 
 Every list field is an untyped ``IndefiniteList`` rebuilt element by element in
 ``__post_init__``: that is how the contracts' serialiser encodes them, and decoded raw
@@ -62,6 +64,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.redeemers import PoolMint
 __all__ = [
     "ActionTypeChangeCollateral",
     "AssetManagerMintRedeemer",
+    "AssetManagerWithdrawRedeemer",
     "ActionTypeRecast",
     "ActionTypeRepay",
     "BondMintRedeemer",
@@ -69,6 +72,8 @@ __all__ = [
     "BoolTrue",
     "BorrowData",
     "ChangeCollateralData",
+    "LenderManagerActionWithdrawBonds",
+    "LenderManagerWithdrawRedeemer",
     "LoanChangeCollateralActionWithdrawRedeemer",
     "LoanMintRedeemer",
     "LoanRecastActionWithdrawRedeemer",
@@ -340,3 +345,35 @@ class PoolManagerActionWithdrawRedeemer(PlutusData):
         self.pool_manager_nft_names = IndefiniteList(
             [bytes(name) for name in self.pool_manager_nft_names],
         )
+
+
+@dataclass
+class AssetManagerWithdrawRedeemer(PlutusData):
+    """Asset-manager withdraw redeemer == ``AssetManagerWithdrawRedeemer``.
+
+    == Constr0[config_ref_input_index]. The asset manager releases a payment whose
+    owner token is among the transaction's inputs.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+
+
+@dataclass
+class LenderManagerActionWithdrawBonds(PlutusData):
+    """Lender-manager ``LenderManagerAction.WithdrawBonds`` == Constr0[]."""
+
+    CONSTR_ID = 0
+
+
+@dataclass
+class LenderManagerWithdrawRedeemer(PlutusData):
+    """Lender-manager dispatch withdraw redeemer == ``LenderManagerWithdrawRedeemer``.
+
+    == Constr0[config_ref_input_index, action]; the index points at the lender-manager
+    config, not the protocol config.
+    """
+
+    CONSTR_ID = 0
+    config_ref_input_index: int
+    action: Datum

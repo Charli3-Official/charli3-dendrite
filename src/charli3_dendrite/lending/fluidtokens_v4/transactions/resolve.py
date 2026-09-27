@@ -25,8 +25,20 @@ from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
     resolve_utxo_by_outref,
 )
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.datums import AssetManagerDatumWithToken
 from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
+from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerConfigDatum
+from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
+from charli3_dendrite.lending.fluidtokens_v4.indexing import DECODE_ERRORS
+from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
+from charli3_dendrite.lending.fluidtokens_v4.indexing import EntitySelector
+from charli3_dendrite.lending.fluidtokens_v4.indexing import entity_selectors
+from charli3_dendrite.lending.fluidtokens_v4.loader import fetch_entities
+from charli3_dendrite.lending.fluidtokens_v4.transactions.claim import (
+    MAX_REPAYMENTS_PER_CLAIM,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.claim import ClaimPosition
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import pool_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
     LoanPosition,
@@ -37,9 +49,13 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_action import (
     PoolPosition,
 )
+from charli3_dendrite.lending.transactions.infra import parse_out_ref
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from collections.abc import Sequence
+
+    from pycardano import PlutusData
 
     from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
@@ -78,6 +94,22 @@ def require_known_pool_manager(scripts: ConfigDatum) -> None:
             "the live config names pool-manager policy "
             f"{scripts.pool_manager_policy_id.hex()}, whose owner checks are unknown",
         )
+
+
+def resolve_lender_manager_config_utxo(backend: AbstractBackend) -> Utxo:
+    """The live lender-manager config UTxO."""
+    return resolve_utxo_by_asset(
+        backend,
+        c.LENDER_MANAGER_CONFIG_NFT_POLICY,
+        c.LENDER_MANAGER_CONFIG_NFT_NAME,
+    )
+
+
+def lender_manager_config_datum(config: Utxo) -> LenderManagerConfigDatum:
+    """The lender-manager config UTxO's datum."""
+    if config.datum is None:
+        raise ValueError("lender-manager config UTxO is missing its datum")
+    return LenderManagerConfigDatum.from_cbor(config.datum)
 
 
 def resolve_script(backend: AbstractBackend, script_hash: bytes | str) -> Utxo:
@@ -323,6 +355,122 @@ def resolve_pool_action(
         action_script_ref=resolve_script(backend, getattr(scripts, field)),
         manager_action_script_ref=resolve_script(backend, manager_action),
     )
+
+
+def _resolve_ref(backend: AbstractBackend, value: str) -> Utxo:
+    """The UTxO at ``value`` (``tx_hash#index``)."""
+    ref = parse_out_ref(value)
+    return resolve_utxo(backend, (bytes(ref.transaction_id).hex(), ref.index))
+
+
+def _has_inline_datum(utxo: Utxo, cls: type[PlutusData]) -> bool:
+    """True if ``utxo`` carries an inline datum that decodes as ``cls``."""
+    if not utxo.datum:
+        return False
+    try:
+        cls.from_cbor(utxo.datum)
+    except DECODE_ERRORS:
+        return False
+    return True
+
+
+def _lender_bonds(
+    backend: AbstractBackend,
+    selector: EntitySelector,
+    *,
+    lender_pkh: bytes,
+    bonds: Collection[bytes] | None,
+) -> dict[str, tuple[str, str]]:
+    """The lender's bonds at the lender manager: name -> (UTxO out-ref, principal)."""
+    held: dict[str, tuple[str, str]] = {}
+    for manager in fetch_entities(backend, selector):
+        auth = manager.lender_auth  # type: ignore[attr-defined]
+        if auth.kind == "signature" and auth.hash_hex == lender_pkh.hex():
+            principal = manager.datum.principal_asset.unit()  # type: ignore[attr-defined]
+            for name in manager.lender_bond_names:  # type: ignore[attr-defined]
+                held[name] = (manager.out_ref, principal)
+    if bonds is None:
+        return held
+    wanted = {bond.hex() for bond in bonds}
+    missing = sorted(wanted - held.keys())
+    if missing:
+        raise ValueError(
+            f"lender bonds {missing} of this lender are not at the lender manager",
+        )
+    return {name: bond for name, bond in held.items() if name in wanted}
+
+
+def _repayments_by_size(
+    backend: AbstractBackend,
+    selector: EntitySelector,
+    held: dict[str, tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """(repayment, bond) out-refs of every repayment the bonds own, largest first."""
+    candidates = []
+    for payment in fetch_entities(backend, selector):
+        unit = payment.owner_unit  # type: ignore[attr-defined]
+        bond = (
+            held.get(unit[len(c.LENDER_BOND_POLICY) :])
+            if unit is not None and unit.startswith(c.LENDER_BOND_POLICY)
+            else None
+        )
+        if bond is not None:
+            amount = payment.assets.root.get(bond[1], 0)
+            candidates.append((-amount, payment.out_ref, bond[0]))
+    return [(payment_ref, bond_ref) for _, payment_ref, bond_ref in sorted(candidates)]
+
+
+def resolve_claim_positions(
+    backend: AbstractBackend,
+    scripts: ConfigDatum,
+    *,
+    lender_pkh: bytes,
+    bonds: Collection[bytes] | None = None,
+    max_repayments: int = MAX_REPAYMENTS_PER_CLAIM,
+) -> list[ClaimPosition]:
+    """The lender's bond UTxOs at the lender manager and the repayments each owns.
+
+    A bond UTxO is the lender's when its lender authorisation is the key
+    ``lender_pkh``; a repayment is an asset-manager UTxO owned by one of its lender
+    bonds. The ``max_repayments`` largest repayments, measured in their bond's
+    principal, are kept, and bond UTxOs left owning none are dropped. A UTxO without
+    an inline datum of its kind cannot be spent by a claim and is skipped. ``bonds``
+    (loan ids) limits the result to those bonds and raises ``ValueError`` for one
+    that is not the lender's at the lender manager.
+    """
+    selectors = entity_selectors(scripts)
+    held = _lender_bonds(
+        backend,
+        selectors[EntityKind.LENDER_MANAGER],
+        lender_pkh=lender_pkh,
+        bonds=bonds,
+    )
+    bond_utxos: dict[str, Utxo | None] = {}
+    owned: dict[str, list[Utxo]] = {}
+    kept = 0
+    for payment_ref, bond_ref in _repayments_by_size(
+        backend,
+        selectors[EntityKind.ASSET_MANAGER],
+        held,
+    ):
+        if kept == max_repayments:
+            break
+        if bond_ref not in bond_utxos:
+            bond_utxo = _resolve_ref(backend, bond_ref)
+            bond_utxos[bond_ref] = (
+                bond_utxo if _has_inline_datum(bond_utxo, LenderManagerDatum) else None
+            )
+        repayment = _resolve_ref(backend, payment_ref)
+        if bond_utxos[bond_ref] is not None and _has_inline_datum(
+            repayment,
+            AssetManagerDatumWithToken,
+        ):
+            owned.setdefault(bond_ref, []).append(repayment)
+            kept += 1
+    return [
+        ClaimPosition(bond=bond_utxos[bond_ref], repayments=repayments)  # type: ignore[arg-type]
+        for bond_ref, repayments in sorted(owned.items())
+    ]
 
 
 def default_window(

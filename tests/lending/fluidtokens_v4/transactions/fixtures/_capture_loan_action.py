@@ -55,6 +55,13 @@ JOBS = {
     ),
     # A pool lending ADA cancelled; its pool manager sorts before the pool.
     "pool_cancel": "a39195b6bc6f4d07d2c06b8c021600fe4512549c0d80cd12f7832e0e80eda684",
+    # A lender claims one repayment: the lender bond leaves the lender manager and
+    # returns unchanged, and the repayment pays the fee and goes to the lender.
+    "claim": "6f0cbf4d49616c72c3430c40f5695aa4b5592ceac54153463a219fe1506678eb",
+    # The same claim with the lender-bond input sorting before the repayment.
+    "claim_bond_first": (
+        "9cdc439f0258e719522c81253a4a6cd5c36bd513ea72b7d8a24ff7ba9771e35c"
+    ),
 }
 
 REFERENCE_SCRIPTS = {

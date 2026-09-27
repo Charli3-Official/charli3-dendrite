@@ -22,6 +22,8 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral impo
 from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral import (
     build_change_collateral,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.claim import ClaimSnapshot
+from charli3_dendrite.lending.fluidtokens_v4.transactions.claim import build_claim
 from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
     PoolCancelSnapshot,
 )
@@ -56,6 +58,19 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.transactions.base import ActionParams
     from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 
+# The borrower's actions on an existing loan, and the lender's actions.
+_LOAN_ACTIONS = {
+    LendingAction.REPAY,
+    LendingAction.MODIFY_COLLATERAL,
+    LendingAction.RECAST,
+}
+_LENDER_ACTIONS = {
+    LendingAction.POOL_CREATE,
+    LendingAction.POOL_EDIT,
+    LendingAction.POOL_CANCEL,
+    LendingAction.CLAIM_REPAYMENTS,
+}
+
 # Each action's snapshot type and the function that adds it to a builder.
 _ACTIONS: dict[
     LendingAction,
@@ -71,6 +86,7 @@ _ACTIONS: dict[
     LendingAction.POOL_CREATE: (PoolCreateSnapshot, build_pool_create),
     LendingAction.POOL_EDIT: (PoolEditSnapshot, build_pool_edit),
     LendingAction.POOL_CANCEL: (PoolCancelSnapshot, build_pool_cancel),
+    LendingAction.CLAIM_REPAYMENTS: (ClaimSnapshot, build_claim),
 }
 
 
@@ -99,7 +115,7 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
 
     @classmethod
     def supported_actions(cls) -> set[LendingAction]:
-        """Borrow, repay, change collateral, recast, and pool create, edit, cancel."""
+        """The borrower's loan actions, the lender's pool actions and the claim."""
         return set(_ACTIONS)
 
     def resolve_snapshot(
@@ -126,11 +142,27 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
         - POOL_EDIT: ``loan_utxo`` is the pool and ``amount`` the principal it gains
           (negative withdraws); its terms are kept. ``actor_address`` owns the pool.
         - POOL_CANCEL: ``loan_utxo`` is the pool; ``actor_address`` owns it.
+        - CLAIM_REPAYMENTS: the repayments owed to the lender bonds
+          ``actor_address``'s key holds at the lender manager, at most
+          ``MAX_REPAYMENTS_PER_CLAIM``; no other field may be set.
         - POOL_CREATE takes lender terms ``ActionParams`` cannot carry: resolve it
           with ``PoolCreateSnapshot.from_backend``.
         """
         if action == LendingAction.BORROW:
             return self._resolve_borrow(backend, params)
+        if action in _LOAN_ACTIONS:
+            return self._resolve_loan_action(backend, action, params)
+        if action in _LENDER_ACTIONS:
+            return self._resolve_lender_action(backend, action, params)
+        raise ValueError(f"{self.protocol()} does not support action {action.value!r}")
+
+    def _resolve_loan_action(
+        self,
+        backend: AbstractBackend,
+        action: LendingAction,
+        params: ActionParams,
+    ) -> PoolActionSnapshot:
+        """REPAY, MODIFY_COLLATERAL or RECAST of the loan in ``params``."""
         if action == LendingAction.REPAY:
             if params.amount:
                 raise ValueError(
@@ -158,6 +190,15 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
                 recasts=[(_out_ref(params.loan_utxo, "loan"), params.amount)],
                 borrower_address=params.actor_address,
             )
+        raise ValueError(f"{self.protocol()} does not support action {action.value!r}")
+
+    def _resolve_lender_action(
+        self,
+        backend: AbstractBackend,
+        action: LendingAction,
+        params: ActionParams,
+    ) -> PoolActionSnapshot:
+        """POOL_EDIT, POOL_CANCEL or CLAIM_REPAYMENTS; refuses POOL_CREATE."""
         if action == LendingAction.POOL_EDIT:
             if not params.amount:
                 raise ValueError(
@@ -178,6 +219,21 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
             return PoolCancelSnapshot.from_backend(
                 backend,
                 pools=[_out_ref(params.loan_utxo, "pool")],
+                lender_address=params.actor_address,
+            )
+        if action == LendingAction.CLAIM_REPAYMENTS:
+            if (
+                params.loan_utxo
+                or params.amount
+                or params.collateral
+                or (params.borrow_amount)
+            ):
+                raise ValueError(
+                    "CLAIM_REPAYMENTS takes only params.actor_address; name the bonds "
+                    "to claim with ClaimSnapshot.from_backend",
+                )
+            return ClaimSnapshot.from_backend(
+                backend,
                 lender_address=params.actor_address,
             )
         if action == LendingAction.POOL_CREATE:
