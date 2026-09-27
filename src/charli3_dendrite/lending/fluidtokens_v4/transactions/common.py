@@ -15,13 +15,17 @@ from pycardano import min_lovelace
 from pycardano import plutus_script_hash
 from pycardano import script_hash as pycardano_script_hash
 
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.units import constr
+from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
+    from pycardano import Datum
+
     from charli3_dendrite.lending.fluidtokens_v4.datums import CollateralAsset
 
 # Default validity window of a repay or recast. They owe their amount as of the
@@ -46,6 +50,39 @@ def min_ada(output: TransactionOutput) -> int:
     output and Ogmios evaluation none, so the builders check their own outputs.
     """
     return min_lovelace(EvalContext(last_block_slot=0), output=output)
+
+
+def settled_min_ada(address: Address, assets: dict[str, int], datum: Datum) -> int:
+    """The least ADA an output of ``assets`` and ``datum`` at ``address`` can hold.
+
+    That is the least lovelace amount that covers the min-ADA of the output holding
+    it: the coin's own encoding grows with the amount, so the minimum is iterated to
+    its fixed point. ``assets`` maps unit to quantity and excludes lovelace.
+    """
+    lovelace = 0
+    while True:
+        output = TransactionOutput(
+            address,
+            asset_to_value(Assets(**{"lovelace": lovelace, **assets})),
+            datum=datum,
+        )
+        needed = min_ada(output)
+        if needed <= lovelace:
+            return lovelace
+        lovelace = needed
+
+
+def sole_nft_name(utxo: Utxo, policy: str, what: str) -> bytes:
+    """The name of the one NFT of ``policy`` a ``what`` UTxO holds."""
+    names = [n for p, n, q in utxo.assets if p == policy and q == 1]
+    if len(names) != 1:
+        raise ValueError(f"{what} UTxO must hold exactly one {what} NFT")
+    return bytes.fromhex(names[0])
+
+
+def pool_nft_name(pool: Utxo) -> bytes:
+    """The name of the one pool NFT a pool UTxO holds."""
+    return sole_nft_name(pool, c.POOL_POLICY, "pool")
 
 
 def is_policy_wide(collateral: CollateralAsset) -> bool:

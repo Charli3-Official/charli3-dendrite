@@ -1,14 +1,15 @@
 """FluidTokens V4 implementation of the lending transaction seam.
 
 ``resolve_snapshot`` covers a single loan or pool from :class:`ActionParams`; several
-pools or loans in one transaction resolve through the snapshots' ``from_backend``
-directly and go through :meth:`FluidTokensV4TxBuilder.contribute` the same way.
+pools or loans in one transaction, a pool create, and an edit of a pool's terms
+resolve through the snapshots' ``from_backend`` directly and go through
+:meth:`FluidTokensV4TxBuilder.contribute` the same way.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
-from typing import cast
 
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
@@ -20,6 +21,25 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral impo
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral import (
     build_change_collateral,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
+    PoolCancelSnapshot,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
+    build_pool_cancel,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_create import (
+    PoolCreateSnapshot,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_create import (
+    build_pool_create,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_edit import PoolEdit
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_edit import (
+    PoolEditSnapshot,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_edit import (
+    build_pool_edit,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.recast import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens_v4.transactions.recast import build_recast
@@ -36,11 +56,21 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.transactions.base import ActionParams
     from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 
-_SNAPSHOT_TYPE: dict[LendingAction, type[PoolActionSnapshot]] = {
-    LendingAction.BORROW: BorrowSnapshot,
-    LendingAction.REPAY: RepaySnapshot,
-    LendingAction.MODIFY_COLLATERAL: ChangeCollateralSnapshot,
-    LendingAction.RECAST: RecastSnapshot,
+# Each action's snapshot type and the function that adds it to a builder.
+_ACTIONS: dict[
+    LendingAction,
+    tuple[type[PoolActionSnapshot], Callable[..., None]],
+] = {
+    LendingAction.BORROW: (BorrowSnapshot, build_borrow),
+    LendingAction.REPAY: (RepaySnapshot, build_repay),
+    LendingAction.MODIFY_COLLATERAL: (
+        ChangeCollateralSnapshot,
+        build_change_collateral,
+    ),
+    LendingAction.RECAST: (RecastSnapshot, build_recast),
+    LendingAction.POOL_CREATE: (PoolCreateSnapshot, build_pool_create),
+    LendingAction.POOL_EDIT: (PoolEditSnapshot, build_pool_edit),
+    LendingAction.POOL_CANCEL: (PoolCancelSnapshot, build_pool_cancel),
 }
 
 
@@ -60,7 +90,7 @@ def _single(collateral: dict[str, int], action: LendingAction) -> tuple[str, int
 
 
 class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
-    """Build FluidTokens V4 borrow, repay, change-collateral and recast transactions."""
+    """Build FluidTokens V4 borrower and lender transactions."""
 
     @classmethod
     def protocol(cls) -> str:
@@ -69,8 +99,8 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
 
     @classmethod
     def supported_actions(cls) -> set[LendingAction]:
-        """Borrow, repay, change collateral and recast."""
-        return set(_SNAPSHOT_TYPE)
+        """Borrow, repay, change collateral, recast, and pool create, edit, cancel."""
+        return set(_ACTIONS)
 
     def resolve_snapshot(
         self,
@@ -93,6 +123,11 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
         - MODIFY_COLLATERAL: ``loan_utxo`` is the loan and ``collateral`` its one
           ``{unit: new amount}``; prices are fetched from the registry.
         - RECAST: ``loan_utxo`` is the loan and ``amount`` the principal paid.
+        - POOL_EDIT: ``loan_utxo`` is the pool and ``amount`` the principal it gains
+          (negative withdraws); its terms are kept. ``actor_address`` owns the pool.
+        - POOL_CANCEL: ``loan_utxo`` is the pool; ``actor_address`` owns it.
+        - POOL_CREATE takes lender terms ``ActionParams`` cannot carry: resolve it
+          with ``PoolCreateSnapshot.from_backend``.
         """
         if action == LendingAction.BORROW:
             return self._resolve_borrow(backend, params)
@@ -122,6 +157,33 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
                 backend,
                 recasts=[(_out_ref(params.loan_utxo, "loan"), params.amount)],
                 borrower_address=params.actor_address,
+            )
+        if action == LendingAction.POOL_EDIT:
+            if not params.amount:
+                raise ValueError(
+                    "POOL_EDIT moves principal: params.amount must be non-zero; edit "
+                    "a pool's terms with PoolEditSnapshot.from_backend",
+                )
+            return PoolEditSnapshot.from_backend(
+                backend,
+                edits=[
+                    PoolEdit(
+                        _out_ref(params.loan_utxo, "pool"),
+                        principal_change=params.amount,
+                    ),
+                ],
+                lender_address=params.actor_address,
+            )
+        if action == LendingAction.POOL_CANCEL:
+            return PoolCancelSnapshot.from_backend(
+                backend,
+                pools=[_out_ref(params.loan_utxo, "pool")],
+                lender_address=params.actor_address,
+            )
+        if action == LendingAction.POOL_CREATE:
+            raise ValueError(
+                "POOL_CREATE needs lender terms ActionParams cannot carry; resolve it "
+                "with PoolCreateSnapshot.from_backend and contribute that snapshot",
             )
         raise ValueError(f"{self.protocol()} does not support action {action.value!r}")
 
@@ -170,24 +232,14 @@ class FluidTokensV4TxBuilder(AbstractLendingTxBuilder):
         params: ActionParams,  # - the snapshot carries every amount
     ) -> None:
         """Add the action described by ``snapshot`` to ``tx_builder``."""
-        expected = _SNAPSHOT_TYPE.get(action)
-        if expected is None:
+        if action not in _ACTIONS:
             raise ValueError(
                 f"{self.protocol()} does not support action {action.value!r}",
             )
+        expected, build = _ACTIONS[action]
         if not isinstance(snapshot, expected):
             raise TypeError(
                 f"{action.value} expects {expected.__name__}, "
                 f"got {type(snapshot).__name__}",
             )
-        if action == LendingAction.BORROW:
-            build_borrow(tx_builder, snapshot=cast(BorrowSnapshot, snapshot))
-        elif action == LendingAction.REPAY:
-            build_repay(tx_builder, snapshot=cast(RepaySnapshot, snapshot))
-        elif action == LendingAction.MODIFY_COLLATERAL:
-            build_change_collateral(
-                tx_builder,
-                snapshot=cast(ChangeCollateralSnapshot, snapshot),
-            )
-        else:
-            build_recast(tx_builder, snapshot=cast(RecastSnapshot, snapshot))
+        build(tx_builder, snapshot=snapshot)

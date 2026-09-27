@@ -78,6 +78,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_o
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import loan_address
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import pool_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import script_hash_of
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     withdraw_redeemer_position,
@@ -220,14 +221,6 @@ def priced_sides(
         option.oracle_token_asset if option.policy_id else None,
         common.principal_oracle_asset if common.principal_asset.policy_id else None,
     )
-
-
-def pool_nft_name(pool: Utxo) -> bytes:
-    """The name of the one pool NFT a pool UTxO holds."""
-    names = [n for p, n, q in pool.assets if p == c.POOL_POLICY and q == 1]
-    if len(names) != 1:
-        raise ValueError("pool UTxO must hold exactly one pool NFT")
-    return bytes.fromhex(names[0])
 
 
 @dataclass(frozen=True)

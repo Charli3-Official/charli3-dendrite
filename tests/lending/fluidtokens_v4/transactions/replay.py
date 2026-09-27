@@ -22,7 +22,11 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_value
+from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_action import (
+    PoolPosition,
+)
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.infra import assemble_unsigned
 from charli3_dendrite.lending.transactions.infra import evaluate_tx_cbor
@@ -141,3 +145,75 @@ def evaluate(built: Built, utxos: Iterable[Utxo]) -> list[str]:
         assert budget["budget"]["memory"] > 0
         assert budget["budget"]["cpu"] > 0
     return sorted(b["validator"]["purpose"] for b in budgets)
+
+
+def renamed(utxo: Utxo, out_ref: tuple[str, int], old: bytes, new: bytes) -> Utxo:
+    """``utxo`` at ``out_ref`` with its pool or pool-manager NFT ``old`` renamed."""
+    return replace(
+        utxo,
+        out_ref=out_ref,
+        assets=[(p, new.hex() if n == old.hex() else n, q) for p, n, q in utxo.assets],
+    )
+
+
+def second_pool(
+    position: PoolPosition,
+    *,
+    pool_ref: tuple[str, int],
+    manager_ref: tuple[str, int],
+) -> PoolPosition:
+    """A copy of ``position`` at other out-refs, its NFTs renamed ``01`` + suffix.
+
+    Ogmios reads it from ``additionalUtxo``, so a transaction can spend two pools
+    of one owner although only one exists on chain.
+    """
+    old = position.pool_id
+    new = b"\x01" + old[1:]
+    assert old != new
+    return PoolPosition(
+        pool=renamed(position.pool, pool_ref, old, new),
+        pool_manager=renamed(position.pool_manager, manager_ref, old, new),
+    )
+
+
+def pool_fixture_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    fix: dict[str, Any],
+    *,
+    extra: Iterable[Utxo] = (),
+) -> None:
+    """Resolve pools, pool managers, the config and scripts from ``fix`` (+ ``extra``)."""
+    from charli3_dendrite.lending.fluidtokens.transactions.utxos import (
+        script_ref_by_hash,
+    )
+    from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
+
+    utxos = [utxo_from_dict(u) for u in fix["inputs"]] + list(extra)
+    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+    monkeypatch.setattr(
+        resolve,
+        "resolve_utxo",
+        lambda _backend, out_ref, **_: next(u for u in utxos if u.out_ref == out_ref),
+    )
+    monkeypatch.setattr(
+        resolve,
+        "resolve_pool_manager_utxo",
+        lambda _backend, pool_id, **_: next(
+            u for u in utxos if u.holds(c.POOL_MANAGER_POLICY, pool_id.hex())
+        ),
+    )
+    monkeypatch.setattr(
+        resolve,
+        "resolve_config_utxo",
+        lambda _backend: next(
+            u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
+        ),
+    )
+    monkeypatch.setattr(
+        resolve,
+        "resolve_script",
+        lambda _backend, h: script_ref_by_hash(
+            refs,
+            h.hex() if isinstance(h, bytes) else h,
+        ),
+    )

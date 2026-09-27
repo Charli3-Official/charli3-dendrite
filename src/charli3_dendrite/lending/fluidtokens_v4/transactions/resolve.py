@@ -1,15 +1,19 @@
 """Resolve the live UTxOs a V4 builder needs from a dbsync backend.
 
 The config UTxO is found by its NFT and names every script the protocol runs; the
-action scripts (borrow, repay, change collateral, recast) change when FluidTokens
-upgrades them, so their reference scripts are always looked up by the hash the live
-config names, never by a hard-coded out-ref.
+action scripts (borrow, repay, change collateral, recast, pool edit and cancel)
+change when FluidTokens upgrades them, so their reference scripts are always looked
+up by the hash the live config names, never by a hard-coded out-ref. The pool
+manager's owner checks are parameters of the pool-manager policy, so they are looked
+up by their constant hashes, and only while the config names that policy.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from pycardano import Address
 
 from charli3_dendrite.lending.fluidtokens.transactions.resolve import db_query_rows
 from charli3_dendrite.lending.fluidtokens.transactions.resolve import resolve_funding
@@ -23,11 +27,15 @@ from charli3_dendrite.lending.fluidtokens.transactions.resolve import (
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import pool_nft_name
 from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
     LoanPosition,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
     loan_nft_name,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_action import (
+    PoolPosition,
 )
 
 if TYPE_CHECKING:
@@ -59,15 +67,43 @@ def config_datum(config: Utxo) -> ConfigDatum:
     return ConfigDatum.from_cbor(config.datum)
 
 
+def require_known_pool_manager(scripts: ConfigDatum) -> None:
+    """Raise unless ``scripts`` names :data:`~.constants.POOL_MANAGER_POLICY`.
+
+    A pool create, edit or cancel all rely on this module's pool-manager owner-check
+    hashes, which are parameters of that one policy and unknown for any other.
+    """
+    if scripts.pool_manager_policy_id.hex() != c.POOL_MANAGER_POLICY:
+        raise ValueError(
+            "the live config names pool-manager policy "
+            f"{scripts.pool_manager_policy_id.hex()}, whose owner checks are unknown",
+        )
+
+
 def resolve_script(backend: AbstractBackend, script_hash: bytes | str) -> Utxo:
     """The newest unspent UTxO carrying the reference script ``script_hash``."""
     hex_hash = script_hash.hex() if isinstance(script_hash, bytes) else script_hash
     return resolve_script_ref(backend, hex_hash)
 
 
+def resolve_pool_manager_utxo(
+    backend: AbstractBackend,
+    pool_id: bytes,
+    *,
+    allow_spent: bool = False,
+) -> Utxo:
+    """The pool-manager UTxO of pool ``pool_id`` (the NFTs share a name)."""
+    return resolve_utxo_by_asset(
+        backend,
+        c.POOL_MANAGER_POLICY,
+        pool_id.hex(),
+        allow_spent=allow_spent,
+    )
+
+
 def resolve_pool_manager(backend: AbstractBackend, pool_id: bytes) -> PoolManagerDatum:
-    """The datum of the pool manager of pool ``pool_id`` (the NFTs share a name)."""
-    manager = resolve_utxo_by_asset(backend, c.POOL_MANAGER_POLICY, pool_id.hex())
+    """The datum of the pool manager of pool ``pool_id``."""
+    manager = resolve_pool_manager_utxo(backend, pool_id)
     if manager.datum is None:
         raise ValueError(f"the pool manager of pool {pool_id.hex()} has no datum")
     return PoolManagerDatum.from_cbor(manager.datum)
@@ -171,6 +207,121 @@ def resolve_loan_action(
             backend,
             getattr(scripts, _ACTION_SCRIPT_FIELD[action]),
         ),
+    )
+
+
+def resolve_pool_position(
+    backend: AbstractBackend,
+    pool_out_ref: tuple[str, int],
+    *,
+    lender_address: str,
+    allow_spent: bool = False,
+) -> PoolPosition:
+    """A pool UTxO and its pool manager.
+
+    Raises ``ValueError`` unless the key of ``lender_address`` owns the pool manager.
+    """
+    pool = resolve_utxo(backend, pool_out_ref, allow_spent=allow_spent)
+    position = PoolPosition(
+        pool=pool,
+        pool_manager=resolve_pool_manager_utxo(
+            backend,
+            pool_nft_name(pool),
+            allow_spent=allow_spent,
+        ),
+    )
+    payment = Address.decode(lender_address).payment_part
+    if position.owner_pkh != bytes(payment):
+        raise ValueError(
+            f"pool {pool_out_ref} is owned by key {position.owner_pkh.hex()}, not "
+            f"by {lender_address}",
+        )
+    return position
+
+
+# The config field naming each pool action's withdraw script, and the pool-manager
+# owner check the action runs.
+_POOL_ACTION_SCRIPTS = {
+    "edit": ("pool_edit_action_script_hash", c.POOL_MANAGER_EDIT_POOL_ACTION_SKH),
+    "cancel": ("pool_cancel_action_script_hash", c.POOL_MANAGER_CANCEL_ACTION_SKH),
+}
+
+
+@dataclass
+class PoolActionContext:
+    """What a pool edit or cancel resolves before its own terms."""
+
+    positions: list[PoolPosition]
+    funding: list[Utxo]
+    config: Utxo
+    pool_spend_script_ref: Utxo
+    pool_manager_spend_script_ref: Utxo
+    pool_policy_script_ref: Utxo
+    pool_manager_policy_script_ref: Utxo
+    action_script_ref: Utxo
+    manager_action_script_ref: Utxo
+
+
+def resolve_pool_action(
+    backend: AbstractBackend,
+    *,
+    action: str,
+    pool_out_refs: Sequence[tuple[str, int]],
+    lender_address: str,
+    funding: Sequence[Utxo] | None = None,
+    allow_spent: bool = False,
+) -> PoolActionContext:
+    """Resolve the pools, their managers, the funding and the scripts of a pool action.
+
+    ``action`` is ``"edit"`` or ``"cancel"``. Raises ``ValueError`` when the live
+    config names a pool-manager policy other than
+    :data:`~.constants.POOL_MANAGER_POLICY`, whose owner checks this module knows, or
+    when ``funding`` is not given and the lender's wallet resolves no UTxOs (an
+    explicit empty ``funding`` stays allowed: the action then funds and burns against
+    the pools themselves).
+    """
+    if not pool_out_refs:
+        raise ValueError("a pool action needs at least one pool")
+    positions = [
+        resolve_pool_position(
+            backend,
+            out_ref,
+            lender_address=lender_address,
+            allow_spent=allow_spent,
+        )
+        for out_ref in pool_out_refs
+    ]
+    config = resolve_config_utxo(backend)
+    scripts = config_datum(config)
+    require_known_pool_manager(scripts)
+    field, manager_action = _POOL_ACTION_SCRIPTS[action]
+    spent = [u for p in positions for u in (p.pool, p.pool_manager)]
+    if funding is not None:
+        resolved_funding = list(funding)
+    else:
+        resolved_funding = resolve_wallet_funding(
+            backend,
+            lender_address,
+            exclude=spent,
+        )
+        if not resolved_funding:
+            raise ValueError(f"no UTxOs at {lender_address} fund the {action}")
+    return PoolActionContext(
+        positions=positions,
+        funding=resolved_funding,
+        config=config,
+        pool_spend_script_ref=resolve_script(backend, scripts.pool_spend_script_hash),
+        pool_manager_spend_script_ref=resolve_script(
+            backend,
+            scripts.pool_manager_spend_script_hash,
+        ),
+        pool_policy_script_ref=resolve_script(backend, scripts.pool_policy_id),
+        pool_manager_policy_script_ref=resolve_script(
+            backend,
+            scripts.pool_manager_policy_id,
+        ),
+        action_script_ref=resolve_script(backend, getattr(scripts, field)),
+        manager_action_script_ref=resolve_script(backend, manager_action),
     )
 
 

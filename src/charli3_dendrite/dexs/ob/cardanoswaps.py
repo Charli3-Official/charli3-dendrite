@@ -42,6 +42,7 @@ from charli3_dendrite.dexs.ob.ob_base import AbstractOrderState
 from charli3_dendrite.dexs.ob.ob_base import BuyOrderBook
 from charli3_dendrite.dexs.ob.ob_base import OrderBookOrder
 from charli3_dendrite.dexs.ob.ob_base import SellOrderBook
+from charli3_dendrite.dexs.ob.ob_base import fill_within_budget
 from charli3_dendrite.utility import asset_to_value
 
 # v2 one-way beacon minting policy id (also stored verbatim in the datum's
@@ -973,8 +974,7 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         for order in book:
             state = order.state
 
-            order_out, _ = state.get_amount_out(in_remaining)
-            order_in, _ = state.get_amount_in(order_out)
+            order_out, order_in = fill_within_budget(state, in_remaining)
 
             # Stop once the remaining budget cannot satisfy a meaningful fill.
             if order_out.quantity() <= 0 or order_in.quantity() <= 0:
