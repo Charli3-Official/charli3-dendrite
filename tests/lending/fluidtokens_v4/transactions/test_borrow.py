@@ -22,6 +22,8 @@ from pycardano import Transaction
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens.datums import Asset
 from charli3_dendrite.lending.fluidtokens.oracles.witness import (
     build_oracle_reward_cbor,
@@ -37,6 +39,8 @@ from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import LoanDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
+from charli3_dendrite.lending.fluidtokens_v4.market import lendable_principal
+from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolState
 from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
 from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
 from charli3_dendrite.lending.fluidtokens_v4.transactions.borrow import BorrowSnapshot
@@ -800,3 +804,36 @@ def test_a_borrowed_loan_can_repay_its_24th_installment(
     assert LoanDatum.from_cbor(continuing.datum.to_cbor()).repaid_installments == 24
     assert continuing.amount.coin == loan.amount.coin
     assert continuing.amount.coin >= min_ada(continuing)
+
+
+def test_a_pool_lends_exactly_what_its_market_reports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fix = fixture("borrow_single")
+    capture = BorrowSnapshot.from_capture(fix)
+    (leg,) = capture.legs
+    _fixture_backend(monkeypatch, fix)
+    pool = leg.pool
+    tx_hash, tx_index = leg.out_ref
+    state = FluidV4PoolState.from_record(
+        PoolStateInfo(
+            address=pool.address,
+            tx_hash=tx_hash,
+            tx_index=tx_index,
+            block_time=0,
+            block_index=0,
+            block_hash="",
+            datum_hash="",
+            datum_cbor=pool.datum or "",
+            assets=Assets(
+                root={"lovelace": pool.lovelace}
+                | {p + n: q for p, n, q in pool.assets},
+            ),
+            plutus_v2=False,
+        ),
+    )
+    assert state.borrowable_unit == "lovelace"
+    lendable = lendable_principal(state)
+    _from_backend(capture, borrows=[PoolBorrow(leg.out_ref, lendable)])
+    with pytest.raises(ValueError, match="below the"):
+        _from_backend(capture, borrows=[PoolBorrow(leg.out_ref, lendable + 1)])
