@@ -94,6 +94,7 @@ class RateModel(ABC):
 
 
 _REGISTRY: dict[tuple[str, RateKind], type[RateModel]] = {}
+_BUILTINS_LOADED = False
 
 
 def register_rate_model(cls: type[RateModel]) -> type[RateModel]:
@@ -108,6 +109,7 @@ def rate_model_from_dict(data: Mapping[str, Any]) -> RateModel:
     Raises:
         KeyError: if no model is registered for the record's protocol and kind.
     """
+    _load_builtins()
     key = (str(data["protocol"]), RateKind(data["kind"]))
     try:
         cls = _REGISTRY[key]
@@ -117,3 +119,15 @@ def rate_model_from_dict(data: Mapping[str, Any]) -> RateModel:
             f"no rate model registered for {key[0]}/{key[1].value}; known: {known}",
         ) from None
     return cls.from_params(data["params"])
+
+
+def _load_builtins() -> None:
+    """Import the protocol packages that register models, once, on first lookup."""
+    global _BUILTINS_LOADED  # noqa: PLW0603
+    if _BUILTINS_LOADED:
+        return
+    _BUILTINS_LOADED = True
+    from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS
+
+    for model in RATE_MODELS:
+        register_rate_model(model)

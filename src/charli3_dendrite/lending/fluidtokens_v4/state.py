@@ -17,6 +17,7 @@ Identity policies are this package's constants: a policy change is a new deploym
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import ClassVar
 from typing import NamedTuple
@@ -52,6 +53,11 @@ from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import asset_unit
 from charli3_dendrite.lending.units import constr
 from charli3_dendrite.lending.units import script_payment_address
+
+if TYPE_CHECKING:
+    from charli3_dendrite.lending.normalized import BorrowRequest
+    from charli3_dendrite.lending.normalized import LendingMarket
+    from charli3_dendrite.lending.normalized import LendingPosition
 
 PROTOCOL_NAME = "FluidTokensV4"
 
@@ -251,6 +257,20 @@ class FluidV4PoolState(FluidV4Record, FluidPoolState):
         datum: PoolDatum = self.pool_datum  # type: ignore[assignment]
         return [collateral_asset_unit(option) for option in datum.collateral_options]
 
+    def to_market(
+        self,
+        pool_manager: FluidV4PoolManagerState | None = None,
+    ) -> LendingMarket:
+        """This pool as a common market; ``pool_manager`` supplies the lender.
+
+        Without the pool manager (same asset name), the lender is the pool's own
+        ``lender_auth``, which for a managed pool is the pool-manager script. Raises
+        LendingParseError when the datum cannot be converted.
+        """
+        from charli3_dendrite.lending.fluidtokens_v4.market import pool_to_market
+
+        return pool_to_market(self, pool_manager)
+
 
 class FluidV4LoanState(FluidV4Record, FluidLoanState):
     """A V4 loan UTxO: one borrower position.
@@ -341,6 +361,15 @@ class FluidV4LoanState(FluidV4Record, FluidLoanState):
         """The validated collateral unit, for the inherited value and health math."""
         return self.collateral_unit
 
+    def to_position(self) -> LendingPosition:
+        """This loan as a common position.
+
+        Raises LendingParseError when the datum cannot be converted.
+        """
+        from charli3_dendrite.lending.fluidtokens_v4.market import loan_to_position
+
+        return loan_to_position(self)
+
     def oracle_refs(self) -> list[OracleRef]:
         """The collateral price feed the liquidation check needs.
 
@@ -398,6 +427,17 @@ class FluidV4RequestState(FluidV4Record, FluidRequestState):
     def request_id(self) -> str:
         """Request NFT asset name (hex); empty when the UTxO holds none."""
         return identity_name(self.assets, c.REQUEST_POLICY) or ""
+
+    def to_request(self) -> BorrowRequest:
+        """This request as a common borrow request.
+
+        Raises LendingParseError when the datum cannot be converted.
+        """
+        from charli3_dendrite.lending.fluidtokens_v4.market import (
+            request_to_borrow_request,
+        )
+
+        return request_to_borrow_request(self)
 
 
 class FluidV4UtxoState(FluidV4Record, DendriteBaseModel):
