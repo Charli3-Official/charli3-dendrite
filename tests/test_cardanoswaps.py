@@ -32,6 +32,7 @@ from pycardano.utils import min_lovelace
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_ID
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_HASH
@@ -518,6 +519,9 @@ OWNER = Address(
 )
 
 
+CPUB = _OfflineContext().protocol_param.coins_per_utxo_byte
+
+
 @pytest.fixture
 def tx_builder() -> TransactionBuilder:
     return TransactionBuilder(_OfflineContext())
@@ -649,14 +653,15 @@ def test_build_create_mints_three_beacons_and_datum(tx_builder) -> None:
 
 
 def test_build_create_ada_offer_funds_drawable_carrier(tx_builder) -> None:
-    """An ADA-offer CREATE funds offer + a carrier sized to the FINAL full-fill
-    state (3 beacons + fully-accumulated ask + datum), so the ENTIRE offered ADA
-    is drawable — no phantom, un-fillable min-ADA tail.
+    """An ADA-offer CREATE funds offer + a carrier sized to the full-fill
+    CONTINUATION (3 beacons + fully-accumulated ask + the datum with
+    ``prev_input = Some``), so the ENTIRE offered ADA is drawable.
 
-    The validator derives ``offer_taken = lovelace_in - lovelace_out``, so the
-    resting UTxO can never be drawn below its (ask-laden) min-ADA floor; funding
-    that floor as a separate carrier on top of the offer makes the full offer
-    takeable.
+    The validator derives ``offer_taken = lovelace_in - lovelace_out``, so a fill
+    can never draw the UTxO below its continuation's min-ADA. That continuation
+    records the spent UTxO in ``prev_input``, so it is larger than the resting
+    output and a carrier sized on the resting datum leaves the offer's tail
+    un-fillable.
     """
     offer_qty = 10_000_000
     num, den = 2, 1
@@ -667,23 +672,29 @@ def test_build_create_ada_offer_funds_drawable_carrier(tx_builder) -> None:
         price=(num, den),
         tx_builder=tx_builder,
     )
+    carrier = txo.amount.coin - offer_qty
 
-    # Independently size the floor the continuation must hold at a FULL fill:
-    # 3 beacons + the fully-accumulated ask (offer × price) + the inline datum.
+    # The full-fill state sized on the RESTING datum (prev_input = None).
     full_ask = -(-offer_qty * num // den)
     final_assets = CardanoSwapsOrderState._beacon_mint_assets(datum, 1) + Assets(
         root={TOKEN_A_UNIT: full_ask},
     )
-    final_txo = TransactionOutput(
+    resting_final = TransactionOutput(
         address=txo.address,
         amount=asset_to_value(final_assets),
         datum=datum,
     )
-    carrier = min_lovelace(tx_builder.context, output=final_txo)
+    resting_carrier = min_lovelace(tx_builder.context, output=resting_final)
 
-    # Resting UTxO holds exactly offer + carrier; the whole offer is drawable.
-    assert txo.amount.coin == offer_qty + carrier
-    assert txo.amount.coin - carrier == offer_qty
+    # The carrier covers exactly the extra bytes of the Some(prev_input) datum.
+    cont_datum = datum.continuation_datum(bytes.fromhex(TX_HASH), 0)
+    datum_growth = len(cont_datum.to_cbor()) - len(datum.to_cbor())
+    assert datum_growth > 0
+    assert carrier == datum.carrier_lovelace(offer_qty, CPUB, address=txo.address)
+    assert carrier - resting_carrier == datum_growth * CPUB
+
+    # The created UTxO nets back to exactly the stated offer.
+    assert datum.claimable_offer(txo.amount.coin, CPUB) == offer_qty
 
 
 def test_build_create_expiration_set(tx_builder) -> None:
@@ -703,6 +714,328 @@ def test_build_create_expiration_set(tx_builder) -> None:
         bytes.fromhex(TOKEN_A_POLICY),
         bytes.fromhex(TOKEN_A_NAME),
     )
+
+
+@pytest.mark.parametrize("price", [(0, 1), (1, 0), (-2, 1), (2, -1)])
+def test_build_create_rejects_non_positive_price(tx_builder, price) -> None:
+    """The beacon policy only mints for a positive price, so CREATE refuses early."""
+    with pytest.raises(ValueError, match="positive rational"):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root={"lovelace": 10_000_000}),
+            ask=Assets(root={TOKEN_A_UNIT: 0}),
+            price=price,
+            tx_builder=tx_builder,
+        )
+
+
+# --- carrier sizing and claimable offer -------------------------------------
+
+
+def _assets_of(txo: TransactionOutput) -> Assets:
+    """A ``unit -> quantity`` bag of everything an output holds."""
+    root = {"lovelace": txo.amount.coin}
+    if txo.amount.multi_asset is not None:
+        for policy, names in txo.amount.multi_asset.data.items():
+            for name, qty in names.items():
+                root[bytes(policy).hex() + bytes(name).hex()] = qty
+    return Assets(root=root)
+
+
+def _state_from_output(txo: TransactionOutput, tx_index: int) -> CardanoSwapsOrderState:
+    """Parse a built swap output back into an order state, as if on chain."""
+    values = _values_from_datum(txo.datum, _assets_of(txo))
+    values["tx_index"] = tx_index
+    values["address"] = str(txo.address)
+    return CardanoSwapsOrderState.model_validate(values)
+
+
+def _cont_quantity(txo: TransactionOutput, unit: str) -> int:
+    """The quantity of ``unit`` a (continuing) output holds."""
+    return _assets_of(txo)[unit]
+
+
+@pytest.mark.parametrize(
+    ("price", "offer_qty"),
+    [
+        ((2, 1), 1),
+        ((2, 1), 10_000_000),
+        ((1, 3), 987_654_321),
+        ((158_061, 1_000_000), 12_345_678),
+        ((2, 1), 5_000_000_000),  # the resting lovelace needs a wider encoding
+        ((7, 5), 10**14),
+        # The carrier pushes the full-fill ask across 2**32 (a wider encoding).
+        ((1, 1), 2**32 - 1_000_000),
+    ],
+)
+def test_ada_offer_create_is_fully_claimable_and_fillable(price, offer_qty) -> None:
+    """A created ADA offer nets back to the stated offer and fills in full."""
+    tb = TransactionBuilder(_OfflineContext())
+    txo, datum = CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={"lovelace": offer_qty}),
+        ask=Assets(root={TOKEN_A_UNIT: 0}),
+        price=price,
+        tx_builder=tb,
+    )
+    carrier = txo.amount.coin - offer_qty
+    assert carrier == datum.carrier_lovelace(offer_qty, CPUB)
+    assert datum.claimable_offer(txo.amount.coin, CPUB) == offer_qty
+
+    state = _state_from_output(txo, tx_index=0)
+    assert state.claimable_offer(CPUB) == offer_qty
+
+    fill = TransactionBuilder(_OfflineContext())
+    cont_txo, _ = state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_A_UNIT: state.required_ask(offer_qty)}),
+        out_assets=Assets(root={"lovelace": offer_qty}),
+        tx_builder=fill,
+        owner_address=OWNER,
+    )
+    # The full offer left and the continuation is still funded by the carrier.
+    assert cont_txo.amount.coin == carrier
+    assert min_lovelace(fill.context, output=cont_txo) <= carrier
+    assert _cont_quantity(cont_txo, TOKEN_A_UNIT) == state.required_ask(offer_qty)
+
+
+def test_create_carrier_is_sized_at_the_created_output_index() -> None:
+    """The first fill's prev_input records the created output's own index."""
+    offer = Assets(root={"lovelace": 10_000_000})
+    ask = Assets(root={TOKEN_A_UNIT: 0})
+
+    first = TransactionBuilder(_OfflineContext())
+    txo_0, datum = CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=offer,
+        ask=ask,
+        price=(2, 1),
+        tx_builder=first,
+    )
+
+    # 24 outputs ahead of it: index 24 no longer fits CBOR's one-byte integer.
+    crowded = TransactionBuilder(_OfflineContext())
+    for _ in range(24):
+        crowded.add_output(TransactionOutput(OWNER, Value(coin=2_000_000)))
+    txo_24, _ = CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=offer,
+        ask=ask,
+        price=(2, 1),
+        tx_builder=crowded,
+    )
+
+    assert txo_24.amount.coin - txo_0.amount.coin == CPUB
+    assert _state_from_output(txo_0, 0).claimable_offer(CPUB) == 10_000_000
+    assert _state_from_output(txo_24, 24).claimable_offer(CPUB) == 10_000_000
+    # The same UTxO at a two-byte index would clip the offer by one byte's worth.
+    assert (
+        datum.claimable_offer(txo_0.amount.coin, CPUB, prev_output_index=24)
+        == 10_000_000 - CPUB
+    )
+
+
+def test_token_offer_ada_ask_carrier_funds_first_fill(tx_builder) -> None:
+    """A token offer's carrier covers its continuation, so no fill tops it up.
+
+    The continuation still holds (almost) the whole offer token and records the
+    spent UTxO in ``prev_input``, so it needs more than the resting output.
+    """
+    offer_qty = 5_000
+    txo, datum = CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={TOKEN_A_UNIT: offer_qty}),
+        ask=Assets(root={"lovelace": 0}),
+        price=(3, 2),
+        tx_builder=tx_builder,
+    )
+    resting = TransactionOutput(
+        address=txo.address,
+        amount=asset_to_value(
+            Assets(root={TOKEN_A_UNIT: offer_qty}) + datum.beacon_assets(1),
+        ),
+        datum=datum,
+    )
+    assert txo.amount.coin == datum.carrier_lovelace(offer_qty, CPUB)
+    assert txo.amount.coin > min_lovelace(tx_builder.context, output=resting)
+
+    state = _state_from_output(txo, tx_index=0)
+    assert state.claimable_offer(CPUB) == offer_qty
+
+    fill = TransactionBuilder(_OfflineContext())
+    cont_txo, _ = state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={"lovelace": state.required_ask(1)}),
+        out_assets=Assets(root={TOKEN_A_UNIT: 1}),
+        tx_builder=fill,
+        owner_address=OWNER,
+    )
+    # Carrier + the ADA ask paid in, with no taker top-up.
+    assert cont_txo.amount.coin == txo.amount.coin + state.required_ask(1)
+    assert _cont_quantity(cont_txo, TOKEN_A_UNIT) == offer_qty - 1
+
+
+@pytest.mark.parametrize("taken", [1, 5_000, 9_999, 10_000])
+def test_token_to_token_carrier_funds_every_fill(taken) -> None:
+    """A token-for-token carrier also sizes in the ask token it accumulates."""
+    offer_qty = 10_000
+    tb = TransactionBuilder(_OfflineContext())
+    txo, datum = CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={TOKEN_A_UNIT: offer_qty}),
+        ask=Assets(root={TOKEN_B_UNIT: 0}),
+        price=(7, 5),
+        tx_builder=tb,
+    )
+    assert txo.amount.coin == datum.carrier_lovelace(offer_qty, CPUB)
+
+    state = _state_from_output(txo, tx_index=0)
+    fill = TransactionBuilder(_OfflineContext())
+    cont_txo, _ = state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_B_UNIT: state.required_ask(taken)}),
+        out_assets=Assets(root={TOKEN_A_UNIT: taken}),
+        tx_builder=fill,
+        owner_address=OWNER,
+    )
+    assert cont_txo.amount.coin == txo.amount.coin
+    assert _cont_quantity(cont_txo, TOKEN_B_UNIT) == state.required_ask(taken)
+
+
+def test_continuation_min_lovelace_adds_the_prev_input_bytes() -> None:
+    """The continuation outgrows the resting output by the Some(prev_input) bytes."""
+    datum = _make_datum(
+        b"", b"", bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), 2, 1
+    )
+    held = Assets(root={TOKEN_A_UNIT: 20_000_000})
+    address = CardanoSwapsOrderState.beacon_address(OWNER)
+    resting = TransactionOutput(
+        address=address,
+        amount=asset_to_value(held + datum.beacon_assets(1)),
+        datum=datum,
+    )
+    resting_min = min_lovelace(_OfflineContext(), output=resting)
+
+    growth = len(datum.continuation_datum(bytes(32), 0).to_cbor()) - len(
+        datum.to_cbor(),
+    )
+    cont_min = datum.continuation_min_lovelace(held, CPUB, address=address)
+    assert cont_min - resting_min == growth * CPUB
+    # The owner's credentials never change the size, only the address shape.
+    assert datum.continuation_min_lovelace(held, CPUB) == cont_min
+    # Lovelace in ``held`` is ignored: the balance is sized as the minimum.
+    assert (
+        datum.continuation_min_lovelace(
+            held + Assets(root={"lovelace": 10**12}),
+            CPUB,
+        )
+        == cont_min
+    )
+
+
+def test_claimable_offer_token_offer_is_whole_balance() -> None:
+    """A token offer's min-ADA is separate: the whole balance is claimable."""
+    datum = _make_datum(
+        bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), b"", b"", 3, 2
+    )
+    assert datum.claimable_offer(5_000, CPUB) == 5_000
+
+
+def test_claimable_offer_ada_offer_nets_full_fill_continuation() -> None:
+    """An ADA offer keeps its continuation's min-UTxO, sized at the full ask."""
+    datum = _make_datum(
+        b"", b"", bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), 2, 1
+    )
+    gross = 100_000_000
+    floor = datum.continuation_min_lovelace(
+        Assets(root={TOKEN_A_UNIT: datum.required_ask(gross)}),
+        CPUB,
+    )
+    assert datum.claimable_offer(gross, CPUB) == gross - floor
+    # Below the continuation's minimum nothing is claimable.
+    assert datum.claimable_offer(floor, CPUB) == 0
+    assert datum.claimable_offer(1, CPUB) == 0
+
+
+def test_claimable_offer_counts_the_held_ask() -> None:
+    """Ask already held can widen the full-fill ask and raise the floor."""
+    datum = _make_datum(
+        b"", b"", bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), 2, 1
+    )
+    gross = 100_000_000
+    assert datum.claimable_offer(gross, CPUB, held_ask=2**32) < datum.claimable_offer(
+        gross,
+        CPUB,
+    )
+
+    # The order state reads the held ask from its own balance.
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        2,
+        1,
+        gross,
+        extra={TOKEN_A_UNIT: 2**32},
+    )
+    assert state.claimable_offer(CPUB) == datum.claimable_offer(
+        gross,
+        CPUB,
+        held_ask=2**32,
+    )
+
+
+def test_required_ask_is_the_price_ceiling() -> None:
+    """The least ask that passes ``offer_taken * num <= ask_given * den``."""
+    datum = _make_datum(
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        bytes.fromhex(TOKEN_B_POLICY),
+        bytes.fromhex(TOKEN_B_NAME),
+        7,
+        5,
+    )
+    assert datum.required_ask(5) == 7
+    assert datum.required_ask(1) == 2
+    assert datum.required_ask(0) == 0
+    for taken in (1, 2, 3, 4, 5, 999, 10**15 + 3):
+        ask = datum.required_ask(taken)
+        assert taken * 7 <= ask * 5
+        assert taken * 7 > (ask - 1) * 5
+
+
+# --- malformed swap_price ---------------------------------------------------
+
+
+@pytest.mark.parametrize(("num", "den"), [(1, 0), (0, 1), (-1, 2), (1, -2), (-1, -2)])
+def test_non_positive_swap_price_raises_invalid_pool_error(num, den) -> None:
+    """A UTxO with a non-positive swap_price still parses but cannot be priced."""
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        num,
+        den,
+        10_000_000,
+    )
+    with pytest.raises(InvalidPoolError, match="swap_price"):
+        state.price
+    with pytest.raises(InvalidPoolError):
+        state.get_amount_out(Assets(root={TOKEN_A_UNIT: 4}))
+    with pytest.raises(InvalidPoolError):
+        state.required_ask(1)
+    with pytest.raises(InvalidPoolError):
+        state.claimable_offer(CPUB)
+    with pytest.raises(InvalidPoolError):
+        state.swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={TOKEN_A_UNIT: 8}),
+            out_assets=Assets(root={"lovelace": 4}),
+            tx_builder=TransactionBuilder(_OfflineContext()),
+            owner_address=OWNER,
+        )
 
 
 # --- FILL ------------------------------------------------------------------
@@ -821,6 +1154,110 @@ def test_build_fill_token_to_token(tx_builder) -> None:
     assert cont_units[TOKEN_A_UNIT] == 5_000
     assert cont_units[TOKEN_B_UNIT] == 7_000
     assert isinstance(cont_datum.prev_input, CardanoSwapsSomeOutRef)
+
+
+def test_build_fill_deposits_required_ask_not_in_quantity(tx_builder) -> None:
+    """The ask paid in is ``required_ask(offer_taken)``; in_assets picks the unit."""
+    state = _resting_state(
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        bytes.fromhex(TOKEN_B_POLICY),
+        bytes.fromhex(TOKEN_B_NAME),
+        7,
+        5,
+        10_000,
+        extra={"lovelace": 2_000_000},
+    )
+    cont_txo, _ = state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_B_UNIT: 1}),
+        out_assets=Assets(root={TOKEN_A_UNIT: 3}),
+        tx_builder=tx_builder,
+        owner_address=OWNER,
+    )
+    assert _cont_quantity(cont_txo, TOKEN_B_UNIT) == state.required_ask(3) == 5
+
+
+def _underfunded_ada_offer() -> tuple[CardanoSwapsOrderState, int]:
+    """An ADA offer funded with the RESTING-datum carrier, and its stated offer.
+
+    Sized on ``prev_input = None``, the carrier is short of the continuation the
+    validator requires, so the stated offer's tail cannot be taken.
+    """
+    offer_qty = 10_000_000
+    datum = _make_datum(
+        b"", b"", bytes.fromhex(TOKEN_A_POLICY), bytes.fromhex(TOKEN_A_NAME), 2, 1
+    )
+    final = TransactionOutput(
+        address=CardanoSwapsOrderState.beacon_address(OWNER),
+        amount=asset_to_value(
+            datum.beacon_assets(1)
+            + Assets(root={TOKEN_A_UNIT: datum.required_ask(offer_qty)}),
+        ),
+        datum=datum,
+    )
+    resting_carrier = min_lovelace(_OfflineContext(), output=final)
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        2,
+        1,
+        offer_qty + resting_carrier,
+    )
+    return state, offer_qty
+
+
+def test_build_fill_rejects_ada_over_claim() -> None:
+    """Taking more ADA than is claimable is refused, not silently short-paid."""
+    state, offer_qty = _underfunded_ada_offer()
+    claimable = state.claimable_offer(CPUB)
+    assert 0 < claimable < offer_qty
+
+    with pytest.raises(ValueError, match="min-UTxO"):
+        state.swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={TOKEN_A_UNIT: state.required_ask(offer_qty)}),
+            out_assets=Assets(root={"lovelace": offer_qty}),
+            tx_builder=TransactionBuilder(_OfflineContext()),
+            owner_address=OWNER,
+        )
+
+    tb = TransactionBuilder(_OfflineContext())
+    cont_txo, _ = state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN_A_UNIT: state.required_ask(claimable)}),
+        out_assets=Assets(root={"lovelace": claimable}),
+        tx_builder=tb,
+        owner_address=OWNER,
+    )
+    # The claimable fill takes exactly what it states.
+    assert cont_txo.amount.coin == state.assets["lovelace"] - claimable
+    assert min_lovelace(tb.context, output=cont_txo) <= cont_txo.amount.coin
+
+
+@pytest.mark.parametrize("taken", [0, -1, 10_001])
+def test_build_fill_rejects_out_of_range_offer(tx_builder, taken) -> None:
+    """A fill must take between one unit and the whole held offer."""
+    state = _resting_state(
+        bytes.fromhex(TOKEN_A_POLICY),
+        bytes.fromhex(TOKEN_A_NAME),
+        b"",
+        b"",
+        3,
+        2,
+        10_000,
+        extra={"lovelace": 2_000_000},
+    )
+    with pytest.raises(ValueError, match="between 1 and 10000"):
+        state.swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={"lovelace": 20_000}),
+            out_assets=Assets(root={TOKEN_A_UNIT: taken}),
+            tx_builder=tx_builder,
+            owner_address=OWNER,
+        )
 
 
 # --- CLOSE -----------------------------------------------------------------
@@ -1190,3 +1627,57 @@ def test_orderstate_retains_address_from_record() -> None:
     values["address"] = _resting_beacon_addr(_MAKER)
     state = CardanoSwapsOrderState.model_validate(values)
     assert state.address == _resting_beacon_addr(_MAKER)
+
+
+def test_orderbook_get_book_skips_malformed_price() -> None:
+    # One order with a zero-denominator swap_price must not break the whole book.
+    good = _sell_order(2, 1, 100)
+    bad = _sell_order(1, 0, 100)
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
+    assert len(book.sell_book_full) == 1
+    assert book.sell_book_full[0].state is good
+
+
+def test_orderbook_swap_utxo_caps_ada_offer_at_claimable(tx_builder) -> None:
+    # A budget that buys the whole ADA balance takes only the claimable offer, so
+    # the continuation keeps its min-UTxO instead of the fill being refused.
+    order = _ada_offer_order(2, 1, 10_000_000)
+    order.address = _resting_beacon_addr(_MAKER)
+    claimable = order.claimable_offer(CPUB)
+    assert claimable < 10_000_000
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[order])
+
+    cont_txo, _ = book.swap_utxo(
+        address_source=_TAKER,
+        in_assets=Assets(root={TOKEN_A_UNIT: 30_000_000}),
+        out_assets=Assets(root={"lovelace": 10_000_000}),
+        tx_builder=tx_builder,
+    )
+
+    assert cont_txo is not None
+    assert cont_txo.amount.coin == 10_000_000 - claimable
+    assert min_lovelace(tx_builder.context, output=cont_txo) <= cont_txo.amount.coin
+    assert _cont_quantity(cont_txo, TOKEN_A_UNIT) == order.required_ask(claimable)
+
+
+def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
+    # An ADA offer already down to its min-UTxO is passed over for the next level.
+    drained = _ada_offer_order(1, 1, 1_000_000)
+    drained.address = _resting_beacon_addr(_MAKER)
+    assert drained.claimable_offer(CPUB) == 0
+    live = _ada_offer_order(2, 1, 10_000_000)
+    live.address = _resting_beacon_addr(_TAKER)
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[live, drained])
+    assert book.buy_book_full[0].state is drained
+
+    cont_txo, _ = book.swap_utxo(
+        address_source=_TAKER,
+        in_assets=Assets(root={TOKEN_A_UNIT: 4_000_000}),
+        out_assets=Assets(root={"lovelace": 2_000_000}),
+        tx_builder=tx_builder,
+    )
+
+    assert cont_txo is not None
+    assert cont_txo.address.staking_part == _TAKER.staking_part
+    assert cont_txo.amount.coin == 8_000_000
+    assert len(tx_builder.outputs) == 1
