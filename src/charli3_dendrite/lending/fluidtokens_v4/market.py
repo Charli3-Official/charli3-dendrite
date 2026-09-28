@@ -1,4 +1,4 @@
-"""FluidTokens V4 states as common lending views.
+"""FluidTokens V4 states as common lending views, and the V4 market source.
 
 A V4 pool is one market, a loan one position and a request one borrow request. The
 conversions read only the UTxO (and, for a pool's lender, its pool manager); every
@@ -7,6 +7,7 @@ number comes from the datum and the contract-exact maths.
 
 from __future__ import annotations
 
+import time
 from fractions import Fraction
 from typing import TYPE_CHECKING
 from typing import Any
@@ -17,6 +18,9 @@ from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
     min_output_lovelace,
 )
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
+from charli3_dendrite.lending.fluidtokens_v4.indexing import entity_selectors
+from charli3_dendrite.lending.fluidtokens_v4.indexing import parse_utxo
 from charli3_dendrite.lending.fluidtokens_v4.rates import PROTOCOL_NAME
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidAmortizedRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
@@ -30,6 +34,8 @@ from charli3_dendrite.lending.fluidtokens_v4.state import auth_method
 from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
 from charli3_dendrite.lending.fluidtokens_v4.state import decode_repayment_mode
 from charli3_dendrite.lending.fluidtokens_v4.state import names_under
+from charli3_dendrite.lending.markets import LendingSnapshot
+from charli3_dendrite.lending.markets import WatchSpec
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import CollateralTerms
@@ -45,8 +51,11 @@ from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import constr
 
 if TYPE_CHECKING:
+    from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.dataclasses.models import Assets
+    from charli3_dendrite.dataclasses.models import PoolStateInfo
     from charli3_dendrite.lending.fluidtokens_v4.datums import CollateralAsset
+    from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
     from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolManagerState
     from charli3_dendrite.lending.rates import RateModel
 
@@ -335,3 +344,76 @@ def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
         )
     except _CONVERSION_ERRORS as exc:
         raise _converted(f"request {request.out_ref}", exc) from exc
+
+
+_VIEW_KINDS = (EntityKind.POOL, EntityKind.LOAN, EntityKind.REQUEST)
+
+
+class FluidTokensV4MarketSource:
+    """FluidTokens V4 pools, loans and requests as common views."""
+
+    name = PROTOCOL_NAME
+
+    def __init__(self, config: ConfigDatum | None = None) -> None:
+        """Watch the deployment ``config`` names; mainnet by default."""
+        selectors = entity_selectors(config)
+        self._selectors = {kind: selectors[kind] for kind in _VIEW_KINDS}
+
+    def selectors(self) -> list[WatchSpec]:
+        """The pool, loan and request credentials and identity policies."""
+        return [
+            WatchSpec(s.payment_credential, s.identity_policy)
+            for s in self._selectors.values()
+        ]
+
+    def parse(
+        self,
+        info: PoolStateInfo,
+    ) -> LendingMarket | LendingPosition | BorrowRequest | None:
+        """One UTxO as its view; None when it is not a V4 pool, loan or request.
+
+        Raises LendingParseError for a pool, loan or request it cannot convert.
+        """
+        state = parse_utxo(info, self._selectors)
+        if isinstance(state, FluidV4PoolState):
+            return pool_to_market(state)
+        if isinstance(state, FluidV4LoanState):
+            return loan_to_position(state)
+        if isinstance(state, FluidV4RequestState):
+            return request_to_borrow_request(state)
+        return None
+
+    def load(
+        self,
+        backend: AbstractBackend,
+        now_ms: int | None = None,
+    ) -> LendingSnapshot:
+        """Every live V4 pool, loan and request, each pool with its manager's owner.
+
+        UTxOs that raise LendingParseError are left out.
+        """
+        from charli3_dendrite.lending.fluidtokens_v4.loader import snapshot
+
+        found = snapshot(
+            backend,
+            now_ms=int(time.time() * 1000) if now_ms is None else now_ms,
+        )
+        managers = {manager.pool_id: manager for manager in found.pool_managers}
+        return LendingSnapshot(
+            markets=_convertible(
+                lambda pool: pool_to_market(pool, managers.get(pool.pool_id)),
+                found.pools,
+            ),
+            positions=_convertible(loan_to_position, found.loans),
+            requests=_convertible(request_to_borrow_request, found.requests),
+        )
+
+
+def _convertible(convert: Any, states: list[Any]) -> tuple[Any, ...]:  # noqa: ANN401
+    out = []
+    for state in states:
+        try:
+            out.append(convert(state))
+        except LendingParseError:
+            continue
+    return tuple(out)

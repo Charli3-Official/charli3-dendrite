@@ -19,6 +19,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.datum_synth import (
 )
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4 import datums as v4
+from charli3_dendrite.lending.fluidtokens_v4.market import FluidTokensV4MarketSource
 from charli3_dendrite.lending.fluidtokens_v4.market import lendable_principal
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidAmortizedRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
@@ -30,7 +31,9 @@ from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4RequestState
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import DefaultRule
+from charli3_dendrite.lending.normalized import LendingMarket
 from charli3_dendrite.lending.normalized import LendingParseError
+from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
@@ -393,3 +396,25 @@ def test_a_fixed_ratio_request_takes_the_contracts_range():
         state.request_datum,
         collateral_amount=collateral,
     )
+
+
+def test_the_source_parses_pools_loans_and_requests_only():
+    source = FluidTokensV4MarketSource()
+    assert {spec.payment_credential for spec in source.selectors()} == {
+        c.POOL_SPEND_SKH,
+        c.LOAN_SPEND_SKH,
+        c.REQUEST_SPEND_SKH,
+    }
+    assert isinstance(source.parse(record_info(FIX["pool"][0])), LendingMarket)
+    assert isinstance(source.parse(record_info(FIX["loan"][0])), LendingPosition)
+    assert isinstance(source.parse(record_info(v4_request_record())), BorrowRequest)
+    assert source.parse(record_info(FIX["pool_manager"][0])) is None
+    assert source.parse(record_info(FIX["lender_manager"][0])) is None
+
+
+def test_the_source_raises_on_a_pool_it_cannot_convert():
+    rec = dict(FIX["pool"][ADA])
+    datum = v4.PoolDatum.from_cbor(rec["datum_cbor"])
+    rec["datum_cbor"] = replace(datum, min_collateral_divider=[0]).to_cbor_hex()
+    with pytest.raises(LendingParseError):
+        FluidTokensV4MarketSource().parse(record_info(rec))
