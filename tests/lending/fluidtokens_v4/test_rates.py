@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 
 from charli3_dendrite.lending.fluidtokens.math import amortization_installment
+from charli3_dendrite.lending.fluidtokens.math import amortized_remaining_principal
 from charli3_dendrite.lending.fluidtokens.math import installments_pi_amount
 from charli3_dendrite.lending.fluidtokens.math import is_repayment_late
 from charli3_dendrite.lending.fluidtokens.math import perpetual_debt
@@ -202,3 +203,25 @@ def test_lateness_is_the_contracts_rule(now_hours):
 )
 def test_every_model_rebuilds_from_its_record(model):
     assert rate_model_from_dict(model.to_dict()) == model
+
+
+@pytest.mark.parametrize("paid", [0, 2, 6])
+def test_remaining_principal_follows_each_mode(paid):
+    principal = 5_000_000_000
+    assert _perpetual().remaining_principal(principal, paid) == principal
+    flat = FluidFlatTermRate(**_terms(total_installments=6))
+    assert (
+        flat.remaining_principal(principal, paid) == principal - principal * paid // 6
+    )
+    amortized = FluidAmortizedRate(**_terms(total_installments=6))
+    expected = amortized_remaining_principal(
+        principal=principal,
+        interest_rate=1200,
+        total_installments=6,
+        repaid_installments=paid,
+    )
+    assert amortized.remaining_principal(principal, paid) == max(expected, 0)
+    free = FluidAmortizedRate(**_terms(total_installments=6, interest_rate=0))
+    assert (
+        free.remaining_principal(principal, paid) == principal - principal * paid // 6
+    )

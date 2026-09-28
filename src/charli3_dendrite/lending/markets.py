@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Protocol
 
+from charli3_dendrite.lending.rates import MS_PER_HOUR
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -125,7 +127,9 @@ def _load_builtins() -> None:
     _BUILTINS_LOADED = True
     from charli3_dendrite.lending.fluidtokens_v4.market import FluidTokensV4MarketSource
 
-    register_market_source(FluidTokensV4MarketSource())
+    source = FluidTokensV4MarketSource()
+    # A caller's own registration under the same name is kept.
+    _SOURCES.setdefault(source.name.lower(), source)
 
 
 @dataclass(frozen=True)
@@ -166,6 +170,9 @@ class LendingMarketBook:
     ) -> list[BorrowOption]:
         """Markets that can lend ``amount`` against ``collateral_unit``, cheapest first.
 
+        A market qualifies when it lends ``borrow_unit``, accepts the collateral, holds
+        ``amount``, and (for a term loan) its term covers ``duration_ms``.
+
         Cost is the interest ``amount`` owes over ``duration_ms`` on each market's own
         terms; ties go to the lower market id. ``required_collateral`` is None where a
         needed price is missing.
@@ -183,14 +190,37 @@ class LendingMarketBook:
             for market in self.markets
             if market.borrow_unit == borrow_unit
             and market.available_liquidity >= amount
+            and _lasts(market, duration_ms)
             and market.terms_for(collateral_unit) is not None
             and (include_permissioned or not market.permissioned)
         ]
         return sorted(options, key=lambda o: (o.interest, o.market.market_id))
 
-    def lend_options(self, borrow_unit: str) -> list[BorrowRequest]:
-        """Open requests to borrow ``borrow_unit``, highest headline rate first."""
+    def lend_options(
+        self,
+        borrow_unit: str,
+        now_ms: int | None = None,
+        *,
+        include_permissioned: bool = False,
+    ) -> list[BorrowRequest]:
+        """Requests to borrow ``borrow_unit`` a lender could fill, best rate first.
+
+        With ``now_ms``, requests already expired then are left out (a fill must fall
+        before the expiry); permissioned requests are left out unless asked for.
+        """
         return sorted(
-            (r for r in self.requests if r.borrow_unit == borrow_unit),
+            (
+                r
+                for r in self.requests
+                if r.borrow_unit == borrow_unit
+                and (now_ms is None or now_ms < r.expires_ms)
+                and (include_permissioned or not r.permissioned)
+            ),
             key=lambda r: (-r.rate_model.headline_rate(), r.request_id),
         )
+
+
+def _lasts(market: LendingMarket, duration_ms: int) -> bool:
+    """Whether ``market``'s term, if it has one, lasts ``duration_ms``."""
+    term = market.rate_model.term_hours()
+    return term is None or term * MS_PER_HOUR >= duration_ms

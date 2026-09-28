@@ -60,6 +60,10 @@ class RateModel(ABC):
         """What a loan of ``principal`` opened at ``opened_ms`` owes at ``now_ms``."""
 
     @abstractmethod
+    def remaining_principal(self, principal: int, installments_paid: int) -> int:
+        """Principal a loan of ``principal`` still owes after ``installments_paid``."""
+
+    @abstractmethod
     def is_late(self, *, opened_ms: int, now_ms: int, installments_paid: int) -> bool:
         """Whether an installment is overdue at ``now_ms``."""
 
@@ -130,4 +134,5 @@ def _load_builtins() -> None:
     from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS
 
     for model in RATE_MODELS:
-        register_rate_model(model)
+        # A caller's own registration under the same key is kept.
+        _REGISTRY.setdefault((model.protocol, model.kind), model)

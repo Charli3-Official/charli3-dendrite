@@ -137,18 +137,20 @@ def _is_policy_wide(collateral: CollateralAsset) -> bool:
 def _price_source(
     collateral: CollateralAsset,
     unit: str,
-    quote: str,
     *,
     dynamic: bool,
 ) -> OracleRef | None:
-    """The feed pricing ``collateral`` in ``quote``; None when not oracle-priced."""
+    """The feed pricing ``collateral`` in lovelace; None when not oracle-priced.
+
+    The contract's feeds price every token in lovelace, the principal included.
+    """
     feed = collateral.oracle_token_asset
     if not dynamic or feed.policy_id == _NO_ORACLE:
         return None
     return OracleRef(
         source=OracleSource.FLUID_AGGREGATED,
         token=unit,
-        quote=quote,
+        quote="lovelace",
         feed_policy=feed.policy_id.hex(),
         feed_name=feed.asset_name.hex(),
     )
@@ -158,7 +160,6 @@ def _collateral_terms(
     collateral: CollateralAsset,
     ratio: Fraction,
     liquidation: _Liquidation,
-    quote: str,
     *,
     dynamic: bool,
 ) -> CollateralTerms:
@@ -172,7 +173,7 @@ def _collateral_terms(
         liquidation_penalty=liquidation.penalty,
         liquidation_discount=None,
         equity_to_borrower=liquidation.equity_to_borrower,
-        price_source=_price_source(collateral, unit, quote, dynamic=dynamic),
+        price_source=_price_source(collateral, unit, dynamic=dynamic),
     )
 
 
@@ -236,7 +237,6 @@ def pool_to_market(
                 option,
                 _ratio(int(minimum), int(divider), "collateral ratio"),
                 liquidation,
-                quote,
                 dynamic=dynamic,
             )
             for option, minimum, divider in zip(
@@ -331,7 +331,6 @@ def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
                     "principal ratio",
                 ),
                 liquidation,
-                quote,
                 dynamic=request.is_dynamic,
             ),
             principal_max=int(datum.max_principal),

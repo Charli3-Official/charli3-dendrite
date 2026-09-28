@@ -93,14 +93,44 @@ def test_required_collateral_at_a_max_ltv_prices_the_collateral():
     assert market().required_collateral(MIN, 1_000_000, book) is None
 
 
-def test_a_non_ada_market_needs_a_price_in_its_own_borrow_unit():
-    # Prices quoted in lovelace alone do not value SNEK in MIN.
+def test_a_non_ada_market_crosses_lovelace_prices():
+    # SNEK at 3/1000 and MIN at 1/100 lovelace: a SNEK is worth 3/10 MIN.
     offer = market(borrow_unit=MIN)
-    book = prices((SNEK, "lovelace", 3, 1000), (MIN, "lovelace", 1, 100))
-    assert offer.required_collateral(SNEK, 1_000_000, book) is None
-    assert offer.required_collateral(SNEK, 1_000_000, prices((SNEK, MIN, 3, 10))) == (
-        5_000_000
+    both = prices((SNEK, "lovelace", 3, 1000), (MIN, "lovelace", 1, 100))
+    assert offer.required_collateral(SNEK, 1_000_000, both) == 5_000_000
+    direct = prices(
+        (SNEK, MIN, 3, 20),
+        (SNEK, "lovelace", 3, 1000),
+        (MIN, "lovelace", 1, 100),
     )
+    assert offer.required_collateral(SNEK, 1_000_000, direct) == 10_000_000
+    # Without the borrow unit's own price there is nothing to cross.
+    alone = prices((SNEK, "lovelace", 3, 1000))
+    assert offer.required_collateral(SNEK, 1_000_000, alone) is None
+
+
+def test_ada_collateral_is_worth_one_lovelace_per_lovelace():
+    offer = market(borrow_unit=MIN, collateral=(terms("lovelace"),))
+    book = prices((MIN, "lovelace", 1, 100))
+    # 1 MIN = 1/100 lovelace, so 1_000_000 MIN is 10_000 lovelace of value.
+    assert offer.required_collateral("lovelace", 1_000_000, book) == 15_000
+
+
+def test_a_policy_price_values_each_token_of_the_policy():
+    position = _position(
+        collateral=(
+            CollateralHolding(NFT_POLICY + "01", 1),
+            CollateralHolding(NFT_POLICY + "02", 1),
+        ),
+    )
+    floor = prices((NFT_POLICY, "lovelace", 900_000_000, 1))
+    assert position.collateral_value(floor) == 1_800_000_000
+    assert position.health_factor(floor, position.opened_ms) == Decimal("1.44")
+    own = prices(
+        (NFT_POLICY, "lovelace", 900_000_000, 1),
+        (NFT_POLICY + "01", "lovelace", 1, 1),
+    )
+    assert position.collateral_value(own) == 900_000_001
 
 
 def test_the_headline_rate_is_the_rate_models():

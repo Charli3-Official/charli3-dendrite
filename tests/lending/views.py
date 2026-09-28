@@ -55,6 +55,9 @@ class SimpleRate(RateModel):
     ) -> int:
         return principal + self.interest_for(principal, max(now_ms - opened_ms, 0))
 
+    def remaining_principal(self, principal: int, installments_paid: int) -> int:
+        return principal
+
     def is_late(self, *, opened_ms: int, now_ms: int, installments_paid: int) -> bool:
         return False
 

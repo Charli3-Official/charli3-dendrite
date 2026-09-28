@@ -21,6 +21,7 @@ from typing import Any
 from typing import ClassVar
 
 from charli3_dendrite.lending.fluidtokens.math import amortization_installment
+from charli3_dendrite.lending.fluidtokens.math import amortized_remaining_principal
 from charli3_dendrite.lending.fluidtokens.math import installments_pi_amount
 from charli3_dendrite.lending.fluidtokens.math import is_repayment_late
 from charli3_dendrite.lending.fluidtokens.math import perpetual_debt
@@ -130,6 +131,10 @@ class FluidPerpetualRate(_FluidRate):
             initial_grace_period=self.initial_grace_period,
         )
 
+    def remaining_principal(self, principal: int, installments_paid: int) -> int:
+        """The whole principal: its installments pay interest only."""
+        return principal
+
     def term_hours(self) -> int | None:
         """None: a perpetual loan has no end."""
         return None
@@ -175,6 +180,11 @@ class _FluidTermRate(_FluidRate):
         """The installments still to pay."""
         remaining = max(self.total_installments - installments_paid, 0)
         return remaining * self.installment(principal)
+
+    def remaining_principal(self, principal: int, installments_paid: int) -> int:
+        """Principal not yet repaid, each installment repaying an even share."""
+        paid = min(max(installments_paid, 0), self.total_installments)
+        return principal - principal * paid // self.total_installments
 
     def term_hours(self) -> int | None:
         """The grace period plus every installment period."""
@@ -229,6 +239,21 @@ class FluidAmortizedRate(_FluidTermRate):
             interest_rate=self.interest_rate,
             total_installments=self.total_installments,
         )
+
+    def remaining_principal(self, principal: int, installments_paid: int) -> int:
+        """The annuity's principal balance after ``installments_paid`` installments.
+
+        The contract's recast formula; at a zero rate the installments are even shares.
+        """
+        if self.interest_rate == 0:
+            return super().remaining_principal(principal, installments_paid)
+        balance = amortized_remaining_principal(
+            principal=principal,
+            interest_rate=self.interest_rate,
+            total_installments=self.total_installments,
+            repaid_installments=min(max(installments_paid, 0), self.total_installments),
+        )
+        return max(balance, 0)
 
     def headline_rate(self) -> Fraction:
         """The annuity's total interest per unit borrowed, annualized over the term."""

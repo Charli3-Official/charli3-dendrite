@@ -4,6 +4,7 @@ import pytest
 
 from charli3_dendrite.lending import markets
 from charli3_dendrite.lending.fluidtokens_v4.market import FluidTokensV4MarketSource
+from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
 from charli3_dendrite.lending.markets import LendingMarketBook
 from charli3_dendrite.lending.markets import LendingSnapshot
 from charli3_dendrite.lending.markets import available_market_sources
@@ -140,3 +141,43 @@ def test_a_book_from_a_snapshot():
     book = LendingMarketBook.from_snapshot(snapshot)
     assert book.markets == (market(),)
     assert book.requests == (request(),)
+
+
+def test_a_source_registered_before_the_first_lookup_is_kept(monkeypatch):
+    monkeypatch.setattr(markets, "_SOURCES", {})
+    monkeypatch.setattr(markets, "_BUILTINS_LOADED", False)
+    mine = _Source("FluidTokensV4", LendingSnapshot())
+    register_market_source(mine)
+    assert get_market_source("fluidtokensv4") is mine
+
+
+def test_borrow_options_leave_out_terms_shorter_than_the_borrow():
+    month = FluidFlatTermRate(
+        interest_rate=100,
+        total_installments=1,
+        installment_period=720,
+        initial_grace_period=0,
+        repayment_time_window=0,
+        penalty_fee_for_late_repayment=0,
+    )
+    book = LendingMarketBook([market("month", rate_model=month), market("open")])
+    term_ms = 720 * MS_PER_HOUR
+    within = book.borrow_options("lovelace", SNEK, 1_000, term_ms)
+    assert sorted(o.market.market_id for o in within) == ["month", "open"]
+    beyond = book.borrow_options("lovelace", SNEK, 1_000, term_ms + 1)
+    assert [o.market.market_id for o in beyond] == ["open"]
+
+
+def test_lend_options_leave_out_expired_and_permissioned_requests():
+    book = LendingMarketBook(
+        [],
+        [
+            request("live"),
+            request("expired", expires_ms=100),
+            request("kyc", permissioned=True),
+        ],
+    )
+    assert [r.request_id for r in book.lend_options("lovelace", now_ms=100)] == ["live"]
+    with_kyc = book.lend_options("lovelace", now_ms=100, include_permissioned=True)
+    assert [r.request_id for r in with_kyc] == ["kyc", "live"]
+    assert [r.request_id for r in book.lend_options("lovelace")] == ["expired", "live"]

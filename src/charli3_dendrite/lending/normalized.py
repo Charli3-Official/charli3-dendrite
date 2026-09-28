@@ -195,14 +195,37 @@ class CollateralTerms:
         )
 
 
-def _price_in(prices: PriceMap | None, unit: str, quote: str) -> Fraction | None:
-    """``unit`` priced in ``quote`` units, or None when missing or not positive."""
-    if prices is None:
-        return None
+def _positive(prices: PriceMap, unit: str, quote: str) -> Fraction | None:
+    """The price of ``unit`` in ``quote`` in ``prices``, if present and positive."""
+    if unit == quote:
+        return Fraction(1)
     price = prices.get(unit, quote=quote)
     if price is None or price.num <= 0 or price.denom <= 0:
         return None
     return Fraction(price.num, price.denom)
+
+
+def _price_in(prices: PriceMap | None, unit: str, quote: str) -> Fraction | None:
+    """``unit`` priced in ``quote`` units, or None when it cannot be priced.
+
+    A direct price wins; otherwise both sides priced in lovelace are crossed, which is
+    how the protocols value one token in another. A token with no price of its own
+    takes its policy's price: a policy-wide collateral has one feed for the policy.
+    """
+    if prices is None:
+        return None
+    candidates = [unit]
+    if unit != "lovelace" and len(unit) > _POLICY_HEX_LEN:
+        candidates.append(unit[:_POLICY_HEX_LEN])
+    for token in candidates:
+        direct = _positive(prices, token, quote)
+        if direct is not None:
+            return direct
+        token_ada = _positive(prices, token, "lovelace")
+        quote_ada = _positive(prices, quote, "lovelace")
+        if token_ada is not None and quote_ada is not None:
+            return token_ada / quote_ada
+    return None
 
 
 @dataclass(frozen=True)
@@ -344,20 +367,19 @@ class LendingPosition:
         )
 
     def interest_accrued(self, now_ms: int) -> int:
-        """``current_debt`` minus the stated principal.
-
-        For an installment loan this is the schedule's remaining interest.
-        """
-        return self.current_debt(now_ms) - self.principal
+        """Interest owed at ``now_ms``: the debt less the principal still owed."""
+        return self.current_debt(now_ms) - self.rate_model.remaining_principal(
+            self.principal,
+            self.installments_paid,
+        )
 
     def collateral_value(self, prices: PriceMap) -> int:
         """Collateral value in the borrow unit; an unpriced holding counts as 0."""
         total = 0
         for holding in self.collateral:
-            price = prices.get(holding.unit, quote=self.borrow_unit)
-            if price is None or price.num <= 0 or price.denom <= 0:
-                continue
-            total += holding.amount * price.num // price.denom
+            price = _price_in(prices, holding.unit, self.borrow_unit)
+            if price is not None:
+                total += holding.amount * price.numerator // price.denominator
         return total
 
     def health_factor(self, prices: PriceMap, now_ms: int) -> Decimal:

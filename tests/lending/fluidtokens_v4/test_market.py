@@ -99,6 +99,17 @@ def _token_pool_index():
     )
 
 
+def _token_pool_with(ada_collateral):
+    """A captured token-principal pool whose first option is (or is not) ADA."""
+    for index in range(len(FIX["pool"])):
+        pool = _pool(index)
+        if pool.borrowable_unit == "lovelace":
+            continue
+        if (pool.collateral_units[0] == "lovelace") == ada_collateral:
+            return pool
+    raise AssertionError("no such captured pool")
+
+
 def test_every_captured_pool_converts_with_its_manager():
     for index in range(len(FIX["pool"])):
         pool = _pool(index)
@@ -418,3 +429,58 @@ def test_the_source_raises_on_a_pool_it_cannot_convert():
     rec["datum_cbor"] = replace(datum, min_collateral_divider=[0]).to_cbor_hex()
     with pytest.raises(LendingParseError):
         FluidTokensV4MarketSource().parse(record_info(rec))
+
+
+def test_a_token_pool_prices_its_collateral_in_lovelace():
+    market = _token_pool_with(ada_collateral=False).to_market()
+    sources = [terms.price_source for terms in market.collateral]
+    assert sources
+    assert all(s is not None and s.quote == "lovelace" for s in sources)
+
+
+@pytest.mark.parametrize("ada_collateral", [False, True])
+def test_a_token_pool_needs_the_builders_collateral(ada_collateral):
+    pool = _token_pool_with(ada_collateral=ada_collateral)
+    market = pool.to_market()
+    unit = market.collateral[0].unit
+    book = prices((market.borrow_unit, "lovelace", 386, 100))
+    collateral_price = (1, 1)
+    if not ada_collateral:
+        book.add(prices((unit, "lovelace", 7, 1000)).get(unit))
+        collateral_price = (7, 1000)
+    for principal in (1, 1_000_000, 123_456_789):
+        assert market.required_collateral(
+            unit,
+            principal,
+            book,
+        ) == min_collateral_amount(
+            pool.pool_datum,
+            chosen_collateral_index=0,
+            principal_amount=principal,
+            price_num=collateral_price[0],
+            price_den=collateral_price[1],
+            principal_price_num=386,
+            principal_price_den=100,
+        )
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        v4.PrincipalAndInterestOnInstallments(),
+        v4.InterestOnRemainingPrincipal(max_possible_recasts=0),
+    ],
+)
+def test_installment_interest_is_the_debt_less_the_principal_still_owed(mode):
+    loan = _loan(
+        repayment_mode=mode,
+        total_installments=6,
+        installment_period=720,
+        initial_grace_period=24,
+        repaid_installments=2,
+    )
+    position = loan.to_position()
+    interest = position.interest_accrued(NOW_MS)
+    still_owed = position.rate_model.remaining_principal(position.principal, 2)
+    assert interest == position.current_debt(NOW_MS) - still_owed
+    assert interest >= 0
