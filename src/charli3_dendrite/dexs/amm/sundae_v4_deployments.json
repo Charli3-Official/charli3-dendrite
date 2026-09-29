@@ -14,7 +14,9 @@
       "strategy_order.withdraw": "5b67b76ff03dd497083df1450caabb3a4a99feea53ad631e700173ee",
       "fee_constraint.withdraw": "d7d1c09deb8bc8e15baae7895e57e86ab6d0cb10e2faaa6d96cd691b",
       "governance.withdraw": "4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d5246",
-      "treasury_policy.withdraw": "6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd372876"
+      "treasury_policy.withdraw": "6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd372876",
+      "stableswap.withdraw": "9db7ce54fb25f4390a89bb715a022fe79a86b9a043aa22c31c27380a",
+      "stableswap.withdraw.superseded1": "a44e0058459a223752be78dc4df7ca86446ba22ef95c7ee690e0b5a3"
     },
     "references": {
       "settings.mint": {
@@ -68,6 +70,14 @@
       "governance.withdraw": {
         "tx_hash": "a3148ea514d48587d1bb99725c97fe1570aa38e3b07354dab0575dc783f64c6f",
         "index": 0
+      },
+      "stableswap.withdraw": {
+        "tx_hash": "849ff000d1b17e974f8024bf962e82d9317cbc28fc8be7010e52462f28ada689",
+        "index": 0
+      },
+      "stableswap.withdraw.superseded1": {
+        "tx_hash": "d25422f6ffd60ed1a3501b6ac7b8c8c2b08e58efab8263419f9416e6a1111fdd",
+        "index": 0
       }
     },
     "settings_policy": "7b576da254d745bcbbabc91f34605deaa08f4e68d216f2a67d72ee12",
@@ -102,6 +112,16 @@
         "tx_hash": "2d046837e142376b57fb7af8d7a4defe638670df08b2cae1bc5ea134e400c3bf",
         "index": 0,
         "token": "0004ba14399a9e56f9bd699b7c1892213c57aa533c790a6fd06cf66c054a6325"
+      },
+      "ss-pool": {
+        "tx_hash": "57331475b8dd909219f8c1b3b96b72e39c3f104d66d33f9a035cafe2f9217873",
+        "index": 0,
+        "token": "00a5dd0919b986a53a7baacc5066889ccb23866c31c8ef6fecc0c4d47676643e"
+      },
+      "ss-old-pool": {
+        "tx_hash": "682639b7add0241e467a71ff4bc3696f1399df5d4439581fb5fe2553d6581149",
+        "index": 0,
+        "token": "00c334ba9af39b245b3dd97e43e46920c8f8a1ad42bddfe936f546bb349f71e9"
       }
     }
   },
@@ -119,7 +139,8 @@
       "strategy_order.withdraw": "3e32ea28c902aef16682b96bd7236347a55a216d7e4cc5ff7b0c5f9a",
       "fee_constraint.withdraw": "ab835b719a82f620d5517b7fe846b4db1c8caadd024befe63efce5b6",
       "governance.withdraw": "d0fe277f9969b57c3c265311b4dfff277588ae036fc0c408d367d515",
-      "treasury_policy.withdraw": "cb4795b8c101099e2bd0f8923c6f10f618ab1f2b552b8c18ffb25416"
+      "treasury_policy.withdraw": "cb4795b8c101099e2bd0f8923c6f10f618ab1f2b552b8c18ffb25416",
+      "stableswap.withdraw": "031b29852b494e33ab3b66a4df53d28dd8d00af15b59d3c5a6529db0"
     },
     "references": {
       "settings.mint": {
@@ -173,6 +194,10 @@
       "governance.withdraw": {
         "tx_hash": "ee55e17391cb74b5e3be458b94459d4183d1fa583505efb6442594008e8067ef",
         "index": 0
+      },
+      "stableswap.withdraw": {
+        "tx_hash": "5d8891affb8e84f755e683317415408fc06a72be4c8b455ebc1b0c9f5e6aad0f",
+        "index": 0
       }
     },
     "settings_policy": "ecd76a8c8cf574d44b38a016246c1c6f9a75f5baa8417db8e59c81c5",
@@ -207,6 +232,11 @@
         "tx_hash": "7841a543cac3b2ec071c8c2cd9efe1fb1b356ebdde02016ecca8548cde53ce33",
         "index": 0,
         "token": "00d18c29fb9bd2d27b95a055b5c821a10aee09dc9aa8347bb4b1dca38ddbf585"
+      },
+      "ss-pool": {
+        "tx_hash": "27076ad3bb6aca58d06cc75f9de280f3b7415af0ed5797b7d04ff843d948c503",
+        "index": 0,
+        "token": "00a82e7c7e5cffdf60a99f6162c65a1332f0ce7393dac5f5a7ae4d2cad0a074e"
       }
     }
   },
@@ -224,7 +254,8 @@
       "strategy_order.withdraw": "35a9eebba5ea685d1deb20e269ca0045b9ff35df85cedde95c619a70",
       "fee_constraint.withdraw": "267eabb980be6699144e85b24283659838b0746e0fd2f08be1423e70",
       "governance.withdraw": "518c4a6ef444c2f0631b3a7adb7514d80212dff988e35c1318da88a2",
-      "treasury_policy.withdraw": "bcdca3ffc967ed2a5bf2dc9040f9f17d97f574122f7561fe26ef565b"
+      "treasury_policy.withdraw": "bcdca3ffc967ed2a5bf2dc9040f9f17d97f574122f7561fe26ef565b",
+      "stableswap.withdraw": "f47f6594cab956302f7f1cd81ac4122e9ee128146102497feca1a79f"
     },
     "references": {
       "settings.mint": {
@@ -278,6 +309,10 @@
       "governance.withdraw": {
         "tx_hash": "88f35f925515e9fa9f5e119cff380b8b17934590973a4a031c0f2955b15bf64f",
         "index": 0
+      },
+      "stableswap.withdraw": {
+        "tx_hash": "419cbf3bc96169d0a46cc9d5a122e8a9ee1f4b1f71625911def64294468dfc8d",
+        "index": 0
       }
     },
     "settings_policy": "371738e95ab3f0afba69c6b0896df05d7851a5307a830677b77c2ead",
@@ -323,6 +358,11 @@
         "tx_hash": "35dcd33ba9d3d52417398ee082b985c8c08fabb22c8e21a776bc10a75caf03d5",
         "index": 0,
         "token": "025fb43112751939720577e60909603f20e3756295f415de490d9785c019b4d9"
+      },
+      "ss-pool": {
+        "tx_hash": "97375e4ecf9725f053bb4075ec3ddf1ead7e7a029b970ea3d60be75716b2b714",
+        "index": 0,
+        "token": "00c250095fc26d302cd932fd84f89b1b66fc8f6d9a21b1d59f2d7c839f1c23cc"
       }
     }
   }

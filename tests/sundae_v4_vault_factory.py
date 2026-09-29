@@ -17,9 +17,12 @@ from pycardano.serialization import CBORTag
 
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dexs.amm.sundae_v4 import ActionEntry
+from charli3_dendrite.dexs.amm.sundae_v4 import BoolFalse
 from charli3_dendrite.dexs.amm.sundae_v4 import BoolTrue
 from charli3_dendrite.dexs.amm.sundae_v4 import ConstantSumConfig
+from charli3_dendrite.dexs.amm.sundae_v4 import OptionNone
 from charli3_dendrite.dexs.amm.sundae_v4 import Rational
+from charli3_dendrite.dexs.amm.sundae_v4 import StableSwapConfig
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4PoolDatum
 from charli3_dendrite.dexs.amm.sundae_v4 import module_config_hash
@@ -118,6 +121,89 @@ def build_vault_utxo(
     value[policy + "0014df10" + identifier.hex()] = 1  # one LP token held as a rider
     values = {
         "tx_hash": "ab" * 32,
+        "tx_index": 0,
+        "datum_cbor": datum.to_cbor().hex(),
+        "datum_hash": "cd" * 32,
+        "assets": value,
+        "block_time": 0,
+        "block_index": 0,
+    }
+    return values, config
+
+
+def build_stableswap_vault_utxo(
+    reserves: list[tuple[str, int]],
+    *,
+    rates: list[int],
+    amp: int = 200,
+    fee: tuple[int, int] = (25, 10_000),
+    total_lp: int,
+    identifier: bytes = b"\x22" * 28,
+    surplus: int = 3_000_000,
+    network: str = "preview",
+) -> tuple[dict, StableSwapConfig]:
+    """A stableswap vault UTxO ``values`` dict plus the config it commits to.
+
+    Two reserves in datum (declaration) order, ``rates`` aligned to them, the
+    deployed stableswap package action map ``{100: [stableswap, fee_split,
+    fairness], 200: [treasury_policy], 1: [governance]}``; the config has no rate
+    manager and uncapped, non-monotone rates.
+    """
+    deployment = SundaeV4Deployment.for_network(network)
+    config = StableSwapConfig(
+        linear_amplification=amp,
+        fee=Rational(num=fee[0], den=fee[1]),
+        rates=IndefiniteList(list(rates)),
+        rate_manager=OptionNone(),
+        monotone_rates=BoolFalse(),
+        max_rate_step=OptionNone(),
+    )
+    tags = {
+        100: ["stableswap", "fee_split", "fairness"],
+        200: ["treasury_policy"],
+        1: ["governance"],
+    }
+    actions = [
+        ActionEntry(
+            tag=tag,
+            enabled=BoolTrue(),
+            modules=IndefiniteList(
+                [deployment.validator(f"{kind}.withdraw") for kind in kinds]
+            ),
+        )
+        for tag, kinds in tags.items()
+    ]
+    module_state: list = []
+    for kinds in tags.values():
+        for kind in kinds:
+            h = deployment.validator(f"{kind}.withdraw")
+            if kind == "stableswap":
+                commitment = module_config_hash(config)
+            elif kind == "fairness":
+                commitment = CONFIG_LESS
+            else:
+                commitment = hashlib.blake2b(kind.encode(), digest_size=32).digest()
+            module_state.append(IndefiniteList([h, commitment]))
+    datum = SundaeV4PoolDatum(
+        assets=IndefiniteList(
+            [IndefiniteList([_asset_class(u), q]) for u, q in reserves]
+        ),
+        total_lp=total_lp,
+        circulating_lp=total_lp,
+        preminted_lp=0,
+        identifier=identifier,
+        actions=actions,
+        module_state=IndefiniteList(module_state),
+        min_surplus=2_000_000,
+        extension=RawPlutusData(CBORTag(121, [])),
+    )
+    policy = deployment.pool_nft_policy.hex()
+    value = {u: q for u, q in reserves if q > 0}
+    value["lovelace"] = value.get("lovelace", 0) + surplus
+    value[policy + "000de140" + identifier.hex()] = 1
+    value[policy + "0014df10" + identifier.hex()] = 1
+    values = {
+        "tx_hash": "ef" * 32,
         "tx_index": 0,
         "datum_cbor": datum.to_cbor().hex(),
         "datum_hash": "cd" * 32,

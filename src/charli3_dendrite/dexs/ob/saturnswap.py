@@ -586,32 +586,53 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
             return (0, 0)
         return (amount_buy, amount_sell)
 
+    def _taker_share(self, gross_out: int) -> int:
+        """Sell asset the taker keeps when the order releases ``gross_out``.
+
+        The taker fee is paid out of the released sell asset, so the taker keeps
+        what is left after it.
+        """
+        return gross_out - (gross_out * self.volume_fee) // 10_000
+
+    def _max_taker_out(self) -> int:
+        """Most sell asset a taker can keep: the full balance, net of the fee."""
+        return self._taker_share(int(self.order_datum.amount_sell))
+
     def get_amount_out(
         self,
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Estimate output assets for a given input."""
+        """Estimate output assets for a given input.
+
+        The order releases at most its sell balance and the fee is paid out of
+        what it releases, so the released amount is capped before the fee is
+        taken: a fill never keeps more than the balance less its fee.
+        """
         if len(asset) != 1:
             raise ValueError("Input asset must contain exactly one unit.")
         if asset.unit() != self.in_unit:
             raise ValueError("Input asset unit must match in_unit.")
 
         num, denom = self.price
-        fee_bps = self.volume_fee
 
         in_qty = int(asset.quantity())
-        out_qty = (in_qty * denom + num - 1) // num
-        fee = (out_qty * fee_bps) // 10_000
-        out_qty = min(out_qty - fee, int(self.order_datum.amount_sell))
-        return Assets(**{self.out_unit: int(out_qty)}), 0
+        gross_out = min(
+            (in_qty * denom + num - 1) // num,
+            int(self.order_datum.amount_sell),
+        )
+        return Assets(**{self.out_unit: self._taker_share(gross_out)}), 0
 
     def get_amount_in(
         self,
         asset: Assets,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """Estimate input assets for a desired output."""
+        """Estimate input assets for a desired output.
+
+        The output is capped at what a full fill keeps (the balance less its
+        fee), so the input never exceeds the order's ``amount_buy``.
+        """
         if len(asset) != 1:
             raise ValueError("Output asset must contain exactly one unit.")
         if asset.unit() != self.out_unit:
@@ -620,11 +641,13 @@ class _SaturnSwapOrderStateBase(AbstractOrderState):
         num, denom = self.price
         fee_bps = self.volume_fee
 
-        desired_out = int(asset.quantity())
-        desired_out = min(desired_out, int(self.order_datum.amount_sell))
+        desired_out = min(int(asset.quantity()), self._max_taker_out())
         gross_out = (desired_out * 10_000 + (10_000 - fee_bps) - 1) // (
             10_000 - fee_bps
         )
+        # Grossing up can round past the balance, which already delivers the
+        # capped output on its own.
+        gross_out = min(gross_out, int(self.order_datum.amount_sell))
         in_qty = (gross_out * num + denom - 1) // denom
         return Assets(**{self.in_unit: int(in_qty)}), 0
 
@@ -1329,6 +1352,25 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
         )
         return Decimal(int(tvl) / 10**6)
 
+    @property
+    def taker_fee_bps(self) -> int:
+        """Taker fee, in basis points, that the book walk charges a fill.
+
+        The walk charges each order its own contract's fee (0 when fills are
+        co-signed by the authorize key, see ``volume_fee``), so a book holding
+        orders from contracts with different fees reports the largest. An empty
+        book charges nothing.
+        """
+        return max(
+            (
+                order.state.volume_fee
+                for side in (self.sell_book_full, self.buy_book_full)
+                for order in side
+                if isinstance(order.state, _SaturnSwapOrderStateBase)
+            ),
+            default=0,
+        )
+
     def get_amount_out(
         self,
         asset: Assets,
@@ -1410,11 +1452,11 @@ class SaturnSwapOrderBook(AbstractOrderBookState):
 
         for order in book:
             state = order.state
-            if state is None:
+            if not isinstance(state, _SaturnSwapOrderStateBase):
                 continue
 
-            max_out = state.available.quantity()
-            take_out = min(out_remaining.quantity(), max_out)
+            # Each order delivers at most its balance less the fee paid from it.
+            take_out = min(out_remaining.quantity(), state._max_taker_out())
             if take_out <= 0:
                 continue
 

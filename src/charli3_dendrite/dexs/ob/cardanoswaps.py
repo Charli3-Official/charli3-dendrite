@@ -11,13 +11,17 @@ on-chain ``SwapDatum`` and exposes it through the standard order-book interface
 are implemented separately.
 """
 
+import dataclasses
 import hashlib
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Union
+from typing import cast
 
 from pycardano import Address
+from pycardano import ChainContext
 from pycardano import Network
 from pycardano import PlutusData
 from pycardano import PlutusV2Script
@@ -28,8 +32,10 @@ from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import VerificationKeyHash
 from pycardano import plutus_script_hash
 from pycardano.utils import min_lovelace
+from pycardano.utils import min_lovelace_post_alonzo
 
 from charli3_dendrite.backend import get_backend
 from charli3_dendrite.dataclasses.datums import OrderDatum
@@ -37,6 +43,7 @@ from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderBookState
 from charli3_dendrite.dexs.ob.ob_base import AbstractOrderState
 from charli3_dendrite.dexs.ob.ob_base import BuyOrderBook
@@ -154,6 +161,51 @@ def _unit(policy: bytes, name: bytes) -> str:
     return policy.hex() + name.hex()
 
 
+# A staked swap address used only for its size when sizing an output whose owner
+# is not known: every base address (payment + staking credential) serializes to
+# the same 57 bytes, so the credentials themselves never affect the result.
+_SIZING_ADDRESS = Address(
+    payment_part=ScriptHash(bytes.fromhex(SWAP_VALIDATOR_HASH)),
+    staking_part=VerificationKeyHash(bytes(28)),
+    network=Network.MAINNET,
+)
+
+# Lovelace balances in [2**16, 2**32) share one CBOR width (a 4-byte argument).
+# Every realistic min-UTxO falls in that range, so sizing starts from a balance
+# inside it and only re-sizes when the minimum lands outside.
+_SIZING_COIN = 1_000_000
+_SIZING_COIN_WIDTH = range(2**16, 2**32)
+
+
+def _min_lovelace_at(output: TransactionOutput, coins_per_utxo_byte: int) -> int:
+    """The ledger min-UTxO of ``output`` at ``coins_per_utxo_byte``.
+
+    pycardano's rule reads only ``protocol_param.coins_per_utxo_byte`` from the
+    chain context, so callers without a context can size outputs too.
+    """
+    context = SimpleNamespace(
+        protocol_param=SimpleNamespace(coins_per_utxo_byte=coins_per_utxo_byte),
+    )
+    return min_lovelace_post_alonzo(output, cast(ChainContext, context))
+
+
+def _self_funded_min_lovelace(
+    output: TransactionOutput,
+    coins_per_utxo_byte: int,
+) -> int:
+    """The min-UTxO of ``output`` when its lovelace balance is that minimum.
+
+    The balance's own CBOR width is part of the output size, so a minimum whose
+    width differs from the starting balance's is re-sized at the balance it names.
+    """
+    output.amount.coin = _SIZING_COIN
+    needed = _min_lovelace_at(output, coins_per_utxo_byte)
+    if needed in _SIZING_COIN_WIDTH:
+        return needed
+    output.amount.coin = needed
+    return max(needed, _min_lovelace_at(output, coins_per_utxo_byte))
+
+
 @dataclass
 class CardanoSwapsRational(PlutusData):
     """A positive rational price (numerator / denominator)."""
@@ -251,6 +303,218 @@ class CardanoSwapsSwapDatum(OrderDatum):
         """A resting swap order."""
         return OrderType.swap
 
+    def price(self) -> tuple[int, int]:
+        """The ask-per-offer ``swap_price`` as ``(numerator, denominator)``.
+
+        The beacon policy only mints for a strictly positive price, but any datum
+        can sit in a UTxO, so a zero or negative component is rejected here rather
+        than surfacing as a division error in the pricing and fill math.
+
+        Raises:
+            InvalidPoolError: ``swap_price`` is not a positive rational.
+        """
+        num = self.swap_price.numerator
+        den = self.swap_price.denominator
+        if num <= 0 or den <= 0:
+            raise InvalidPoolError(
+                f"Cardano-Swaps swap_price must be positive, got {num}/{den}.",
+            )
+        return num, den
+
+    def required_ask(self, offer_taken: int) -> int:
+        """The least ask the validator accepts for taking ``offer_taken`` of the offer.
+
+        The validator checks ``offer_taken * numerator <= ask_given * denominator``,
+        so the minimum is ``ceil(offer_taken * numerator / denominator)``.
+
+        Raises:
+            InvalidPoolError: ``swap_price`` is not a positive rational.
+        """
+        num, den = self.price()
+        return -(-offer_taken * num // den)
+
+    def beacon_assets(self, quantity: int = 1) -> Assets:
+        """The pair, offer and ask beacons, each at ``quantity``."""
+        return Assets(
+            root={
+                BEACON_POLICY_ID + self.pair_beacon.hex(): quantity,
+                BEACON_POLICY_ID + self.offer_beacon.hex(): quantity,
+                BEACON_POLICY_ID + self.ask_beacon.hex(): quantity,
+            },
+        )
+
+    def continuation_datum(
+        self,
+        tx_hash: bytes,
+        output_index: int,
+    ) -> "CardanoSwapsSwapDatum":
+        """This datum with ``prev_input`` pointing at the consumed ``tx_hash#index``.
+
+        The validator requires a fill's continuing output to carry the spent datum
+        unchanged except for ``prev_input``, which must reference the spent UTxO.
+        """
+        return dataclasses.replace(
+            self,
+            prev_input=CardanoSwapsSomeOutRef(
+                value=CardanoSwapsOutputReference(
+                    transaction_id=CardanoSwapsTxId(tx_hash=tx_hash),
+                    output_index=output_index,
+                ),
+            ),
+        )
+
+    def continuation_min_lovelace(
+        self,
+        held: Assets,
+        coins_per_utxo_byte: int,
+        *,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The min-UTxO of a continuing output of this swap that holds ``held``.
+
+        The output carries the three beacons, the native tokens in ``held`` (its
+        lovelace entry is ignored) and :meth:`continuation_datum` for a spent
+        output at ``prev_output_index``. That ``Some`` reference makes it larger
+        than the resting output, whose ``prev_input`` is ``None``, so a resting
+        UTxO sized only for itself cannot fund its own continuation.
+
+        The lovelace balance is sized as the minimum itself: the balance a
+        continuation is left with once an ADA offer is fully drawn.
+
+        Args:
+            held: The offer and/or ask quantities the continuation holds.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            prev_output_index: The output index of the spent UTxO, which the
+                continuation's ``prev_input`` records.
+            address: The swap address; defaults to a staked address of the same
+                size as every base address.
+
+        Returns:
+            The lovelace the continuing output must hold.
+        """
+        tokens = Assets(
+            root={
+                unit: quantity
+                for unit, quantity in held.items()
+                if unit != "lovelace" and quantity > 0
+            },
+        )
+        output = TransactionOutput(
+            address=address if address is not None else _SIZING_ADDRESS,
+            amount=asset_to_value(self.beacon_assets(1) + tokens),
+            datum=self.continuation_datum(bytes(32), prev_output_index),
+        )
+        return _self_funded_min_lovelace(output, coins_per_utxo_byte)
+
+    def claimable_offer(
+        self,
+        gross: int,
+        coins_per_utxo_byte: int,
+        *,
+        held_ask: int = 0,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The offer a taker can draw from a swap UTxO holding ``gross`` of it.
+
+        A token offer's min-ADA is a separate lovelace balance, so all of
+        ``gross`` is claimable. An ADA offer's lovelace also funds the UTxO's
+        min-UTxO: a fill must leave the continuing output its minimum, which is
+        largest when the output holds the most ask. That is sized as the ask
+        already held (``held_ask``) plus the ask for drawing all of ``gross``, an
+        upper bound on any single fill, so a fill of the returned amount always
+        leaves the continuation funded.
+
+        Args:
+            gross: The offer balance held in the swap UTxO.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            held_ask: The ask already accumulated in the swap UTxO.
+            prev_output_index: The swap UTxO's own output index, which the
+                continuation's ``prev_input`` records.
+            address: The swap address, when known.
+
+        Returns:
+            The claimable offer quantity, floored at 0.
+
+        Raises:
+            InvalidPoolError: ``swap_price`` is not a positive rational.
+        """
+        self.price()
+        if self.offer_unit() != "lovelace":
+            return gross
+        full_ask = held_ask + self.required_ask(gross)
+        floor = self.continuation_min_lovelace(
+            Assets(root={self.ask_unit(): full_ask}),
+            coins_per_utxo_byte,
+            prev_output_index=prev_output_index,
+            address=address,
+        )
+        return max(0, gross - floor)
+
+    def carrier_lovelace(
+        self,
+        offer_quantity: int,
+        coins_per_utxo_byte: int,
+        *,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The lovelace a new swap offering ``offer_quantity`` funds for its min-UTxO.
+
+        It is sized for the largest continuation the swap can reach, so no fill
+        has to top the output up and the whole offer stays claimable:
+
+        * ADA offer: funded on top of the offer. A full fill leaves the output
+          holding only this carrier, the beacons and the full ask, and
+          :meth:`claimable_offer` sizes that ask on the whole balance, so the
+          carrier is the fixed point ``c = min_utxo(required_ask(offer + c))``.
+          Then ``claimable_offer(offer + c) == offer``.
+        * Token offer: funded as the output's whole lovelace balance. A
+          continuation holds at most the full offer and, when the ask is also a
+          token, the full ask, so both are sized in.
+
+        Args:
+            offer_quantity: The offered quantity.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            prev_output_index: The output index the swap UTxO is created at.
+            address: The swap address, when known.
+
+        Returns:
+            The carrier lovelace.
+
+        Raises:
+            InvalidPoolError: ``swap_price`` is not a positive rational.
+        """
+        self.price()
+        ask_unit = self.ask_unit()
+        if self.offer_unit() == "lovelace":
+            # The minimum grows with the ask's CBOR width, which grows with the
+            # carrier, so iterate from zero; the sequence never decreases and the
+            # width takes only a few values, so it settles within a few steps.
+            carrier = 0
+            while True:
+                needed = self.continuation_min_lovelace(
+                    Assets(
+                        root={ask_unit: self.required_ask(offer_quantity + carrier)},
+                    ),
+                    coins_per_utxo_byte,
+                    prev_output_index=prev_output_index,
+                    address=address,
+                )
+                if needed <= carrier:
+                    return carrier
+                carrier = needed
+        held = {self.offer_unit(): offer_quantity}
+        if ask_unit != "lovelace":
+            held[ask_unit] = self.required_ask(offer_quantity)
+        return self.continuation_min_lovelace(
+            Assets(root=held),
+            coins_per_utxo_byte,
+            prev_output_index=prev_output_index,
+            address=address,
+        )
+
 
 class CardanoSwapsOrderState(AbstractOrderState):
     """A resting Cardano-Swaps v2 one-way swap UTxO.
@@ -336,23 +600,60 @@ class CardanoSwapsOrderState(AbstractOrderState):
 
     @property
     def price(self) -> tuple[int, int]:
-        """Ask-per-offer price as ``(numerator, denominator)``."""
-        return (
-            self.order_datum.swap_price.numerator,
-            self.order_datum.swap_price.denominator,
-        )
+        """Ask-per-offer price as ``(numerator, denominator)``.
+
+        A UTxO whose datum has a non-positive ``swap_price`` still parses, so a
+        caller can skip it on this error instead of failing a whole book.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.price()
 
     @property
     def available(self) -> Assets:
-        """Max offer asset that can be taken (the offer balance in the UTxO).
+        """The offer balance held in the UTxO.
 
-        When the offer asset is ADA, this includes the UTxO's mandatory min-ADA
-        (the continuing/owner output must still carry it), so the figure is an
-        upper bound on the genuinely-takeable amount. The contract has no
-        separate offered-amount field, so the held balance is the only signal;
-        the fill builder nets out the min-UTxO.
+        The contract has no separate offered-amount field, so the held balance is
+        the only signal. For an ADA offer it includes the lovelace the continuing
+        output must keep as its min-UTxO, so it is an upper bound on what a fill
+        can take; :meth:`claimable_offer` nets that out, and :meth:`swap_utxo`
+        rejects a fill that takes more.
         """
         return Assets(root={self.out_unit: self.assets[self.out_unit]})
+
+    def required_ask(self, offer_taken: int) -> int:
+        """The ask a fill taking ``offer_taken`` of the offer pays into the swap.
+
+        This is exactly what :meth:`swap_utxo` deposits into the continuing output.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.required_ask(offer_taken)
+
+    def claimable_offer(self, coins_per_utxo_byte: int) -> int:
+        """The most of the offer one fill of this UTxO can take.
+
+        :meth:`CardanoSwapsSwapDatum.claimable_offer` over this UTxO's offer
+        balance and accumulated ask, sized at its own output index (which the
+        continuation's ``prev_input`` records) and at its address when known. A
+        :meth:`swap_utxo` fill of this amount always leaves the continuing output
+        funded.
+
+        Args:
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.claimable_offer(
+            self.assets[self.out_unit],
+            coins_per_utxo_byte,
+            held_ask=self.assets[self.in_unit],
+            prev_output_index=self.tx_index,
+            address=Address.decode(self.address) if self.address is not None else None,
+        )
 
     @property
     def tvl(self) -> int:
@@ -508,13 +809,7 @@ class CardanoSwapsOrderState(AbstractOrderState):
     @staticmethod
     def _beacon_mint_assets(datum: CardanoSwapsSwapDatum, quantity: int) -> Assets:
         """The three beacons (pair/offer/ask) at +1 (CREATE) or -1 (CLOSE)."""
-        return Assets(
-            root={
-                BEACON_POLICY_ID + datum.pair_beacon.hex(): quantity,
-                BEACON_POLICY_ID + datum.offer_beacon.hex(): quantity,
-                BEACON_POLICY_ID + datum.ask_beacon.hex(): quantity,
-            },
-        )
+        return datum.beacon_assets(quantity)
 
     @staticmethod
     def _accumulate_mint(tx_builder: TransactionBuilder, mint_assets: Assets) -> None:
@@ -544,6 +839,11 @@ class CardanoSwapsOrderState(AbstractOrderState):
         beacon-tagged swap address carrying the offer asset, the three beacons
         and an inline ``SwapDatum``. No swap-UTxO is spent.
 
+        The output's lovelace is funded for the largest continuation the swap
+        reaches (see :meth:`CardanoSwapsSwapDatum.carrier_lovelace`), sized at the
+        output index this output is added at, so the whole offer can be taken by
+        :meth:`swap_utxo` without the taker topping the output up.
+
         Args:
             owner_address: The owner's address; its staking credential identifies
                 the owner and is carried onto the swap address.
@@ -558,6 +858,9 @@ class CardanoSwapsOrderState(AbstractOrderState):
 
         Returns:
             The swap output and its inline ``SwapDatum``.
+
+        Raises:
+            ValueError: ``price`` is not a positive rational.
         """
         offer_unit = offer.unit()
         ask_unit = ask.unit()
@@ -565,6 +868,8 @@ class CardanoSwapsOrderState(AbstractOrderState):
         ask_id, ask_name = cls._split_unit(ask_unit)
 
         num, den = price
+        if num <= 0 or den <= 0:
+            raise ValueError(f"price must be a positive rational, got {num}/{den}.")
         exp = (
             CardanoSwapsSomeInt(value=expiration)
             if expiration is not None
@@ -599,31 +904,23 @@ class CardanoSwapsOrderState(AbstractOrderState):
             amount=asset_to_value(output_assets),
             datum=datum,
         )
+        # The validator derives an ADA offer's ``offer_taken`` as
+        # ``lovelace_in - lovelace_out``, so a fill can never draw the UTxO below
+        # the min-UTxO of its continuation, whose ``prev_input`` records the spent
+        # UTxO. Fund a carrier for that continuation: on top of an ADA offer, or
+        # as the lovelace of a token offer. Its first fill spends this output at
+        # the index it is added at. The maker reclaims the carrier on CLOSE.
+        carrier = datum.carrier_lovelace(
+            offer.quantity(),
+            tx_builder.context.protocol_param.coins_per_utxo_byte,
+            prev_output_index=len(tx_builder.outputs),
+            address=swap_address,
+        )
         if offer_unit == "lovelace":
-            # ADA offer: the offered asset IS the UTxO's min-ADA, and the
-            # validator derives ``offer_taken = lovelace_in - lovelace_out``, so a
-            # taker can never draw the UTxO below its min-ADA floor — the tail of
-            # the stated offer would be un-fillable. Fund a SEPARATE carrier on
-            # top of the offer, sized to the FINAL full-fill state (3 beacons +
-            # the fully-accumulated ask asset + inline datum), so the entire
-            # offer is drawable while the UTxO stays at/above that floor. The
-            # maker reclaims the carrier (plus the accumulated ask) on CLOSE.
-            full_ask = -(-offer.quantity() * num // den)  # ceil(offer x price)
-            final_assets = cls._beacon_mint_assets(datum, 1) + Assets(
-                root={ask_unit: full_ask},
-            )
-            final_txo = TransactionOutput(
-                address=swap_address,
-                amount=asset_to_value(final_assets),
-                datum=datum,
-            )
-            carrier = min_lovelace(tx_builder.context, output=final_txo)
             txo.amount.coin = offer.quantity() + carrier
         else:
-            # Token offer: the offered token fully leaves on a fill and the
-            # min-ADA is a separate lovelace carrier (no phantom tail).
             txo.amount.coin = max(
-                txo.amount.coin,
+                carrier,
                 min_lovelace(tx_builder.context, output=txo),
             )
         tx_builder.add_output(txo)
@@ -685,12 +982,25 @@ class CardanoSwapsOrderState(AbstractOrderState):
         ``out_assets`` is the offer asset the taker receives; ``in_assets`` is the
         ask asset they pay. Purity (only offer leaves, only ask is added) and the
         ``offer_taken * price_num <= ask_given * price_den`` price check are
-        enforced by the validator; this builder constructs a balanced fill.
+        enforced by the validator; this builder constructs a balanced fill. The
+        ask deposited is :meth:`required_ask` of the offer taken; ``in_assets``
+        only selects the ask asset.
+
+        A token offer's continuation is topped up to its min-UTxO when needed (the
+        validator lets a taker deposit ADA). An ADA offer's cannot be: the lovelace
+        left behind is what sets ``offer_taken``, so a fill that would leave the
+        continuation below its min-UTxO is rejected; :meth:`claimable_offer` is the
+        most a fill can take.
 
         Returns:
             ``(continuing_output, continuing_datum)`` — the validator always
             requires a continuing beacon output (a full fill simply leaves the
             offer balance at ~0); only CLOSE removes the beacons.
+
+        Raises:
+            ValueError: the assets are not the offer and ask, or the fill takes
+                more of the offer than the UTxO can release.
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
         """
         owner = owner_address if owner_address is not None else address_source
 
@@ -703,11 +1013,14 @@ class CardanoSwapsOrderState(AbstractOrderState):
         offer_unit = self.out_unit
         ask_unit = self.in_unit
 
-        num, den = self.price
         offer_taken = out_assets.quantity()
-        # Minimum ask the maker must receive for this offer at price-or-better:
-        # offer_taken*num <= ask_given*den => ask_given >= ceil(offer_taken*num/den).
-        ask_given = -(-offer_taken * num // den)  # ceil division
+        held_offer = self.assets[offer_unit]
+        if offer_taken <= 0 or offer_taken > held_offer:
+            raise ValueError(
+                f"out_assets must take between 1 and {held_offer} of the offer, "
+                f"got {offer_taken}.",
+            )
+        ask_given = self.required_ask(offer_taken)
 
         input_utxo = self._input_utxo(owner)
 
@@ -728,12 +1041,9 @@ class CardanoSwapsOrderState(AbstractOrderState):
         # no separate maker payment; the maker collects the accumulated ask on
         # CLOSE. The datum is identical to the input EXCEPT prev_input = consumed
         # TxOutRef.
-        cont_datum = CardanoSwapsSwapDatum.from_cbor(self.order_datum.to_cbor())
-        cont_datum.prev_input = CardanoSwapsSomeOutRef(
-            value=CardanoSwapsOutputReference(
-                transaction_id=CardanoSwapsTxId(tx_hash=bytes.fromhex(self.tx_hash)),
-                output_index=self.tx_index,
-            ),
+        cont_datum = self.order_datum.continuation_datum(
+            bytes.fromhex(self.tx_hash),
+            self.tx_index,
         )
 
         # Continuing value = consumed value, less the offer taken, plus the ask
@@ -759,10 +1069,15 @@ class CardanoSwapsOrderState(AbstractOrderState):
             amount=asset_to_value(cont_assets),
             datum=cont_datum,
         )
-        cont_txo.amount.coin = max(
-            cont_txo.amount.coin,
-            min_lovelace(tx_builder.context, output=cont_txo),
-        )
+        coin = cont_txo.amount.coin
+        needed = min_lovelace(tx_builder.context, output=cont_txo)
+        if offer_unit == "lovelace" and coin < needed:
+            raise ValueError(
+                f"Taking {offer_taken} lovelace leaves the continuing output "
+                f"{coin} lovelace, below its min-UTxO of {needed}; "
+                "claimable_offer() is the most a fill can take.",
+            )
+        cont_txo.amount.coin = max(coin, needed)
         tx_builder.add_output(cont_txo)
 
         return cont_txo, cont_datum
@@ -865,7 +1180,11 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         for order in orders:
             if order.inactive:
                 continue
-            num, denom = order.price
+            try:
+                num, denom = order.price
+            except InvalidPoolError:
+                # A malformed swap_price cannot be priced or filled.
+                continue
             o = OrderBookOrder(
                 price=num / denom,
                 quantity=int(order.available.quantity()),
@@ -960,13 +1279,17 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         fill is threaded the maker's real owner — the resting UTxO's staking
         credential, carried on the order's ``address`` — so the continuing output
         lands back at the correct beacon-tagged swap address (defaulting the owner
-        to the taker would reconstruct the wrong input and fail validation).
+        to the taker would reconstruct the wrong input and fail validation). Each
+        fill is capped at the order's claimable offer, so an ADA offer's
+        continuation keeps its min-UTxO; an order with nothing claimable is
+        skipped.
         """
         if in_assets.unit() == self.assets.unit():
             book = self.sell_book_full
         else:
             book = self.buy_book_full
 
+        coins_per_utxo_byte = tx_builder.context.protocol_param.coins_per_utxo_byte
         in_remaining = Assets.model_validate(in_assets.model_dump())
         txo = None
         datum = None
@@ -979,6 +1302,15 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
             # Stop once the remaining budget cannot satisfy a meaningful fill.
             if order_out.quantity() <= 0 or order_in.quantity() <= 0:
                 break
+
+            claimable = state.claimable_offer(coins_per_utxo_byte)
+            if claimable <= 0:
+                continue
+            if order_out.quantity() > claimable:
+                order_out = Assets(root={state.out_unit: claimable})
+                order_in = Assets(
+                    root={state.in_unit: state.required_ask(claimable)},
+                )
 
             if state.address is None:
                 raise ValueError(
