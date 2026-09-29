@@ -211,7 +211,7 @@ def test_manifest_resolves_the_preview_deployment() -> None:
 
 def test_manifest_resolves_the_mainnet_deployment() -> None:
     deployment = SundaeV4Deployment.for_network("mainnet")
-    assert len(deployment.validators) == 13
+    assert len(deployment.validators) == 14
     assert deployment.base_fee == 1_280_000
     assert deployment.pool_address.encode().startswith("addr1wysundaev4")
     assert deployment.cardano_network == Network.MAINNET

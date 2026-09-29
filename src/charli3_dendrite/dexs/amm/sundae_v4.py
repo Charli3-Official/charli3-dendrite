@@ -102,6 +102,9 @@ from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
+from charli3_dendrite.dexs.amm.sundae_v4_stableswap_math import STABLESWAP_PRECISION
+from charli3_dendrite.dexs.amm.sundae_v4_stableswap_math import stableswap_d
+from charli3_dendrite.dexs.amm.sundae_v4_stableswap_math import stableswap_swap
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import ModuleConfigUnavailableError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
@@ -1452,9 +1455,10 @@ def pool_identifier(seed_tx_hash: bytes, seed_index: int) -> bytes:
 
 @dataclass(frozen=True)
 class PinnedDeposit:
-    """The unique constant-sum deposit the vault accepts for an offer.
+    """The unique deposit the vault accepts for an offer.
 
-    ``target_delta_v`` is the value delta the scoop declares, ``deltas`` the
+    ``target_delta_v`` is the measure delta the scoop declares (a constant-sum
+    pool's value ``V``, a stableswap pool's invariant ``D``), ``deltas`` the
     per-asset contributions (aligned to the pool's assets), ``lp_after`` the
     pool's total LP after the step and ``lp_minted`` the LP the depositor is
     owed. Anything offered above ``deltas`` is returned as change.
@@ -1466,46 +1470,39 @@ class PinnedDeposit:
     lp_minted: int
 
 
-def constant_sum_pinned_deposit(
+def _pinned_deposit(
     reserves: list[int],
-    prices: list[int],
+    measure: int,
     offered: list[int],
     total_lp: int,
+    kind: str,
 ) -> PinnedDeposit:
-    """The target-pinned constant-sum deposit for ``offered`` against ``reserves``.
+    """The target-pinned deposit of ``offered`` into ``reserves`` of size ``measure``.
 
-    A constant-sum deposit is proportional: the step declares a value delta
-    ``t`` and the validator pins every reserve to move by ``ceil(r_i * t / V_b)``
-    and the total LP to ``floor(lp_b * (V_b + t) / V_b)``, rounding against the
-    depositor. The largest fillable ``t`` is capped by the scarcest offered
-    asset, ``min_i floor(offered_i * V_b / r_i)``, so every pool asset must be
-    offered.
-
-    Raises:
-        ValueError: on misaligned inputs, a pool with no value or LP, or an
-            offer that leaves some pool asset out.
+    ``measure`` is the pool's constant-sum value ``V`` or stableswap invariant
+    ``D``. The step declares a measure delta ``t``; the validator pins every
+    reserve to move by ``ceil(r_i * t / measure)`` and the total LP to
+    ``floor(lp * (measure + t) / measure)``, rounding against the depositor. The
+    largest fillable ``t`` is capped by the scarcest offered asset,
+    ``min_i floor(offered_i * measure / r_i)``, so every pool asset must be offered.
     """
-    if not len(reserves) == len(prices) == len(offered):
-        msg = "reserves, prices and offered must be aligned to the pool assets."
-        raise ValueError(msg)
     if total_lp <= 0:
         msg = "The pool has no LP to deposit against."
         raise ValueError(msg)
-    value_before = sum(r * p for r, p in zip(reserves, prices))
-    if value_before <= 0:
+    if measure <= 0:
         msg = "The pool holds no value."
         raise ValueError(msg)
     caps = [
-        amount * value_before // reserve
+        amount * measure // reserve
         for amount, reserve in zip(offered, reserves)
         if reserve > 0
     ]
     target = min(caps) if caps else 0
     if target <= 0:
-        msg = "A constant-sum deposit must offer every pool asset in proportion."
+        msg = f"A {kind} deposit must offer every pool asset in proportion."
         raise ValueError(msg)
-    deltas = [-(-(reserve * target) // value_before) for reserve in reserves]
-    lp_after = total_lp * (value_before + target) // value_before
+    deltas = [-(-(reserve * target) // measure) for reserve in reserves]
+    lp_after = total_lp * (measure + target) // measure
     return PinnedDeposit(
         target_delta_v=target,
         deltas=deltas,
@@ -1514,15 +1511,58 @@ def constant_sum_pinned_deposit(
     )
 
 
+def constant_sum_pinned_deposit(
+    reserves: list[int],
+    prices: list[int],
+    offered: list[int],
+    total_lp: int,
+) -> PinnedDeposit:
+    """The target-pinned constant-sum deposit for ``offered`` against ``reserves``.
+
+    The pool's value ``V`` is the reserve/price dot product (see
+    :func:`_pinned_deposit`).
+
+    Raises:
+        ValueError: on misaligned inputs, a pool with no value or LP, or an
+            offer that leaves some pool asset out.
+    """
+    if not len(reserves) == len(prices) == len(offered):
+        msg = "reserves, prices and offered must be aligned to the pool assets."
+        raise ValueError(msg)
+    value = sum(r * p for r, p in zip(reserves, prices))
+    return _pinned_deposit(reserves, value, offered, total_lp, "constant-sum")
+
+
+def stableswap_pinned_deposit(
+    reserves: list[int],
+    d: int,
+    offered: list[int],
+    total_lp: int,
+) -> PinnedDeposit:
+    """The target-pinned stableswap deposit: the invariant ``D`` is the measure.
+
+    Rates do not enter a proportional move (see :func:`_pinned_deposit`).
+
+    Raises:
+        ValueError: on misaligned inputs, a pool with no invariant or LP, or an
+            offer that leaves some pool asset out.
+    """
+    if len(reserves) != len(offered):
+        msg = "reserves and offered must be aligned to the pool assets."
+        raise ValueError(msg)
+    return _pinned_deposit(reserves, d, offered, total_lp, "stableswap")
+
+
 @dataclass(frozen=True)
 class PinnedWithdraw:
-    """The unique constant-sum withdrawal the vault accepts for an LP redemption.
+    """The unique withdrawal the vault accepts for an LP redemption.
 
-    ``target_delta_v`` is the (negative) value delta the scoop declares,
+    ``target_delta_v`` is the (negative) measure delta the scoop declares (a
+    constant-sum pool's value ``V``, a stableswap pool's invariant ``D``),
     ``payouts`` the per-asset amounts paid out (aligned to the pool's assets),
     ``lp_after`` the pool's total LP after the step and ``lp_burned`` the LP
     actually consumed — at most the LP redeemed, and below it only on pools
-    whose LP is finer-grained than their value.
+    whose LP is finer-grained than their measure.
     """
 
     target_delta_v: int
@@ -1531,17 +1571,43 @@ class PinnedWithdraw:
     lp_burned: int
 
 
+def _pinned_withdraw(
+    reserves: list[int],
+    measure: int,
+    lp: int,
+    total_lp: int,
+) -> PinnedWithdraw:
+    """The target-pinned withdrawal of ``lp`` from ``reserves`` of size ``measure``.
+
+    The step declares ``t = -floor(lp * measure / total_lp)``; every reserve moves
+    by ``ceil(r_i * t / measure)`` (a payout of ``floor(r_i * |t| / measure)``) and
+    the total LP to ``floor(total_lp * (measure + t) / measure)``, rounding
+    against the withdrawer.
+    """
+    if not 0 < lp <= total_lp:
+        msg = "lp must be positive and at most the pool's total LP."
+        raise ValueError(msg)
+    if measure <= 0:
+        msg = "The pool holds no value."
+        raise ValueError(msg)
+    target_delta_v = -(lp * measure // total_lp)
+    payouts = [r * -target_delta_v // measure for r in reserves]
+    lp_after = total_lp + (total_lp * target_delta_v) // measure
+    return PinnedWithdraw(
+        target_delta_v=target_delta_v,
+        payouts=payouts,
+        lp_after=lp_after,
+        lp_burned=total_lp - lp_after,
+    )
+
+
 def constant_sum_pinned_withdraw(
     reserves: list[int],
     prices: list[int],
     lp: int,
     total_lp: int,
 ) -> PinnedWithdraw:
-    """The target-pinned constant-sum withdrawal of ``lp`` against ``reserves``.
-
-    The step declares ``t = -floor(lp * V / total_lp)``; every reserve moves by
-    ``ceil(r_i * t / V)`` (a payout of ``floor(r_i * |t| / V)``) and the total
-    LP to ``floor(total_lp * (V + t) / V)``, rounding against the withdrawer.
+    """The target-pinned constant-sum withdrawal of ``lp`` (value ``V`` as measure).
 
     Raises:
         ValueError: misaligned inputs, a pool with no value, or ``lp`` outside
@@ -1554,18 +1620,21 @@ def constant_sum_pinned_withdraw(
         msg = "lp must be positive and at most the pool's total LP."
         raise ValueError(msg)
     value = sum(r * p for r, p in zip(reserves, prices))
-    if value <= 0:
-        msg = "The pool holds no value."
-        raise ValueError(msg)
-    target_delta_v = -(lp * value // total_lp)
-    payouts = [r * -target_delta_v // value for r in reserves]
-    lp_after = total_lp + (total_lp * target_delta_v) // value
-    return PinnedWithdraw(
-        target_delta_v=target_delta_v,
-        payouts=payouts,
-        lp_after=lp_after,
-        lp_burned=total_lp - lp_after,
-    )
+    return _pinned_withdraw(reserves, value, lp, total_lp)
+
+
+def stableswap_pinned_withdraw(
+    reserves: list[int],
+    d: int,
+    lp: int,
+    total_lp: int,
+) -> PinnedWithdraw:
+    """The target-pinned stableswap withdrawal of ``lp`` (invariant ``D`` as measure).
+
+    Raises:
+        ValueError: a pool with no invariant, or ``lp`` outside ``(0, total_lp]``.
+    """
+    return _pinned_withdraw(reserves, d, lp, total_lp)
 
 
 def module_config_hash(config: PlutusData) -> bytes:
@@ -2220,20 +2289,20 @@ class SundaeV4Vault(DendriteBaseModel):
                     out.append((entry.tag, bytes(module), kind))
         return out
 
-    def pools(self) -> list[SundaeV4ConstantSumPool]:
+    def pools(self) -> list[SundaeV4ConstantSumPool | SundaeV4StableSwapPool]:
         """One pool type per enabled invariant-module binding on the action map.
 
         Raises:
             NotImplementedError: an invariant kind without a pool type yet.
             ModuleConfigUnavailableError: a config could not be resolved.
         """
-        out: list[SundaeV4ConstantSumPool] = []
+        out: list[SundaeV4ConstantSumPool | SundaeV4StableSwapPool] = []
         for tag, module, kind in self.invariant_modules():
-            if kind != "constant_sum":
+            pool_type = _POOL_TYPES.get(kind)
+            if pool_type is None:
                 msg = f"SundaeV4Vault: no pool type for the {kind} module yet."
                 raise NotImplementedError(msg)
-            config = self.module_config(module)
-            out.append(SundaeV4ConstantSumPool.from_vault(self, tag, config))
+            out.append(pool_type.from_vault(self, tag, self.module_config(module)))
         return out
 
     # -- module configs -------------------------------------------------------
@@ -2698,67 +2767,15 @@ class _SundaeV4OrderBuilders:
         return tx_builder
 
 
-class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolState):
-    """The constant-sum module bound to a vault on one action tag.
+class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
+    """Identity, fees and reserve moves shared by every pool type bound to a vault."""
 
-    ``prices`` is the config's positional price vector re-keyed to units;
-    ``reserves`` and ``total_lp`` are a snapshot of the vault's at construction
-    so :meth:`apply_swap` never mutates the vault. A swap step may raise any
-    subset of the reserves and lower another; the on-chain check is on value:
-    ``out = floor((V_in - floor(V_in * fee)) / p_out)`` with the pool keeping
-    the fee and the sub-``p_out`` remainder. That value is the only output the
-    fee-band check ever admits — a lower amount fails it exactly like a higher
-    one — so a step whose out reserve cannot cover it, or (with the bounty on)
-    whose value increase cannot cover the obligation dock, quotes zero rather
-    than a partial fill.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    vault: SundaeV4Vault
-    tag: int
-    config: ConstantSumConfig
-    total_lp: int
-    prices: dict[str, int]
+    if TYPE_CHECKING:
+        vault: SundaeV4Vault
+        tag: int
+        reserves: Assets
 
     _deposit_rider: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
-
-    @classmethod
-    def from_vault(
-        cls,
-        vault: SundaeV4Vault,
-        tag: int,
-        config: ConstantSumConfig,
-    ) -> SundaeV4ConstantSumPool:
-        """Bind the constant-sum module's ``config`` to ``vault`` on action ``tag``.
-
-        Raises:
-            InvalidPoolError: the config's price vector does not cover the
-                reserves, or the vault's datum order and reserve units disagree.
-        """
-        price_list = [int(p) for p in _list_items(config.prices)]
-        if len(price_list) != len(vault.datum_units):
-            msg = (
-                f"SundaeV4ConstantSumPool: {len(price_list)} prices for "
-                f"{len(vault.datum_units)} reserves."
-            )
-            raise InvalidPoolError(msg)
-        if set(vault.datum_units) != set(vault.reserves.root):
-            msg = (
-                "SundaeV4ConstantSumPool: the vault's datum order and "
-                "reserve units disagree."
-            )
-            raise InvalidPoolError(msg)
-        return cls(
-            vault=vault,
-            tag=tag,
-            config=config,
-            reserves=Assets(**dict(vault.reserves.root)),
-            total_lp=vault.total_lp,
-            prices=dict(zip(vault.datum_units, price_list)),
-        )
-
-    # -- identity -------------------------------------------------------------
 
     @classmethod
     def dex(cls) -> str:
@@ -2801,6 +2818,77 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
     ) -> Assets:
         """The lovelace rider returned with the order's payout."""
         return self._deposit_rider
+
+    def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
+        """Move every touched reserve as if the swap settled.
+
+        Raises:
+            KeyError: ``asset_in`` or ``asset_out`` names a unit that is not a
+                reserve of this pool.
+        """
+        for unit, quantity in asset_in.items():
+            self.reserves.root[unit] = self.reserves.root[unit] + quantity
+        for unit, quantity in asset_out.items():
+            self.reserves.root[unit] = self.reserves.root[unit] - quantity
+
+
+class SundaeV4ConstantSumPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
+    """The constant-sum module bound to a vault on one action tag.
+
+    ``prices`` is the config's positional price vector re-keyed to units;
+    ``reserves`` and ``total_lp`` are a snapshot of the vault's at construction
+    so :meth:`apply_swap` never mutates the vault. A swap step may raise any
+    subset of the reserves and lower another; the on-chain check is on value:
+    ``out = floor((V_in - floor(V_in * fee)) / p_out)`` with the pool keeping
+    the fee and the sub-``p_out`` remainder. That value is the only output the
+    fee-band check ever admits — a lower amount fails it exactly like a higher
+    one — so a step whose out reserve cannot cover it, or (with the bounty on)
+    whose value increase cannot cover the obligation dock, quotes zero rather
+    than a partial fill.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    vault: SundaeV4Vault
+    tag: int
+    config: ConstantSumConfig
+    total_lp: int
+    prices: dict[str, int]
+
+    @classmethod
+    def from_vault(
+        cls,
+        vault: SundaeV4Vault,
+        tag: int,
+        config: ConstantSumConfig,
+    ) -> SundaeV4ConstantSumPool:
+        """Bind the constant-sum module's ``config`` to ``vault`` on action ``tag``.
+
+        Raises:
+            InvalidPoolError: the config's price vector does not cover the
+                reserves, or the vault's datum order and reserve units disagree.
+        """
+        price_list = [int(p) for p in _list_items(config.prices)]
+        if len(price_list) != len(vault.datum_units):
+            msg = (
+                f"SundaeV4ConstantSumPool: {len(price_list)} prices for "
+                f"{len(vault.datum_units)} reserves."
+            )
+            raise InvalidPoolError(msg)
+        if set(vault.datum_units) != set(vault.reserves.root):
+            msg = (
+                "SundaeV4ConstantSumPool: the vault's datum order and "
+                "reserve units disagree."
+            )
+            raise InvalidPoolError(msg)
+        return cls(
+            vault=vault,
+            tag=tag,
+            config=config,
+            reserves=Assets(**dict(vault.reserves.root)),
+            total_lp=vault.total_lp,
+            prices=dict(zip(vault.datum_units, price_list)),
+        )
 
     # -- curve ----------------------------------------------------------------
 
@@ -2998,18 +3086,6 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
                 lo = mid + 1
         return lo
 
-    def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
-        """Move every touched reserve as if the swap settled.
-
-        Raises:
-            KeyError: ``asset_in`` or ``asset_out`` names a unit that is not a
-                reserve of this pool.
-        """
-        for unit, quantity in asset_in.items():
-            self.reserves.root[unit] = self.reserves.root[unit] + quantity
-        for unit, quantity in asset_out.items():
-            self.reserves.root[unit] = self.reserves.root[unit] - quantity
-
     # -- liquidity ------------------------------------------------------------
 
     def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
@@ -3038,6 +3114,322 @@ class SundaeV4ConstantSumPool(_SundaeV4OrderBuilders, AbstractMultiAssetPoolStat
             lp=lp,
             total_lp=self.total_lp,
         )
+
+
+# A stableswap pool prices exactly two reserves; a ledger quantity is below 2**64.
+_STABLESWAP_ASSETS = 2
+_LEDGER_MAX = 2**64 - 1
+
+
+class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
+    """The stableswap module bound to a vault on one action tag.
+
+    A two-asset Curve curve ``4A(x + y) + D = 4AD + D^3 / (4xy)`` over reserves
+    scaled by ``rate * STABLESWAP_PRECISION``. ``rates`` is the config's rate vector
+    re-keyed to units; ``reserves`` and ``total_lp`` are a snapshot of the vault's at
+    construction, so :meth:`apply_swap` never mutates the vault. The validator admits
+    exactly one output per input — its exchange check pins the post-swap reserve to
+    the smallest integer on or above the curve and its fee check pins the ceiled fee
+    — so every quote here is that output. The rates are the vault's committed ones; a
+    scoop that opens with a rate update prices at the updated rates, which an order's
+    minimum received must absorb (``rate_manager``, ``monotone_rates`` and
+    ``max_rate_step`` bound how far one may move).
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    vault: SundaeV4Vault
+    tag: int
+    config: StableSwapConfig
+    total_lp: int
+    rates: dict[str, int]
+
+    _d_memo: tuple[tuple[int, int, int, int], int] | None = PrivateAttr(default=None)
+
+    @classmethod
+    def from_vault(
+        cls,
+        vault: SundaeV4Vault,
+        tag: int,
+        config: StableSwapConfig,
+    ) -> SundaeV4StableSwapPool:
+        """Bind the stableswap module's ``config`` to ``vault`` on action ``tag``.
+
+        Raises:
+            InvalidPoolError: the vault does not declare two reserves matching the
+                config's two rates, its datum order and reserve units disagree, or
+                the amplification or a rate is not positive.
+        """
+        rate_list = [int(r) for r in _list_items(config.rates)]
+        if (
+            len(vault.datum_units) != _STABLESWAP_ASSETS
+            or len(rate_list) != _STABLESWAP_ASSETS
+        ):
+            msg = (
+                f"SundaeV4StableSwapPool: {len(rate_list)} rates for "
+                f"{len(vault.datum_units)} reserves; a stableswap pool prices two."
+            )
+            raise InvalidPoolError(msg)
+        if set(vault.datum_units) != set(vault.reserves.root):
+            msg = (
+                "SundaeV4StableSwapPool: the vault's datum order and reserve units "
+                "disagree."
+            )
+            raise InvalidPoolError(msg)
+        if config.linear_amplification <= 0 or min(rate_list) <= 0:
+            msg = (
+                "SundaeV4StableSwapPool: the amplification and every rate must be "
+                "positive."
+            )
+            raise InvalidPoolError(msg)
+        return cls(
+            vault=vault,
+            tag=tag,
+            config=config,
+            reserves=Assets(**dict(vault.reserves.root)),
+            total_lp=vault.total_lp,
+            rates=dict(zip(vault.datum_units, rate_list)),
+        )
+
+    # -- config ---------------------------------------------------------------
+
+    @property
+    def amp(self) -> int:
+        """The config's amplification ``A``."""
+        return int(self.config.linear_amplification)
+
+    @property
+    def rate_manager(self) -> MultisigScript | None:
+        """Who may run a rate update (``None``: the rates are fixed)."""
+        manager = self.config.rate_manager
+        return manager.value if isinstance(manager, OptionSomeMultisig) else None
+
+    @property
+    def monotone_rates(self) -> bool:
+        """Whether a rate update may never lower ``rates[1] / rates[0]``."""
+        return isinstance(self.config.monotone_rates, BoolTrue)
+
+    @property
+    def max_rate_step(self) -> tuple[int, int] | None:
+        """The largest relative rate change one scoop may make (``None``: uncapped)."""
+        step = self.config.max_rate_step
+        if isinstance(step, OptionSomeRational):
+            return (step.value.num, step.value.den)
+        return None
+
+    def _fee(self) -> tuple[int, int]:
+        """The config's swap fee as ``(num, den)``."""
+        return (self.config.fee.num, self.config.fee.den)
+
+    # -- curve ----------------------------------------------------------------
+
+    def _scaled(self, unit: str) -> int:
+        """A reserve as the invariant sees it: ``reserve * rate * 10**12``."""
+        return self.reserves.root[unit] * self.rates[unit] * STABLESWAP_PRECISION
+
+    def sum_invariant(self) -> int:
+        """The invariant ``D`` of the reserves at the config's rates.
+
+        Zero when a side is empty. Memoised on the reserves and rates themselves,
+        so a move made directly on ``reserves`` or through :meth:`apply_swap`
+        never serves a stale value.
+        """
+        a, b = self.vault.datum_units
+        key = (
+            self.reserves.root[a],
+            self.reserves.root[b],
+            self.rates[a],
+            self.rates[b],
+        )
+        if self._d_memo is not None and self._d_memo[0] == key:
+            return self._d_memo[1]
+        d = stableswap_d(self.amp, self._scaled(a), self._scaled(b))
+        self._d_memo = (key, d)
+        return d
+
+    def _check_pair(self, asset: Assets, out_unit: str) -> str:
+        """The offered unit of a one-asset offer for ``out_unit``.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
+                one reserve other than ``out_unit`` with a non-negative quantity.
+        """
+        if out_unit not in self.rates:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        if len(asset) != 1:
+            msg = "A stableswap pool takes exactly one offered asset."
+            raise ValueError(msg)
+        unit = asset.unit()
+        if unit not in self.rates or unit == out_unit:
+            msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
+            raise ValueError(msg)
+        if asset.quantity() < 0:
+            msg = f"Offered quantity of {unit} is negative."
+            raise ValueError(msg)
+        return unit
+
+    def _takes(self, unit_in: str, out_unit: str, amount: int) -> int:
+        """The exact output for ``amount`` of ``unit_in``.
+
+        Zero for no offer, or when a side is empty.
+        """
+        if amount <= 0 or min(self.reserves.root.values()) <= 0:
+            return 0
+        return stableswap_swap(
+            self.amp,
+            self.sum_invariant(),
+            self.reserves.root[unit_in],
+            self.rates[unit_in],
+            self.reserves.root[out_unit],
+            self.rates[out_unit],
+            amount,
+            self._fee(),
+        ).takes
+
+    def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
+        """The exact fee-exclusive marginal rate as integer weights ``(p_in, p_out)``.
+
+        Out per in at the margin is ``p_in / p_out`` (the constant-sum meaning):
+        ``(rate_in * F_x, rate_out * F_y)`` for the invariant's partial derivatives,
+        cleared of denominators by ``4x²y²``. A vault with an empty side has no
+        margin and reports its rate peg ``(rate_in, rate_out)``.
+
+        Raises:
+            KeyError: ``unit_in`` or ``unit_out`` is not a reserve of this pool.
+        """
+        rate_in, rate_out = self.rates[unit_in], self.rates[unit_out]
+        x, y = self._scaled(unit_in), self._scaled(unit_out)
+        if x <= 0 or y <= 0:
+            return (rate_in, rate_out)
+        d = self.sum_invariant()
+        base = 16 * self.amp * x * x * y * y
+        d_cubed = d * d * d
+        return (rate_in * (base + d_cubed * y), rate_out * (base + d_cubed * x))
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        out_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """The exact output of ``out_unit`` for ``asset``, and the price impact.
+
+        The only amount the validator admits; zero for a zero offer or a vault with
+        an empty side.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
+                one other reserve.
+        """
+        unit_in = self._check_pair(asset, out_unit)
+        amount = asset.quantity()
+        takes = self._takes(unit_in, out_unit, amount)
+        out = Assets(**{out_unit: takes})
+        if takes == 0:
+            return out, 0.0
+        p_in, p_out = self.price(unit_in, out_unit)
+        return out, 1.0 - (takes * p_out) / (amount * p_in)
+
+    def max_output(self, out_unit: str) -> int:
+        """The smallest undeliverable output of ``out_unit``.
+
+        One past what the largest ledger offer of the other reserve buys: the
+        output never decreases as the offer grows, and no offer exceeds the ledger.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve of this pool.
+        """
+        if out_unit not in self.rates:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        (unit_in,) = (unit for unit in self.rates if unit != out_unit)
+        return self._takes(unit_in, out_unit, _LEDGER_MAX) + 1
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        in_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """The minimum ``in_unit`` whose exact output reaches the one-asset ``asset``.
+
+        The output never decreases as the offer grows, so the minimum is found by
+        stepping up from the marginal-rate estimate and bisecting.
+
+        Raises:
+            ValueError: ``asset`` is not exactly one reserve, ``in_unit`` is not the
+                other reserve, or the amount is not positive.
+            InvalidPoolError: no ledger quantity of ``in_unit`` reaches the output
+                (it is at or past :meth:`max_output`).
+        """
+        if len(asset) != 1:
+            msg = "The desired output must be exactly one asset."
+            raise ValueError(msg)
+        out_unit, desired = asset.unit(), asset.quantity()
+        self._check_pair(Assets(**{in_unit: 1}), out_unit)
+        if desired <= 0:
+            msg = "The desired output must be positive."
+            raise ValueError(msg)
+        if desired >= self.max_output(out_unit):
+            msg = (
+                f"SundaeV4StableSwapPool: no amount of {in_unit} reaches {desired} "
+                f"of {out_unit}."
+            )
+            raise InvalidPoolError(msg)
+        p_in, p_out = self.price(in_unit, out_unit)
+        fee_num, fee_den = self._fee()
+        guess = -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num)))
+        hi = min(max(guess, 1), _LEDGER_MAX)
+        lo = 1
+        step = max(1, hi // 1024)
+        while self._takes(in_unit, out_unit, hi) < desired:
+            lo = hi + 1
+            hi = min(_LEDGER_MAX, hi + step)
+            step *= 2
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self._takes(in_unit, out_unit, mid) >= desired:
+                hi = mid
+            else:
+                lo = mid + 1
+        return Assets(**{in_unit: lo}), 1.0 - (desired * p_out) / (lo * p_in)
+
+    # -- liquidity ------------------------------------------------------------
+
+    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
+        """The proportional deposit the vault accepts for ``offered``.
+
+        ``deltas`` is aligned to the vault's declaration order
+        (``vault.datum_units``).
+        """
+        order = self.vault.datum_units
+        return stableswap_pinned_deposit(
+            reserves=[self.reserves.root[u] for u in order],
+            d=self.sum_invariant(),
+            offered=[offered.root.get(u, 0) for u in order],
+            total_lp=self.total_lp,
+        )
+
+    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
+        """The proportional payout for redeeming ``lp`` LP tokens.
+
+        ``payouts`` is aligned to the vault's declaration order
+        (``vault.datum_units``).
+        """
+        order = self.vault.datum_units
+        return stableswap_pinned_withdraw(
+            reserves=[self.reserves.root[u] for u in order],
+            d=self.sum_invariant(),
+            lp=lp,
+            total_lp=self.total_lp,
+        )
+
+
+_POOL_TYPES: dict[str, type[SundaeV4ConstantSumPool | SundaeV4StableSwapPool]] = {
+    "constant_sum": SundaeV4ConstantSumPool,
+    "stableswap": SundaeV4StableSwapPool,
+}
 
 
 def _void() -> RawPlutusData:
