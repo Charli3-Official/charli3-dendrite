@@ -34,6 +34,8 @@ from charli3_dendrite.dexs.amm.sundae_v4 import StableSwapRateUpdate
 from charli3_dendrite.dexs.amm.sundae_v4 import StableSwapSwapStep
 from charli3_dendrite.dexs.amm.sundae_v4 import StableSwapSwapStepV0
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
+from charli3_dendrite.dexs.amm.sundae_v4 import INVARIANT_MODULE_KINDS
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4PoolDatum
 from charli3_dendrite.dexs.amm.sundae_v4 import module_config_hash
 from charli3_dendrite.dexs.amm.sundae_v4 import parse_stableswap_step
@@ -221,3 +223,77 @@ def test_superseded_shapes_are_two_field_steps() -> None:
 def test_a_tag_the_module_has_no_step_for_raises(tag: int) -> None:
     with pytest.raises(ValueError, match="not a stableswap step"):
         parse_stableswap_step(tag, b"\xd8\x79\x80")
+
+
+@pytest.mark.parametrize(
+    ("network", "title", "applied"),
+    [
+        (
+            "mainnet",
+            "stableswap.withdraw",
+            "f47f6594cab956302f7f1cd81ac4122e9ee128146102497feca1a79f",
+        ),
+        (
+            "preview",
+            "stableswap.withdraw",
+            "9db7ce54fb25f4390a89bb715a022fe79a86b9a043aa22c31c27380a",
+        ),
+        (
+            "preview",
+            "stableswap.withdraw.superseded1",
+            "a44e0058459a223752be78dc4df7ca86446ba22ef95c7ee690e0b5a3",
+        ),
+        (
+            "preprod",
+            "stableswap.withdraw",
+            "031b29852b494e33ab3b66a4df53d28dd8d00af15b59d3c5a6529db0",
+        ),
+    ],
+)
+def test_every_stableswap_build_is_the_stableswap_module(
+    network, title, applied
+) -> None:
+    deployment = SundaeV4Deployment.for_network(network)
+    assert deployment.validator(title).hex() == applied
+    assert deployment.module_kind(bytes.fromhex(applied)) == "stableswap"
+    assert deployment.module_kind(deployment.constant_sum_hash) == "constant_sum"
+    assert deployment.module_kind(deployment.pool_hash) is None
+
+
+def test_manifest_carries_the_stableswap_references_and_pool_configs() -> None:
+    mainnet = SundaeV4Deployment.for_network("mainnet")
+    assert mainnet.stableswap_hash.hex() == MAINNET["module"]
+    assert mainnet.reference("stableswap.withdraw") == (
+        "419cbf3bc96169d0a46cc9d5a122e8a9ee1f4b1f71625911def64294468dfc8d",
+        0,
+    )
+    assert mainnet.config_token("ss-pool").hex() == (
+        "00c250095fc26d302cd932fd84f89b1b66fc8f6d9a21b1d59f2d7c839f1c23cc"
+    )
+    preview = SundaeV4Deployment.for_network("preview")
+    assert preview.config_token("ss-old-pool").hex() == (
+        "00c334ba9af39b245b3dd97e43e46920c8f8a1ad42bddfe936f546bb349f71e9"
+    )
+    preprod = SundaeV4Deployment.for_network("preprod")
+    assert preprod.reference("stableswap.withdraw") == (
+        "5d8891affb8e84f755e683317415408fc06a72be4c8b455ebc1b0c9f5e6aad0f",
+        0,
+    )
+
+
+def test_the_mainnet_vault_binds_one_stableswap_module() -> None:
+    SundaeV4Vault.select_network("mainnet")
+    state = MAINNET["pool_states"][-1]
+    vault = SundaeV4Vault.model_validate(
+        {
+            "tx_hash": state["tx"],
+            "tx_index": state["index"],
+            "datum_cbor": state["datum"],
+            "assets": state["value"],
+            "block_time": state["block_time"],
+        }
+    )
+    assert "stableswap" in INVARIANT_MODULE_KINDS
+    assert vault.invariant_modules() == [
+        (100, bytes.fromhex(MAINNET["module"]), "stableswap")
+    ]

@@ -64,6 +64,7 @@ import hashlib
 import importlib.resources
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from enum import IntEnum
@@ -1628,6 +1629,10 @@ def _validator_hashes(title: str) -> frozenset[bytes]:
 _BASIC_ORDER_HASHES: frozenset[bytes] = _validator_hashes("basic_order.withdraw")
 _STRATEGY_ORDER_HASHES: frozenset[bytes] = _validator_hashes("strategy_order.withdraw")
 
+# A module validator's blueprint title: ``<kind>.withdraw``, or
+# ``<kind>.withdraw.superseded<N>`` for a build pools were upgraded off.
+_MODULE_TITLE = re.compile(r"(?P<kind>.+)\.withdraw(?:\.superseded\d+)?")
+
 
 @dataclass(frozen=True)
 class SundaeV4Deployment:
@@ -1683,14 +1688,18 @@ class SundaeV4Deployment:
         return self.references[title]
 
     def module_kind(self, script_hash: bytes) -> str | None:
-        """The module kind (``constant_sum``, ``fee_split``, ...) of a withdraw script.
+        """The module kind (``constant_sum``, ``stableswap``, ...) of a withdraw script.
 
-        Module validators are registered under ``<kind>.withdraw``; anything else
-        (the vault, order and settings validators) is not a module.
+        Module validators are registered under ``<kind>.withdraw``, and a build that
+        pools were upgraded off under ``<kind>.withdraw.superseded<N>``; anything
+        else (the vault, order and settings validators) is not a module.
         """
         for title, applied in self.validators.items():
-            if bytes.fromhex(applied) == script_hash and title.endswith(".withdraw"):
-                return title[: -len(".withdraw")]
+            if bytes.fromhex(applied) != script_hash:
+                continue
+            match = _MODULE_TITLE.fullmatch(title)
+            if match is not None:
+                return match.group("kind")
         return None
 
     @property
@@ -1722,6 +1731,11 @@ class SundaeV4Deployment:
     def constant_sum_hash(self) -> bytes:
         """The constant-sum invariant module hash."""
         return self.validator("constant_sum.withdraw")
+
+    @property
+    def stableswap_hash(self) -> bytes:
+        """The current stableswap invariant module hash."""
+        return self.validator("stableswap.withdraw")
 
     def config_token(self, label: str) -> bytes:
         """The token name of the settings node labelled ``label``."""
@@ -1784,7 +1798,7 @@ class SundaeV4Deployment:
 
 
 INVARIANT_MODULE_KINDS: frozenset[str] = frozenset(
-    {"constant_sum", "constant_product", "concentrated_liquidity"},
+    {"constant_sum", "constant_product", "concentrated_liquidity", "stableswap"},
 )
 _CONFIG_LESS_COMMITMENT = b"\x80"
 _NFT_PREFIX = "000de140"
@@ -1806,6 +1820,7 @@ _CONFIG_TYPES: dict[str, type[PlutusData]] = {
     "constant_product": ConstantProductConfig,
     "concentrated_liquidity": ConcentratedLiquidityConfig,
     "fee_split": FeeSplitConfig,
+    "stableswap": StableSwapConfig,
 }
 _CREATE_TAG = 121  # constructor 0
 _OPERATE_TAG = 122  # constructor 1
