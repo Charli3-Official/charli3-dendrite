@@ -6,8 +6,9 @@ pool-mint policy), the N declared reserves, the action map, the module
 commitments and the lovelace surplus. It prices nothing.
 
 A **pool type** is a module bound to the vault on an action tag.
-`vault.pools()` returns one `SundaeV4ConstantSumPool` per enabled
-constant-sum binding; each quotes with explicit units:
+`vault.pools()` returns one pool type per enabled invariant-module binding — a
+`SundaeV4ConstantSumPool` for a constant-sum binding, a `SundaeV4StableSwapPool`
+for a stableswap one; each quotes with explicit units:
 
 ```python
 from charli3_dendrite import SundaeV4Vault
@@ -30,8 +31,32 @@ Blockfrost) — usually the producing transaction, else found by walking the
 pool NFT's UTxO history via `backend.get_pool_utxos`. Every resolved config is
 hash-verified.
 
+## Stableswap pools
+
+A stableswap vault binds the `stableswap` module (`vault.invariant_modules()`
+lists it) and prices its two reserves on Curve's invariant
+`4A(x + y) + D = 4AD + D^3 / (4xy)`, each reserve scaled by its config rate and
+`10^12`. The validator admits exactly one output per input, and
+`SundaeV4StableSwapPool` computes exactly that integer: `get_amount_out` is the
+output an order receives, `get_amount_in` the exact minimum input for an output,
+`max_output` the smallest output no ledger-sized offer reaches, and
+`sum_invariant` the invariant `D` the next step must declare. `price` is the
+marginal rate as integer weights, and `pinned_deposit` / `pinned_withdraw` are the
+proportional liquidity moves, with `D` as the measure. The math is the contract's
+own integer reference (`charli3_dendrite.dexs.amm.sundae_v4_stableswap_math`).
+
+A stableswap config's rates can change between scoops: a rate update, signed by
+the config's `rate_manager`, commits the config with the new rates while the
+scoop's `Operate` redeemer still carries the old one. Config resolution also tries
+each recorded config with the rates of every rate update in the same transaction,
+accepting only a hash match. A quote is priced at the vault's current rates; a
+scoop that opens with a rate update prices an order at the new ones, so its
+minimum received should allow for `max_rate_step` (uncapped when `None`).
+
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4Vault
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4ConstantSumPool
+
+::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4StableSwapPool
 
 ::: charli3_dendrite.dexs.amm.multi_asset.AbstractMultiAssetPoolState
