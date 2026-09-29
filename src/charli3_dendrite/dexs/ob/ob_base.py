@@ -405,6 +405,20 @@ class AbstractOrderBookState(AbstractPairState):
 
         return in_assets, 0
 
+    @property
+    def taker_fee_bps(self) -> int:
+        """Taker fee, in basis points, that the book's level walk charges a fill.
+
+        The level walk (``get_amount_out`` / ``get_amount_in`` with ``apply_fee``)
+        charges the book's own ``fee``, so that is the fee reported here, or 0
+        when the book has none. A book whose walk leaves the fee to each order
+        overrides this.
+        """
+        fee = self.fee
+        if isinstance(fee, list):
+            return max(fee, default=0)
+        return fee or 0
+
     @classmethod
     def reference_utxo(self) -> UTxO | None:
         return None
