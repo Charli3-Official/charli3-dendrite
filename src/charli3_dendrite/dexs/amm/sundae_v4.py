@@ -58,6 +58,7 @@ blake2b-256 of its serialised config (:func:`module_config_hash`).
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import hashlib
 import importlib.resources
@@ -348,6 +349,112 @@ class BountyClaim(PlutusData):
     CONSTR_ID = 0
     asset: AssetClass
     amount: int
+
+
+@dataclass
+class StableSwapSwapStep(PlutusData):
+    """A stableswap swap step's ``operation_data`` (tag 3, constructor 0).
+
+    ``raw_swap_result`` is the scaled out-side reserve delta the validator pins;
+    ``next_sum_invariant`` the invariant after the step. ``attribution`` is opaque:
+    the served order's output reference, or Void.
+    """
+
+    CONSTR_ID = 0
+    raw_swap_result: int
+    next_sum_invariant: int
+    attribution: RawPlutusData
+
+
+@dataclass
+class StableSwapLiquidityStep(PlutusData):
+    """A stableswap deposit (tag 6) or withdraw (tag 4) step (constructor 0).
+
+    ``target_delta_d`` is the declared invariant change every reserve is pinned to
+    (positive for a deposit, negative for a withdrawal).
+    """
+
+    CONSTR_ID = 0
+    target_delta_d: int
+    next_sum_invariant: int
+    attribution: RawPlutusData
+
+
+@dataclass
+class StableSwapRateUpdate(PlutusData):
+    """A stableswap rate update (tag 7, constructor 0): new rates, same reserves."""
+
+    CONSTR_ID = 0
+    rates: IndefiniteList
+    next_sum_invariant: int
+
+
+@dataclass
+class StableSwapSwapStepV0(PlutusData):
+    """A swap step of the superseded preview build: no attribution slot."""
+
+    CONSTR_ID = 0
+    raw_swap_result: int
+    next_sum_invariant: int
+
+
+@dataclass
+class StableSwapLiquidityStepV0(PlutusData):
+    """A liquidity step of the superseded preview build: no attribution slot."""
+
+    CONSTR_ID = 0
+    target_delta_d: int
+    next_sum_invariant: int
+
+
+_STABLESWAP_SWAP_TAG = 3
+_STABLESWAP_WITHDRAW_TAG = 4
+_STABLESWAP_DEPOSIT_TAG = 6
+_STABLESWAP_RATE_UPDATE_TAG = 7
+
+
+def parse_stableswap_step(
+    tag: int,
+    operation_data: RawPlutusData | bytes,
+    *,
+    superseded: bool = False,
+) -> PlutusData:
+    """A stableswap transcript entry's ``operation_data`` as its typed payload.
+
+    ``tag`` is the entry's ``operation_tag``; ``superseded`` selects the shapes of
+    the superseded preview build, whose swap and liquidity steps carry no
+    attribution slot (its rate update is the same shape).
+
+    Raises:
+        ValueError: ``tag`` names no stableswap step (the module has no tag 5).
+        DeserializeException: the payload does not have the tag's shape (pycardano
+            alone would read a three-field step as the two-field one, dropping the
+            attribution, so the field count is checked first).
+    """
+    cbor = (
+        operation_data.to_cbor()
+        if isinstance(operation_data, RawPlutusData)
+        else operation_data
+    )
+    step_type: type[PlutusData]
+    if tag == _STABLESWAP_SWAP_TAG:
+        step_type = StableSwapSwapStepV0 if superseded else StableSwapSwapStep
+    elif tag in (_STABLESWAP_WITHDRAW_TAG, _STABLESWAP_DEPOSIT_TAG):
+        step_type = StableSwapLiquidityStepV0 if superseded else StableSwapLiquidityStep
+    elif tag == _STABLESWAP_RATE_UPDATE_TAG:
+        step_type = StableSwapRateUpdate
+    else:
+        msg = f"Operation tag {tag} is not a stableswap step."
+        raise ValueError(msg)
+    raw = RawPlutusData.from_cbor(cbor).data
+    fields = list(raw.value) if isinstance(raw, CBORTag) else []
+    expected = len(dataclasses.fields(step_type))
+    if len(fields) != expected:
+        msg = (
+            f"A tag-{tag} step of this build has {expected} fields, not {len(fields)}."
+        )
+        raise DeserializeException(msg)
+    return step_type.from_cbor(cbor)
 
 
 # -- PoolRedeemer: the constructor index is the action class ----------------
@@ -1005,6 +1112,52 @@ class FeeSplitConfig(PlutusData):
     protocol_share: Rational
 
 
+@dataclass
+class OptionSomeMultisig(PlutusData):
+    """Aiken ``Option<MultisigScript>`` ``Some(value)`` (constructor 0)."""
+
+    CONSTR_ID = 0
+    value: MultisigScript
+
+
+@dataclass
+class OptionSomeRational(PlutusData):
+    """Aiken ``Option<Rational>`` ``Some(value)`` (constructor 0)."""
+
+    CONSTR_ID = 0
+    value: Rational
+
+
+OptionMultisig = Union[OptionSomeMultisig, OptionNone]
+OptionRational = Union[OptionSomeRational, OptionNone]
+
+
+@dataclass
+class StableSwapConfig(PlutusData):
+    """Stableswap module config (constructor 0).
+
+    ``linear_amplification`` is the curve's ``A`` in ``4A(x + y) + D = 4AD +
+    D^3 / (4xy)``. ``fee`` is charged on the gross output, ceiled, and stays in the
+    reserve. ``rates`` is one positive integer per asset, positionally aligned with
+    the pool ``assets`` (as constant-sum ``prices``); a reserve enters the invariant
+    as ``reserve * rate * 10^12``. It is modelled as an
+    :class:`~pycardano.IndefiniteList` so it serialises as the on-chain
+    ``serialise_data`` the ``module_state`` commitment hashes. ``rate_manager`` may
+    run a rate-update step (``None`` disables it); ``monotone_rates`` forbids the
+    relative price ``rates[1] / rates[0]`` from falling on one; ``max_rate_step`` caps
+    its relative change per scoop (``None`` is uncapped). ``rates`` is the only field
+    a scoop can change, so a rate update moves the commitment.
+    """
+
+    CONSTR_ID = 0
+    linear_amplification: int
+    fee: Rational
+    rates: IndefiniteList
+    rate_manager: OptionMultisig
+    monotone_rates: Bool
+    max_rate_step: OptionRational
+
+
 # ---------------------------------------------------------------------------
 # Module redeemers
 #
@@ -1064,6 +1217,49 @@ class ConstantSumDestroy(PlutusData):
 
 
 ConstantSumRedeemer = Union[ConstantSumCreate, ConstantSumOperate, ConstantSumDestroy]
+
+
+@dataclass
+class StableSwapEntry(PlutusData):
+    """One pool the stableswap module operates on (constructor 0).
+
+    ``config`` is the full :class:`StableSwapConfig` the pool input commits to;
+    ``sum_invariant`` is the pool's invariant ``D`` before the scoop.
+    """
+
+    CONSTR_ID = 0
+    pool_oref: OutputReference
+    config: StableSwapConfig
+    sum_invariant: int
+
+
+@dataclass
+class StableSwapCreate(PlutusData):
+    """Stableswap module ``Create`` (constructor 0)."""
+
+    CONSTR_ID = 0
+    initial_state: StableSwapConfig
+    pool_output_index: int
+    sum_invariant: int
+
+
+@dataclass
+class StableSwapOperate(PlutusData):
+    """Stableswap module ``Operate`` (constructor 1)."""
+
+    CONSTR_ID = 1
+    entries: list[StableSwapEntry]
+
+
+@dataclass
+class StableSwapDestroy(PlutusData):
+    """Stableswap module ``Destroy`` (constructor 2)."""
+
+    CONSTR_ID = 2
+    entries: list[DestroyEntry]
+
+
+StableSwapRedeemer = Union[StableSwapCreate, StableSwapOperate, StableSwapDestroy]
 
 
 @dataclass
