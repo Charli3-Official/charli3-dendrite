@@ -1862,18 +1862,53 @@ def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
     return candidates
 
 
+def _rate_update_rates(
+    records: list[RedeemerRecord],
+    pool_hash: bytes,
+) -> list[list[int]]:
+    """The rates of every rate-update step in ``records``' pool spends.
+
+    A rate-update scoop commits the config with its new rates in the vault it
+    produces while its Operate entry still carries the old config, so the new rates
+    are read from the vault spend's transcript.
+    """
+    out: list[list[int]] = []
+    for record in records:
+        if record.purpose != "spend" or not record.script_hash:
+            continue
+        if bytes.fromhex(record.script_hash) != pool_hash:
+            continue
+        try:
+            action = PoolAction.from_cbor(record.data_cbor)
+        except (DeserializeException, TypeError, ValueError, KeyError):
+            continue
+        for entry in action.transcript:
+            if entry.operation_tag != _STABLESWAP_RATE_UPDATE_TAG:
+                continue
+            try:
+                update = StableSwapRateUpdate.from_cbor(entry.operation_data.to_cbor())
+            except (DeserializeException, TypeError, ValueError, KeyError):
+                continue
+            out.append([int(rate) for rate in _list_items(update.rates)])
+    return out
+
+
 def _matching_config(
     records: list[RedeemerRecord],
     module_hash: bytes,
     kind: str | None,
     commitment: bytes,
+    pool_hash: bytes,
 ) -> Any | None:  # noqa: ANN401
     """The first config among ``records`` for ``module_hash`` hashing to ``commitment``.
 
     Shared by both legs of :meth:`SundaeV4Vault._resolve_from_backend`: the
     producing transaction's own redeemers and, failing that, each past
-    transaction's redeemers visited while walking the pool NFT's history.
+    transaction's redeemers visited while walking the pool NFT's history. For a
+    stableswap module, each candidate is also tried with the rates of every
+    rate-update step in the same transaction; only a hash match is accepted.
     """
+    rate_sets = _rate_update_rates(records, pool_hash) if kind == "stableswap" else []
     for record in records:
         if not record.script_hash:
             continue
@@ -1882,6 +1917,10 @@ def _matching_config(
         for candidate in _config_candidates(record.data_cbor, kind):
             if module_config_hash(candidate) == commitment:
                 return candidate
+            for rates in rate_sets:
+                variant = dataclasses.replace(candidate, rates=IndefiniteList(rates))
+                if module_config_hash(variant) == commitment:
+                    return variant
     return None
 
 
@@ -2278,13 +2317,14 @@ class SundaeV4Vault(DendriteBaseModel):
                 history carries a redeemer committing to ``commitment``.
         """
         kind = self.module_kind(module_hash)
+        pool_hash = self._deployment.pool_hash
         records = self._redeemers_or_unavailable(self.tx_hash, module_hash)
-        config = _matching_config(records, module_hash, kind, commitment)
+        config = _matching_config(records, module_hash, kind, commitment, pool_hash)
         if config is not None:
             return config
         for tx_hash in self._history_tx_hashes(module_hash):
             records = self._redeemers_or_unavailable(tx_hash, module_hash)
-            config = _matching_config(records, module_hash, kind, commitment)
+            config = _matching_config(records, module_hash, kind, commitment, pool_hash)
             if config is not None:
                 return config
         msg = (
