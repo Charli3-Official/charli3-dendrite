@@ -53,6 +53,21 @@ accepting only a hash match. A quote is priced at the vault's current rates; a
 scoop that opens with a rate update prices an order at the new ones, so its
 minimum received should allow for `max_rate_step` (uncapped when `None`).
 
+## Multi-vault routes
+
+A basic swap names only what it offers and the least it must receive, so the
+scooper may route it across several vaults (for example USDCx → USDr on a
+constant-sum vault, then USDr → sUSDr on a stableswap vault). It does so when the
+order's fee budget pays for the route:
+
+```
+route_fee_budget(pools, hops) = base_fee + (pools − 1) · 1 ADA + (hops − 1) · 0.5 ADA
+```
+
+Build such an order with `swap_utxo(..., fee_budget=SundaeV4Vault.route_fee_budget(k, k))`
+on any bound pool, for a straight path over `k` vaults: the datum's `service_budget` and
+`max_per_execution` are both the budget, and the order locks it with the 2 ADA rider.
+
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4Vault
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4ConstantSumPool

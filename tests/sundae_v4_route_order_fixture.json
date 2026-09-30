@@ -1,0 +1,12 @@
+{
+  "tx": "4b453086e52f67dc76e2fc893cb7f37ec4ec17fc06e0ab10cc670c5a0a04a174",
+  "index": 0,
+  "slot": 199058021,
+  "address": "addr1zyr7ktasnkwavcpcwr8xlpxglpgxyjg4y9eamux80u0s0m8su9a4r0qcjc3ew3gwkcjjy27wn3gsewptyyaanncha2pq5glwf4",
+  "datum": "d8799fd8799f581cf0e17b51bc18962397450eb625222bce9c510cb82b213bd9cf17ea82ffd8799fd8799fd8799f581ce0b68e229f9c043ab610067ed7f3c6d662b8f3c6bb4ec452c11f6411ffd8799fd8799fd8799f581cf0e17b51bc18962397450eb625222bce9c510cb82b213bd9cf17ea82ffffffffd87a80ff1a002a6b601a002a6b605820012dd204b7a3c6d5d410290631d135f95703fc7247a0954067c9dbf32838d0fb9f9f581c30f1fac08a15ef84ea6a5aa04989b1c2ceeb3b437f2c3103df5aca68d87b9f9f9fd8799f581c1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34455553444378ff1a004c4b40ffff9f9fd8799f581c7d9e4a0ee1a3f5d5ff8159ea91a83310cf2795ee7a87170c7aea05ae457355534472ff1a0049d592ffffffff9f581c267eabb980be6699144e85b24283659838b0746e0fd2f08be1423e70d87980ffffd87980ff",
+  "value": {
+    "lovelace": 4780000,
+    "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378": 5000000
+  },
+  "note": "Mainnet basic swap USDCx -> sUSDr the scooper filled across the USDCx/USDr constant-sum vault and the USDr/sUSDr stableswap vault: budget 2,780,000 = base 1,280,000 + one extra pool + one extra hop."
+}
