@@ -84,6 +84,7 @@ from pycardano import RawPlutusData
 from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
+from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import VerificationKeyHash
 from pycardano.serialization import CBORTag
@@ -1665,6 +1666,13 @@ _DEPLOYMENTS_RESOURCE = "sundae_v4_deployments.json"
 # payout output and is returned with the fill (or the cancel).
 _ORDER_RIDER = 2_000_000
 
+# The scooper's charge, beyond the flat base fee, for routing one basic order
+# across several vaults: each vault beyond the first costs ROUTE_EXTRA_POOL_FEE
+# and each hop beyond the first ROUTE_EXTRA_HOP_FEE (lovelace). A straight path
+# over k vaults has k pools and k hops.
+ROUTE_EXTRA_POOL_FEE = 1_000_000
+ROUTE_EXTRA_HOP_FEE = 500_000
+
 # How long a live (or fallback) SundaeV4Vault.base_fee() reading is cached, per
 # network, before the fee-settings node is read again.
 _BASE_FEE_TTL_S = 300
@@ -2107,6 +2115,38 @@ class SundaeV4Vault(DendriteBaseModel):
             )
         cls._base_fee_cache[deployment.network] = (fee, now)
         return fee
+
+    @classmethod
+    def route_fee_budget(
+        cls,
+        pools: int,
+        hops: int,
+        *,
+        base_fee: int | None = None,
+    ) -> int:
+        """The fee budget a basic order needs for the scooper to route it.
+
+        ``base_fee + (pools - 1) * ROUTE_EXTRA_POOL_FEE + (hops - 1) *
+        ROUTE_EXTRA_HOP_FEE``: one vault on one hop is the flat base fee; a
+        straight path over ``k`` vaults has ``pools == hops == k``. Set the
+        order's ``service_budget`` and ``max_per_execution`` to it (and lock it)
+        for a multi-vault fill. ``base_fee`` defaults to the live
+        :meth:`base_fee`; pass the value a quote was priced at to reuse it.
+
+        Raises:
+            ValueError: ``pools`` or ``hops`` is below one, or ``hops`` exceeds
+                ``pools`` (every hop crosses at least one vault).
+        """
+        if pools < 1 or hops < 1 or hops > pools:
+            msg = (
+                f"A route crosses at least one vault per hop: "
+                f"pools={pools}, hops={hops}."
+            )
+            raise ValueError(msg)
+        fee = cls.base_fee() if base_fee is None else base_fee
+        return (
+            fee + (pools - 1) * ROUTE_EXTRA_POOL_FEE + (hops - 1) * ROUTE_EXTRA_HOP_FEE
+        )
 
     @classmethod
     def dex(cls) -> str:
@@ -2775,6 +2815,15 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
         tag: int
         reserves: Assets
 
+        def _order_output(
+            self,
+            in_assets: Assets,
+            fee: int,
+            rider: int,
+            order_datum: PlutusData,
+        ) -> TransactionOutput:
+            ...
+
     _deposit_rider: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
 
     @classmethod
@@ -2818,6 +2867,49 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
     ) -> Assets:
         """The lovelace rider returned with the order's payout."""
         return self._deposit_rider
+
+    def swap_utxo(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        *,
+        fee_budget: int | None = None,
+    ) -> tuple[TransactionOutput, PlutusData]:
+        """The order output for a swap: input + fee budget + rider, inline datum.
+
+        Unset, ``fee_budget`` is the live base fee: the order budgets and locks
+        exactly one vault's execution. Set, the datum's ``service_budget`` and
+        ``max_per_execution`` are both ``fee_budget`` and the order locks it: the
+        budget a multi-vault route needs (:meth:`SundaeV4Vault.route_fee_budget`).
+
+        Raises:
+            ValueError: more than one asset offered or asked, or ``fee_budget``
+                below the live base fee (the scooper never includes such an order).
+        """
+        if len(in_assets) != 1 or len(out_assets) != 1:
+            msg = "Only one asset can be supplied as input, and one asset as output."
+            raise ValueError(msg)
+        base_fee = SundaeV4Vault.base_fee()
+        if fee_budget is not None and fee_budget < base_fee:
+            msg = f"A fee budget of {fee_budget} is below the base fee {base_fee}."
+            raise ValueError(msg)
+        order_datum = self.swap_datum(
+            address_source=address_source,
+            in_assets=in_assets,
+            out_assets=out_assets,
+            extra_assets=extra_assets,
+            address_target=address_target,
+            datum_target=datum_target,
+            service_budget=fee_budget,
+            max_per_execution=fee_budget,
+        )
+        fee = base_fee if fee_budget is None else fee_budget
+        rider = self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
+        return self._order_output(in_assets, fee, rider, order_datum), order_datum
 
     def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:
         """Move every touched reserve as if the swap settled.
