@@ -127,6 +127,22 @@ class AbstractMultiAssetPoolState(DendriteBaseModel, ABC):
         """
         return self.reserves.root[unit]
 
+    def _order_output(
+        self,
+        in_assets: Assets,
+        fee: int,
+        rider: int,
+        order_datum: PlutusData,
+    ) -> TransactionOutput:
+        """The order output: in_assets plus fee and rider lovelace, an inline datum."""
+        value = Assets(**dict(in_assets.root))
+        value.root["lovelace"] = value.root.get("lovelace", 0) + fee + rider
+        return TransactionOutput(
+            address=self.stake_address,
+            amount=asset_to_value(value),
+            datum=order_datum,
+        )
+
     def swap_utxo(
         self,
         address_source: Address,
@@ -152,19 +168,10 @@ class AbstractMultiAssetPoolState(DendriteBaseModel, ABC):
             address_target=address_target,
             datum_target=datum_target,
         )
-        value = Assets(**dict(in_assets.root))
-        value.root["lovelace"] = (
-            value.root.get("lovelace", 0)
-            + self.batcher_fee(
-                in_assets=in_assets,
-                out_assets=out_assets,
-                extra_assets=extra_assets,
-            ).quantity()
-            + self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
-        )
-        output = TransactionOutput(
-            address=self.stake_address,
-            amount=asset_to_value(value),
-            datum=order_datum,
-        )
-        return output, order_datum
+        fee = self.batcher_fee(
+            in_assets=in_assets,
+            out_assets=out_assets,
+            extra_assets=extra_assets,
+        ).quantity()
+        rider = self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
+        return self._order_output(in_assets, fee, rider, order_datum), order_datum
