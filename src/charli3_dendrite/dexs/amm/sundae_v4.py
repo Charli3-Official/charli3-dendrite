@@ -2868,6 +2868,15 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
         """The lovelace rider returned with the order's payout."""
         return self._deposit_rider
 
+    @property
+    def swap_forward(self) -> bool:
+        """A V4 order pays a fixed destination, its datum inline: it can forward a fill.
+
+        ``swap_utxo(address_target=..., datum_target=...)`` points the destination at
+        another order's address, with that order's datum inline.
+        """
+        return True
+
     def swap_utxo(
         self,
         address_source: Address,
@@ -2878,6 +2887,7 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
         datum_target: PlutusData | None = None,
         *,
         fee_budget: int | None = None,
+        rider: int | None = None,
     ) -> tuple[TransactionOutput, PlutusData]:
         """The order output for a swap: input + fee budget + rider, inline datum.
 
@@ -2886,9 +2896,16 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
         ``max_per_execution`` are both ``fee_budget`` and the order locks it: the
         budget a multi-vault route needs (:meth:`SundaeV4Vault.route_fee_budget`).
 
+        ``rider`` is the lovelace returned with the payout. Everything in the order
+        but the consumed offer and the fee leaves with the output, so an order that
+        forwards its fill into another (``address_target`` / ``datum_target``)
+        carries the next order's fee and deposit here. Unset, the 2 ADA rider. The
+        datum does not name it.
+
         Raises:
-            ValueError: more than one asset offered or asked, or ``fee_budget``
-                below the live base fee (the scooper never includes such an order).
+            ValueError: more than one asset offered or asked, ``fee_budget`` below
+                the live base fee (the scooper never includes such an order), or
+                ``rider`` below the 2 ADA rider.
         """
         if len(in_assets) != 1 or len(out_assets) != 1:
             msg = "Only one asset can be supplied as input, and one asset as output."
@@ -2896,6 +2913,12 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
         base_fee = SundaeV4Vault.base_fee()
         if fee_budget is not None and fee_budget < base_fee:
             msg = f"A fee budget of {fee_budget} is below the base fee {base_fee}."
+            raise ValueError(msg)
+        if rider is not None and rider < _ORDER_RIDER:
+            msg = (
+                f"A rider of {rider} lovelace is below the {_ORDER_RIDER} "
+                "lovelace order rider."
+            )
             raise ValueError(msg)
         order_datum = self.swap_datum(
             address_source=address_source,
@@ -2908,7 +2931,8 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
             max_per_execution=fee_budget,
         )
         fee = base_fee if fee_budget is None else fee_budget
-        rider = self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
+        if rider is None:
+            rider = self.deposit(in_assets=in_assets, out_assets=out_assets).quantity()
         return self._order_output(in_assets, fee, rider, order_datum), order_datum
 
     def apply_swap(self, asset_in: Assets, asset_out: Assets) -> None:

@@ -68,6 +68,28 @@ Build such an order with `swap_utxo(..., fee_budget=SundaeV4Vault.route_fee_budg
 on any bound pool, for a straight path over `k` vaults: the datum's `service_budget` and
 `max_per_execution` are both the budget, and the order locks it with the 2 ADA rider.
 
+## Forwarding
+
+A V4 order pays a fixed destination: an address and, optionally, a datum carried
+inline. Pointing the destination at another protocol's order address, with that
+order's datum inline, forwards the fill into it (`swap_forward` is `True` on the V4
+pool types). Everything in the order but the consumed offer and the fee leaves with
+the output, so the next order's batcher fee and deposit ride as the order's rider:
+
+```python
+pool.swap_utxo(
+    address_source,
+    in_assets,
+    min_received,
+    address_target=next_order_address,
+    datum_target=next_order_datum,
+    rider=next_fee + next_deposit,
+)
+```
+
+`rider` defaults to the 2 ADA a payout returns and may not be lower. It changes the
+order's value only, never its datum.
+
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4Vault
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4ConstantSumPool

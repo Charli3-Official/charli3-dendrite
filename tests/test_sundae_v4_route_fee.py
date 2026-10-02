@@ -1,4 +1,4 @@
-"""SundaeSwap V4 multi-vault orders: the route fee budget and an explicit order budget.
+"""SundaeSwap V4 orders: the route fee budget, an explicit order budget and the rider.
 
 A V4 basic swap names only what it offers and the least it must receive; the
 scooper routes it across vaults when its fee budget pays for the route. The
@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 from pycardano import Address
+from pycardano import PlutusData
+from pycardano import TransactionOutput
 
 from charli3_dendrite.backend import set_backend
 from charli3_dendrite.dataclasses.models import Assets
@@ -21,6 +23,7 @@ from charli3_dendrite.dexs.amm.sundae_v4 import FeeSettings
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4ConstantSumPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4OrderDatum
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4StableSwapPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from tests.sundae_v4_vault_factory import build_vault_utxo
 from tests.test_sundae_v4_backend_redeemers import _Minimal
@@ -166,3 +169,73 @@ def test_a_budgeted_order_still_offers_and_asks_one_asset() -> None:
             out_assets=Assets(**{_SUSDR: 4_838_802}),
             fee_budget=2_780_000,
         )
+
+
+_MAINNET = json.loads(
+    (Path(__file__).parent / "sundae_v4_mainnet_fixtures.json").read_text(),
+)
+# Recorded mainnet order f8c017cd…#0: one vault's basic swap of 100,251 SPRINKLES for
+# at least 100,001 JIMMIES at the 1.28 ADA base fee, owned by its destination's stake
+# key.
+_SINGLE = _MAINNET["orders"][3]
+_V4_POLICY = "3e9e48ac43d02b7230382fe455009f66c0b8531d72d25350209a2012"
+_SPRINKLES = _V4_POLICY + "535052494e4b4c4553"
+_JIMMIES = _V4_POLICY + "4a494d4d494553"
+
+
+def _single_swap(rider: int | None = None) -> tuple[TransactionOutput, PlutusData]:
+    """Rebuild the recorded single-vault swap through ``swap_utxo``."""
+    recorded = SundaeV4OrderDatum.from_cbor(_SINGLE["datum"])
+    return _pool().swap_utxo(
+        address_source=recorded.address_source(),
+        in_assets=Assets(**{_SPRINKLES: 100_251}),
+        out_assets=Assets(**{_JIMMIES: 100_001}),
+        rider=rider,
+    )
+
+
+def test_an_unset_rider_rebuilds_the_recorded_single_vault_order() -> None:
+    output, datum = _single_swap()
+    assert datum.to_cbor_hex() == _SINGLE["datum"]
+    assert output.datum == datum
+    assert output.amount.coin == _BASE_FEE + 2_000_000
+    held = {
+        (p.payload.hex(), n.payload.hex()): q
+        for p, names in output.amount.multi_asset.items()
+        for n, q in names.items()
+    }
+    assert held == {(_SPRINKLES[:56], _SPRINKLES[56:]): 100_251}
+
+
+def test_a_rider_rides_the_order_and_leaves_the_datum_unchanged() -> None:
+    plain_output, plain = _single_swap()
+    output, datum = _single_swap(rider=4_500_000)
+    assert datum.to_cbor_hex() == plain.to_cbor_hex()
+    assert output.amount.coin == plain_output.amount.coin + 2_500_000
+    assert output.amount.multi_asset == plain_output.amount.multi_asset
+    assert output.address == plain_output.address
+
+
+def test_a_rider_beside_a_route_budget_leaves_the_route_order_unchanged() -> None:
+    recorded = SundaeV4OrderDatum.from_cbor(ORDER["datum"])
+    budget = SundaeV4Vault.route_fee_budget(2, 2)
+    output, datum = _pool().swap_utxo(
+        address_source=recorded.address_source(),
+        in_assets=Assets(**{_USDCX: 5_000_000}),
+        out_assets=Assets(**{_SUSDR: 4_838_802}),
+        fee_budget=budget,
+        rider=5_000_000,
+    )
+    assert datum.to_cbor_hex() == ORDER["datum"]
+    assert output.amount.coin == budget + 5_000_000
+
+
+@pytest.mark.parametrize("rider", [0, 1_999_999])
+def test_a_rider_below_the_order_rider_is_refused(rider: int) -> None:
+    with pytest.raises(ValueError, match="rider"):
+        _single_swap(rider=rider)
+
+
+def test_v4_pool_types_forward() -> None:
+    assert _pool().swap_forward is True
+    assert SundaeV4StableSwapPool.swap_forward is SundaeV4ConstantSumPool.swap_forward
