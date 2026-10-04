@@ -207,13 +207,96 @@ def ask_beacon_name(ask_id: bytes, ask_name: bytes) -> bytes:
     return _sha256(_AskAsset(ask_id, ask_name).to_cbor())
 
 
+@dataclass
+class CardanoSwapsTxId(PlutusData):
+    """A transaction id wrapper, as the pre-release build encodes it."""
+
+    CONSTR_ID = 0
+    tx_hash: bytes
+
+
+@dataclass
+class CardanoSwapsOutputReference(PlutusData):
+    """An output reference in the pre-release build's shape.
+
+    ``Constr 0 [Constr 0 [tx_hash], output_index]``: the transaction id is
+    wrapped in its own constructor.
+    """
+
+    CONSTR_ID = 0
+    transaction_id: CardanoSwapsTxId
+    output_index: int
+
+
+@dataclass
+class CardanoSwapsSomeOutRef(PlutusData):
+    """``Some`` output reference in the pre-release build's shape."""
+
+    CONSTR_ID = 0
+    value: CardanoSwapsOutputReference
+
+    @classmethod
+    def from_ref(cls, tx_hash: bytes, output_index: int) -> "CardanoSwapsSomeOutRef":
+        """``Some`` reference to the output ``tx_hash#output_index``."""
+        return cls(
+            value=CardanoSwapsOutputReference(
+                transaction_id=CardanoSwapsTxId(tx_hash=tx_hash),
+                output_index=output_index,
+            ),
+        )
+
+    def ref(self) -> tuple[bytes, int]:
+        """The referenced output as ``(tx_hash, output_index)``."""
+        return self.value.transaction_id.tx_hash, self.value.output_index
+
+
+@dataclass
+class CardanoSwapsOutRefV3(PlutusData):
+    """An output reference in the official (Plutus V3) contracts' shape.
+
+    ``Constr 0 [transaction_id, output_index]``: the transaction id is a plain
+    bytestring.
+    """
+
+    CONSTR_ID = 0
+    transaction_id: bytes
+    output_index: int
+
+
+@dataclass
+class CardanoSwapsSomeOutRefV3(PlutusData):
+    """``Some`` output reference in the official (Plutus V3) contracts' shape."""
+
+    CONSTR_ID = 0
+    value: CardanoSwapsOutRefV3
+
+    @classmethod
+    def from_ref(
+        cls,
+        tx_hash: bytes,
+        output_index: int,
+    ) -> "CardanoSwapsSomeOutRefV3":
+        """``Some`` reference to the output ``tx_hash#output_index``."""
+        return cls(
+            value=CardanoSwapsOutRefV3(
+                transaction_id=tx_hash,
+                output_index=output_index,
+            ),
+        )
+
+    def ref(self) -> tuple[bytes, int]:
+        """The referenced output as ``(tx_hash, output_index)``."""
+        return self.value.transaction_id, self.value.output_index
+
+
 @dataclass(frozen=True)
 class CardanoSwapsContract:
     """One deployment of the Cardano-Swaps one-way contracts.
 
     Everything that differs between deployments: script hashes and bytes, the
-    Plutus version, the beacon-name rule, whether a new swap's staking key must
-    sign its creation, and which builders are allowed.
+    Plutus version, the shape a continuation's ``prev_input`` is written in, the
+    beacon-name rule, whether a new swap's staking key must sign its creation,
+    and which builders are allowed.
     """
 
     swap_validator_hash: str
@@ -221,6 +304,7 @@ class CardanoSwapsContract:
     swap_script_hex: str
     beacon_script_hex: str
     script_class: type[PlutusV2Script] | type[PlutusV3Script]
+    prev_input_class: type[CardanoSwapsSomeOutRef] | type[CardanoSwapsSomeOutRefV3]
     pair_beacon_name: Callable[[bytes, bytes, bytes, bytes], bytes]
     offer_beacon_name: Callable[[bytes, bytes], bytes]
     ask_beacon_name: Callable[[bytes, bytes], bytes]
@@ -243,6 +327,7 @@ OFFICIAL_CONTRACT = CardanoSwapsContract(
     swap_script_hex=SWAP_VALIDATOR_SCRIPT_HEX,
     beacon_script_hex=BEACON_POLICY_SCRIPT_HEX,
     script_class=PlutusV3Script,
+    prev_input_class=CardanoSwapsSomeOutRefV3,
     pair_beacon_name=pair_beacon_name,
     offer_beacon_name=offer_beacon_name,
     ask_beacon_name=ask_beacon_name,
@@ -257,6 +342,7 @@ LEGACY_CONTRACT = CardanoSwapsContract(
     swap_script_hex=LEGACY_SWAP_VALIDATOR_SCRIPT_HEX,
     beacon_script_hex=LEGACY_BEACON_POLICY_SCRIPT_HEX,
     script_class=PlutusV2Script,
+    prev_input_class=CardanoSwapsSomeOutRef,
     pair_beacon_name=legacy_pair_beacon_name,
     offer_beacon_name=legacy_offer_beacon_name,
     ask_beacon_name=legacy_ask_beacon_name,
@@ -264,6 +350,20 @@ LEGACY_CONTRACT = CardanoSwapsContract(
     allows_create=False,
     allows_fill=False,
 )
+
+
+def contract_for_beacon(beacon_id: bytes) -> CardanoSwapsContract:
+    """The contract whose beacon policy is ``beacon_id`` (a datum's ``beacon_id``).
+
+    Raises:
+        ValueError: ``beacon_id`` is neither contract's beacon policy.
+    """
+    for contract in (OFFICIAL_CONTRACT, LEGACY_CONTRACT):
+        if beacon_id.hex() == contract.beacon_policy_id:
+            return contract
+    raise ValueError(
+        f"Unknown Cardano-Swaps beacon policy id {beacon_id.hex()}.",
+    )
 
 
 def _unit(policy: bytes, name: bytes) -> str:
@@ -290,6 +390,11 @@ _SIZING_ADDRESS = Address(
 # inside it and only re-sizes when the minimum lands outside.
 _SIZING_COIN = 1_000_000
 _SIZING_COIN_WIDTH = range(2**16, 2**32)
+
+# How far past the chain tip a fill's validity may end (one hour of slots). An
+# expiring swap needs an upper bound at or before its expiration; bounding it
+# from the tip as well keeps it inside the node's slot-to-time forecast horizon.
+_FILL_VALIDITY_SLOTS = 3600
 
 
 def _min_lovelace_at(output: TransactionOutput, coins_per_utxo_byte: int) -> int:
@@ -331,31 +436,6 @@ class CardanoSwapsRational(PlutusData):
 
 
 @dataclass
-class CardanoSwapsTxId(PlutusData):
-    """A transaction id wrapper."""
-
-    CONSTR_ID = 0
-    tx_hash: bytes
-
-
-@dataclass
-class CardanoSwapsOutputReference(PlutusData):
-    """A reference to a transaction output (tx id + output index)."""
-
-    CONSTR_ID = 0
-    transaction_id: CardanoSwapsTxId
-    output_index: int
-
-
-@dataclass
-class CardanoSwapsSomeOutRef(PlutusData):
-    """``Some`` wrapper for an optional output reference."""
-
-    CONSTR_ID = 0
-    value: CardanoSwapsOutputReference
-
-
-@dataclass
 class CardanoSwapsSomeInt(PlutusData):
     """``Some`` wrapper for an optional integer (POSIX millis expiration)."""
 
@@ -370,6 +450,10 @@ class CardanoSwapsSwapDatum(OrderDatum):
     Asset policy/name pairs are kept as separate flat bytestrings (not an
     ``AssetClass``) to match the on-chain 11-field wire format exactly. ADA is
     the empty bytestring in the ``*_id`` / ``*_name`` fields.
+
+    ``prev_input`` parses in either contract's output-reference shape; the two
+    differ in field 0 (a bytestring vs a wrapping constructor), so each datum
+    decodes to exactly one of them. :meth:`prev_input_ref` reads either.
     """
 
     CONSTR_ID = 0
@@ -383,8 +467,19 @@ class CardanoSwapsSwapDatum(OrderDatum):
     ask_name: bytes
     ask_beacon: bytes
     swap_price: CardanoSwapsRational
-    prev_input: Union[CardanoSwapsSomeOutRef, PlutusNone]
+    prev_input: Union[CardanoSwapsSomeOutRefV3, CardanoSwapsSomeOutRef, PlutusNone]
     expiration: Union[CardanoSwapsSomeInt, PlutusNone]
+
+    def prev_input_ref(self) -> tuple[bytes, int] | None:
+        """The consumed output this datum's ``prev_input`` records.
+
+        Returns:
+            ``(tx_hash, output_index)`` in either shape, or ``None`` when
+            ``prev_input`` is ``None`` (a swap that has not been filled).
+        """
+        if isinstance(self.prev_input, PlutusNone):
+            return None
+        return self.prev_input.ref()
 
     def offer_unit(self) -> str:
         """The dendrite unit of the offered (output) asset."""
@@ -463,20 +558,25 @@ class CardanoSwapsSwapDatum(OrderDatum):
         self,
         tx_hash: bytes,
         output_index: int,
+        *,
+        contract: CardanoSwapsContract | None = None,
     ) -> "CardanoSwapsSwapDatum":
         """This datum with ``prev_input`` pointing at the consumed ``tx_hash#index``.
 
         The validator requires a fill's continuing output to carry the spent datum
-        unchanged except for ``prev_input``, which must reference the spent UTxO.
+        unchanged except for ``prev_input``, which must reference the spent UTxO
+        in the output-reference shape of ``contract``'s validator. ``contract``
+        defaults to the one this datum's ``beacon_id`` names.
+
+        Raises:
+            ValueError: ``contract`` is not given and ``beacon_id`` is neither
+                contract's beacon policy.
         """
+        if contract is None:
+            contract = contract_for_beacon(self.beacon_id)
         return dataclasses.replace(
             self,
-            prev_input=CardanoSwapsSomeOutRef(
-                value=CardanoSwapsOutputReference(
-                    transaction_id=CardanoSwapsTxId(tx_hash=tx_hash),
-                    output_index=output_index,
-                ),
-            ),
+            prev_input=contract.prev_input_class.from_ref(tx_hash, output_index),
         )
 
     def continuation_min_lovelace(
@@ -486,6 +586,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
         *,
         prev_output_index: int = 0,
         address: Address | None = None,
+        contract: CardanoSwapsContract | None = None,
     ) -> int:
         """The min-UTxO of a continuing output of this swap that holds ``held``.
 
@@ -505,9 +606,15 @@ class CardanoSwapsSwapDatum(OrderDatum):
                 continuation's ``prev_input`` records.
             address: The swap address; defaults to a staked address of the same
                 size as every base address.
+            contract: The contract whose ``prev_input`` shape the continuation
+                is written in; by default the one ``beacon_id`` names.
 
         Returns:
             The lovelace the continuing output must hold.
+
+        Raises:
+            ValueError: ``contract`` is not given and ``beacon_id`` is neither
+                contract's beacon policy.
         """
         tokens = Assets(
             root={
@@ -519,7 +626,11 @@ class CardanoSwapsSwapDatum(OrderDatum):
         output = TransactionOutput(
             address=address if address is not None else _SIZING_ADDRESS,
             amount=asset_to_value(self.beacon_assets(1) + tokens),
-            datum=self.continuation_datum(bytes(32), prev_output_index),
+            datum=self.continuation_datum(
+                bytes(32),
+                prev_output_index,
+                contract=contract,
+            ),
         )
         return _self_funded_min_lovelace(output, coins_per_utxo_byte)
 
@@ -531,6 +642,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
         held_ask: int = 0,
         prev_output_index: int = 0,
         address: Address | None = None,
+        contract: CardanoSwapsContract | None = None,
     ) -> int:
         """The offer a taker can draw from a swap UTxO holding ``gross`` of it.
 
@@ -549,14 +661,20 @@ class CardanoSwapsSwapDatum(OrderDatum):
             prev_output_index: The swap UTxO's own output index, which the
                 continuation's ``prev_input`` records.
             address: The swap address, when known.
+            contract: The contract whose ``prev_input`` shape the continuation
+                is written in; by default the one ``beacon_id`` names.
 
         Returns:
             The claimable offer quantity, floored at 0.
 
         Raises:
             InvalidPoolError: ``swap_price`` is not a positive rational.
+            ValueError: ``contract`` is not given and ``beacon_id`` is neither
+                contract's beacon policy.
         """
         self.price()
+        if contract is None:
+            contract = contract_for_beacon(self.beacon_id)
         if self.offer_unit() != "lovelace":
             return gross
         full_ask = held_ask + self.required_ask(gross)
@@ -565,6 +683,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
             coins_per_utxo_byte,
             prev_output_index=prev_output_index,
             address=address,
+            contract=contract,
         )
         return max(0, gross - floor)
 
@@ -575,6 +694,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
         *,
         prev_output_index: int = 0,
         address: Address | None = None,
+        contract: CardanoSwapsContract | None = None,
     ) -> int:
         """The lovelace a new swap offering ``offer_quantity`` funds for its min-UTxO.
 
@@ -595,12 +715,16 @@ class CardanoSwapsSwapDatum(OrderDatum):
             coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
             prev_output_index: The output index the swap UTxO is created at.
             address: The swap address, when known.
+            contract: The contract whose ``prev_input`` shape the continuation
+                is written in; by default the one ``beacon_id`` names.
 
         Returns:
             The carrier lovelace.
 
         Raises:
             InvalidPoolError: ``swap_price`` is not a positive rational.
+            ValueError: ``contract`` is not given and ``beacon_id`` is neither
+                contract's beacon policy.
         """
         self.price()
         ask_unit = self.ask_unit()
@@ -617,6 +741,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
                     coins_per_utxo_byte,
                     prev_output_index=prev_output_index,
                     address=address,
+                    contract=contract,
                 )
                 if needed <= carrier:
                     return carrier
@@ -629,6 +754,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
             coins_per_utxo_byte,
             prev_output_index=prev_output_index,
             address=address,
+            contract=contract,
         )
 
 
@@ -750,9 +876,9 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
 
         :meth:`CardanoSwapsSwapDatum.claimable_offer` over this UTxO's offer
         balance and accumulated ask, sized at its own output index (which the
-        continuation's ``prev_input`` records) and at its address when known. A
-        :meth:`swap_utxo` fill of this amount always leaves the continuing output
-        funded.
+        continuation's ``prev_input`` records, in this contract's shape) and at
+        its address when known. A :meth:`swap_utxo` fill of this amount always
+        leaves the continuing output funded.
 
         Args:
             coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
@@ -766,6 +892,7 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
             held_ask=self.assets[self.in_unit],
             prev_output_index=self.tx_index,
             address=Address.decode(self.address) if self.address is not None else None,
+            contract=self.CONTRACT,
         )
 
     @property
@@ -1055,6 +1182,7 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
             tx_builder.context.protocol_param.coins_per_utxo_byte,
             prev_output_index=len(tx_builder.outputs),
             address=swap_address,
+            contract=cls.CONTRACT,
         )
         if offer_unit == "lovelace":
             txo.amount.coin = offer.quantity() + carrier
@@ -1183,9 +1311,15 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         )
         # An expiring swap is fillable only by a transaction whose validity ends at
         # or before the expiration (the validator reads it as the upper bound).
+        # The bound is also kept within _FILL_VALIDITY_SLOTS of the tip: a node
+        # cannot convert a slot past its forecast horizon to time, so a far
+        # expiration as the upper bound fails evaluation and submission.
         expiration = self.order_datum.expiration
         if isinstance(expiration, CardanoSwapsSomeInt):
-            deadline = posix_ms_to_slot(expiration.value)
+            deadline = min(
+                posix_ms_to_slot(expiration.value),
+                tx_builder.context.last_block_slot + _FILL_VALIDITY_SLOTS,
+            )
             if tx_builder.ttl is None or tx_builder.ttl > deadline:
                 tx_builder.ttl = deadline
         # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
@@ -1199,10 +1333,11 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         # and ``offer_taken = offer_in - offer_out`` from this output — there is
         # no separate maker payment; the maker collects the accumulated ask on
         # CLOSE. The datum is identical to the input EXCEPT prev_input = consumed
-        # TxOutRef.
+        # TxOutRef, in the output-reference shape this contract's validator reads.
         cont_datum = self.order_datum.continuation_datum(
             bytes.fromhex(self.tx_hash),
             self.tx_index,
+            contract=self.CONTRACT,
         )
 
         # Continuing value = consumed value, less the offer taken, plus the ask

@@ -44,6 +44,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutputReference
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRef
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSwapDatum
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsTxId
 from charli3_dendrite.dexs.ob.cardanoswaps import CreateOrCloseSwaps
@@ -1090,9 +1091,10 @@ def test_build_fill_partial(tx_builder) -> None:
     assert BEACON_POLICY_ID + datum.offer_beacon.hex() in cont_units
     assert BEACON_POLICY_ID + datum.ask_beacon.hex() in cont_units
 
-    assert isinstance(cont_datum.prev_input, CardanoSwapsSomeOutRef)
-    assert cont_datum.prev_input.value.transaction_id.tx_hash == bytes.fromhex(TX_HASH)
-    assert cont_datum.prev_input.value.output_index == 0
+    # The official validator reads prev_input as Some(OutputReference) with a
+    # bytestring transaction id.
+    assert isinstance(cont_datum.prev_input, CardanoSwapsSomeOutRefV3)
+    assert cont_datum.prev_input_ref() == (bytes.fromhex(TX_HASH), 0)
     # Everything else is byte-identical to the input datum.
     assert cont_datum.pair_beacon == datum.pair_beacon
     assert cont_datum.offer_beacon == datum.offer_beacon
@@ -1147,7 +1149,7 @@ def test_build_fill_token_to_token(tx_builder) -> None:
     # the ask paid in (>= ceil(5000 * 7 / 5) = 7000 BBB).
     assert cont_units[TOKEN_A_UNIT] == 5_000
     assert cont_units[TOKEN_B_UNIT] == 7_000
-    assert isinstance(cont_datum.prev_input, CardanoSwapsSomeOutRef)
+    assert isinstance(cont_datum.prev_input, CardanoSwapsSomeOutRefV3)
 
 
 def test_build_fill_deposits_required_ask_not_in_quantity(tx_builder) -> None:
