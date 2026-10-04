@@ -9,7 +9,6 @@ and that beacon tokens are stripped from the tradable balance.
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import cbor2
@@ -17,6 +16,7 @@ import pytest
 from pycardano import Address
 from pycardano import Network
 from pycardano import PlutusV2Script
+from pycardano import PlutusV3Script
 from pycardano import ProtocolParameters
 from pycardano import TransactionBuilder
 from pycardano import TransactionId
@@ -35,6 +35,9 @@ from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_ID
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_SCRIPT_HEX
+from charli3_dendrite.dexs.ob.cardanoswaps import LEGACY_BEACON_POLICY_ID
+from charli3_dendrite.dexs.ob.cardanoswaps import LEGACY_BEACON_POLICY_SCRIPT_HEX
+from charli3_dendrite.dexs.ob.cardanoswaps import LEGACY_SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutputReference
@@ -65,25 +68,16 @@ TOKEN_B_UNIT = TOKEN_B_POLICY + TOKEN_B_NAME
 TX_HASH = "c" * 64
 
 
-def _sha256(data: bytes) -> bytes:
-    return hashlib.sha256(data).digest()
-
-
 def _pair_beacon(offer_id: bytes, offer_name: bytes, ask_id: bytes, ask_name: bytes):
-    """sha2_256(a1_id ++ offer_name ++ a2_id ++ ask_name), ADA policy -> 0x00."""
-    a1 = offer_id if offer_id != b"" else b"\x00"
-    a2 = ask_id if ask_id != b"" else b"\x00"
-    return _sha256(a1 + offer_name + a2 + ask_name)
+    return pair_beacon_name(offer_id, offer_name, ask_id, ask_name)
 
 
 def _offer_beacon(offer_id: bytes, offer_name: bytes) -> bytes:
-    """sha2_256(0x01 ++ offer_id ++ offer_name)."""
-    return _sha256(b"\x01" + offer_id + offer_name)
+    return offer_beacon_name(offer_id, offer_name)
 
 
 def _ask_beacon(ask_id: bytes, ask_name: bytes) -> bytes:
-    """sha2_256(0x02 ++ ask_id ++ ask_name)."""
-    return _sha256(b"\x02" + ask_id + ask_name)
+    return ask_beacon_name(ask_id, ask_name)
 
 
 def _make_datum(
@@ -1326,7 +1320,11 @@ def test_beacon_minting_script_is_dapp_hash_applied_blueprint() -> None:
     ``importorskip`` so a missing ``uplc`` fails the suite rather than skipping.
     """
     unapplied = (
-        (Path(__file__).parent / "data" / "cardanoswaps_one_way_beacon_unapplied.hex")
+        (
+            Path(__file__).parent
+            / "data"
+            / "cardanoswaps_official_one_way_beacon_unapplied.hex"
+        )
         .read_text()
         .strip()
     )
@@ -1336,13 +1334,33 @@ def test_beacon_minting_script_is_dapp_hash_applied_blueprint() -> None:
     )
 
     assert applied.hex() == BEACON_POLICY_SCRIPT_HEX
-    assert str(plutus_script_hash(PlutusV2Script(applied))) == BEACON_POLICY_ID
+    assert str(plutus_script_hash(PlutusV3Script(applied))) == BEACON_POLICY_ID
+
+
+def test_legacy_beacon_minting_script_is_dapp_hash_applied_blueprint() -> None:
+    """The pre-release build's beacon script is its blueprint with ``dapp_hash`` applied.
+
+    Same derivation as the official contract, over the pre-release build's
+    unapplied Plutus V2 beacon script and its swap validator hash.
+    """
+    unapplied = (
+        (Path(__file__).parent / "data" / "cardanoswaps_one_way_beacon_unapplied.hex")
+        .read_text()
+        .strip()
+    )
+
+    applied = apply_params_to_script(
+        bytes.fromhex(unapplied), bytes.fromhex(LEGACY_SWAP_VALIDATOR_HASH)
+    )
+
+    assert applied.hex() == LEGACY_BEACON_POLICY_SCRIPT_HEX
+    assert str(plutus_script_hash(PlutusV2Script(applied))) == LEGACY_BEACON_POLICY_ID
 
 
 # --- reference scripts -----------------------------------------------------
 
 
-def _ref_utxo(script: PlutusV2Script, *, index: int = 0) -> UTxO:
+def _ref_utxo(script: PlutusV2Script | PlutusV3Script, *, index: int = 0) -> UTxO:
     """A synthetic reference-script UTxO carrying ``script`` in its output."""
     return UTxO(
         TransactionInput(TransactionId(bytes.fromhex("ab" * 32)), index),
