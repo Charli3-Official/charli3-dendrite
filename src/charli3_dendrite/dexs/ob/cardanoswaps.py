@@ -799,6 +799,91 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         """The swap spending validator's Plutus version (this contract's)."""
         return cls.CONTRACT.script_class
 
+    # Discovered reference UTxOs, keyed by (class, script hash). Keying on the
+    # class as well as the hash keeps the official and legacy classes independent.
+    _REFERENCE_UTXO_CACHE: ClassVar[dict[tuple[type, str], UTxO | None]] = {}
+
+    @classmethod
+    def clear_reference_utxo_cache(cls) -> None:
+        """Drop this class's cached reference UTxOs so the next call re-queries."""
+        for key in [k for k in cls._REFERENCE_UTXO_CACHE if k[0] is cls]:
+            del cls._REFERENCE_UTXO_CACHE[key]
+
+    @classmethod
+    def _discover_reference_utxo(
+        cls,
+        script_hash: str,
+        refresh: bool,
+    ) -> UTxO | None:
+        key = (cls, script_hash)
+        if refresh:
+            cls._REFERENCE_UTXO_CACHE.pop(key, None)
+        if key in cls._REFERENCE_UTXO_CACHE:
+            return cls._REFERENCE_UTXO_CACHE[key]
+
+        try:
+            ref = get_backend().get_script_from_address(
+                Address(payment_part=ScriptHash(bytes.fromhex(script_hash))),
+            )
+        except IndexError:
+            ref = None  # the backend returned no rows: nothing published
+
+        if ref is None or ref.tx_hash is None or ref.script is None:
+            return None  # not cached, so a later publication is picked up
+
+        script = cls.CONTRACT.script_class(bytes.fromhex(ref.script))
+        if plutus_script_hash(script).payload.hex() != script_hash:
+            msg = (
+                f"reference script at {ref.tx_hash}#{ref.tx_index} does not hash "
+                f"to the expected {script_hash}"
+            )
+            raise ValueError(msg)
+
+        address = ref.address
+        utxo = UTxO(
+            input=TransactionInput(
+                TransactionId(bytes.fromhex(ref.tx_hash)),
+                cast(int, ref.tx_index),
+            ),
+            output=TransactionOutput(
+                address=Address.decode(address)
+                if isinstance(address, str)
+                else address,
+                amount=asset_to_value(ref.assets or Assets(lovelace=0)),
+                script=script,
+            ),
+        )
+        cls._REFERENCE_UTXO_CACHE[key] = utxo
+        return utxo
+
+    @classmethod
+    def reference_utxo(cls, refresh: bool = False) -> UTxO | None:
+        """Discover the swap validator's reference-script UTxO on chain.
+
+        Looks up this contract's swap validator by script hash through the
+        configured backend and returns the newest unspent output carrying it as
+        a reference script. Any publisher qualifies: a reference script is
+        usable by anyone. The script is rebuilt with this contract's Plutus
+        version and its hash is verified against the contract; a mismatch raises
+        ``ValueError``. Returns ``None`` when no unspent publication exists, and
+        on a backend that cannot report the output carrying a script (Blockfrost,
+        Ogmios/Kupo): discovery needs the db-sync backend.
+
+        The result is cached per class and contract. Pass ``refresh=True`` (or
+        call :meth:`clear_reference_utxo_cache`) to re-query, e.g. after the
+        cached reference has been spent.
+        """
+        return cls._discover_reference_utxo(cls.CONTRACT.swap_validator_hash, refresh)
+
+    @classmethod
+    def beacon_reference_utxo(cls, refresh: bool = False) -> UTxO | None:
+        """Discover the beacon policy's reference-script UTxO on chain.
+
+        Same discovery, hash verification and caching as :meth:`reference_utxo`,
+        keyed on this contract's beacon policy id instead of the swap validator.
+        """
+        return cls._discover_reference_utxo(cls.CONTRACT.beacon_policy_id, refresh)
+
     @classmethod
     def dex_policy(cls) -> list[str] | None:
         """The beacon minting policy id used to discover swap UTxOs."""
