@@ -674,3 +674,126 @@ def test_legacy_parses_a_filled_swap_datum() -> None:
     assert type(state.order_datum.prev_input) is CardanoSwapsSomeOutRef
     assert state.order_datum.prev_input_ref() == (PREV_HASH, PREV_INDEX)
     assert state.available.quantity() == 10_000_000
+
+
+# --- reference-script UTxO discovery -----------------------------------------
+
+REF_TX = "ab" * 32
+REF_INDEX = 3
+
+
+class _FakeRefBackend:
+    def __init__(self, scripts_hex=None, none_as="index_error"):
+        self.scripts_hex = scripts_hex or {}
+        self.none_as = none_as
+        self.calls = []
+
+    def get_script_from_address(self, address):
+        from types import SimpleNamespace
+
+        payload = address.payment_part.payload.hex()
+        self.calls.append(payload)
+        if payload not in self.scripts_hex:
+            if self.none_as == "index_error":
+                raise IndexError
+            return SimpleNamespace(
+                tx_hash=None, tx_index=None, address=None, assets=None, script=None
+            )
+        return SimpleNamespace(
+            tx_hash=REF_TX,
+            tx_index=REF_INDEX,
+            address=str(
+                Address(
+                    payment_part=plutus_script_hash(PlutusV2Script(b"\x01")),
+                    network=Network.MAINNET,
+                )
+            ),
+            assets=Assets(lovelace=20_000_000),
+            script=self.scripts_hex[payload],
+        )
+
+
+@pytest.fixture
+def ref_backend(monkeypatch):
+    def install(backend):
+        monkeypatch.setattr(
+            "charli3_dendrite.dexs.ob.cardanoswaps.get_backend", lambda: backend
+        )
+        for cls in (CardanoSwapsOrderState, CardanoSwapsLegacyOrderState):
+            cls.clear_reference_utxo_cache()
+        return backend
+
+    yield install
+    for cls in (CardanoSwapsOrderState, CardanoSwapsLegacyOrderState):
+        cls.clear_reference_utxo_cache()
+
+
+def _all_scripts():
+    return {
+        c.swap_validator_hash: c.swap_script_hex
+        for c in (OFFICIAL_CONTRACT, LEGACY_CONTRACT)
+    } | {
+        c.beacon_policy_id: c.beacon_script_hex
+        for c in (OFFICIAL_CONTRACT, LEGACY_CONTRACT)
+    }
+
+
+@pytest.mark.parametrize(
+    ("cls", "contract", "script_cls"),
+    [
+        (CardanoSwapsOrderState, OFFICIAL_CONTRACT, PlutusV3Script),
+        (CardanoSwapsLegacyOrderState, LEGACY_CONTRACT, PlutusV2Script),
+    ],
+)
+def test_reference_utxos_discovered_by_contract_hash(
+    ref_backend, cls, contract, script_cls
+):
+    backend = ref_backend(_FakeRefBackend(_all_scripts()))
+    swap = cls.reference_utxo()
+    beacon = cls.beacon_reference_utxo()
+    assert backend.calls == [contract.swap_validator_hash, contract.beacon_policy_id]
+    for utxo, expected in (
+        (swap, contract.swap_validator_hash),
+        (beacon, contract.beacon_policy_id),
+    ):
+        assert utxo.input.transaction_id.payload.hex() == REF_TX
+        assert utxo.input.index == REF_INDEX
+        assert type(utxo.output.script) is script_cls
+        assert plutus_script_hash(utxo.output.script).payload.hex() == expected
+
+
+def test_reference_utxo_hash_mismatch_raises(ref_backend):
+    scripts = _all_scripts()
+    scripts[OFFICIAL_CONTRACT.swap_validator_hash] = OFFICIAL_CONTRACT.beacon_script_hex
+    ref_backend(_FakeRefBackend(scripts))
+    with pytest.raises(ValueError):
+        CardanoSwapsOrderState.reference_utxo()
+
+
+@pytest.mark.parametrize("none_as", ["index_error", "null_row"])
+def test_reference_utxo_none_when_unpublished(ref_backend, none_as):
+    ref_backend(_FakeRefBackend({}, none_as=none_as))
+    assert CardanoSwapsOrderState.reference_utxo() is None
+    assert CardanoSwapsOrderState.beacon_reference_utxo() is None
+
+
+def test_reference_utxo_cached_and_refreshable(ref_backend):
+    backend = ref_backend(_FakeRefBackend(_all_scripts()))
+    first = CardanoSwapsOrderState.reference_utxo()
+    assert CardanoSwapsOrderState.reference_utxo() is first
+    assert len(backend.calls) == 1
+    CardanoSwapsOrderState.reference_utxo(refresh=True)
+    assert len(backend.calls) == 2
+    CardanoSwapsOrderState.clear_reference_utxo_cache()
+    CardanoSwapsOrderState.reference_utxo()
+    assert len(backend.calls) == 3
+
+
+def test_reference_utxo_caches_are_independent(ref_backend):
+    backend = ref_backend(_FakeRefBackend(_all_scripts()))
+    CardanoSwapsOrderState.reference_utxo()
+    CardanoSwapsLegacyOrderState.reference_utxo()
+    assert len(backend.calls) == 2
+    CardanoSwapsOrderState.clear_reference_utxo_cache()
+    CardanoSwapsLegacyOrderState.reference_utxo()
+    assert len(backend.calls) == 2
