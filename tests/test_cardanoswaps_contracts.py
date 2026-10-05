@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import dataclasses
 import json
 from pathlib import Path
 
+import cbor2
 import pytest
+from cbor2 import CBORTag
 from pycardano import Address
 from pycardano import Network
 from pycardano import PlutusV2Script
@@ -28,9 +31,15 @@ from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOneWayOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsLegacyOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderState
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutputReference
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRef
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSwapDatum
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsTxId
 from charli3_dendrite.dexs.ob.cardanoswaps import ask_beacon_name
+from charli3_dendrite.dexs.ob.cardanoswaps import contract_for_beacon
 from charli3_dendrite.dexs.ob.cardanoswaps import legacy_ask_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import legacy_offer_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import legacy_pair_beacon_name
@@ -157,8 +166,14 @@ def test_contract_capabilities() -> None:
 TOKEN = "a" * 56 + "414141"
 
 
-def _legacy_state(offer_qty: int = 10_000_000) -> CardanoSwapsLegacyOrderState:
-    """A resting swap on the pre-release build: ADA offered for TOKEN at 2/1."""
+def _legacy_state(
+    offer_qty: int = 10_000_000,
+    prev_input: CardanoSwapsSomeOutRef | PlutusNone | None = None,
+) -> CardanoSwapsLegacyOrderState:
+    """A swap on the pre-release build: ADA offered for TOKEN at 2/1.
+
+    Resting (``prev_input = None``) unless ``prev_input`` is given.
+    """
     token_id, token_name = bytes.fromhex("a" * 56), bytes.fromhex("414141")
     datum = CardanoSwapsSwapDatum(
         beacon_id=bytes.fromhex(LEGACY_BEACON_POLICY_ID),
@@ -170,7 +185,7 @@ def _legacy_state(offer_qty: int = 10_000_000) -> CardanoSwapsLegacyOrderState:
         ask_name=token_name,
         ask_beacon=legacy_ask_beacon_name(token_id, token_name),
         swap_price=CardanoSwapsRational(numerator=2, denominator=1),
-        prev_input=PlutusNone(),
+        prev_input=prev_input if prev_input is not None else PlutusNone(),
         expiration=PlutusNone(),
     )
     assets = Assets(root={"lovelace": offer_qty, **datum.beacon_assets(1).root})
@@ -266,6 +281,8 @@ from pycardano import ScriptHash
 
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.utility import posix_ms_to_slot
+from tests.test_cardanoswaps import CPUB
+from tests.test_cardanoswaps import _make_datum
 from tests.test_cardanoswaps import _resting_state
 
 
@@ -316,58 +333,267 @@ def test_official_create_writes_ada_as_empty_and_no_reference_script() -> None:
     assert txo.script is None
 
 
+EXPIRATION = 1_790_000_040_000  # a 60 000 ms multiple
+EXPIRATION_SLOT = posix_ms_to_slot(EXPIRATION)
+
+
+class _ContextAt(_OfflineContext):
+    """An offline context whose chain tip is a fixed slot."""
+
+    def __init__(self, tip: int) -> None:
+        super().__init__()
+        self._tip = tip
+
+    @property
+    def last_block_slot(self) -> int:
+        return self._tip
+
+
+def _fill(
+    tip: int,
+    expiration: int | None = EXPIRATION,
+    ttl: int | None = None,
+) -> TransactionBuilder:
+    """Fill an ADA-for-TOKEN swap with the chain tip at ``tip``; return the builder."""
+    state = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex("a" * 56),
+        bytes.fromhex("414141"),
+        2,
+        1,
+        10_000_000,
+    )
+    if expiration is not None:
+        datum = state.order_datum
+        datum.expiration = CardanoSwapsSomeInt(value=expiration)
+        state.datum_cbor = datum.to_cbor_hex()
+    tb = TransactionBuilder(_ContextAt(tip))
+    tb.ttl = ttl
+    state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        owner_address=OWNER,
+    )
+    return tb
+
+
 def test_fill_of_an_expiring_swap_sets_its_deadline() -> None:
-    expiration = 1_790_000_040_000  # a 60 000 ms multiple
-    state = _resting_state(
-        b"",
-        b"",
-        bytes.fromhex("a" * 56),
-        bytes.fromhex("414141"),
-        2,
-        1,
-        10_000_000,
-    )
-    datum = state.order_datum
-    datum.expiration = CardanoSwapsSomeInt(value=expiration)
-    state.datum_cbor = datum.to_cbor_hex()
-    tb = TransactionBuilder(_OfflineContext())
-    state.swap_utxo(
-        address_source=OWNER,
-        in_assets=Assets(root={TOKEN: 8_000_000}),
-        out_assets=Assets(root={"lovelace": 4_000_000}),
-        tx_builder=tb,
-        owner_address=OWNER,
-    )
-    assert tb.ttl == posix_ms_to_slot(expiration)
+    # The tip is ten minutes before the expiration, inside the one-hour fill
+    # window, so the expiration itself bounds the fill.
+    tb = _fill(tip=EXPIRATION_SLOT - 600)
+    assert tb.ttl == EXPIRATION_SLOT
 
 
-def test_fill_keeps_an_earlier_deadline() -> None:
-    expiration = 1_790_000_040_000
-    state = _resting_state(
-        b"",
-        b"",
-        bytes.fromhex("a" * 56),
-        bytes.fromhex("414141"),
-        2,
-        1,
-        10_000_000,
-    )
-    datum = state.order_datum
-    datum.expiration = CardanoSwapsSomeInt(value=expiration)
-    state.datum_cbor = datum.to_cbor_hex()
-    tb = TransactionBuilder(_OfflineContext())
-    tb.ttl = posix_ms_to_slot(expiration) - 100
-    state.swap_utxo(
-        address_source=OWNER,
-        in_assets=Assets(root={TOKEN: 8_000_000}),
-        out_assets=Assets(root={"lovelace": 4_000_000}),
-        tx_builder=tb,
-        owner_address=OWNER,
-    )
-    assert tb.ttl == posix_ms_to_slot(expiration) - 100
+def test_fill_of_a_far_expiring_swap_caps_its_deadline_an_hour_out() -> None:
+    # An expiration two days out lies past the node's forecast horizon, so the
+    # bound is one hour (3600 slots) past the tip instead.
+    tip = EXPIRATION_SLOT - 48 * 3600
+    tb = _fill(tip=tip)
+    assert tb.ttl == tip + 3600
+
+
+@pytest.mark.parametrize(
+    ("tip", "ttl"),
+    [
+        (EXPIRATION_SLOT - 600, EXPIRATION_SLOT - 100),
+        (EXPIRATION_SLOT - 48 * 3600, EXPIRATION_SLOT - 48 * 3600 + 100),
+    ],
+    ids=["before-expiration", "before-the-hour-cap"],
+)
+def test_fill_keeps_an_earlier_deadline(tip: int, ttl: int) -> None:
+    tb = _fill(tip=tip, ttl=ttl)
+    assert tb.ttl == ttl
 
 
 def test_fill_of_a_non_expiring_swap_sets_no_deadline() -> None:
+    # Only an expiring swap needs an upper bound; the one-hour window caps it,
+    # it does not add one.
+    tb = _fill(tip=EXPIRATION_SLOT, expiration=None)
+    assert tb.ttl is None
+
+
+# --- prev_input: the two output-reference shapes ----------------------------
+
+PREV_HASH = bytes.fromhex("ab" * 32)
+PREV_INDEX = 5
+# Some(OutputReference { transaction_id: ByteArray, output_index: Int }): the
+# official contracts' shape.
+OFFICIAL_PREV_HEX = "d8799f" + "d8799f" + "5820" + "ab" * 32 + "05" + "ff" + "ff"
+OFFICIAL_PREV = CBORTag(121, [CBORTag(121, [PREV_HASH, PREV_INDEX])])
+# Some(OutputReference { transaction_id: TransactionId { hash }, output_index }):
+# the pre-release build's shape, with the id wrapped in one more Constr 0.
+LEGACY_PREV_HEX = (
+    "d8799f" + "d8799f" + "d8799f" + "5820" + "ab" * 32 + "ff" + "05" + "ff" + "ff"
+)
+LEGACY_PREV = CBORTag(121, [CBORTag(121, [CBORTag(121, [PREV_HASH]), PREV_INDEX])])
+NONE_HEX = "d87a80"
+
+
+def test_prev_input_vectors_encode_their_shapes() -> None:
+    assert cbor2.loads(bytes.fromhex(OFFICIAL_PREV_HEX)) == OFFICIAL_PREV
+    assert cbor2.loads(bytes.fromhex(LEGACY_PREV_HEX)) == LEGACY_PREV
+
+
+def _datum_hex(prev_hex: str) -> str:
+    """An official ADA-for-TOKEN datum's CBOR with ``prev_input`` spliced in.
+
+    The expiration is set, so the resting datum's only ``None`` is ``prev_input``.
+    """
+    resting = _make_datum(
+        b"",
+        b"",
+        bytes.fromhex("a" * 56),
+        bytes.fromhex("414141"),
+        2,
+        1,
+        expiration=CardanoSwapsSomeInt(value=EXPIRATION),
+    ).to_cbor_hex()
+    assert resting.count(NONE_HEX) == 1
+    return resting.replace(NONE_HEX, prev_hex)
+
+
+@pytest.mark.parametrize(
+    ("prev_hex", "some_type", "ref_type"),
+    [
+        (OFFICIAL_PREV_HEX, CardanoSwapsSomeOutRefV3, CardanoSwapsOutRefV3),
+        (LEGACY_PREV_HEX, CardanoSwapsSomeOutRef, CardanoSwapsOutputReference),
+    ],
+    ids=["official", "legacy"],
+)
+def test_datum_parses_either_prev_input_shape_byte_exactly(
+    prev_hex: str,
+    some_type: type,
+    ref_type: type,
+) -> None:
+    datum_hex = _datum_hex(prev_hex)
+    datum = CardanoSwapsSwapDatum.from_cbor(datum_hex)
+    assert type(datum.prev_input) is some_type
+    assert type(datum.prev_input.value) is ref_type
+    assert datum.to_cbor_hex() == datum_hex
+    assert datum.prev_input_ref() == (PREV_HASH, PREV_INDEX)
+
+
+def test_prev_input_ref_is_none_for_a_resting_swap() -> None:
+    datum = CardanoSwapsSwapDatum.from_cbor(_datum_hex(NONE_HEX))
+    assert isinstance(datum.prev_input, PlutusNone)
+    assert datum.prev_input_ref() is None
+
+
+def test_contracts_carry_their_prev_input_shape() -> None:
+    assert OFFICIAL_CONTRACT.prev_input_class is CardanoSwapsSomeOutRefV3
+    assert LEGACY_CONTRACT.prev_input_class is CardanoSwapsSomeOutRef
+
+
+@pytest.mark.parametrize(
+    ("contract", "prev_hex"),
+    [(OFFICIAL_CONTRACT, OFFICIAL_PREV_HEX), (LEGACY_CONTRACT, LEGACY_PREV_HEX)],
+    ids=["official", "legacy"],
+)
+def test_continuation_writes_the_contract_prev_input_shape(contract, prev_hex) -> None:
+    resting = CardanoSwapsSwapDatum.from_cbor(_datum_hex(NONE_HEX))
+    cont = resting.continuation_datum(PREV_HASH, PREV_INDEX, contract=contract)
+    assert cont.prev_input.to_cbor_hex() == prev_hex
+    # Every other field is the resting datum's.
+    assert cont.to_cbor_hex() == _datum_hex(prev_hex)
+
+
+def _resting_datum_on(contract) -> CardanoSwapsSwapDatum:
+    """A resting ADA-for-TOKEN datum whose ``beacon_id`` is ``contract``'s policy."""
+    if contract is LEGACY_CONTRACT:
+        return _legacy_state().order_datum
+    return CardanoSwapsSwapDatum.from_cbor(_datum_hex(NONE_HEX))
+
+
+@pytest.mark.parametrize(
+    ("own", "prev_hex"),
+    [(OFFICIAL_CONTRACT, OFFICIAL_PREV_HEX), (LEGACY_CONTRACT, LEGACY_PREV_HEX)],
+    ids=["official", "legacy"],
+)
+def test_continuation_defaults_to_the_datum_contract_shape(own, prev_hex) -> None:
+    cont = _resting_datum_on(own).continuation_datum(PREV_HASH, PREV_INDEX)
+    assert cont.prev_input.to_cbor_hex() == prev_hex
+
+
+def test_contract_for_beacon() -> None:
+    assert contract_for_beacon(bytes.fromhex(BEACON_POLICY_ID)) is OFFICIAL_CONTRACT
+    assert (
+        contract_for_beacon(bytes.fromhex(LEGACY_BEACON_POLICY_ID)) is LEGACY_CONTRACT
+    )
+    with pytest.raises(ValueError, match="ee" * 28):
+        contract_for_beacon(bytes.fromhex("ee" * 28))
+
+
+@pytest.mark.parametrize(
+    ("own", "other"),
+    [(OFFICIAL_CONTRACT, LEGACY_CONTRACT), (LEGACY_CONTRACT, OFFICIAL_CONTRACT)],
+    ids=["official", "legacy"],
+)
+def test_datum_sizing_defaults_to_the_datum_contract(own, other) -> None:
+    datum = _resting_datum_on(own)
+    held = Assets(root={TOKEN: 8_000_000})
+
+    def sizes(**contract):
+        return (
+            datum.continuation_min_lovelace(held, CPUB, **contract),
+            datum.claimable_offer(10_000_000, CPUB, held_ask=1_000, **contract),
+            datum.carrier_lovelace(10_000_000, CPUB, **contract),
+        )
+
+    assert sizes() == sizes(contract=own)
+    # Each size depends on the continuation's prev_input shape.
+    assert all(a != b for a, b in zip(sizes(), sizes(contract=other)))
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "continuation_datum",
+        "continuation_min_lovelace",
+        "claimable_offer",
+        "carrier_lovelace",
+    ],
+)
+def test_datum_with_an_unknown_beacon_id_raises(method) -> None:
+    unknown = "ee" * 28
+    datum = _resting_datum_on(OFFICIAL_CONTRACT)
+    datum.beacon_id = bytes.fromhex(unknown)
+    calls = {
+        "continuation_datum": lambda **kw: datum.continuation_datum(
+            PREV_HASH, PREV_INDEX, **kw
+        ),
+        "continuation_min_lovelace": lambda **kw: datum.continuation_min_lovelace(
+            Assets(root={TOKEN: 8_000_000}), CPUB, **kw
+        ),
+        "claimable_offer": lambda **kw: datum.claimable_offer(10_000_000, CPUB, **kw),
+        "carrier_lovelace": lambda **kw: datum.carrier_lovelace(10_000_000, CPUB, **kw),
+    }
+    with pytest.raises(ValueError, match=unknown):
+        calls[method]()
+    # An explicit contract needs no lookup.
+    calls[method](contract=OFFICIAL_CONTRACT)
+
+
+def test_token_offer_with_an_unknown_beacon_id_raises_too() -> None:
+    # A token offer sizes no continuation, but an unknown beacon id is refused the
+    # same way an ADA offer's is.
+    unknown = "ee" * 28
+    datum = dataclasses.replace(
+        _resting_datum_on(OFFICIAL_CONTRACT),
+        beacon_id=bytes.fromhex(unknown),
+        offer_id=bytes.fromhex("a" * 56),
+        offer_name=bytes.fromhex("414141"),
+        ask_id=b"",
+        ask_name=b"",
+    )
+    with pytest.raises(ValueError, match=unknown):
+        datum.claimable_offer(5_000, CPUB)
+    assert datum.claimable_offer(5_000, CPUB, contract=OFFICIAL_CONTRACT) == 5_000
+
+
+def test_official_fill_writes_the_official_prev_input() -> None:
     state = _resting_state(
         b"",
         b"",
@@ -378,11 +604,73 @@ def test_fill_of_a_non_expiring_swap_sets_no_deadline() -> None:
         10_000_000,
     )
     tb = TransactionBuilder(_OfflineContext())
-    state.swap_utxo(
+    cont_txo, _ = state.swap_utxo(
         address_source=OWNER,
         in_assets=Assets(root={TOKEN: 8_000_000}),
         out_assets=Assets(root={"lovelace": 4_000_000}),
         tx_builder=tb,
         owner_address=OWNER,
     )
-    assert tb.ttl is None
+    assert cont_txo is not None
+    fields = cbor2.loads(cont_txo.datum.to_cbor()).value
+    spent = bytes.fromhex(state.tx_hash)
+    assert fields[9] == CBORTag(121, [CBORTag(121, [spent, state.tx_index])])
+    assert cont_txo.datum.prev_input.to_cbor_hex() == (
+        "d8799f" + "d8799f" + "5820" + state.tx_hash + "00" + "ff" + "ff"
+    )
+
+
+def test_continuation_sizing_follows_the_contract_shape() -> None:
+    resting = CardanoSwapsSwapDatum.from_cbor(_datum_hex(NONE_HEX))
+    held = Assets(root={TOKEN: 8_000_000})
+    official = resting.continuation_min_lovelace(held, CPUB, contract=OFFICIAL_CONTRACT)
+    legacy = resting.continuation_min_lovelace(held, CPUB, contract=LEGACY_CONTRACT)
+    # The pre-release shape's extra Constr 0 around the id: d8799f ... ff.
+    assert legacy - official == 4 * CPUB
+    assert resting.continuation_min_lovelace(held, CPUB) == official
+
+
+@pytest.mark.parametrize(
+    ("state", "other"),
+    [
+        (
+            _resting_state(
+                b"",
+                b"",
+                bytes.fromhex("a" * 56),
+                bytes.fromhex("414141"),
+                2,
+                1,
+                10_000_000,
+            ),
+            LEGACY_CONTRACT,
+        ),
+        (_legacy_state(), OFFICIAL_CONTRACT),
+    ],
+    ids=["official", "legacy"],
+)
+def test_claimable_offer_is_sized_on_the_class_contract_shape(state, other) -> None:
+    def sized(contract):
+        return state.order_datum.claimable_offer(
+            state.assets["lovelace"],
+            CPUB,
+            held_ask=state.assets[state.in_unit],
+            prev_output_index=state.tx_index,
+            contract=contract,
+        )
+
+    assert state.claimable_offer(CPUB) == sized(state.CONTRACT)
+    assert sized(state.CONTRACT) != sized(other)
+
+
+def test_legacy_parses_a_filled_swap_datum() -> None:
+    prev = CardanoSwapsSomeOutRef(
+        value=CardanoSwapsOutputReference(
+            transaction_id=CardanoSwapsTxId(tx_hash=PREV_HASH),
+            output_index=PREV_INDEX,
+        ),
+    )
+    state = _legacy_state(prev_input=prev)
+    assert type(state.order_datum.prev_input) is CardanoSwapsSomeOutRef
+    assert state.order_datum.prev_input_ref() == (PREV_HASH, PREV_INDEX)
+    assert state.available.quantity() == 10_000_000
