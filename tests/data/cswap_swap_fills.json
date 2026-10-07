@@ -1,0 +1,671 @@
+{
+  "description": "Real mainnet CSWAP swap fills. Reserves are the pool before-state with lovelace net of the 2 ADA pool deposit; amount_received is what the swapper was paid.",
+  "fills": [
+    {
+      "tx_hash": "66680cdc20ce3d999ccd5b9a58d613dd160bcfc472783f9487a3a86769a8f271",
+      "direction": "ada_in",
+      "amount_in": 176165743,
+      "amount_received": 47088751,
+      "reserve_in": 18689559397,
+      "reserve_out": 5052778301,
+      "pool_fee": 5
+    },
+    {
+      "tx_hash": "0c169a837b0757688dbddb7c02d7e3671321c7a53a6d6d8172abeffb13bbd77f",
+      "direction": "ada_in",
+      "amount_in": 773340540,
+      "amount_received": 111415705,
+      "reserve_in": 8068985125,
+      "reserve_out": 1276248755,
+      "pool_fee": 5
+    },
+    {
+      "tx_hash": "668cea14b1a6603667f10a28a109f9792df1fe8e6ec310efe12ac145d0351158",
+      "direction": "ada_in",
+      "amount_in": 234000015,
+      "amount_received": 2091592322,
+      "reserve_in": 187846321013,
+      "reserve_out": 1686190953251,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "212ff9d075ac3a021629180c82e46f012dfea0f4b29e1fcce09c2c035b6844c5",
+      "direction": "ada_in",
+      "amount_in": 390382824,
+      "amount_received": 2349867236,
+      "reserve_in": 95771040529,
+      "reserve_out": 580566650194,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "2cb994be34787cdb1bbc39090a1656189f37e8968382e5c460cf9665e05492de",
+      "direction": "ada_in",
+      "amount_in": 800000000,
+      "amount_received": 7589220647,
+      "reserve_in": 194292497297,
+      "reserve_out": 1856291959521,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "de95ca538b3919923a8b778560c7dd8a5d4c8b9857ded347a45ab122dac0a99f",
+      "direction": "ada_in",
+      "amount_in": 934606531,
+      "amount_received": 10458872297,
+      "reserve_in": 181799716157,
+      "reserve_out": 2051036455016,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "b0b684489826627ef143b3c235b5e1a4cb0e9dbd09ad5d0d83e2fcb87d5f5827",
+      "direction": "ada_in",
+      "amount_in": 1050227392,
+      "amount_received": 9665478559,
+      "reserve_in": 198590861003,
+      "reserve_out": 1842837166052,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "87e88bd30532b7b8a835eb7a8afdeb8e8987504a90ae2ed06cd54729d433bd12",
+      "direction": "ada_in",
+      "amount_in": 5000000000,
+      "amount_received": 48255137439,
+      "reserve_in": 185983311410,
+      "reserve_out": 1848582118372,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "b25d0aa081fbf339f9306c645853d5c49ea904b562984a75da8e794eb7eba93a",
+      "direction": "ada_in",
+      "amount_in": 5428169732,
+      "amount_received": 26050187687,
+      "reserve_in": 230744854231,
+      "reserve_out": 1136741369824,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "abb50613b006c9df7f558c7b1812e7aa8a04e7479a0b935e90676f7913804969",
+      "direction": "ada_in",
+      "amount_in": 167049587,
+      "amount_received": 448150609,
+      "reserve_in": 67815067127,
+      "reserve_out": 183016787008,
+      "pool_fee": 20
+    },
+    {
+      "tx_hash": "11766ce7bdfff873dd9f7a209c056d5352755b78a036f9c0f746af1651657bf7",
+      "direction": "ada_in",
+      "amount_in": 3951200,
+      "amount_received": 4258470996,
+      "reserve_in": 113366261,
+      "reserve_out": 126931065918,
+      "pool_fee": 25
+    },
+    {
+      "tx_hash": "5c7cdd47ed68302ed6dcf014bd9ec2145283ff64a2fe8c6ae2409df63d213113",
+      "direction": "ada_in",
+      "amount_in": 200000000,
+      "amount_received": 15446666062,
+      "reserve_in": 243429505181,
+      "reserve_out": 18910695089601,
+      "pool_fee": 35
+    },
+    {
+      "tx_hash": "bfb2d7c82d166cd039e9d494d458ceb67b2e0d5414722fef26f7afa1f392d94c",
+      "direction": "ada_in",
+      "amount_in": 86000000,
+      "amount_received": 20956,
+      "reserve_in": 1756593421,
+      "reserve_out": 451580,
+      "pool_fee": 45
+    },
+    {
+      "tx_hash": "6b0eaacd5c9679bf0d38e14f9458bb9e914c352afbc385877161b988da0a5c29",
+      "direction": "ada_in",
+      "amount_in": 150000000,
+      "amount_received": 765273,
+      "reserve_in": 9529387399,
+      "reserve_out": 49700248,
+      "pool_fee": 50
+    },
+    {
+      "tx_hash": "41ad0b7b8c3c6a7850631e57499c5eeae42fc42e24083441faaf904008f88ee6",
+      "direction": "ada_in",
+      "amount_in": 84140000,
+      "amount_received": 370903,
+      "reserve_in": 963765535,
+      "reserve_out": 4651407,
+      "pool_fee": 60
+    },
+    {
+      "tx_hash": "deeb519bae5791218afa309a48a0af273d3c04648d6191ffef633e9c4c604b02",
+      "direction": "ada_in",
+      "amount_in": 690000,
+      "amount_received": 338,
+      "reserve_in": 22329590298,
+      "reserve_out": 11064426,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "6f26e0f1d689ce6cc1682ce0723f52bc93934b8a94b2f7b0e67ed3f23bd84d13",
+      "direction": "ada_in",
+      "amount_in": 700000,
+      "amount_received": 9589805,
+      "reserve_in": 138743258,
+      "reserve_out": 1929508562,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "1c8dc833c513389fb3a7cab253b36e3986c97f63453f9bd96098c881560ce505",
+      "direction": "ada_in",
+      "amount_in": 754319,
+      "amount_received": 3352020,
+      "reserve_in": 86551031,
+      "reserve_out": 391845137,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "e46f952be9a9612705681922bb84a53bbd14757b9697c4c4e48a00b185f0ea93",
+      "direction": "ada_in",
+      "amount_in": 1000000,
+      "amount_received": 13324,
+      "reserve_in": 185474684,
+      "reserve_out": 2509673,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "f4757404d696b0385ae7e34bd9064b71c9d55806a1cbf9bef8bd03edbd94c3ea",
+      "direction": "ada_in",
+      "amount_in": 3000000,
+      "amount_received": 734493,
+      "reserve_in": 1366625332,
+      "reserve_out": 338702293,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "8eea5a0f83cac5d813bb9af6251ba7b1f613c3d22a62a465d3f743287f1b74f7",
+      "direction": "ada_in",
+      "amount_in": 3000000,
+      "amount_received": 10117569,
+      "reserve_in": 92674594,
+      "reserve_out": 325817760,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "048c50c29420e5841c0e3dff83c6c9477d2a96d6600344f953cc3a588f63e715",
+      "direction": "ada_in",
+      "amount_in": 9397952,
+      "amount_received": 6195162,
+      "reserve_in": 157330749,
+      "reserve_out": 110954388,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "375dffaa36c88d2296fbd6977c9c49077ed3bc5af0fb5895da44a08e2b91a6e1",
+      "direction": "ada_in",
+      "amount_in": 20000000,
+      "amount_received": 28583150196,
+      "reserve_in": 10927193,
+      "reserve_out": 44357371223,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "c5332648b0affafecaed4dfd59a6feccb87b15fa0888a9485fcdefb42193533b",
+      "direction": "ada_in",
+      "amount_in": 50000000,
+      "amount_received": 9028,
+      "reserve_in": 92872052954,
+      "reserve_out": 16948793,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "3a5435d51f6a600e2dbbc8e5768a8005b13c412d39b5cfc49e7726874fc9273a",
+      "direction": "ada_in",
+      "amount_in": 50000000,
+      "amount_received": 174207947,
+      "reserve_in": 25816639668,
+      "reserve_out": 91030892308,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "7f15880fc65dc7e9632e83baad2611774f1b215c88852b805054071adfd7047f",
+      "direction": "ada_in",
+      "amount_in": 64694612,
+      "amount_received": 17593748,
+      "reserve_in": 4758150948,
+      "reserve_out": 1324630222,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "daa2694208056c17c587cd1b8e514bc51df850a040a519d2d6307632e99f7a2f",
+      "direction": "ada_in",
+      "amount_in": 76560880,
+      "amount_received": 26485461,
+      "reserve_in": 4199370688,
+      "reserve_out": 1493870417,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "a34848f028553b32206c66fd5b7b8575e4758d59a81b28b920475a35a0e39d93",
+      "direction": "ada_in",
+      "amount_in": 162500000,
+      "amount_received": 350235492,
+      "reserve_in": 21557162763,
+      "reserve_out": 47280997139,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "897d6cd35f97fa6363b68c4d4f98c99bb1eb22387a489176063aa70d4d911dd3",
+      "direction": "ada_in",
+      "amount_in": 240000000,
+      "amount_received": 59805863584,
+      "reserve_in": 31966666082,
+      "reserve_out": 8105973581106,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "ccc2129339660828721855ffae7060907e60d4e235ba114dcc55f24a7ef0654e",
+      "direction": "ada_in",
+      "amount_in": 452529535,
+      "amount_received": 251321347,
+      "reserve_in": 63226892077,
+      "reserve_out": 35719876479,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "dfb66d8dd42df8b62309721db3743d97c3cd0c8ea593e772a7a566f0561b132e",
+      "direction": "ada_in",
+      "amount_in": 5000000000,
+      "amount_received": 976997156996,
+      "reserve_in": 518065454929,
+      "reserve_out": 103227897785042,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "47a2fdec8cc671ffae1fe7f02b9cea56e7db88595695aa5b9f2dec201d89cbba",
+      "direction": "ada_in",
+      "amount_in": 10000000,
+      "amount_received": 15014,
+      "reserve_in": 304810175,
+      "reserve_out": 477980,
+      "pool_fee": 100
+    },
+    {
+      "tx_hash": "67cace783e8d051eb08c1f999c0f517b8f630cde339bbb38bbe953640c3bb77a",
+      "direction": "ada_in",
+      "amount_in": 11000000,
+      "amount_received": 4361893,
+      "reserve_in": 9027578140,
+      "reserve_out": 3629372273,
+      "pool_fee": 110
+    },
+    {
+      "tx_hash": "41a26834b5f46d82a80f3d11427432723ff9c0419b7fba03b56b6a329bc92cea",
+      "direction": "ada_in",
+      "amount_in": 11900041,
+      "amount_received": 67160212,
+      "reserve_in": 95506881,
+      "reserve_out": 614369103,
+      "pool_fee": 135
+    },
+    {
+      "tx_hash": "34d4c26799c42a8ea310d7c0ebc878a61e26ba043aa8a1d247e1bfd210d13f05",
+      "direction": "ada_in",
+      "amount_in": 69000000,
+      "amount_received": 15225,
+      "reserve_in": 4007957260,
+      "reserve_out": 917622,
+      "pool_fee": 185
+    },
+    {
+      "tx_hash": "e445aac22ee3ebeb6ee3920bbececacde334206996efa952bd8d445459b77d72",
+      "direction": "ada_in",
+      "amount_in": 57888995,
+      "amount_received": 9910,
+      "reserve_in": 2382198521,
+      "reserve_out": 430321,
+      "pool_fee": 285
+    },
+    {
+      "tx_hash": "b47dbf6e3020a3cc308e05ef98da7b1336ed8613d69aecaea7f4e72949d35683",
+      "direction": "ada_in",
+      "amount_in": 62500000,
+      "amount_received": 10339,
+      "reserve_in": 1530452100,
+      "reserve_out": 271352,
+      "pool_fee": 285
+    },
+    {
+      "tx_hash": "15db2594533443daa51fdae11be83cf5d686035fa91084ddcd715439af8d0b8c",
+      "direction": "ada_out",
+      "amount_in": 14397216,
+      "amount_received": 86843284,
+      "reserve_in": 1299686430,
+      "reserve_out": 7942321908,
+      "pool_fee": 5
+    },
+    {
+      "tx_hash": "73ce965cdc4eba33fe0c79aaa6d7aabbfee0c3e99cadb0af0490422642d206cc",
+      "direction": "ada_out",
+      "amount_in": 23849697,
+      "amount_received": 108328320,
+      "reserve_in": 1472894930,
+      "reserve_out": 6811966838,
+      "pool_fee": 5
+    },
+    {
+      "tx_hash": "a1b9c377095e5eb79d87c79aa847c7e43b7705c13ae65566f937c3103ac3ca8b",
+      "direction": "ada_out",
+      "amount_in": 97046751,
+      "amount_received": 19305213,
+      "reserve_in": 1097066788524,
+      "reserve_out": 218911665984,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "b7e447512476fd1d7845ffd9a97a7b6aebc148718fe914b33bfc0ab6e5c8d4b6",
+      "direction": "ada_out",
+      "amount_in": 1298404469,
+      "amount_received": 160164510,
+      "reserve_in": 1289152867040,
+      "reserve_out": 159661831605,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "3e11e3519a889290161fd3b9ce32b8d84e45f4bdffe683df04769d6e5a50075b",
+      "direction": "ada_out",
+      "amount_in": 1779130080,
+      "amount_received": 445353753,
+      "reserve_in": 913340764373,
+      "reserve_out": 229761896662,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "56a3a9c024d783b725673cf4c63aa1a88af4c9ada2b36d836c2726533343ef47",
+      "direction": "ada_out",
+      "amount_in": 4472523160,
+      "amount_received": 496141339,
+      "reserve_in": 1680409314774,
+      "reserve_out": 187466814080,
+      "pool_fee": 15
+    },
+    {
+      "tx_hash": "3750c535d0031131231722b74f0775b469af9d6269002136f3d36ba790144e05",
+      "direction": "ada_out",
+      "amount_in": 1976904363,
+      "amount_received": 819569947,
+      "reserve_in": 171940013934,
+      "reserve_out": 72352528441,
+      "pool_fee": 20
+    },
+    {
+      "tx_hash": "4fea7ea34e2a9e3bd1e3724955a047cdf7bfc14879fd27967d9c90c1a1073e4f",
+      "direction": "ada_out",
+      "amount_in": 4000000000,
+      "amount_received": 4630718,
+      "reserve_in": 109268523401,
+      "reserve_out": 131643186,
+      "pool_fee": 25
+    },
+    {
+      "tx_hash": "2a6d8017abe0e14791ed47f384902ccde7bdc73dbb2f8696c2071fd9b2bb5f3f",
+      "direction": "ada_out",
+      "amount_in": 50000000000,
+      "amount_received": 566185401,
+      "reserve_in": 24339196284760,
+      "reserve_out": 277560501549,
+      "pool_fee": 35
+    },
+    {
+      "tx_hash": "f580ce845157566c69286106234554594654a9bd64b8d6a170a52e8cb9025eec",
+      "direction": "ada_out",
+      "amount_in": 1160,
+      "amount_received": 2228388,
+      "reserve_in": 739875,
+      "reserve_out": 1432119744,
+      "pool_fee": 45
+    },
+    {
+      "tx_hash": "48ce99849b868809e989d69ddc03069ceda9291d0b2dbfbf2597cd4c309f5e41",
+      "direction": "ada_out",
+      "amount_in": 424582,
+      "amount_received": 60403966,
+      "reserve_in": 70604045,
+      "reserve_out": 10170754644,
+      "pool_fee": 50
+    },
+    {
+      "tx_hash": "ca984eba8d8211d12f9e901a9fb1a181c31d2149c03bbd079d8e8e2a846cc1be",
+      "direction": "ada_out",
+      "amount_in": 123587,
+      "amount_received": 28167075,
+      "reserve_in": 2523584,
+      "reserve_out": 607707858,
+      "pool_fee": 60
+    },
+    {
+      "tx_hash": "15ed8814ba45d4f99ec5620f49d3a4024d8f9df54f7d75eb4f681da4fc44bcd3",
+      "direction": "ada_out",
+      "amount_in": 684,
+      "amount_received": 1801275,
+      "reserve_in": 9725887,
+      "reserve_out": 25872754603,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "ded28f5f6ba962955a376e3a3e394c89dbaeeb33c0f6e4397782aae5cfcf0aae",
+      "direction": "ada_out",
+      "amount_in": 74048,
+      "amount_received": 146962996,
+      "reserve_in": 11223539,
+      "reserve_out": 22647244959,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "ea3fec98452dfd7e29b047ed4dde72b18679bb4f20c7149574bb71f06e32c749",
+      "direction": "ada_out",
+      "amount_in": 2811554,
+      "amount_received": 1617423,
+      "reserve_in": 113198308,
+      "reserve_out": 67397213,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "ded083ac380ca3b32a83a34da9650af90e78f9241eb4966eb37684167c6dbc0d",
+      "direction": "ada_out",
+      "amount_in": 2940798,
+      "amount_received": 782497,
+      "reserve_in": 333667561,
+      "reserve_out": 90462767,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "5b88f9a1b7825ec01c883c1d6688254d8840644de300a15a4d9108c342575091",
+      "direction": "ada_out",
+      "amount_in": 8793885,
+      "amount_received": 32448793,
+      "reserve_in": 348710459,
+      "reserve_out": 1332194082,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "aeecfabfc0b9a2fdf33155807f0bce94be16f6f383d6f6a54a379a7efa636e6b",
+      "direction": "ada_out",
+      "amount_in": 22889696,
+      "amount_received": 64600531,
+      "reserve_in": 1472038026,
+      "reserve_out": 4261072766,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "a8745271c38f6f31aa6cf7d8da6d2e6c39d9cf1543f275c3ef3a4cbbf89bca9e",
+      "direction": "ada_out",
+      "amount_in": 33606973,
+      "amount_received": 4379532,
+      "reserve_in": 491843118,
+      "reserve_out": 69127831,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "9a457e05f1756d61b89822359f614f4b3a327ca05a97564dadcc35c1c325cb22",
+      "direction": "ada_out",
+      "amount_in": 95353336,
+      "amount_received": 328159730,
+      "reserve_in": 87155374121,
+      "reserve_out": 303300852342,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "72d56ae4e717cce1f442a63a49ae1794d60f0cfbd26e394dd033938a19d23a54",
+      "direction": "ada_out",
+      "amount_in": 151257301,
+      "amount_received": 230510791,
+      "reserve_in": 6576629029,
+      "reserve_out": 10354515258,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "80aa8907afc9091ac8a61da1758f9c8fd618b04bd546a501aaa5938b4b2a340b",
+      "direction": "ada_out",
+      "amount_in": 166194634,
+      "amount_received": 13315707,
+      "reserve_in": 51321092489,
+      "reserve_out": 4166722525,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "d84cc646f69b9ee0e6aaf32e39804763300c60ed183c020e547053284008388e",
+      "direction": "ada_out",
+      "amount_in": 1682253289,
+      "amount_received": 342495076,
+      "reserve_in": 245120711637,
+      "reserve_out": 50751323205,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "93a6ce52c83c933ab7da4e8b367c6c26b3c8b47292e5051ff7200730ad1da5d6",
+      "direction": "ada_out",
+      "amount_in": 4081954138,
+      "amount_received": 20212394,
+      "reserve_in": 7977063342,
+      "reserve_out": 60140832,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "71a84be2828631d64d86638b83357a1c328bd5f3f2eff1d380ab8fcbe1b7c3ef",
+      "direction": "ada_out",
+      "amount_in": 10000000000,
+      "amount_received": 16870445,
+      "reserve_in": 12500112413320,
+      "reserve_out": 21317880675,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "2a690bde6b7876e028b291445b7bbc4174319f41e48aafc24708ac2b21149ee1",
+      "direction": "ada_out",
+      "amount_in": 3944084236871,
+      "amount_received": 26435153,
+      "reserve_in": 183412913791414,
+      "reserve_out": 1268198069,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "293431b837c4020e7a8581b7639c88360fb401cda7bf638f858b3f7ae1f31f7c",
+      "direction": "ada_out",
+      "amount_in": 6266104926104,
+      "amount_received": 33781866637,
+      "reserve_in": 98120514314380,
+      "reserve_out": 568157017644,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "58ed44e86c74a854fecfcab8cfd2c98aaaada552690da249b32ed394733d8e62",
+      "direction": "ada_out",
+      "amount_in": 7046084583460,
+      "amount_received": 58831233,
+      "reserve_in": 291261846811905,
+      "reserve_out": 2515341284,
+      "pool_fee": 85
+    },
+    {
+      "tx_hash": "ad82769382c0472aaef150fee26f1b44ee687c0d8a2115bf35e42fe5af515cb1",
+      "direction": "ada_out",
+      "amount_in": 6447,
+      "amount_received": 7478755,
+      "reserve_in": 385809,
+      "reserve_out": 460242358,
+      "pool_fee": 100
+    },
+    {
+      "tx_hash": "c894d47fe4a77c461d0b659439a44cba813930c9d4aa79f13453bc5d5bfc97d8",
+      "direction": "ada_out",
+      "amount_in": 2600000,
+      "amount_received": 8339884,
+      "reserve_in": 3169220739,
+      "reserve_out": 10302605028,
+      "pool_fee": 110
+    },
+    {
+      "tx_hash": "cc3128d6f591c7e02970600c5dcf26097464933afccca2febad9e31c6e411ed5",
+      "direction": "ada_out",
+      "amount_in": 28823707608,
+      "amount_received": 5104525,
+      "reserve_in": 20824989159036,
+      "reserve_out": 3749193366,
+      "pool_fee": 135
+    },
+    {
+      "tx_hash": "a9b4292b7b9a2f60802f1a67e52295a0e6764b91c6a94374def38944ec94c656",
+      "direction": "ada_out",
+      "amount_in": 10,
+      "amount_received": 35304,
+      "reserve_in": 1110497,
+      "reserve_out": 4000625281,
+      "pool_fee": 185
+    },
+    {
+      "tx_hash": "5bd654fb55584180ed5bbee3d2bd7aa1f76fdc7fea89e5aa8ffd382c812428f9",
+      "direction": "ada_out",
+      "amount_in": 690,
+      "amount_received": 1878371,
+      "reserve_in": 861192,
+      "reserve_out": 2394062589,
+      "pool_fee": 185
+    },
+    {
+      "tx_hash": "d0b628fab152873177f1adee0625ac8643598191951dd7e5411f140d008eeaef",
+      "direction": "ada_out",
+      "amount_in": 1611,
+      "amount_received": 5198616,
+      "reserve_in": 774581,
+      "reserve_out": 2555679708,
+      "pool_fee": 185
+    },
+    {
+      "tx_hash": "f373c8ad4780c49d4c5e411e263a82a0dc158bce2304591707eea22f8602ee2b",
+      "direction": "ada_out",
+      "amount_in": 15000,
+      "amount_received": 47848328,
+      "reserve_in": 960243,
+      "reserve_out": 3173411523,
+      "pool_fee": 185
+    },
+    {
+      "tx_hash": "06ec7cc91e8669e11b8a9caeac1005aba2ea6e3fd7b0c68b31a97fabe4c11adf",
+      "direction": "ada_out",
+      "amount_in": 52722,
+      "amount_received": 41166884,
+      "reserve_in": 778278,
+      "reserve_out": 667698354,
+      "pool_fee": 285
+    },
+    {
+      "tx_hash": "d5b6af62e13a02e24ab95a5cabdbb106005741d6ba11ea303f3993ddb7a74666",
+      "direction": "ada_out",
+      "amount_in": 953083,
+      "amount_received": 127369182,
+      "reserve_in": 19877264,
+      "reserve_out": 2865976200,
+      "pool_fee": 285
+    }
+  ]
+}
