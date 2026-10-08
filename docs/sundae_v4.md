@@ -8,7 +8,8 @@ commitments and the lovelace surplus. It prices nothing.
 A **pool type** is a module bound to the vault on an action tag.
 `vault.pools()` returns one pool type per enabled invariant-module binding — a
 `SundaeV4ConstantSumPool` for a constant-sum binding, a `SundaeV4StableSwapPool`
-for a stableswap one; each quotes with explicit units:
+for a stableswap one, a `SundaeV4BandedCLPool` for a banded concentrated-liquidity
+one; each quotes with explicit units:
 
 ```python
 from charli3_dendrite import SundaeV4Vault
@@ -53,6 +54,42 @@ accepting only a hash match. A quote is priced at the vault's current rates; a
 scoop that opens with a rate update prices an order at the new ones, so its
 minimum received should allow for `max_rate_step` (uncapped when `None`).
 
+## Banded concentrated-liquidity pools
+
+A banded vault binds the `banded_cl` module (preview only, as of October 2026)
+and prices its two reserves on a **ladder** of sqrt-price bands
+(`BandedCLConfig`): band `k` spans `[bands[k].start, bands[k+1].start]` (the last
+band closes at `closing`), holds `weight / weight_total` of the pool's liquidity,
+charges its own `fee_sell` (A is the input) or `fee_buy` (B is the input), and
+prices as a concentrated-liquidity arc or a constant-sum bin. Asset A is the
+vault's first declared reserve, B the second, and price means B per A.
+
+The pool stores no price and no active band. Both are derived from the reserves
+by the band proof, as the on-chain module derives them on every spend:
+`pool.witness()` is the ladder counter and active band for the current reserves
+(`pool.active_band` the band alone). A swap prices against the active band and
+crosses into the next band when it exhausts that band's holding of the output
+asset, so a small trade near a band edge uses two bands. `SundaeV4BandedCLPool`
+computes the exact integers the chain pays: `get_amount_out` is the output across
+every band crossed, `get_amount_in` the least input reaching an output,
+`max_output` the smallest unreachable output (one past the pool's whole holding),
+`quote` the full picture (output, input absorbed, bands used, reserves after), and
+`price` the active band's marginal rate. `pinned_deposit` / `pinned_withdraw` are
+the proportional liquidity moves with the LP supply as the measure. The math is in
+`charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`, checked against recorded
+preview scoops.
+
+The ladder is **not in the datum**; `module_state` holds only its hash. It is
+recovered from the module's `Create` / `Operate` redeemers like every other config,
+with two preview-specific twists resolution absorbs: the pools were created under
+a superseded build of the module (every build of a kind is now searched, matching
+by hash alone), and under the pre-index three-field config (`BandedCLConfigV0`),
+whose ladder index a governance upgrade derived on chain — so the committed
+four-field config exists in no redeemer and is rebuilt from the bands
+(`parse_banded_cl_config`), then hash-verified. Pools that are still on the
+superseded build commit to the three-field hash, which the parser does not
+reproduce; every preview pool has been upgraded.
+
 ## Multi-vault routes
 
 A basic swap names only what it offers and the least it must receive, so the
@@ -95,5 +132,7 @@ order's value only, never its datum.
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4ConstantSumPool
 
 ::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4StableSwapPool
+
+::: charli3_dendrite.dexs.amm.sundae_v4.SundaeV4BandedCLPool
 
 ::: charli3_dendrite.dexs.amm.multi_asset.AbstractMultiAssetPoolState
