@@ -72,12 +72,16 @@ crosses into the next band when it exhausts that band's holding of the output
 asset, so a small trade near a band edge uses two bands. `SundaeV4BandedCLPool`
 computes the exact integers the chain pays: `get_amount_out` is the output across
 every band crossed, `get_amount_in` the least input reaching an output,
-`max_output` the smallest unreachable output (one past the pool's whole holding),
-`quote` the full picture (output, input absorbed, bands used, reserves after), and
-`price` the active band's marginal rate. `pinned_deposit` / `pinned_withdraw` are
+`max_output` the smallest unreachable output, `quote` the full picture (output,
+input absorbed, per-band steps, reserves after), and `price` the active band's
+marginal rate. A quote absorbs less than the offer when nothing more can be
+bought: the ladder's last band is drained, or the state sits on a band edge that
+the band being entered does not admit a witness for (integer rounding can
+exclude one side of an edge, and a scooper cannot continue the trade there
+either). The math is checked against the validator's own step check on
+randomised ladders: see `tests/test_sundae_v4_banded_cl_oracle.py`. `pinned_deposit` / `pinned_withdraw` are
 the proportional liquidity moves with the LP supply as the measure. The math is in
-`charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`, checked against recorded
-preview scoops.
+`charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`.
 
 The ladder is **not in the datum**; `module_state` holds only its hash. It is
 recovered from the module's `Create` / `Operate` redeemers like every other config,
