@@ -383,19 +383,35 @@ def band_output(witness: Witness, band: Band, a_is_input: bool, dx: int) -> int:
 
 
 @dataclass(frozen=True)
+class BandedStep:
+    """One in-band step of a quote: what the chain sees as one transcript step.
+
+    ``witness`` is the band proof for the reserves the step starts from,
+    ``amount_in`` the input the band absorbed and ``amount_out`` what it paid.
+    """
+
+    witness: Witness
+    amount_in: int
+    amount_out: int
+
+
+@dataclass(frozen=True)
 class BandedQuote:
     """A quote across the ladder.
 
     ``amount_out`` is the total output, ``spent`` how much of the offer the ladder
-    absorbed (less than offered only when the ladder ran out of bands or the
-    state is unpriceable), ``bands`` the bands used in order, and
-    ``reserves_after`` the ``(A, B)`` the pool is left with.
+    absorbed (less than offered when the ladder ran out of bands, the state is
+    unpriceable, or no further unit of output could be bought; see
+    :func:`banded_quote`), ``bands`` the bands used in order, ``steps`` the
+    per-band steps (every step pays a positive output), and ``reserves_after``
+    the ``(A, B)`` the pool is left with.
     """
 
     amount_out: int
     spent: int
     bands: tuple[int, ...]
     reserves_after: tuple[int, int]
+    steps: tuple[BandedStep, ...] = ()
 
 
 def banded_quote(
@@ -412,12 +428,16 @@ def banded_quote(
     A is the input, ``ra`` when B is). When the band's formula would pay more, the
     largest input whose output fits is found by bisection, applied, and the
     remainder continues in the next band down (A input) or up (B input). The
-    quote stops when the input is spent, the ladder runs out, or a band cannot
-    absorb a single unit. ``witness`` may supply the already-known witness of
-    ``(a, b)``.
+    quote stops when the input is spent or no further output can be bought: the
+    ladder's last band is drained, the remaining input is too small to buy one
+    unit, or the state sits on a band edge the band being entered does not admit
+    a witness for (integer rounding can exclude one side of an edge; a scooper
+    cannot continue the trade there either). A band may appear twice in a row in
+    ``steps`` when a fill to its edge left residual units the output's jumps
+    skipped over. ``witness`` may supply the already-known witness of ``(a, b)``.
     """
     out, left = 0, dx
-    bands_used: list[int] = []
+    steps: list[BandedStep] = []
     prefer: int | None = None
     while left > 0:
         if witness is None:
@@ -439,19 +459,27 @@ def banded_quote(
                 else:
                     hi = mid
             spend, got = lo, band_output(witness, band, a_is_input, lo)
-            if spend == 0:
-                break
+        if got == 0:
+            # Nothing more is paid: the band is exhausted (and the band being
+            # entered admitted no witness at this edge, so the search returned
+            # the one just left), or the input is too small to buy one unit.
+            # On chain an input that buys nothing is a donation, not a swap.
+            break
         out += got
         left -= spend
-        bands_used.append(k)
+        steps.append(BandedStep(witness=witness, amount_in=spend, amount_out=got))
         a, b = (a + spend, b - got) if a_is_input else (a - got, b + spend)
         prefer = k - 1 if a_is_input else k + 1
-        witness = None
         if not 0 <= prefer < ladder.n:
-            break
+            # The ladder's last band in this direction: a fill to its edge can
+            # leave a few units of residual when the output moves in jumps, so
+            # keep draining it until nothing more can be bought.
+            prefer = k
+        witness = None
     return BandedQuote(
         amount_out=out,
         spent=dx - left,
-        bands=tuple(bands_used),
+        bands=tuple(step.witness.band for step in steps),
         reserves_after=(a, b),
+        steps=tuple(steps),
     )
