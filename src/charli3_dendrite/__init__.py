@@ -19,6 +19,7 @@ from charli3_dendrite.dexs.amm.splash import SplashSSPState
 from charli3_dendrite.dexs.amm.sundae import SundaeSwapCPPState
 from charli3_dendrite.dexs.amm.sundae import SundaeSwapV3CPPState
 from charli3_dendrite.dexs.amm.sundae import SundaeSwapV3StableSwap
+from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4BandedCLPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4ConstantSumPool
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Vault
 from charli3_dendrite.dexs.amm.vyfi import VyFiCPPState
