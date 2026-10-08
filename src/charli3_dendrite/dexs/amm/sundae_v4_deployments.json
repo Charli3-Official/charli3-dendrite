@@ -16,7 +16,9 @@
       "governance.withdraw": "4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d5246",
       "treasury_policy.withdraw": "6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd372876",
       "stableswap.withdraw": "9db7ce54fb25f4390a89bb715a022fe79a86b9a043aa22c31c27380a",
-      "stableswap.withdraw.superseded1": "a44e0058459a223752be78dc4df7ca86446ba22ef95c7ee690e0b5a3"
+      "stableswap.withdraw.superseded1": "a44e0058459a223752be78dc4df7ca86446ba22ef95c7ee690e0b5a3",
+      "banded_cl.withdraw": "33485bba2689d4b82b412fb683f07474b9c6c042778d3b9d2b691f18",
+      "banded_cl.withdraw.superseded1": "0977898c126442fdab79057b5b677932b55d4373d93b87dcee3e7d9a"
     },
     "references": {
       "settings.mint": {
