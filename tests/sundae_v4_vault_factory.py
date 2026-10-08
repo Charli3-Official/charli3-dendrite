@@ -224,8 +224,8 @@ def build_banded_cl_vault_utxo(
     closing: tuple[int, int],
     weights: list[int] | None = None,
     curves: list[int] | None = None,
-    fee_buy: tuple[int, int] = (3, 1000),
-    fee_sell: tuple[int, int] = (3, 1000),
+    fee_buy: tuple[int, int] | list[tuple[int, int]] = (3, 1000),
+    fee_sell: tuple[int, int] | list[tuple[int, int]] = (3, 1000),
     total_lp: int,
     identifier: bytes = b"\x33" * 28,
     surplus: int = 3_000_000,
@@ -237,7 +237,8 @@ def build_banded_cl_vault_utxo(
 
     Two reserves in datum (declaration) order (asset A first). ``starts`` are the
     bands' lower sqrt-price edges and ``closing`` the last band's upper edge, as
-    ``(num, den)``; ``weights`` default to one per band and ``curves`` to CL arcs.
+    ``(num, den)``; ``weights`` default to one per band and ``curves`` to CL arcs;
+    ``fee_buy`` / ``fee_sell`` are one rate for every band or one per band.
     The action map is the deployed banded package ``{100: [banded_cl, fee_split,
     fairness], 200: [treasury_policy], 1: [governance]}``; ``module_title`` picks
     which build of the module the trade action binds (the current one by default).
@@ -248,15 +249,17 @@ def build_banded_cl_vault_utxo(
     n = len(starts)
     weights = weights or [1] * n
     curves = curves or [0] * n
+    fees_buy = list(fee_buy) if isinstance(fee_buy, list) else [fee_buy] * n
+    fees_sell = list(fee_sell) if isinstance(fee_sell, list) else [fee_sell] * n
     bands = [
         BandSpec(
             start=Rational(num=s[0], den=s[1]),
             weight=w,
             curve=c,
-            fee_buy=Rational(num=fee_buy[0], den=fee_buy[1]),
-            fee_sell=Rational(num=fee_sell[0], den=fee_sell[1]),
+            fee_buy=Rational(num=fb[0], den=fb[1]),
+            fee_sell=Rational(num=fs[0], den=fs[1]),
         )
-        for s, w, c in zip(starts, weights, curves)
+        for s, w, c, fb, fs in zip(starts, weights, curves, fees_buy, fees_sell)
     ]
     legacy_config = BandedCLConfigV0(
         bands=IndefiniteList(bands),
