@@ -34,6 +34,10 @@ from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.core.errors import NoAssetsError
 from charli3_dendrite.dexs.core.errors import NotAPoolError
 
+# A swap-all SundaeSwap V3 stableswap order offers this multiple of its expected
+# input, so any realistic delivery is swapped in full.
+SWAP_ALL_OFFER_MULTIPLE = 2
+
 
 @dataclass
 class AtoB(PlutusData):
@@ -616,8 +620,11 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
         """Create a swap datum."""
+        swap_all_kwargs = self._swap_all_kwargs(SundaeOrderDatum, swap_all)
+
         if self.swap_forward and address_target is not None:
             print(f"{self.__class__.__name__} does not support swap forwarding.")
 
@@ -629,6 +636,7 @@ class SundaeSwapCPPState(AbstractConstantProductPoolState):
             in_assets=in_assets,
             out_assets=out_assets if minimum_receive is None else minimum_receive,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
+            **swap_all_kwargs,
         )
 
 
@@ -769,7 +777,20 @@ class SundaeSwapV3CPPState(AbstractConstantProductPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
+        """Create a swap datum.
+
+        Raises:
+            ValueError: If ``swap_all`` is set. The constant-product pool swaps
+                exactly the order's offer, so the order cannot swap an amount
+                unknown when the datum is built.
+        """
+        if swap_all:
+            raise self._swap_all_error(
+                "the constant-product pool swaps exactly the order's offer",
+            )
+
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
 
         datum = SundaeV3OrderDatum.create_datum(
@@ -948,13 +969,38 @@ class SundaeSwapV3StableSwap(AbstractStableSwapPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
+        """Create a swap datum.
+
+        The stableswap pool swaps the smaller of the order's offer and the input it
+        holds. With ``swap_all`` the offer is ``SWAP_ALL_OFFER_MULTIPLE`` times
+        ``in_assets``, so the order swaps whatever amount of the input token it
+        holds when executed. The order value is still built from ``in_assets``.
+
+        Raises:
+            ValueError: If ``swap_all`` is set with an ADA input. An ADA offer
+                shares the order value with the protocol fee and deposit, so
+                swapping all of it would leave no ADA on the output.
+        """
+        if swap_all and in_assets.unit() == "lovelace":
+            raise self._swap_all_error(
+                "an ADA input cannot swap whatever arrives because the deposit "
+                "and fee share the input value",
+            )
+
         ident = bytes.fromhex(self.pool_nft.unit()[64:])
+
+        offer = in_assets
+        if swap_all:
+            offer = Assets(
+                root={in_assets.unit(): SWAP_ALL_OFFER_MULTIPLE * in_assets.quantity()},
+            )
 
         datum = SundaeV3OrderDatum.create_datum(
             ident=ident,
             address_source=address_source,
-            in_assets=in_assets,
+            in_assets=offer,
             out_assets=out_assets if minimum_receive is None else minimum_receive,
             fee=self.batcher_fee(in_assets=in_assets, out_assets=out_assets).quantity(),
             address_target=address_target,

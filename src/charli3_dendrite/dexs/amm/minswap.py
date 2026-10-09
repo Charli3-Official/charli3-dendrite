@@ -316,8 +316,21 @@ class SwapExactInV2(PlutusData):
     killable: Union[BoolTrue, BoolFalse]
 
     @classmethod
-    def from_assets(cls, in_asset: Assets, out_asset: Assets) -> "SwapExactInV2":
-        """Parse an Assets object into a SwapExactInV2 datum."""
+    def from_assets(
+        cls,
+        in_asset: Assets,
+        out_asset: Assets,
+        deducted_amount: int | None = None,
+    ) -> "SwapExactInV2":
+        """Parse an Assets object into a SwapExactInV2 datum.
+
+        Args:
+            in_asset: The asset swapped in.
+            out_asset: The asset swapped out; its quantity is the minimum receive.
+            deducted_amount: When None, the order swaps exactly the quantity of
+                ``in_asset``. Otherwise the order swaps everything it holds of the
+                input asset less ``deducted_amount`` (``SAOAll``).
+        """
         assert len(in_asset) == 1
 
         merged_assets = in_asset + out_asset
@@ -326,7 +339,11 @@ class SwapExactInV2(PlutusData):
             BoolTrue() if in_asset.unit() == merged_assets.unit() else BoolFalse()
         )
 
-        option = SAOSpecificAmount(swap_amount=in_asset.quantity())
+        option: SAOSpecificAmount | SAOAll
+        if deducted_amount is None:
+            option = SAOSpecificAmount(swap_amount=in_asset.quantity())
+        else:
+            option = SAOAll(deducted_amount=deducted_amount)
 
         return cls(
             a_to_b_direction=direction,
@@ -544,10 +561,29 @@ class MinswapV2OrderDatum(OrderDatum):
         deposit: Assets,
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
+        swap_all: bool = False,
     ):
-        """Create an order datum."""
+        """Create an order datum.
+
+        With ``swap_all`` the order swaps whatever it holds of the input asset when
+        executed (``SAOAll``) instead of exactly ``in_assets``. The validator swaps
+        the held quantity less ``deducted_amount`` and pays the batcher fee from the
+        remaining ADA, so a token input deducts nothing and an ADA input deducts the
+        batcher fee and deposit the order carries alongside its input.
+        """
         full_address_source = PlutusFullAddress.from_address(address_source)
-        step = SwapExactInV2.from_assets(in_asset=in_assets, out_asset=out_assets)
+        deducted_amount = None
+        if swap_all:
+            deducted_amount = (
+                batcher_fee.quantity() + deposit.quantity()
+                if in_assets.unit() == "lovelace"
+                else 0
+            )
+        step = SwapExactInV2.from_assets(
+            in_asset=in_assets,
+            out_asset=out_assets,
+            deducted_amount=deducted_amount,
+        )
 
         # Minswap V2's ExtraDatum carries only the 32-byte HASH of the datum the
         # batcher attaches to the forwarded output (Constr 1 for a datum-hash output,

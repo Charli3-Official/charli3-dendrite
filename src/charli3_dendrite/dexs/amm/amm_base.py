@@ -1,5 +1,6 @@
 """Module providing base classes for AMM pools."""
 
+import inspect
 from abc import abstractmethod
 from decimal import Decimal
 from typing import Any
@@ -80,6 +81,7 @@ class AbstractPoolState(AbstractPairState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
         """Create a swap datum for the pool.
 
@@ -95,13 +97,21 @@ class AbstractPoolState(AbstractPairState):
             Defaults to None.
             minimum_receive (Assets | None, optional): Overrides the baked on-chain
             minimum; fee and deposit still size from out_assets. Defaults to None.
+            swap_all (bool, optional): The order swaps whatever amount of the input
+            token it holds when executed; use it for an order funded by another
+            order's output, whose exact input is unknown when the datum is built.
+            Fee and deposit still size from in_assets. Defaults to False.
 
         Returns:
             PlutusData: The created swap datum.
 
         Raises:
-            ValueError: If more than one asset is supplied as input or output.
+            ValueError: If more than one asset is supplied as input or output, or if
+            swap_all is set and the order datum cannot express it.
         """
+        datum_class = self.order_datum_class()
+        swap_all_kwargs = self._swap_all_kwargs(datum_class, swap_all)
+
         if not self.swap_forward and address_target is not None:
             print(  # noqa: T201
                 f"{self.__class__.__name__} does not support swap forwarding.",
@@ -111,7 +121,7 @@ class AbstractPoolState(AbstractPairState):
         # fee and deposit are still derived from the EXACT ``out_assets`` so relaxing
         # the floor never under-fees the order — only the step's ``minimum_receive``
         # loosens. Same output unit, so swap direction and lp_asset are unaffected.
-        return self.order_datum_class().create_datum(
+        return datum_class.create_datum(
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets if minimum_receive is None else minimum_receive,
@@ -123,6 +133,53 @@ class AbstractPoolState(AbstractPairState):
             deposit=self.deposit(in_assets=in_assets, out_assets=out_assets),
             address_target=address_target,
             datum_target=datum_target,
+            **swap_all_kwargs,
+        )
+
+    def _swap_all_kwargs(
+        self,
+        datum_class: type[PlutusData],
+        swap_all: bool,
+    ) -> dict[str, bool]:
+        """The ``create_datum`` keyword arguments that request a swap-all order.
+
+        Empty unless ``swap_all`` is set, so an order datum without swap-all support
+        is built exactly as before.
+
+        Args:
+            datum_class (type[PlutusData]): The order datum class building the order.
+            swap_all (bool): Whether a swap-all order is requested.
+
+        Returns:
+            dict[str, bool]: The keyword arguments to pass to ``create_datum``.
+
+        Raises:
+            ValueError: If swap_all is set and ``datum_class`` has no
+            ``create_datum`` taking a ``swap_all`` parameter.
+        """
+        if not swap_all:
+            return {}
+        create_datum = getattr(datum_class, "create_datum", None)
+        if (
+            create_datum is None
+            or "swap_all" not in inspect.signature(create_datum).parameters
+        ):
+            raise self._swap_all_error(
+                f"{datum_class.__name__} has no swap-all form",
+            )
+        return {"swap_all": True}
+
+    def _swap_all_error(self, reason: str) -> ValueError:
+        """The error for a swap-all order this pool cannot build.
+
+        Args:
+            reason (str): Why the order cannot swap whatever amount it holds.
+
+        Returns:
+            ValueError: An error naming the pool class and the reason.
+        """
+        return ValueError(
+            f"{self.__class__.__name__} cannot build a swap-all order: {reason}.",
         )
 
     def swap_utxo(
@@ -135,6 +192,7 @@ class AbstractPoolState(AbstractPairState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> tuple[TransactionOutput | None, PlutusData]:
         """Create a swap UTXO for the pool.
 
@@ -151,13 +209,19 @@ class AbstractPoolState(AbstractPairState):
             Defaults to None.
             minimum_receive (Assets | None, optional): Overrides the baked on-chain
             minimum; fee and deposit still size from out_assets. Defaults to None.
+            swap_all (bool, optional): The order swaps whatever amount of the input
+            token it holds when executed; use it for an order funded by another
+            order's output, whose exact input is unknown when the datum is built.
+            Fee, deposit and the order value still size from in_assets. Defaults to
+            False.
 
         Returns:
             tuple[TransactionOutput, PlutusData]: A tuple containing the created
             transaction output and the swap datum.
 
         Raises:
-            ValueError: If more than one asset is supplied as input or output.
+            ValueError: If more than one asset is supplied as input or output, or if
+            swap_all is set and the order datum cannot express it.
         """
         # Basic checks
         if len(in_assets) != 1 or len(out_assets) != 1:
@@ -174,6 +238,9 @@ class AbstractPoolState(AbstractPairState):
             address_target=address_target,
             datum_target=datum_target,
             minimum_receive=minimum_receive,
+            # Passed only when set, so a swap_datum override without swap-all
+            # support is called exactly as before.
+            **({"swap_all": True} if swap_all else {}),
         )
 
         in_assets.root["lovelace"] = (
