@@ -18,7 +18,6 @@ from pycardano.serialization import CBORTag
 from charli3_dendrite.dataclasses.datums import AssetClass
 from charli3_dendrite.dexs.amm.sundae_v4 import ActionEntry
 from charli3_dendrite.dexs.amm.sundae_v4 import BandedCLConfig
-from charli3_dendrite.dexs.amm.sundae_v4 import BandedCLConfigV0
 from charli3_dendrite.dexs.amm.sundae_v4 import BandSpec
 from charli3_dendrite.dexs.amm.sundae_v4 import BoolFalse
 from charli3_dendrite.dexs.amm.sundae_v4 import BoolTrue
@@ -28,6 +27,7 @@ from charli3_dendrite.dexs.amm.sundae_v4 import Rational
 from charli3_dendrite.dexs.amm.sundae_v4 import StableSwapConfig
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4Deployment
 from charli3_dendrite.dexs.amm.sundae_v4 import SundaeV4PoolDatum
+from charli3_dendrite.dexs.amm.sundae_v4 import banded_cl_ladder
 from charli3_dendrite.dexs.amm.sundae_v4 import module_config_hash
 
 CONFIG_LESS = b"\x80"
@@ -230,8 +230,8 @@ def build_banded_cl_vault_utxo(
     identifier: bytes = b"\x33" * 28,
     surplus: int = 3_000_000,
     network: str = "preview",
-    module_title: str = "banded_cl.withdraw",
-    legacy: bool = False,
+    module_title: str = "banded_concentrated_liquidity.withdraw",
+    extra_trade_modules: tuple[bytes, ...] = (),
 ) -> tuple[dict, BandedCLConfig]:
     """A banded CL vault UTxO ``values`` dict plus the indexed config it commits to.
 
@@ -241,9 +241,8 @@ def build_banded_cl_vault_utxo(
     ``fee_buy`` / ``fee_sell`` are one rate for every band or one per band.
     The action map is the deployed banded package ``{100: [banded_cl, fee_split,
     fairness], 200: [treasury_policy], 1: [governance]}``; ``module_title`` picks
-    which build of the module the trade action binds (the current one by default).
-    ``legacy`` commits the slot to the pre-index three-field config instead, as a
-    pool created before the index upgrade did; the indexed config is still returned.
+    which build of the module the trade action binds (the current one by default)
+    and ``extra_trade_modules`` are bound on it too, each with an opaque commitment.
     """
     deployment = SundaeV4Deployment.for_network(network)
     n = len(starts)
@@ -261,17 +260,19 @@ def build_banded_cl_vault_utxo(
         )
         for s, w, c, fb, fs in zip(starts, weights, curves, fees_buy, fees_sell)
     ]
-    legacy_config = BandedCLConfigV0(
+    closing_edge = Rational(num=closing[0], den=closing[1])
+    index = banded_cl_ladder(bands, closing_edge, sum(weights)).index
+    config = BandedCLConfig(
         bands=IndefiniteList(bands),
-        closing=Rational(num=closing[0], den=closing[1]),
+        index=IndefiniteList([IndefiniteList(list(entry)) for entry in index]),
+        closing=closing_edge,
         weight_total=sum(weights),
     )
-    config = legacy_config.indexed()
-    committed = legacy_config if legacy else config
     banded_hash = deployment.validator(module_title)
     tags = {
         100: [banded_hash]
-        + [deployment.validator(f"{k}.withdraw") for k in ("fee_split", "fairness")],
+        + [deployment.validator(f"{k}.withdraw") for k in ("fee_split", "fairness")]
+        + list(extra_trade_modules),
         200: [deployment.validator("treasury_policy.withdraw")],
         1: [deployment.validator("governance.withdraw")],
     }
@@ -283,7 +284,7 @@ def build_banded_cl_vault_utxo(
     for hashes in tags.values():
         for h in hashes:
             if h == banded_hash:
-                commitment = module_config_hash(committed)
+                commitment = module_config_hash(config)
             elif h == deployment.validator("fairness.withdraw"):
                 commitment = CONFIG_LESS
             else:

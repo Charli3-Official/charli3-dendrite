@@ -1,10 +1,13 @@
-"""The banded CL ladder math against the preview chain.
+"""The banded CL ladder math on preview pool P1 and on edge cases of the walk.
 
-The vectors are pool P1 (``622cee5f…``) at block 4732337 as the integration note
-records them: its ladder, the index the module upgrade derived on chain, the
-witness for its reserves, and eight quotes of which one (1,000 tOKENA for 996
-tOKENC) is transaction ``1fa1fda1…``. The two config hashes are the pool's
-``module_state`` before and after the upgrade, read from the live chain.
+P1 (``622cee5f…``) is a preview pool at block 4732337: its ladder, the index its
+config carries on chain, and the witness the scooper declared for its reserves.
+Of its eight quotes, 1,000 tOKENA for 996 tOKENC is preview transaction
+``1fa1fda1…``; ``test_sundae_v4_banded_cl_oracle.py`` runs all eight through the
+validator's transcript check, and the recorded preview scoops in the pool tests
+carry P1's on-chain index. The other cases pin how a quote crosses band edges: at
+a crossing that would lower the counter, where the last band cannot be drained
+to zero, and where a band can pay nothing.
 """
 
 from __future__ import annotations
@@ -12,16 +15,14 @@ from __future__ import annotations
 import pytest
 
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import CURVE_CONSTANT_SUM
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import TWO64
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Ladder
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import achievable
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import band_output
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import banded_quote
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import build_index
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import ceil_div
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import find_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import is_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import marginal_price
+from charli3_dendrite.lending.math import ceil_div
 
 # Pool P1's ladder: eight CL bands of weight 1, sqrt-price edges 76000/80000 to
 # 84000/80000 in steps of 1000/80000, fees 3/1000 both ways.
@@ -29,16 +30,6 @@ P1_STARTS = [(76000 + 1000 * i, 80000) for i in range(8)]
 P1_CLOSING = (84000, 80000)
 P1_RESERVES = (5_953_003, 6_249_988)  # A = tOKENA, B = tOKENC, block 4732337
 P1_WITNESS = (1_000_049_919, 3)
-P1_INDEX = [
-    (199640087377809004, 0),
-    (168926227781223003, 28823037615171175),
-    (138989934250373357, 57646075230342350),
-    (109802048057794952, 86469112845513525),
-    (81334850413181446, 115292150460684700),
-    (53561974662339001, 144115188075855875),
-    (26458324833203603, 172938225691027050),
-    (0, 201761263306198225),
-]
 # (input, A is the input, output, bands used)
 P1_QUOTES = [
     (100, True, 99, (3,)),
@@ -65,29 +56,6 @@ def p1_ladder() -> Ladder:
     )
 
 
-def test_the_index_is_the_one_the_upgrade_derived_on_chain() -> None:
-    ladder = p1_ladder()
-    assert list(ladder.index) == P1_INDEX
-    assert build_index(list(ladder.bands), ladder.weight_total) == P1_INDEX
-
-
-def test_index_coefficients_round_up_per_band() -> None:
-    ladder = p1_ladder()
-    # index[k].0 sums the coefficients of the bands ABOVE k, so the difference
-    # between entries 0 and 1 is band 1's own coefficient.
-    band = ladder.bands[1]
-    (p0, q0), (p1, q1) = band.lo, band.hi
-    exact_a = band.weight * band.d * TWO64 / (ladder.weight_total * p0 * p1)
-    coeff_a = ladder.index[0][0] - ladder.index[1][0]
-    assert coeff_a == ceil_div(
-        band.weight * band.d * TWO64, ladder.weight_total * p0 * p1
-    )
-    assert coeff_a >= exact_a
-    assert 0 <= coeff_a - exact_a < 1
-    assert ladder.index[-1][0] == 0
-    assert ladder.index[0][1] == 0
-
-
 def test_the_witness_for_the_recorded_reserves() -> None:
     ladder = p1_ladder()
     witness = find_witness(ladder, *P1_RESERVES)
@@ -99,22 +67,6 @@ def test_the_witness_for_the_recorded_reserves() -> None:
     # The counter is tight: one more is not achievable, one less is not a witness.
     assert not achievable(ladder, *P1_RESERVES, witness.counter + 1, witness.band)
     assert not is_witness(ladder, *P1_RESERVES, witness.counter - 1, witness.band)
-    # No other band admits a witness for a state strictly inside band 3.
-    for k in range(ladder.n):
-        if k != witness.band:
-            assert find_witness(ladder, *P1_RESERVES, prefer=k).band == witness.band
-
-
-@pytest.mark.parametrize(("dx", "a_in", "want", "bands"), P1_QUOTES)
-def test_quotes_reproduce_the_preview_chain(
-    dx: int, a_in: bool, want: int, bands: tuple[int, ...]
-) -> None:
-    quote = banded_quote(p1_ladder(), *P1_RESERVES, dx, a_in)
-    assert quote.amount_out == want
-    assert quote.bands == bands
-    assert quote.spent == dx
-    a, b = P1_RESERVES
-    assert quote.reserves_after == ((a + dx, b - want) if a_in else (a - want, b + dx))
 
 
 def test_a_quote_never_exceeds_the_band_capacity_and_crossing_is_exact() -> None:
@@ -224,3 +176,139 @@ def test_malformed_shapes_are_rejected_as_create_rejects_them(
             fees_sell=fees,
             weight_total=kwargs.get("weight_total", sum(weights)),
         )
+
+
+# A ladder whose band 2 -> 3 edge re-derives a lower counter (all CL arcs).
+DROP_LADDER = {
+    "starts": [
+        (4, 10),
+        (6, 10),
+        (7, 10),
+        (9, 10),
+        (10, 10),
+        (11, 10),
+        (12, 10),
+        (14, 10),
+    ],
+    "closing": (16, 10),
+    "weights": [1, 1, 3, 1, 1, 7, 2, 199],
+    "curves": [0] * 8,
+    "fees_buy": [
+        (7, 997),
+        (1, 100),
+        (0, 1),
+        (7, 997),
+        (0, 1),
+        (1, 100),
+        (3, 1000),
+        (5, 10000),
+    ],
+    "fees_sell": [
+        (1, 10),
+        (25, 10000),
+        (1, 10),
+        (1, 10),
+        (1, 10),
+        (25, 10000),
+        (11, 1009),
+        (0, 1),
+    ],
+    "weight_total": 215,
+}
+DROP_STATE = (428_916_515, 11_327_381)
+
+
+def test_a_quote_stops_where_crossing_would_lower_the_counter() -> None:
+    ladder = Ladder.from_shape(**DROP_LADDER)
+    start = find_witness(ladder, *DROP_STATE)
+    assert (start.band, start.counter) == (2, 4_777_717_382)
+    quote = banded_quote(ladder, *DROP_STATE, 386_024_863, False)
+    # Band 2 is bought out; band 3 admits the edge only at counter 4_777_717_377,
+    # which one scoop cannot continue at, and band 2 has nothing left to sell.
+    assert quote.bands == (2,)
+    assert (quote.amount_out, quote.spent) == (12_515_654, 8_672_367)
+    assert is_witness(ladder, *quote.reserves_after, 4_777_717_377, 3)
+    assert banded_quote(ladder, *DROP_STATE, quote.spent, False).spent == quote.spent
+
+
+# A single constant-sum bin whose output drains to zero one unit past its bound.
+CS_BIN = {
+    "starts": [(471, 1000)],
+    "closing": (1459, 1000),
+    "weights": [100],
+    "curves": [CURVE_CONSTANT_SUM],
+    "fees_buy": [(1, 100)],
+    "fees_sell": [(0, 1)],
+    "weight_total": 100,
+}
+CS_BIN_STATE = (842_063, 244_667)
+
+
+def test_draining_the_last_band_stops_one_unit_short_of_an_unbounded_end() -> None:
+    ladder = Ladder.from_shape(**CS_BIN)
+    start = find_witness(ladder, *CS_BIN_STATE)
+    assert start is not None
+    quote = banded_quote(ladder, *CS_BIN_STATE, 367_000, True)
+    # Paying all 244,667 B would leave A one unit past the bin's saturation at
+    # every counter the walk may end on, so the last unit of B is not deliverable.
+    assert quote.amount_out == 244_666
+    assert quote.spent < 367_000
+    end_a, end_b = quote.reserves_after
+    assert end_b == 1
+    state = ladder.at(start.counter, 0)
+    assert achievable(ladder, end_a, end_b, start.counter, 0)
+    assert end_a - state.ca <= state.a_sat
+
+
+# A state three bands admit: band 4 is a sliver holding one unit of B, which no
+# input buys on its own (one unit of A buys two of B).
+SLIVER_LADDER = {
+    "starts": [
+        (69079, 80000),
+        (120232, 80000),
+        (120315, 80000),
+        (120694, 80000),
+        (120701, 80000),
+        (120742, 80000),
+        (139545, 80000),
+        (139576, 80000),
+        (156193, 80000),
+    ],
+    "closing": (162086, 80000),
+    "weights": [2, 1, 1, 100, 1, 199, 100, 7, 100],
+    "curves": [1, 0, 0, 0, 0, 0, 0, 0, 0],
+    "fees_buy": [
+        (1, 100),
+        (1, 100),
+        (7, 997),
+        (7, 997),
+        (1, 100),
+        (1, 100),
+        (3, 1000),
+        (1, 100),
+        (7, 997),
+    ],
+    "fees_sell": [
+        (25, 10000),
+        (11, 1009),
+        (0, 1),
+        (11, 1009),
+        (25, 10000),
+        (3, 1000),
+        (3, 1000),
+        (25, 10000),
+        (11, 1009),
+    ],
+    "weight_total": 511,
+}
+SLIVER_STATE = (36_385, 2_346)
+
+
+def test_a_band_that_pays_nothing_hands_the_trade_to_the_next_band() -> None:
+    ladder = Ladder.from_shape(**SLIVER_LADDER)
+    for band, counter in ((3, 926_473), (4, 926_483), (5, 926_463)):
+        assert is_witness(ladder, *SLIVER_STATE, counter, band)
+    sell = banded_quote(ladder, *SLIVER_STATE, 10, True)
+    assert (sell.amount_out, sell.spent, sell.bands) == (15, 7, (3,))
+    buy = banded_quote(ladder, *SLIVER_STATE, 10, False)
+    assert (buy.amount_out, buy.spent, buy.bands) == (4, 10, (5,))

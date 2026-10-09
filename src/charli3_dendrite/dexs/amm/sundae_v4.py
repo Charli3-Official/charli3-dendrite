@@ -49,17 +49,8 @@ tokens, the flat service fee) come from the per-network manifest
 The deployed order packages are ``basic`` (:data:`BasicConstraint`, four kinds)
 and ``strategy``, each paired with the fee constraint. The deployed invariant
 modules are constant-sum and stableswap on every network, and banded
-concentrated liquidity (:class:`BandedCLConfig`, ``banded_cl``) on preview.
-
-A banded pool's ``module_state`` slot commits to a ladder the datum does not
-carry; the preimage is recovered from the module's ``Create`` / ``Operate``
-redeemers like any other config, with two twists :func:`parse_banded_cl_config`
-absorbs: the preview pools were created under a superseded build of the module
-(so the redeemer's script hash is not the slot's key — every build of the kind
-is searched), and under the pre-index config shape (:class:`BandedCLConfigV0`,
-three fields), whose ladder index a governance upgrade derived on chain, so no
-redeemer anywhere holds the committed four-field config and it is rebuilt from
-the bands and verified by hash.
+concentrated liquidity (:class:`BandedCLConfig`, the ``banded_cl`` kind) on
+preview and preprod.
 
 Two derivations the contracts pin are reproduced here: a pool's ``identifier``
 is the first 28 bytes of the blake2b-256 of the serialised seed output reference
@@ -77,7 +68,6 @@ import json
 import logging
 import re
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -115,12 +105,11 @@ from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import RedeemerRecord
 from charli3_dendrite.dexs.amm.multi_asset import AbstractMultiAssetPoolState
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Band
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import BandedQuote
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Ladder
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import banded_quote
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import build_index
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import directed_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import find_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import marginal_price
 from charli3_dendrite.dexs.amm.sundae_v4_stableswap_math import STABLESWAP_PRECISION
@@ -1159,8 +1148,8 @@ class BandedCLConfig(PlutusData):
     ``index`` is the ladder index: one ``(Int, Int)`` entry per band, the
     cumulative saturation coefficients for the bands above and below it in
     fixed point at ``2**64``, rounded up per coefficient. It is a pure function
-    of the bands (:func:`banded_cl_index`) that Create pins and a spend reads
-    instead of walking the ladder; it is modelled as an
+    of the bands (``banded_cl_ladder(...).index``) that Create pins and a spend
+    reads instead of walking the ladder; it is modelled as an
     :class:`~pycardano.IndefiniteList` of 2-element lists because an Aiken
     2-tuple is a bare array. ``weight_total`` is exactly the weights' sum.
     """
@@ -1172,58 +1161,23 @@ class BandedCLConfig(PlutusData):
     weight_total: int
 
     def __post_init__(self) -> None:
-        """Type the decoded band and index entries; keep both lists indefinite."""
-        self.bands = _band_specs(self.bands)
+        """Type the decoded band and index entries; keep both lists indefinite.
+
+        An Aiken ``List`` serialises indefinite, and the config is hashed
+        off-datum, so both lists must stay indefinite to reproduce the commitment.
+        """
+        super().__post_init__()
+        self.bands = IndefiniteList(
+            [
+                band if isinstance(band, BandSpec) else BandSpec.from_primitive(band)
+                for band in _list_items(self.bands)
+            ],
+        )
         self.index = IndefiniteList(
             [
                 IndefiniteList([int(x) for x in _list_items(entry)])
                 for entry in _list_items(self.index)
             ],
-        )
-
-
-def _band_specs(bands: Any) -> IndefiniteList:  # noqa: ANN401
-    """``bands`` as an indefinite list of :class:`BandSpec`, decoding raw entries.
-
-    An Aiken ``List<BandSpec>`` serialises indefinite, and the config is hashed
-    off-datum, so the list must stay indefinite to reproduce the commitment.
-    """
-    return IndefiniteList(
-        [
-            band if isinstance(band, BandSpec) else BandSpec.from_primitive(band)
-            for band in _list_items(bands)
-        ],
-    )
-
-
-@dataclass
-class BandedCLConfigV0(PlutusData):
-    """The pre-index banded config (constructor 0): no ``index`` field.
-
-    The shape the preview pools were created under, found in their ``Create``
-    redeemers and in every scoop before the module upgrade. The upgrade derived
-    the ladder index on chain and re-committed the four-field
-    :class:`BandedCLConfig`, so this shape is parsed only; :meth:`indexed`
-    rebuilds the current config from it.
-    """
-
-    CONSTR_ID = 0
-    bands: IndefiniteList
-    closing: Rational
-    weight_total: int
-
-    def __post_init__(self) -> None:
-        """Type the decoded band entries; keep the list indefinite."""
-        self.bands = _band_specs(self.bands)
-
-    def indexed(self) -> BandedCLConfig:
-        """The current config: this ladder with its index rebuilt from the bands."""
-        bands = list(self.bands)
-        return BandedCLConfig(
-            bands=IndefiniteList(bands),
-            index=banded_cl_index(bands, self.closing, self.weight_total),
-            closing=self.closing,
-            weight_total=self.weight_total,
         )
 
 
@@ -1251,60 +1205,6 @@ def banded_cl_ladder(
         fees_sell=[_edge(band.fee_sell) for band in bands],
         weight_total=int(weight_total),
     )
-
-
-def banded_cl_index(
-    bands: list[BandSpec],
-    closing: Rational,
-    weight_total: int,
-) -> IndefiniteList:
-    """The ladder index a config with these ``bands`` must carry, as it serialises.
-
-    One ``[ca_k, cb_k]`` pair per band (see :class:`BandedCLConfig`), computed
-    with :func:`~.sundae_v4_banded_cl_math.build_index`.
-    """
-    edges = [_edge(band.start) for band in bands] + [_edge(closing)]
-    shape = [
-        Band(
-            lo=edges[k],
-            hi=edges[k + 1],
-            weight=int(band.weight),
-            curve=int(band.curve),
-            fee_buy=_edge(band.fee_buy),
-            fee_sell=_edge(band.fee_sell),
-        )
-        for k, band in enumerate(bands)
-    ]
-    return IndefiniteList(
-        [IndefiniteList([ca, cb]) for ca, cb in build_index(shape, int(weight_total))],
-    )
-
-
-def parse_banded_cl_config(payload: PlutusData | CBORTag | bytes) -> BandedCLConfig:
-    """A banded config from either serialised shape, current or pre-index.
-
-    The four-field :class:`BandedCLConfig` decodes as is. The three-field
-    :class:`BandedCLConfigV0` decodes and has its index rebuilt. Whether the
-    result is the config a pool commits to is for the caller's hash check.
-
-    Raises:
-        DeserializeException: the payload is neither shape.
-    """
-    if isinstance(payload, bytes):
-        cbor = payload
-    elif isinstance(payload, PlutusData):
-        cbor = payload.to_cbor()
-    else:
-        cbor = RawPlutusData(payload).to_cbor()
-    try:
-        return BandedCLConfig.from_cbor(cbor)
-    except (DeserializeException, TypeError, ValueError, KeyError):
-        pass
-    try:
-        return BandedCLConfigV0.from_cbor(cbor).indexed()
-    except (TypeError, ValueError, KeyError) as e:
-        msg = f"not a banded CL config in either shape: {e}"
-        raise DeserializeException(msg) from e
 
 
 @dataclass
@@ -1482,17 +1382,6 @@ class BandedCLEntry(PlutusData):
 
 
 @dataclass
-class BandedCLEntryV0(PlutusData):
-    """A pre-index Operate entry: :class:`BandedCLEntry` with a three-field config."""
-
-    CONSTR_ID = 0
-    pool_oref: OutputReference
-    config: BandedCLConfigV0
-    counter: int
-    active_band: int
-
-
-@dataclass
 class BandedCLCreate(PlutusData):
     """Banded CL module ``Create`` (constructor 0).
 
@@ -1507,29 +1396,11 @@ class BandedCLCreate(PlutusData):
 
 
 @dataclass
-class BandedCLCreateV0(PlutusData):
-    """A pre-index ``Create``: :class:`BandedCLCreate` with a three-field config."""
-
-    CONSTR_ID = 0
-    initial_state: BandedCLConfigV0
-    pool_output_index: int
-    initial_band: int
-
-
-@dataclass
 class BandedCLOperate(PlutusData):
     """Banded CL module ``Operate`` (constructor 1)."""
 
     CONSTR_ID = 1
     entries: list[BandedCLEntry]
-
-
-@dataclass
-class BandedCLOperateV0(PlutusData):
-    """A pre-index ``Operate`` (constructor 1): entries carrying three-field configs."""
-
-    CONSTR_ID = 1
-    entries: list[BandedCLEntryV0]
 
 
 @dataclass
@@ -2026,6 +1897,9 @@ _STRATEGY_ORDER_HASHES: frozenset[bytes] = _validator_hashes("strategy_order.wit
 # A module validator's blueprint title: ``<kind>.withdraw``, or
 # ``<kind>.withdraw.superseded<N>`` for a build pools were upgraded off.
 _MODULE_TITLE = re.compile(r"(?P<kind>.+)\.withdraw(?:\.superseded\d+)?")
+# A module whose upstream title stem is not its kind's name.
+_MODULE_KIND_ALIASES = {"banded_concentrated_liquidity": "banded_cl"}
+_BANDED_CL_TITLE = "banded_concentrated_liquidity.withdraw"
 
 
 @dataclass(frozen=True)
@@ -2086,14 +1960,16 @@ class SundaeV4Deployment:
 
         Module validators are registered under ``<kind>.withdraw``, and a build that
         pools were upgraded off under ``<kind>.withdraw.superseded<N>``; anything
-        else (the vault, order and settings validators) is not a module.
+        else (the vault, order and settings validators) is not a module. The
+        upstream ``banded_concentrated_liquidity`` titles are the ``banded_cl`` kind.
         """
         for title, applied in self.validators.items():
             if bytes.fromhex(applied) != script_hash:
                 continue
             match = _MODULE_TITLE.fullmatch(title)
             if match is not None:
-                return match.group("kind")
+                kind = match.group("kind")
+                return _MODULE_KIND_ALIASES.get(kind, kind)
         return None
 
     @property
@@ -2138,21 +2014,7 @@ class SundaeV4Deployment:
         Raises:
             KeyError: the module is not deployed on this network.
         """
-        return self.validator("banded_cl.withdraw")
-
-    def module_hashes(self, kind: str) -> frozenset[bytes]:
-        """Every applied hash of module ``kind`` on this network, superseded included.
-
-        A pool keeps the module hash it was created under until a governance
-        upgrade moves it, so the redeemer that carries a pool's config may belong
-        to any build of the kind.
-        """
-        return frozenset(
-            bytes.fromhex(applied)
-            for title, applied in self.validators.items()
-            if (match := _MODULE_TITLE.fullmatch(title)) is not None
-            and match.group("kind") == kind
-        )
+        return self.validator(_BANDED_CL_TITLE)
 
     def config_token(self, label: str) -> bytes:
         """The token name of the settings node labelled ``label``."""
@@ -2244,12 +2106,7 @@ _CONFIG_TYPES: dict[str, type[PlutusData]] = {
     "concentrated_liquidity": ConcentratedLiquidityConfig,
     "fee_split": FeeSplitConfig,
     "stableswap": StableSwapConfig,
-}
-# A kind whose config has more than one serialised shape decodes through a
-# parser rather than one dataclass: banded CL accepts the pre-index shape too.
-_CONFIG_PARSERS: dict[str, Callable[[bytes], PlutusData]] = {
-    **{kind: typed.from_cbor for kind, typed in _CONFIG_TYPES.items()},
-    "banded_cl": parse_banded_cl_config,
+    "banded_cl": BandedCLConfig,
 }
 _CREATE_TAG = 121  # constructor 0
 _OPERATE_TAG = 122  # constructor 1
@@ -2278,13 +2135,13 @@ def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
         ]
     else:
         return []
-    parser = _CONFIG_PARSERS.get(kind or "")
+    typed = _CONFIG_TYPES.get(kind or "")
     candidates: list[Any] = []
     for payload in payloads:
         candidate: Any = RawPlutusData(payload)
-        if parser is not None:
+        if typed is not None:
             try:
-                candidate = parser(candidate.to_cbor())
+                candidate = typed.from_cbor(candidate.to_cbor())
             except (DeserializeException, TypeError, ValueError, KeyError):
                 continue
         candidates.append(candidate)
@@ -2324,27 +2181,24 @@ def _rate_update_rates(
 
 def _matching_config(
     records: list[RedeemerRecord],
-    module_hashes: frozenset[bytes],
+    module_hash: bytes,
     kind: str | None,
     commitment: bytes,
     pool_hash: bytes,
 ) -> Any | None:  # noqa: ANN401
-    """The first config among ``records`` for the module hashing to ``commitment``.
+    """The first config among ``records`` for ``module_hash`` hashing to ``commitment``.
 
-    ``module_hashes`` is every build of the module's kind (the installed hash
-    plus any it superseded): a pool created under an earlier build carries that
-    build's redeemers in its history. Shared by both legs of
-    :meth:`SundaeV4Vault._resolve_from_backend`: the producing transaction's own
-    redeemers and, failing that, each past transaction's redeemers visited while
-    walking the pool NFT's history. For a stableswap module, each candidate is
-    also tried with the rates of every rate-update step in the same transaction;
-    only a hash match is accepted.
+    Shared by both legs of :meth:`SundaeV4Vault._resolve_from_backend`: the
+    producing transaction's own redeemers and, failing that, each past
+    transaction's redeemers visited while walking the pool NFT's history. For a
+    stableswap module, each candidate is also tried with the rates of every
+    rate-update step in the same transaction; only a hash match is accepted.
     """
     rate_sets = _rate_update_rates(records, pool_hash) if kind == "stableswap" else []
     for record in records:
         if not record.script_hash:
             continue
-        if bytes.fromhex(record.script_hash) not in module_hashes:
+        if bytes.fromhex(record.script_hash) != module_hash:
             continue
         for candidate in _config_candidates(record.data_cbor, kind):
             if module_config_hash(candidate) == commitment:
@@ -2689,6 +2543,8 @@ class SundaeV4Vault(DendriteBaseModel):
 
         Raises:
             NotImplementedError: an invariant kind without a pool type yet.
+            InvalidPoolError: a pool type refuses the binding (see
+                :meth:`SundaeV4BandedCLPool._check_binding`) or its config.
             ModuleConfigUnavailableError: a config could not be resolved.
         """
         out: list[SundaeV4Pool] = []
@@ -2697,6 +2553,7 @@ class SundaeV4Vault(DendriteBaseModel):
             if pool_type is None:
                 msg = f"SundaeV4Vault: no pool type for the {kind} module yet."
                 raise NotImplementedError(msg)
+            pool_type._check_binding(self, tag)
             out.append(pool_type.from_vault(self, tag, self.module_config(module)))
         return out
 
@@ -2773,9 +2630,7 @@ class SundaeV4Vault(DendriteBaseModel):
         history is walked newest to oldest, via the active backend's
         ``get_pool_utxos``, until a past transaction's redeemers commit to this
         config; the pool's creation transaction, at the bottom of that history,
-        always carries the module's ``Create`` redeemer — under whichever build
-        of the module the pool was created with, so every build of the kind is
-        accepted and the match is by hash alone.
+        always carries the module's ``Create`` redeemer.
 
         Raises:
             ModuleConfigUnavailableError: the active backend cannot read
@@ -2784,16 +2639,13 @@ class SundaeV4Vault(DendriteBaseModel):
         """
         kind = self.module_kind(module_hash)
         pool_hash = self._deployment.pool_hash
-        builds = frozenset({module_hash})
-        if kind is not None:
-            builds |= self._deployment.module_hashes(kind)
         records = self._redeemers_or_unavailable(self.tx_hash, module_hash)
-        config = _matching_config(records, builds, kind, commitment, pool_hash)
+        config = _matching_config(records, module_hash, kind, commitment, pool_hash)
         if config is not None:
             return config
         for tx_hash in self._history_tx_hashes(module_hash):
             records = self._redeemers_or_unavailable(tx_hash, module_hash)
-            config = _matching_config(records, builds, kind, commitment, pool_hash)
+            config = _matching_config(records, module_hash, kind, commitment, pool_hash)
             if config is not None:
                 return config
         msg = (
@@ -3185,6 +3037,13 @@ class _SundaeV4BoundPool(_SundaeV4OrderBuilders):
             ...
 
     _deposit_rider: ClassVar[Assets] = Assets(lovelace=_ORDER_RIDER)
+
+    @classmethod
+    def _check_binding(cls, vault: SundaeV4Vault, tag: int) -> None:
+        """Refuse a binding on ``tag`` this pool type cannot price; none by default.
+
+        :meth:`SundaeV4Vault.pools` runs it before resolving the module's config.
+        """
 
     @classmethod
     def dex(cls) -> str:
@@ -3592,12 +3451,207 @@ class SundaeV4ConstantSumPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         )
 
 
-# A stableswap pool prices exactly two reserves; a ledger quantity is below 2**64.
-_STABLESWAP_ASSETS = 2
+# A two-asset pool prices exactly two reserves; a ledger quantity is below 2**64.
+_TWO_ASSETS = 2
 _LEDGER_MAX = 2**64 - 1
 
 
-class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
+class _SundaeV4TwoAssetPool(_SundaeV4BoundPool):
+    """The quote and liquidity surface of a pool type that prices two reserves.
+
+    A pool type supplies its curve through four hooks: :meth:`_takes`, the exact
+    output for an offer (non-decreasing in it); :meth:`_fills`, the output
+    :meth:`get_amount_out` reports (:meth:`_takes` unless the pool may absorb less
+    than the whole offer); :meth:`_swap_fee`, the fee the marginal-rate estimate
+    in :meth:`get_amount_in` grosses up by; and :meth:`_measure`, the measure a
+    proportional liquidity move scales (see :func:`_pinned_deposit`).
+    ``_pool_noun`` names the pool type in messages.
+    """
+
+    _pool_noun: ClassVar[str]
+
+    if TYPE_CHECKING:
+        total_lp: int
+
+        def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
+            ...
+
+    def _takes(self, unit_in: str, out_unit: str, amount: int) -> int:
+        """The exact output for ``amount`` of ``unit_in``; non-decreasing in it."""
+        raise NotImplementedError
+
+    def _fills(self, unit_in: str, out_unit: str, amount: int) -> int:
+        """The output :meth:`get_amount_out` reports for ``amount`` of ``unit_in``."""
+        return self._takes(unit_in, out_unit, amount)
+
+    def _swap_fee(self, unit_in: str) -> tuple[int, int]:
+        """The marginal swap fee of a trade offering ``unit_in``, ``(num, den)``."""
+        raise NotImplementedError
+
+    def _measure(self) -> int:
+        """The measure a proportional liquidity move scales."""
+        raise NotImplementedError
+
+    @classmethod
+    def _snapshot(cls, vault: SundaeV4Vault) -> dict[str, Any]:
+        """The vault's ``reserves`` and ``total_lp``, copied so a quote never moves it.
+
+        Raises:
+            InvalidPoolError: the vault's datum order and reserve units disagree.
+        """
+        if set(vault.datum_units) != set(vault.reserves.root):
+            msg = (
+                f"{cls.__name__}: the vault's datum order and reserve units "
+                "disagree."
+            )
+            raise InvalidPoolError(msg)
+        return {
+            "reserves": Assets(**dict(vault.reserves.root)),
+            "total_lp": vault.total_lp,
+        }
+
+    def _check_pair(self, asset: Assets, out_unit: str) -> str:
+        """The offered unit of a one-asset offer for ``out_unit``.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
+                one reserve other than ``out_unit`` with a non-negative quantity.
+        """
+        units = self.vault.datum_units
+        if out_unit not in units:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        if len(asset) != 1:
+            msg = f"A {self._pool_noun} pool takes exactly one offered asset."
+            raise ValueError(msg)
+        unit = asset.unit()
+        if unit not in units or unit == out_unit:
+            msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
+            raise ValueError(msg)
+        if asset.quantity() < 0:
+            msg = f"Offered quantity of {unit} is negative."
+            raise ValueError(msg)
+        return unit
+
+    def get_amount_out(
+        self,
+        asset: Assets,
+        out_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """The exact output of ``out_unit`` for ``asset``, and the price impact.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
+                one other reserve.
+        """
+        unit_in = self._check_pair(asset, out_unit)
+        amount = asset.quantity()
+        takes = self._fills(unit_in, out_unit, amount)
+        out = Assets(**{out_unit: takes})
+        if takes == 0:
+            return out, 0.0
+        p_in, p_out = self.price(unit_in, out_unit)
+        return out, 1.0 - (takes * p_out) / (amount * p_in)
+
+    def max_output(self, out_unit: str) -> int:
+        """The smallest undeliverable output of ``out_unit``.
+
+        One past what the largest ledger offer of the other reserve buys: the
+        output never decreases as the offer grows, and no offer exceeds the ledger.
+
+        Raises:
+            ValueError: ``out_unit`` is not a reserve of this pool.
+        """
+        units = self.vault.datum_units
+        if out_unit not in units:
+            msg = f"out_unit {out_unit} is not a reserve of this pool."
+            raise ValueError(msg)
+        (unit_in,) = (unit for unit in units if unit != out_unit)
+        return self._takes(unit_in, out_unit, _LEDGER_MAX) + 1
+
+    def get_amount_in(
+        self,
+        asset: Assets,
+        in_unit: str,
+        precise: bool = True,
+    ) -> tuple[Assets, float]:
+        """The minimum ``in_unit`` whose exact output reaches the one-asset ``asset``.
+
+        The output never decreases as the offer grows, so the minimum is found by
+        stepping up from the marginal-rate estimate and bisecting.
+
+        Raises:
+            ValueError: ``asset`` is not exactly one reserve, ``in_unit`` is not the
+                other reserve, or the amount is not positive.
+            InvalidPoolError: no ledger quantity of ``in_unit`` reaches the output
+                (it is at or past :meth:`max_output`).
+        """
+        if len(asset) != 1:
+            msg = "The desired output must be exactly one asset."
+            raise ValueError(msg)
+        out_unit, desired = asset.unit(), asset.quantity()
+        self._check_pair(Assets(**{in_unit: 1}), out_unit)
+        if desired <= 0:
+            msg = "The desired output must be positive."
+            raise ValueError(msg)
+        if desired >= self.max_output(out_unit):
+            msg = (
+                f"{type(self).__name__}: no amount of {in_unit} reaches {desired} "
+                f"of {out_unit}."
+            )
+            raise InvalidPoolError(msg)
+        p_in, p_out = self.price(in_unit, out_unit)
+        fee_num, fee_den = self._swap_fee(in_unit)
+        guess = -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num)))
+        hi = min(max(guess, 1), _LEDGER_MAX)
+        lo = 1
+        step = max(1, hi // 1024)
+        while self._takes(in_unit, out_unit, hi) < desired:
+            lo = hi + 1
+            hi = min(_LEDGER_MAX, hi + step)
+            step *= 2
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self._takes(in_unit, out_unit, mid) >= desired:
+                hi = mid
+            else:
+                lo = mid + 1
+        return Assets(**{in_unit: lo}), 1.0 - (desired * p_out) / (lo * p_in)
+
+    # -- liquidity ------------------------------------------------------------
+
+    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
+        """The proportional deposit the vault accepts for ``offered``.
+
+        ``deltas`` is aligned to the vault's declaration order
+        (``vault.datum_units``); the measure is :meth:`_measure`.
+        """
+        order = self.vault.datum_units
+        return _pinned_deposit(
+            [self.reserves.root[u] for u in order],
+            self._measure(),
+            [offered.root.get(u, 0) for u in order],
+            self.total_lp,
+            self._pool_noun,
+        )
+
+    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
+        """The proportional payout for redeeming ``lp`` LP tokens.
+
+        ``payouts`` is aligned to the vault's declaration order
+        (``vault.datum_units``); the measure is :meth:`_measure`.
+        """
+        order = self.vault.datum_units
+        return _pinned_withdraw(
+            [self.reserves.root[u] for u in order],
+            self._measure(),
+            lp,
+            self.total_lp,
+        )
+
+
+class SundaeV4StableSwapPool(_SundaeV4TwoAssetPool, AbstractMultiAssetPoolState):
     """The stableswap module bound to a vault on one action tag.
 
     A two-asset Curve curve ``4A(x + y) + D = 4AD + D^3 / (4xy)`` over reserves
@@ -3613,6 +3667,8 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    _pool_noun: ClassVar[str] = "stableswap"
 
     vault: SundaeV4Vault
     tag: int
@@ -3637,21 +3693,13 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
                 the amplification or a rate is not positive.
         """
         rate_list = [int(r) for r in _list_items(config.rates)]
-        if (
-            len(vault.datum_units) != _STABLESWAP_ASSETS
-            or len(rate_list) != _STABLESWAP_ASSETS
-        ):
+        if len(vault.datum_units) != _TWO_ASSETS or len(rate_list) != _TWO_ASSETS:
             msg = (
                 f"SundaeV4StableSwapPool: {len(rate_list)} rates for "
                 f"{len(vault.datum_units)} reserves; a stableswap pool prices two."
             )
             raise InvalidPoolError(msg)
-        if set(vault.datum_units) != set(vault.reserves.root):
-            msg = (
-                "SundaeV4StableSwapPool: the vault's datum order and reserve units "
-                "disagree."
-            )
-            raise InvalidPoolError(msg)
+        snapshot = cls._snapshot(vault)
         if config.linear_amplification <= 0 or min(rate_list) <= 0:
             msg = (
                 "SundaeV4StableSwapPool: the amplification and every rate must be "
@@ -3662,9 +3710,8 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
             vault=vault,
             tag=tag,
             config=config,
-            reserves=Assets(**dict(vault.reserves.root)),
-            total_lp=vault.total_lp,
             rates=dict(zip(vault.datum_units, rate_list)),
+            **snapshot,
         )
 
     # -- config ---------------------------------------------------------------
@@ -3697,6 +3744,14 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         """The config's swap fee as ``(num, den)``."""
         return (self.config.fee.num, self.config.fee.den)
 
+    def _swap_fee(self, unit_in: str) -> tuple[int, int]:
+        """The config's swap fee, whichever reserve is offered."""
+        return self._fee()
+
+    def _measure(self) -> int:
+        """The invariant ``D``: a stableswap pool's liquidity measure."""
+        return self.sum_invariant()
+
     # -- curve ----------------------------------------------------------------
 
     def _scaled(self, unit: str) -> int:
@@ -3722,28 +3777,6 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         d = stableswap_d(self.amp, self._scaled(a), self._scaled(b))
         self._d_memo = (key, d)
         return d
-
-    def _check_pair(self, asset: Assets, out_unit: str) -> str:
-        """The offered unit of a one-asset offer for ``out_unit``.
-
-        Raises:
-            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
-                one reserve other than ``out_unit`` with a non-negative quantity.
-        """
-        if out_unit not in self.rates:
-            msg = f"out_unit {out_unit} is not a reserve of this pool."
-            raise ValueError(msg)
-        if len(asset) != 1:
-            msg = "A stableswap pool takes exactly one offered asset."
-            raise ValueError(msg)
-        unit = asset.unit()
-        if unit not in self.rates or unit == out_unit:
-            msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
-            raise ValueError(msg)
-        if asset.quantity() < 0:
-            msg = f"Offered quantity of {unit} is negative."
-            raise ValueError(msg)
-        return unit
 
     def _takes(self, unit_in: str, out_unit: str, amount: int) -> int:
         """The exact output for ``amount`` of ``unit_in``.
@@ -3783,129 +3816,8 @@ class SundaeV4StableSwapPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         d_cubed = d * d * d
         return (rate_in * (base + d_cubed * y), rate_out * (base + d_cubed * x))
 
-    def get_amount_out(
-        self,
-        asset: Assets,
-        out_unit: str,
-        precise: bool = True,
-    ) -> tuple[Assets, float]:
-        """The exact output of ``out_unit`` for ``asset``, and the price impact.
 
-        The only amount the validator admits; zero for a zero offer or a vault with
-        an empty side.
-
-        Raises:
-            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
-                one other reserve.
-        """
-        unit_in = self._check_pair(asset, out_unit)
-        amount = asset.quantity()
-        takes = self._takes(unit_in, out_unit, amount)
-        out = Assets(**{out_unit: takes})
-        if takes == 0:
-            return out, 0.0
-        p_in, p_out = self.price(unit_in, out_unit)
-        return out, 1.0 - (takes * p_out) / (amount * p_in)
-
-    def max_output(self, out_unit: str) -> int:
-        """The smallest undeliverable output of ``out_unit``.
-
-        One past what the largest ledger offer of the other reserve buys: the
-        output never decreases as the offer grows, and no offer exceeds the ledger.
-
-        Raises:
-            ValueError: ``out_unit`` is not a reserve of this pool.
-        """
-        if out_unit not in self.rates:
-            msg = f"out_unit {out_unit} is not a reserve of this pool."
-            raise ValueError(msg)
-        (unit_in,) = (unit for unit in self.rates if unit != out_unit)
-        return self._takes(unit_in, out_unit, _LEDGER_MAX) + 1
-
-    def get_amount_in(
-        self,
-        asset: Assets,
-        in_unit: str,
-        precise: bool = True,
-    ) -> tuple[Assets, float]:
-        """The minimum ``in_unit`` whose exact output reaches the one-asset ``asset``.
-
-        The output never decreases as the offer grows, so the minimum is found by
-        stepping up from the marginal-rate estimate and bisecting.
-
-        Raises:
-            ValueError: ``asset`` is not exactly one reserve, ``in_unit`` is not the
-                other reserve, or the amount is not positive.
-            InvalidPoolError: no ledger quantity of ``in_unit`` reaches the output
-                (it is at or past :meth:`max_output`).
-        """
-        if len(asset) != 1:
-            msg = "The desired output must be exactly one asset."
-            raise ValueError(msg)
-        out_unit, desired = asset.unit(), asset.quantity()
-        self._check_pair(Assets(**{in_unit: 1}), out_unit)
-        if desired <= 0:
-            msg = "The desired output must be positive."
-            raise ValueError(msg)
-        if desired >= self.max_output(out_unit):
-            msg = (
-                f"SundaeV4StableSwapPool: no amount of {in_unit} reaches {desired} "
-                f"of {out_unit}."
-            )
-            raise InvalidPoolError(msg)
-        p_in, p_out = self.price(in_unit, out_unit)
-        fee_num, fee_den = self._fee()
-        guess = -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num)))
-        hi = min(max(guess, 1), _LEDGER_MAX)
-        lo = 1
-        step = max(1, hi // 1024)
-        while self._takes(in_unit, out_unit, hi) < desired:
-            lo = hi + 1
-            hi = min(_LEDGER_MAX, hi + step)
-            step *= 2
-        while lo < hi:
-            mid = (lo + hi) // 2
-            if self._takes(in_unit, out_unit, mid) >= desired:
-                hi = mid
-            else:
-                lo = mid + 1
-        return Assets(**{in_unit: lo}), 1.0 - (desired * p_out) / (lo * p_in)
-
-    # -- liquidity ------------------------------------------------------------
-
-    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
-        """The proportional deposit the vault accepts for ``offered``.
-
-        ``deltas`` is aligned to the vault's declaration order
-        (``vault.datum_units``).
-        """
-        order = self.vault.datum_units
-        return stableswap_pinned_deposit(
-            reserves=[self.reserves.root[u] for u in order],
-            d=self.sum_invariant(),
-            offered=[offered.root.get(u, 0) for u in order],
-            total_lp=self.total_lp,
-        )
-
-    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
-        """The proportional payout for redeeming ``lp`` LP tokens.
-
-        ``payouts`` is aligned to the vault's declaration order
-        (``vault.datum_units``).
-        """
-        order = self.vault.datum_units
-        return stableswap_pinned_withdraw(
-            reserves=[self.reserves.root[u] for u in order],
-            d=self.sum_invariant(),
-            lp=lp,
-            total_lp=self.total_lp,
-        )
-
-
-_BANDED_ASSETS = 2
-
-
-class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
+class SundaeV4BandedCLPool(_SundaeV4TwoAssetPool, AbstractMultiAssetPoolState):
     """The banded concentrated-liquidity module bound to a vault on one action tag.
 
     Two reserves: asset A is the vault's first declared reserve and asset B its
@@ -3921,10 +3833,19 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
     Every quote is the exact integer the chain pays (floor division in the
     pool's favour at every step; see
     :mod:`~charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`), so an order's
-    ``min_received`` set from it, less slippage, is what a scooper can fill.
+    ``min_received`` set from it, less slippage, is what a scooper can fill. An
+    offer one scoop cannot fill in full (the ladder runs out, or a crossing
+    would lower the ladder counter) quotes zero, as a constant-sum step does;
+    :meth:`quote` reports how much of it the ladder absorbs, and
+    :meth:`get_amount_in` only names offers it absorbs in full. Only the current
+    build of the module is priced, and not a vault whose trade action also binds
+    a module the manifest does not know, such as an oracle-enabled banded pool's
+    oracle module.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    _pool_noun: ClassVar[str] = "banded CL"
 
     vault: SundaeV4Vault
     tag: int
@@ -3932,9 +3853,7 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
     total_lp: int
     ladder: Ladder
 
-    _witness_memo: tuple[tuple[int, int], Witness | None] | None = PrivateAttr(
-        default=None,
-    )
+    _memo: tuple[tuple[int, int], dict[Any, Any]] | None = PrivateAttr(default=None)
 
     @classmethod
     def from_vault(
@@ -3946,23 +3865,26 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         """Bind the banded CL module's ``config`` to ``vault`` on action ``tag``.
 
         Raises:
-            InvalidPoolError: the vault does not declare exactly two reserves, its
-                datum order and reserve units disagree, the ladder fails the
-                module's shape checks, or the config's index is not the one its
-                bands derive.
+            InvalidPoolError: the binding is refused (:meth:`_check_binding`),
+                ``config`` is not a :class:`BandedCLConfig`, the vault does not
+                declare exactly two reserves, its datum order and reserve units
+                disagree, the ladder fails the module's shape checks, or the
+                config's index is not the one its bands derive.
         """
-        if len(vault.datum_units) != _BANDED_ASSETS:
+        cls._check_binding(vault, tag)
+        if not isinstance(config, BandedCLConfig):
+            msg = (
+                f"SundaeV4BandedCLPool: the config is a {type(config).__name__}, "
+                "not a BandedCLConfig."
+            )
+            raise InvalidPoolError(msg)
+        if len(vault.datum_units) != _TWO_ASSETS:
             msg = (
                 f"SundaeV4BandedCLPool: {len(vault.datum_units)} reserves; a banded "
                 "pool prices two."
             )
             raise InvalidPoolError(msg)
-        if set(vault.datum_units) != set(vault.reserves.root):
-            msg = (
-                "SundaeV4BandedCLPool: the vault's datum order and reserve units "
-                "disagree."
-            )
-            raise InvalidPoolError(msg)
+        snapshot = cls._snapshot(vault)
         bands = list(config.bands)
         try:
             ladder = banded_cl_ladder(bands, config.closing, config.weight_total)
@@ -3973,14 +3895,38 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         if committed != list(ladder.index):
             msg = "SundaeV4BandedCLPool: the config's index is not its bands' index."
             raise InvalidPoolError(msg)
-        return cls(
-            vault=vault,
-            tag=tag,
-            config=config,
-            reserves=Assets(**dict(vault.reserves.root)),
-            total_lp=vault.total_lp,
-            ladder=ladder,
-        )
+        return cls(vault=vault, tag=tag, config=config, ladder=ladder, **snapshot)
+
+    @classmethod
+    def _check_binding(cls, vault: SundaeV4Vault, tag: int) -> None:
+        """Refuse a superseded build of the module, or a module the manifest lacks.
+
+        Only the current build of the banded CL module is priced: a superseded
+        build commits to an older config shape. A trade action that also binds a
+        module the deployment does not know (the oracle module of an
+        oracle-enabled banded pool is one) may constrain the trade in ways this
+        type does not model, so it is not priced either.
+
+        Raises:
+            InvalidPoolError: either case.
+        """
+        deployment = vault.deployment()
+        modules = vault.modules_for(tag)
+        current = deployment.validators.get(_BANDED_CL_TITLE)
+        if current is None or bytes.fromhex(current) not in modules:
+            msg = (
+                f"SundaeV4BandedCLPool: action {tag} does not bind the current "
+                "build of the banded CL module; a superseded build is not priced."
+            )
+            raise InvalidPoolError(msg)
+        unknown = [m.hex() for m in modules if deployment.module_kind(m) is None]
+        if unknown:
+            msg = (
+                f"SundaeV4BandedCLPool: action {tag} also binds "
+                f"{', '.join(unknown)}, a module this deployment does not know; "
+                "it is not priced."
+            )
+            raise InvalidPoolError(msg)
 
     # -- config ---------------------------------------------------------------
 
@@ -3994,38 +3940,43 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         """The unit of asset B (the vault's second declared reserve)."""
         return self.vault.datum_units[1]
 
-    @property
-    def bands(self) -> tuple[Band, ...]:
-        """The ladder's bands in ascending price order, as exact integers."""
-        return self.ladder.bands
-
-    def band_fee(self, k: int, unit_in: str) -> tuple[int, int]:
-        """Band ``k``'s fee for a trade offering ``unit_in``, as ``(num, den)``.
-
-        Raises:
-            ValueError: ``unit_in`` is not a reserve of this pool.
-        """
-        return self.ladder.bands[k].fee(self._a_is_input(unit_in))
-
     # -- witness --------------------------------------------------------------
 
     def _ab(self) -> tuple[int, int]:
         return (self.reserves.root[self.asset_a], self.reserves.root[self.asset_b])
 
-    def witness(self) -> Witness | None:
-        """The band proof's solution for the current reserves, or ``None``.
+    def _cached(self) -> dict[Any, Any]:
+        """Per-state memos (witnesses, drains), keyed on the reserves themselves.
 
-        The ladder counter, the active band and the band's own holdings. Memoised
-        on the reserves themselves, so a move made directly on ``reserves`` or
-        through :meth:`apply_swap` never serves a stale witness. ``None`` means no
-        band admits the reserves: the pool is unpriceable and quotes zero.
+        A move made directly on ``reserves`` or through :meth:`apply_swap` starts
+        a fresh memo, so a stale value is never served.
         """
         key = self._ab()
-        if self._witness_memo is not None and self._witness_memo[0] == key:
-            return self._witness_memo[1]
-        found = find_witness(self.ladder, *key)
-        self._witness_memo = (key, found)
-        return found
+        if self._memo is None or self._memo[0] != key:
+            self._memo = (key, {})
+        return self._memo[1]
+
+    def witness(self, a_is_input: bool | None = None) -> Witness | None:
+        """The band proof's solution for the current reserves, or ``None``.
+
+        The ladder counter, the active band and the band's own holdings. ``None``
+        means no band admits the reserves: the pool is unpriceable and quotes
+        zero. A state exactly on a band edge is a witness in both neighbouring
+        bands; ``a_is_input`` picks the one a trade in that direction enters (see
+        :func:`~.sundae_v4_banded_cl_math.directed_witness`).
+        """
+        cached = self._cached()
+        if a_is_input not in cached:
+            if a_is_input is None:
+                cached[None] = find_witness(self.ladder, *self._ab())
+            else:
+                cached[a_is_input] = directed_witness(
+                    self.ladder,
+                    *self._ab(),
+                    a_is_input,
+                    self.witness(),
+                )
+        return cached[a_is_input]
 
     @property
     def active_band(self) -> int | None:
@@ -4043,34 +3994,14 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         msg = f"Unit {unit_in} is not a reserve of this pool."
         raise ValueError(msg)
 
-    def _check_pair(self, asset: Assets, out_unit: str) -> str:
-        """The offered unit of a one-asset offer for ``out_unit``.
-
-        Raises:
-            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
-                one reserve other than ``out_unit`` with a non-negative quantity.
-        """
-        if out_unit not in (self.asset_a, self.asset_b):
-            msg = f"out_unit {out_unit} is not a reserve of this pool."
-            raise ValueError(msg)
-        if len(asset) != 1:
-            msg = "A banded CL pool takes exactly one offered asset."
-            raise ValueError(msg)
-        unit = asset.unit()
-        if unit not in (self.asset_a, self.asset_b) or unit == out_unit:
-            msg = f"Offered unit {unit} is not a reserve distinct from {out_unit}."
-            raise ValueError(msg)
-        if asset.quantity() < 0:
-            msg = f"Offered quantity of {unit} is negative."
-            raise ValueError(msg)
-        return unit
-
     def quote(self, unit_in: str, amount: int) -> BandedQuote:
         """The exact quote for ``amount`` of ``unit_in``, band crossings included.
 
-        ``amount_out`` is what the pool pays; ``spent`` is below ``amount`` only
-        when the ladder is exhausted (the pool then holds none of the output
-        asset) or the state is unpriceable. Zero output for no offer.
+        ``amount_out`` is what the pool pays for the part of the offer one scoop
+        can fill, ``spent``; ``spent`` is below ``amount`` when the ladder cannot
+        absorb the whole offer (see
+        :func:`~.sundae_v4_banded_cl_math.banded_quote`), and :meth:`get_amount_out`
+        then quotes zero. Zero output for no offer.
 
         Raises:
             ValueError: ``unit_in`` is not a reserve of this pool.
@@ -4079,13 +4010,30 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         a, b = self._ab()
         if amount <= 0:
             return BandedQuote(amount_out=0, spent=0, bands=(), reserves_after=(a, b))
-        return banded_quote(self.ladder, a, b, amount, a_is_input, self.witness())
+        start = self.witness(a_is_input)
+        cached = self._cached()
+        key = ("drain", a_is_input)
+        quote = banded_quote(
+            self.ladder,
+            a,
+            b,
+            amount,
+            a_is_input,
+            start,
+            cached.get(key),
+        )
+        if amount >= _LEDGER_MAX:
+            # The ledger-max quote (:meth:`max_output`'s) walks every band in this
+            # direction; later quotes from this state reuse its band crossings.
+            cached.setdefault(key, quote)
+        return quote
 
     def price(self, unit_in: str, unit_out: str) -> tuple[int, int]:
         """The active band's fee-exclusive marginal rate as weights ``(p_in, p_out)``.
 
         Out per in at the margin is ``p_in / p_out``: a CL band's virtual-reserve
-        ratio, a constant-sum bin's fixed price. An unpriceable pool reports
+        ratio, a constant-sum bin's fixed price. On a band edge it is the margin of
+        the band a trade from ``unit_in`` enters. An unpriceable pool reports
         ``(0, 1)``.
 
         Raises:
@@ -4096,49 +4044,46 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         if self._a_is_input(unit_out) == a_is_input:
             msg = "unit_in and unit_out must be the pool's two reserves."
             raise ValueError(msg)
-        found = self.witness()
+        found = self.witness(a_is_input)
         if found is None:
             return (0, 1)
         return marginal_price(found, self.ladder.bands[found.band], a_is_input)
 
-    def get_amount_out(
-        self,
-        asset: Assets,
-        out_unit: str,
-        precise: bool = True,
-    ) -> tuple[Assets, float]:
-        """The exact output of ``out_unit`` for ``asset``, and the price impact.
+    def _takes(self, unit_in: str, out_unit: str, amount: int) -> int:
+        """The ladder's output for the part of ``amount`` it absorbs (:meth:`quote`)."""
+        return self.quote(unit_in, amount).amount_out
 
-        The output the chain pays for the whole offer, across as many bands as it
-        crosses. When the ladder cannot absorb the whole offer the output is what
-        the ladder does pay for the part it absorbs; :meth:`quote` reports how
-        much was spent.
+    def _fills(self, unit_in: str, out_unit: str, amount: int) -> int:
+        """The output for the whole offer, or zero when the ladder cannot absorb it.
 
-        Raises:
-            ValueError: ``out_unit`` is not a reserve, or ``asset`` is not exactly
-                one other reserve.
+        As :class:`SundaeV4ConstantSumPool` does, an offer one scoop cannot fill
+        in full quotes zero rather than a partial fill.
         """
-        unit_in = self._check_pair(asset, out_unit)
-        amount = asset.quantity()
-        result = self.quote(unit_in, amount)
-        out = Assets(**{out_unit: result.amount_out})
-        if result.amount_out == 0:
-            return out, 0.0
-        p_in, p_out = self.price(unit_in, out_unit)
-        return out, 1.0 - (result.amount_out * p_out) / (amount * p_in)
+        quote = self.quote(unit_in, amount)
+        return quote.amount_out if quote.spent == amount else 0
+
+    def _swap_fee(self, unit_in: str) -> tuple[int, int]:
+        """The fee of the band a trade offering ``unit_in`` starts in."""
+        a_is_input = self._a_is_input(unit_in)
+        found = self.witness(a_is_input)
+        if found is None:
+            return (0, 1)
+        return self.ladder.bands[found.band].fee(a_is_input)
 
     def max_output(self, out_unit: str) -> int:
-        """The smallest undeliverable output of ``out_unit``.
+        """The smallest undeliverable output of ``out_unit``, memoised per state.
 
-        One past what the largest ledger offer of the other reserve buys: the
-        ladder pays out at most the pool's whole holding of ``out_unit``.
+        One past what the largest offer the ladder absorbs in full buys: the
+        output of the ledger-max offer, which the ladder absorbs up to its end.
 
         Raises:
             ValueError: ``out_unit`` is not a reserve of this pool.
         """
-        a_is_out = self._a_is_input(out_unit)
-        unit_in = self.asset_b if a_is_out else self.asset_a
-        return self.quote(unit_in, _LEDGER_MAX).amount_out + 1
+        cached = self._cached()
+        key = ("max_output", out_unit)
+        if key not in cached:
+            cached[key] = super().max_output(out_unit)
+        return cached[key]
 
     def get_amount_in(
         self,
@@ -4146,82 +4091,30 @@ class SundaeV4BandedCLPool(_SundaeV4BoundPool, AbstractMultiAssetPoolState):
         in_unit: str,
         precise: bool = True,
     ) -> tuple[Assets, float]:
-        """The minimum ``in_unit`` whose exact output reaches the one-asset ``asset``.
+        """An ``in_unit`` offer that reaches ``asset`` and the ladder absorbs in full.
 
-        The output never decreases as the offer grows, so the minimum is found by
-        stepping up from the marginal-rate estimate and bisecting.
+        Draining the ladder's last band can leave the end bounded only at some
+        inputs, so the search may land on an offer the ladder does not absorb in
+        full; the part it absorbs pays the same output and is returned instead.
+        Outside such a drain the offer is the least that reaches ``asset``.
 
         Raises:
             ValueError: ``asset`` is not exactly one reserve, ``in_unit`` is not the
                 other reserve, or the amount is not positive.
-            InvalidPoolError: no ledger quantity of ``in_unit`` reaches the output
-                (it is at or past :meth:`max_output`).
+            InvalidPoolError: no ledger quantity of ``in_unit`` reaches the output.
         """
-        if len(asset) != 1:
-            msg = "The desired output must be exactly one asset."
-            raise ValueError(msg)
-        out_unit, desired = asset.unit(), asset.quantity()
-        self._check_pair(Assets(**{in_unit: 1}), out_unit)
-        if desired <= 0:
-            msg = "The desired output must be positive."
-            raise ValueError(msg)
-        if desired >= self.max_output(out_unit):
-            msg = (
-                f"SundaeV4BandedCLPool: no amount of {in_unit} reaches {desired} "
-                f"of {out_unit}."
-            )
-            raise InvalidPoolError(msg)
-        p_in, p_out = self.price(in_unit, out_unit)
-        found = self.witness()
-        fee_num, fee_den = (
-            (0, 1)
-            if found is None
-            else self.ladder.bands[found.band].fee(self._a_is_input(in_unit))
-        )
-        guess = -(-(desired * p_out * fee_den) // (p_in * (fee_den - fee_num)))
-        hi = min(max(guess, 1), _LEDGER_MAX)
-        lo = 1
-        step = max(1, hi // 1024)
-        while self.quote(in_unit, hi).amount_out < desired:
-            lo = hi + 1
-            hi = min(_LEDGER_MAX, hi + step)
-            step *= 2
-        while lo < hi:
-            mid = (lo + hi) // 2
-            if self.quote(in_unit, mid).amount_out >= desired:
-                hi = mid
-            else:
-                lo = mid + 1
-        return Assets(**{in_unit: lo}), 1.0 - (desired * p_out) / (lo * p_in)
-
-    # -- liquidity ------------------------------------------------------------
-
-    def pinned_deposit(self, offered: Assets) -> PinnedDeposit:
-        """The proportional deposit the vault accepts for ``offered``.
-
-        ``deltas`` is aligned to the vault's declaration order
-        (``vault.datum_units``); ``target_delta_v`` is the LP minted. See
-        :func:`banded_cl_pinned_deposit`.
-        """
-        order = self.vault.datum_units
-        return banded_cl_pinned_deposit(
-            reserves=[self.reserves.root[u] for u in order],
-            offered=[offered.root.get(u, 0) for u in order],
-            total_lp=self.total_lp,
+        needed, impact = super().get_amount_in(asset, in_unit, precise)
+        spent = self.quote(in_unit, needed.quantity()).spent
+        if spent == needed.quantity():
+            return needed, impact
+        p_in, p_out = self.price(in_unit, asset.unit())
+        return Assets(**{in_unit: spent}), 1.0 - (asset.quantity() * p_out) / (
+            spent * p_in
         )
 
-    def pinned_withdraw(self, lp: int) -> PinnedWithdraw:
-        """The proportional payout for redeeming ``lp`` LP tokens.
-
-        ``payouts`` is aligned to the vault's declaration order
-        (``vault.datum_units``). See :func:`banded_cl_pinned_withdraw`.
-        """
-        order = self.vault.datum_units
-        return banded_cl_pinned_withdraw(
-            reserves=[self.reserves.root[u] for u in order],
-            lp=lp,
-            total_lp=self.total_lp,
-        )
+    def _measure(self) -> int:
+        """The LP supply: the proportional check scales a banded pool's reserves."""
+        return self.total_lp
 
 
 SundaeV4Pool = Union[
@@ -4271,5 +4164,3 @@ def _asset_amounts(assets: Assets) -> IndefiniteList:
 
 SundaeV4Vault.model_rebuild()
 SundaeV4ConstantSumPool.model_rebuild()
-SundaeV4StableSwapPool.model_rebuild()
-SundaeV4BandedCLPool.model_rebuild()

@@ -56,43 +56,45 @@ minimum received should allow for `max_rate_step` (uncapped when `None`).
 
 ## Banded concentrated-liquidity pools
 
-A banded vault binds the `banded_cl` module (preview only, as of October 2026)
-and prices its two reserves on a **ladder** of sqrt-price bands
-(`BandedCLConfig`): band `k` spans `[bands[k].start, bands[k+1].start]` (the last
-band closes at `closing`), holds `weight / weight_total` of the pool's liquidity,
-charges its own `fee_sell` (A is the input) or `fee_buy` (B is the input), and
-prices as a concentrated-liquidity arc or a constant-sum bin. Asset A is the
-vault's first declared reserve, B the second, and price means B per A.
+A banded vault binds the banded concentrated-liquidity module (the manifest's
+`banded_concentrated_liquidity.withdraw`, the `banded_cl` kind), deployed on
+preview and preprod. It prices its two reserves on a **ladder** of sqrt-price
+bands (`BandedCLConfig`): band `k` spans `[bands[k].start, bands[k+1].start]`
+(the last band closes at `closing`), holds `weight / weight_total` of the pool's
+liquidity, charges its own `fee_sell` (A is the input) or `fee_buy` (B is the
+input), and prices as a concentrated-liquidity arc or a constant-sum bin. Asset A
+is the vault's first declared reserve, B the second, and price means B per A.
 
 The pool stores no price and no active band. Both are derived from the reserves
 by the band proof, as the on-chain module derives them on every spend:
 `pool.witness()` is the ladder counter and active band for the current reserves
 (`pool.active_band` the band alone). A swap prices against the active band and
 crosses into the next band when it exhausts that band's holding of the output
-asset, so a small trade near a band edge uses two bands. `SundaeV4BandedCLPool`
-computes the exact integers the chain pays: `get_amount_out` is the output across
-every band crossed, `get_amount_in` the least input reaching an output,
-`max_output` the smallest unreachable output, `quote` the full picture (output,
-input absorbed, per-band steps, reserves after), and `price` the active band's
-marginal rate. A quote absorbs less than the offer when nothing more can be
-bought: the ladder's last band is drained, or the state sits on a band edge that
-the band being entered does not admit a witness for (integer rounding can
-exclude one side of an edge, and a scooper cannot continue the trade there
-either). The math is checked against the validator's own step check on
-randomised ladders: see `tests/test_sundae_v4_banded_cl_oracle.py`. `pinned_deposit` / `pinned_withdraw` are
-the proportional liquidity moves with the LP supply as the measure. The math is in
-`charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`.
+asset, so a small trade near a band edge uses two bands; a state exactly on an
+edge trades through the band each direction enters. `SundaeV4BandedCLPool`
+computes the exact integers the chain pays: `quote` is the full picture (output,
+input absorbed, per-band steps, reserves after) of the transcript one scoop
+executes, `get_amount_out` the output for the whole offer, `get_amount_in` an
+input that reaches an output, `max_output` the smallest unreachable output, and
+`price` the marginal rate of the band a trade enters. `pinned_deposit` /
+`pinned_withdraw` are the proportional liquidity moves, with the LP supply as the
+measure. The math is in `charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math`.
 
-The ladder is **not in the datum**; `module_state` holds only its hash. It is
-recovered from the module's `Create` / `Operate` redeemers like every other config,
-with two preview-specific twists resolution absorbs: the pools were created under
-a superseded build of the module (every build of a kind is now searched, matching
-by hash alone), and under the pre-index three-field config (`BandedCLConfigV0`),
-whose ladder index a governance upgrade derived on chain — so the committed
-four-field config exists in no redeemer and is rebuilt from the bands
-(`parse_banded_cl_config`), then hash-verified. Pools that are still on the
-superseded build commit to the three-field hash, which the parser does not
-reproduce; every preview pool has been upgraded.
+One scoop may absorb less than an offer: the ladder's last band runs out, the
+remaining input is too small to buy a unit, or crossing into the next band would
+lower the ladder counter, which a scoop's transcript may not do. `quote` reports
+the part it absorbs (`spent`), and `get_amount_out` then returns zero rather than
+a partial fill, as a constant-sum step does; `get_amount_in` only names offers the
+ladder absorbs in full. A quote assumes its order is the first on the pool in its
+scoop: the counter floor carries from one order's steps to the next's.
+
+The ladder is not in the datum; `module_state` holds only its hash, and it is
+recovered from the module's `Create` / `Operate` redeemers like every other
+config. Only the current build of the module is priced: a vault still bound to a
+superseded build fails with `InvalidPoolError`, and so does one whose trade
+action also binds a module the manifest does not know. Oracle-enabled banded
+vaults (the `bcl-oracle-pool` settings node) are not supported; their datums do
+not parse as vaults today.
 
 ## Multi-vault routes
 

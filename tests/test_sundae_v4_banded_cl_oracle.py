@@ -1,33 +1,23 @@
-"""The banded CL math against the validator's own checks, on randomised ladders.
+"""The banded CL math against the validator's own checks, on seeded random ladders.
 
-Two independent references:
+The reference is ``tests/sundae_v4_bcl_oracle.py``, a clause-for-clause Python
+port of ``banded_cl_check.ak``: the *checks* the chain runs on a declared
+transcript, not the quote arithmetic. Ladders and states come from
+``tests/sundae_v4_bcl_ladders.py``, seeded, so every run checks the same cases:
+1 to 9 bands mixing CL arcs and constant-sum bins, uneven weights (1 to 199),
+asymmetric and zero fees, and counters from the weight total to 10^15.
 
-* ``tests/sundae_v4_bcl_oracle.py``, a clause-for-clause Python port of
-  ``banded_cl_check.ak`` (the *check* the chain runs on a declared step, not the
-  quote arithmetic);
-* the recorded fixture ``sundae_v4_banded_cl_vectors.json``, whose every swap step
-  and liquidity move was also run through the real Aiken ``banded_step_ix`` in
-  the sundae-v4 contracts repository (``v4-pool-perf`` at ``b620a7e``, aiken
-  v1.1.24): 1,100 generated tests, 1,100 passed — 480 swap steps accepted and
-  their one-more-unit-out variants rejected, 35 deposits and 35 withdrawals
-  accepted and their short / greedy variants rejected. The generator
-  (``scripts/gen_sundae_v4_banded_cl_vectors.py``) is deterministic and emits
-  that Aiken module alongside the fixture, so the run can be repeated.
-
-The fixture covers 35 ladders of 1 to 9 bands with mixed CL arcs and
-constant-sum bins, uneven weights (1 to 199), asymmetric and zero fees, counters
-from 10^6 to 10^15, and 116 swaps that cross at least one band edge. The tests
-replay it, then run fresh seeded random states through the Python oracle, and
-pin each rounding rule of the spec's table (§5.1) in isolation.
+Every quote is checked as the transcript one scoop would declare: its steps'
+witnesses threaded through the walk (each step's band proof, output pair and
+budget pair, so no counter falls), and a final boundary bounded at a counter no
+lower than the last step's. One more unit out of any step fails. Each rounding
+rule of the spec's table (§5.1) is also pinned in isolation.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import json
-import random
+from collections import Counter
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
@@ -39,184 +29,245 @@ from charli3_dendrite.dexs.amm.sundae_v4 import banded_cl_pinned_deposit
 from charli3_dendrite.dexs.amm.sundae_v4 import banded_cl_pinned_withdraw
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import TWO64
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Band
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import BandedQuote
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import BandState
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Ladder
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import achievable
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import band_output
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import banded_quote
-from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import ceil_div
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import directed_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import find_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import is_witness
+from charli3_dendrite.lending.math import ceil_div
+
 from tests import sundae_v4_bcl_oracle as oracle
+from tests.sundae_v4_bcl_ladders import oracle_bands
+from tests.sundae_v4_bcl_ladders import random_cases
 from tests.sundae_v4_vault_factory import build_banded_cl_vault_utxo
+from tests.test_sundae_v4_banded_cl_math import CS_BIN
+from tests.test_sundae_v4_banded_cl_math import CS_BIN_STATE
+from tests.test_sundae_v4_banded_cl_math import DROP_LADDER
+from tests.test_sundae_v4_banded_cl_math import DROP_STATE
+from tests.test_sundae_v4_banded_cl_math import P1_CLOSING
+from tests.test_sundae_v4_banded_cl_math import P1_QUOTES
+from tests.test_sundae_v4_banded_cl_math import P1_RESERVES
+from tests.test_sundae_v4_banded_cl_math import P1_STARTS
+from tests.test_sundae_v4_banded_cl_math import SLIVER_LADDER
+from tests.test_sundae_v4_banded_cl_math import SLIVER_STATE
+from tests.test_sundae_v4_banded_cl_math import p1_ladder
+from tests.test_sundae_v4_banded_cl_pool import P1_EDGE
 
-_HERE = Path(__file__).parent
-FIXTURE = json.loads((_HERE / "sundae_v4_banded_cl_vectors.json").read_text())
-_GEN_PATH = _HERE.parent / "scripts" / "gen_sundae_v4_banded_cl_vectors.py"
+CASES = random_cases(seed=20261008, count=150)
+SIZES = (1e-6, 0.01, 0.3, 0.9, 1.5, 4.0)
+LP = 10**12
 
 
-def _generator():  # noqa: ANN202
-    spec = importlib.util.spec_from_file_location("bcl_gen", _GEN_PATH)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+def _offers(state: tuple[int, int], a_in: bool) -> list[int]:
+    cap = state[1] if a_in else state[0]
+    return sorted({max(1, int(cap * frac)) for frac in SIZES})
 
 
-def _pairs(items: list) -> list[tuple[int, int]]:
-    return [(int(p), int(q)) for p, q in items]
+def _moved(
+    a: int, b: int, a_in: bool, amount_in: int, amount_out: int
+) -> tuple[int, int]:
+    return (a + amount_in, b - amount_out) if a_in else (a - amount_out, b + amount_in)
 
 
-def _ladder(rec: dict) -> Ladder:
-    return Ladder.from_shape(
-        starts=_pairs(rec["starts"]),
-        closing=tuple(rec["closing"]),
-        weights=list(rec["weights"]),
-        curves=list(rec["curves"]),
-        fees_buy=_pairs(rec["fees_buy"]),
-        fees_sell=_pairs(rec["fees_sell"]),
-        weight_total=rec["weight_total"],
+def _transcript(
+    shape: dict, state: tuple[int, int], quote: BandedQuote, a_in: bool
+) -> list[oracle.Entry] | None:
+    """The transcript the quote declares, or ``None`` if its end cannot be bounded.
+
+    Each step's after-pair is the next step's witness; the last boundary declares
+    a pair the oracle finds on its own.
+    """
+    bands, closing, wt = oracle_bands(shape), shape["closing"], shape["weight_total"]
+    entries = []
+    a, b = state
+    for i, step in enumerate(quote.steps):
+        a, b = _moved(a, b, a_in, step.amount_in, step.amount_out)
+        if i + 1 < len(quote.steps):
+            nxt = quote.steps[i + 1].witness
+            pair: tuple[int, int] | None = (nxt.counter, nxt.band)
+        else:
+            pair = oracle.bounded_pair((a, b), step.witness.counter, bands, closing, wt)
+            if pair is None:
+                return None
+        fee_budget = oracle.swap_fee_budget(step.witness.counter, LP, pair[0], LP)
+        entries.append(oracle.Entry((a, b), pair[0], pair[1], LP, fee_budget))
+    return entries
+
+
+def _accepted(
+    shape: dict,
+    state: tuple[int, int],
+    start: Witness,
+    entries: list[oracle.Entry],
+) -> bool:
+    return oracle.banded_walk_check(
+        entries,
+        state,
+        start.counter,
+        start.band,
+        LP,
+        oracle_bands(shape),
+        shape["closing"],
+        shape["weight_total"],
     )
 
 
-def _oracle_bands(rec: dict) -> list[dict]:
-    return [
-        dict(start=tuple(s), weight=w, curve=c, fee_buy=tuple(fb), fee_sell=tuple(fs))
-        for s, w, c, fb, fs in zip(
-            rec["starts"],
-            rec["weights"],
-            rec["curves"],
-            rec["fees_buy"],
-            rec["fees_sell"],
+# ── every quote, as a transcript ─────────────────────────────────────────────
+
+
+def test_every_quote_is_a_transcript_the_validator_accepts() -> None:
+    seen: Counter = Counter()
+    for shape, ladder, state in CASES:
+        assert find_witness(ladder, *state) is not None, (shape, state)
+        bands = oracle_bands(shape)
+        for a_in in (True, False):
+            for dx in _offers(state, a_in):
+                quote = banded_quote(ladder, *state, dx, a_in)
+                seen["quotes"] += 1
+                assert 0 <= quote.spent <= dx
+                if not quote.steps:
+                    seen["nothing bought"] += 1
+                    continue
+                entries = _transcript(shape, state, quote, a_in)
+                assert entries is not None, (shape, state, a_in, dx)
+                start = quote.steps[0].witness
+                assert _accepted(shape, state, start, entries), (shape, state, a_in, dx)
+                # One more unit out of any step fails, with the same declared pairs.
+                before, x, k = state, start.counter, start.band
+                for entry in entries:
+                    a1, b1 = entry.assets
+                    greedy = (a1, b1 - 1) if a_in else (a1 - 1, b1)
+                    assert not oracle.banded_step(
+                        before,
+                        x,
+                        k,
+                        LP,
+                        greedy,
+                        entry.x,
+                        LP,
+                        entry.fee_budget,
+                        bands,
+                        shape["closing"],
+                        shape["weight_total"],
+                    )
+                    before, x, k = entry.assets, entry.x, entry.k
+                # The part the ladder absorbs is an offer it absorbs in full.
+                if quote.spent < dx:
+                    seen["stopped early"] += 1
+                    again = banded_quote(ladder, *state, quote.spent, a_in)
+                    assert (again.amount_out, again.spent) == (
+                        quote.amount_out,
+                        quote.spent,
+                    )
+                seen["steps"] += len(quote.steps)
+                seen["crossings"] += len(quote.steps) - 1
+                seen["constant-sum steps"] += sum(
+                    ladder.bands[s.witness.band].curve == 1 for s in quote.steps
+                )
+                seen["sells A" if a_in else "buys A"] += 1
+    assert seen["quotes"] >= 1_500
+    assert seen["crossings"] >= 400
+    assert seen["constant-sum steps"] >= 400
+    assert seen["stopped early"] >= 300
+    assert min(seen["sells A"], seen["buys A"]) >= 500
+
+
+def test_the_p1_quotes_are_transcripts_the_validator_accepts() -> None:
+    n = len(P1_STARTS)
+    shape = {
+        "starts": P1_STARTS,
+        "closing": P1_CLOSING,
+        "weights": [1] * n,
+        "curves": [0] * n,
+        "fees_buy": [(3, 1000)] * n,
+        "fees_sell": [(3, 1000)] * n,
+        "weight_total": n,
+    }
+    ladder = Ladder.from_shape(**shape)
+    for dx, a_in, want, _bands in P1_QUOTES:
+        quote = banded_quote(ladder, *P1_RESERVES, dx, a_in)
+        assert (quote.amount_out, quote.spent) == (want, dx)
+        entries = _transcript(shape, P1_RESERVES, quote, a_in)
+        assert entries is not None
+        assert _accepted(shape, P1_RESERVES, quote.steps[0].witness, entries)
+
+
+def test_a_quote_resumed_from_the_drain_is_the_quote_walked_afresh() -> None:
+    named = [
+        (Ladder.from_shape(**shape), state)
+        for shape, state in (
+            (DROP_LADDER, DROP_STATE),
+            (CS_BIN, CS_BIN_STATE),
+            (SLIVER_LADDER, SLIVER_STATE),
         )
     ]
+    named += [(p1_ladder(), P1_RESERVES), (p1_ladder(), P1_EDGE)]
+    for ladder, state in [(ladder, state) for _, ladder, state in CASES[:60]] + named:
+        for a_in in (True, False):
+            start = directed_witness(ladder, *state, a_in)
+            drain = banded_quote(ladder, *state, 2**64 - 1, a_in, start)
+            sizes = set(_offers(state, a_in)) | {drain.spent, drain.spent + 1}
+            cum = 0
+            for step in drain.steps:
+                sizes |= {cum + step.amount_in + d for d in (-1, 0, 1)}
+                cum += step.amount_in
+            for dx in sorted(size for size in sizes if size > 0):
+                walked = banded_quote(ladder, *state, dx, a_in, start)
+                assert banded_quote(ladder, *state, dx, a_in, start, drain) == walked
 
 
-def _step_ok(rec: dict, st: dict, lp: int, after: list[int], lp_after: int) -> bool:
-    return oracle.banded_step(
-        tuple(st["before"]),
-        st["x"],
-        st["k"],
-        lp,
-        tuple(after),
-        st["x_after"],
-        lp_after,
-        st["fee_budget"],
-        _oracle_bands(rec),
-        tuple(rec["closing"]),
-        rec["weight_total"],
-    )
+def test_witnesses_are_tight() -> None:
+    for _shape, ladder, state in CASES:
+        witness = find_witness(ladder, *state)
+        assert witness is not None
+        assert is_witness(ladder, *state, witness.counter, witness.band)
+        assert not achievable(ladder, *state, witness.counter + 1, witness.band)
+        assert not is_witness(ladder, *state, witness.counter - 1, witness.band)
 
 
-# ── the fixture itself ────────────────────────────────────────────────────────
+def test_liquidity_moves_pass_the_proportional_check_and_are_extremal() -> None:
+    checked = 0
+    for shape, ladder, state in CASES:
+        a, b = state
+        if min(a, b) < 100:
+            continue
+        witness = find_witness(ladder, a, b)
+        assert witness is not None
+        lp = witness.counter
+        bands, closing, wt = (
+            oracle_bands(shape),
+            shape["closing"],
+            shape["weight_total"],
+        )
+
+        def step_ok(
+            after: tuple[int, int], lp_after: int, x: int = witness.counter
+        ) -> bool:
+            return oracle.banded_step(
+                (a, b), x, witness.band, lp, after, 0, lp_after, 0, bands, closing, wt
+            )
+
+        deposit = banded_cl_pinned_deposit([a, b], [a // 7, b // 7], lp)
+        after = (a + deposit.deltas[0], b + deposit.deltas[1])
+        assert step_ok(after, deposit.lp_after)
+        assert not step_ok((after[0] - 1, after[1]), deposit.lp_after)
+        assert not step_ok((after[0], after[1] - 1), deposit.lp_after)
+        assert not step_ok(after, deposit.lp_after + 1)
+        withdraw = banded_cl_pinned_withdraw([a, b], lp // 3, lp)
+        paid = (a - withdraw.payouts[0], b - withdraw.payouts[1])
+        assert step_ok(paid, withdraw.lp_after)
+        assert not step_ok((paid[0] - 1, paid[1]), withdraw.lp_after)
+        assert not step_ok((paid[0], paid[1] - 1), withdraw.lp_after)
+        checked += 1
+    assert checked >= 100
 
 
-def test_fixture_covers_the_shapes_the_chain_vectors_do_not() -> None:
-    ladders = FIXTURE["ladders"]
-    swaps = FIXTURE["swaps"]
-    assert len(ladders) >= 30
-    assert len(swaps) >= 250
-    assert {len(l["starts"]) for l in ladders} >= {1, 2, 3, 4, 5, 8, 9}
-    assert sum(1 for l in ladders if len(set(l["weights"])) > 1) >= 20
-    assert sum(1 for l in ladders if l["fees_buy"] != l["fees_sell"]) >= 30
-    assert any([0, 1] in l["fees_buy"] or [0, 1] in l["fees_sell"] for l in ladders)
-    steps = [(ladders[s["ladder"]], st) for s in swaps for st in s["steps"]]
-    assert len(steps) >= 450
-    assert sum(1 for lad, st in steps if lad["curves"][st["k"]] == 1) >= 150
-    assert sum(1 for lad, st in steps if lad["curves"][st["k"]] == 0) >= 150
-    assert sum(1 for s in swaps if len(s["steps"]) > 1) >= 100
-    assert sum(1 for s in swaps if s["a_is_input"]) >= 100
-    assert sum(1 for s in swaps if not s["a_is_input"]) >= 100
-    counters = [s["witness"][0] for s in swaps]
-    assert min(counters) < 10**7 and max(counters) > 10**14
-    assert all(lad["index"] == [list(e) for e in _ladder(lad).index] for lad in ladders)
-    assert FIXTURE["rejected"]["oracle_fail"] == 0
-    assert FIXTURE["rejected"]["unpriceable_state"] == 0
-
-
-@pytest.mark.parametrize("index", range(len(FIXTURE["swaps"])))
-def test_recorded_swap_replays_and_passes_the_validator_check(index: int) -> None:
-    sw = FIXTURE["swaps"][index]
-    rec = FIXTURE["ladders"][sw["ladder"]]
-    ladder = _ladder(rec)
-    a, b = sw["reserves"]
-    witness = find_witness(ladder, a, b)
-    assert witness is not None
-    assert [witness.counter, witness.band] == sw["witness"]
-    quote = banded_quote(ladder, a, b, sw["dx"], sw["a_is_input"])
-    assert quote.amount_out == sw["amount_out"]
-    assert quote.spent == sw["spent"]
-    assert list(quote.bands) == sw["bands"]
-    assert [(s.amount_in, s.amount_out) for s in quote.steps] == [
-        (st["amount_in"], st["amount_out"]) for st in sw["steps"]
-    ]
-    for st in sw["steps"]:
-        assert _step_ok(rec, st, sw["lp"], st["after"], sw["lp"])
-        a1, b1 = st["after"]
-        greedy = [a1, b1 - 1] if sw["a_is_input"] else [a1 - 1, b1]
-        assert not _step_ok(rec, st, sw["lp"], greedy, sw["lp"])
-        assert st["fee_budget"] >= 0
-        assert st["x_after"] >= st["x"]
-
-
-@pytest.mark.parametrize("index", range(len(FIXTURE["liquidity"])))
-def test_recorded_liquidity_moves_are_the_pinned_ones_and_pass(index: int) -> None:
-    lq = FIXTURE["liquidity"][index]
-    rec = FIXTURE["ladders"][lq["ladder"]]
-    a, b = lq["reserves"]
-    st = dict(
-        before=[a, b], x=lq["witness"][0], k=lq["witness"][1], x_after=0, fee_budget=0
-    )
-    assert lq["deposit_ok"] and lq["withdraw_ok"]
-    assert _step_ok(rec, st, lq["lp"], lq["deposit_after"], lq["lp_after"])
-    a1, b1 = lq["deposit_after"]
-    assert not _step_ok(rec, st, lq["lp"], [a1 - 1, b1], lq["lp_after"])
-    assert not _step_ok(rec, st, lq["lp"], [a1, b1 - 1], lq["lp_after"])
-    assert not _step_ok(rec, st, lq["lp"], [a1, b1], lq["lp_after"] + 1)
-    pinned = banded_cl_pinned_deposit([a, b], lq["offered"], lq["lp"])
-    assert [a + pinned.deltas[0], b + pinned.deltas[1]] == lq["deposit_after"]
-    assert pinned.lp_after == lq["lp_after"]
-    lp_after = lq["lp"] - lq["burn"]
-    assert _step_ok(rec, st, lq["lp"], lq["withdraw_after"], lp_after)
-    a1, b1 = lq["withdraw_after"]
-    assert not _step_ok(rec, st, lq["lp"], [a1 - 1, b1], lp_after)
-    assert not _step_ok(rec, st, lq["lp"], [a1, b1 - 1], lp_after)
-    withdraw = banded_cl_pinned_withdraw([a, b], lq["burn"], lq["lp"])
-    assert [a - withdraw.payouts[0], b - withdraw.payouts[1]] == lq["withdraw_after"]
-    assert withdraw.lp_after == lp_after
-
-
-def test_recorded_counter_drops_are_edge_crossings_the_quote_still_prices() -> None:
-    """An edge crossing out of a tiny-weight bin can re-derive a lower counter.
-
-    The quote's output is the chain's for the step, but the budget pair needs
-    ``fee_budget >= 0`` (a non-falling counter) within one transcript, so such a
-    crossing cannot continue in the same scoop. Recorded, rare, and priced.
-    """
-    drops = FIXTURE["counter_drops"]
-    steps = sum(len(s["steps"]) for s in FIXTURE["swaps"])
-    assert len(drops) * 100 <= steps  # under 1% of steps
-    for d in drops:
-        rec = FIXTURE["ladders"][d["ladder"]]
-        ladder = _ladder(rec)
-        assert d["x_after"] < d["x"]
-        assert d["k_after"] != d["k"]
-        assert rec["curves"][d["k"]] == 1
-        assert rec["weights"][d["k"]] * 50 < rec["weight_total"]
-        a0, b0 = d["before"]
-        quote = banded_quote(ladder, a0, b0, d["amount_in"], d["a_is_input"])
-        assert quote.steps[0].amount_out == d["amount_out"]
-        # Priced correctly as a step of its own: the output pair accepts it and
-        # one more unit fails, with the counter held (no budget to pay).
-        st = dict(before=d["before"], x=d["x"], k=d["k"], x_after=d["x"], fee_budget=0)
-        assert _step_ok(rec, st, d["x"], d["after"], d["x"])
-        a1, b1 = d["after"]
-        greedy = [a1, b1 - 1] if d["a_is_input"] else [a1 - 1, b1]
-        assert not _step_ok(rec, st, d["x"], greedy, d["x"])
-
-
-# ── the pool type on the same vectors ────────────────────────────────────────
+# ── the pool type on the same cases ─────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -231,130 +282,42 @@ def _preview() -> Iterator[None]:
 
 
 @pytest.mark.usefixtures("_preview")
-@pytest.mark.parametrize("index", range(0, len(FIXTURE["swaps"]), 7))
-def test_pool_type_quotes_the_recorded_vectors(index: int) -> None:
-    sw = FIXTURE["swaps"][index]
-    rec = FIXTURE["ladders"][sw["ladder"]]
+def test_the_pool_type_quotes_whole_offers_and_inverts_them() -> None:
     a_unit, b_unit = "01" * 28 + "0a", "02" * 28 + "0b"
-    a, b = sw["reserves"]
-    values, config = build_banded_cl_vault_utxo(
-        [(a_unit, a), (b_unit, b)],
-        starts=_pairs(rec["starts"]),
-        closing=tuple(rec["closing"]),
-        weights=list(rec["weights"]),
-        curves=list(rec["curves"]),
-        fee_buy=_pairs(rec["fees_buy"]),
-        fee_sell=_pairs(rec["fees_sell"]),
-        total_lp=sw["lp"],
-    )
-    vault = SundaeV4Vault.model_validate(values)
-    vault.supply_module_config(
-        SundaeV4Deployment.for_network("preview").banded_cl_hash, config
-    )
-    (pool,) = vault.pools()
-    assert isinstance(pool, SundaeV4BandedCLPool)
-    unit_in, unit_out = (a_unit, b_unit) if sw["a_is_input"] else (b_unit, a_unit)
-    out, _ = pool.get_amount_out(Assets(**{unit_in: sw["dx"]}), unit_out)
-    assert out.quantity() == sw["amount_out"]
-    assert pool.active_band == sw["witness"][1]
-    if sw["amount_out"] > 0 and sw["spent"] == sw["dx"]:
-        needed, _ = pool.get_amount_in(Assets(**{unit_out: sw["amount_out"]}), unit_in)
-        assert needed.quantity() <= sw["dx"]
-        assert pool.quote(unit_in, needed.quantity()).amount_out >= sw["amount_out"]
-
-
-# ── fresh random states through the oracle ───────────────────────────────────
-
-
-def test_fresh_random_states_pass_the_oracle_and_fail_greedily() -> None:
-    gen = _generator()
-    rng = random.Random(777)
-    checked = inside = crossings = 0
-    while checked < 120:
-        shape = gen.rand_ladder(rng)
-        ladder = Ladder.from_shape(**shape)
-        state = gen.rand_state(rng, ladder)
-        if state is None:
-            continue
-        a, b = state
-        witness = find_witness(ladder, a, b)
-        assert witness is not None, (shape, state)
-        # Tight: achievable at X, not at X + 1; a witness nowhere else nearby.
-        assert achievable(ladder, a, b, witness.counter, witness.band)
-        assert not achievable(ladder, a, b, witness.counter + 1, witness.band)
-        assert not is_witness(ladder, a, b, witness.counter - 1, witness.band)
-        st = witness.state
-        if 0 < witness.ra < st.a_sat and 0 < witness.rb < st.b_sat:
-            inside += 1
-            # Strictly inside one band: no other band admits a witness.
-            for k in range(ladder.n):
-                if k != witness.band:
-                    assert find_witness(ladder, a, b, prefer=k).band == witness.band
-        bands = gen.oracle_bands(shape)
-        lp = witness.counter
+    module = SundaeV4Deployment.for_network("preview").banded_cl_hash
+    for shape, ladder, state in CASES[:50]:
+        values, config = build_banded_cl_vault_utxo(
+            [(a_unit, state[0]), (b_unit, state[1])],
+            starts=shape["starts"],
+            closing=shape["closing"],
+            weights=shape["weights"],
+            curves=shape["curves"],
+            fee_buy=shape["fees_buy"],
+            fee_sell=shape["fees_sell"],
+            total_lp=LP,
+        )
+        vault = SundaeV4Vault.model_validate(values)
+        vault.supply_module_config(module, config)
+        (pool,) = vault.pools()
+        assert isinstance(pool, SundaeV4BandedCLPool)
         for a_in in (True, False):
-            cap = b if a_in else a
-            dx = max(1, int(cap * rng.choice([0.001, 0.3, 0.9, 2.5])))
-            quote = banded_quote(ladder, a, b, dx, a_in)
-            ca, cb = a, b
-            assert quote.spent <= dx
-            if quote.spent < dx:
-                # Stopped early: nothing more could be bought from the end state.
-                ea, eb = quote.reserves_after
-                assert (
-                    banded_quote(ladder, ea, eb, dx - quote.spent, a_in).amount_out == 0
-                )
-            for i, step in enumerate(quote.steps):
-                assert step.amount_out > 0
-                w = step.witness
-                na, nb = (
-                    (ca + step.amount_in, cb - step.amount_out)
-                    if a_in
-                    else (ca - step.amount_out, cb + step.amount_in)
-                )
-                # The output pair with the counter held: pure pricing check.
-                ok = oracle.banded_step(
-                    (ca, cb),
-                    w.counter,
-                    w.band,
-                    lp,
-                    (na, nb),
-                    w.counter,
-                    lp,
-                    0,
-                    bands,
-                    shape["closing"],
-                    shape["weight_total"],
-                )
-                assert ok, (shape, (ca, cb), w, step)
-                greedy = (na, nb - 1) if a_in else (na - 1, nb)
-                assert not oracle.banded_step(
-                    (ca, cb),
-                    w.counter,
-                    w.band,
-                    lp,
-                    greedy,
-                    w.counter,
-                    lp,
-                    0,
-                    bands,
-                    shape["closing"],
-                    shape["weight_total"],
-                )
-                # The chain's capacity rule: the after residual is non-negative,
-                # and when the step crossed, one more unit of input would not fit.
-                cap_left = (nb - w.state.cb) if a_in else (na - w.state.ca)
-                assert cap_left >= 0
-                if i + 1 < len(quote.steps):
-                    crossings += 1
-                    over = band_output(
-                        w, ladder.bands[w.band], a_in, step.amount_in + 1
-                    )
-                    assert over > (w.rb if a_in else w.ra)
-                ca, cb = na, nb
-        checked += 1
-    assert inside >= 40
-    assert crossings >= 40
+            unit_in, unit_out = (a_unit, b_unit) if a_in else (b_unit, a_unit)
+            top = pool.max_output(unit_out) - 1
+            for dx in _offers(state, a_in):
+                quote = banded_quote(ladder, *state, dx, a_in)
+                out = pool.get_amount_out(Assets(**{unit_in: dx}), unit_out)[0]
+                full = quote.spent == dx
+                assert out.quantity() == (quote.amount_out if full else 0)
+                assert quote.amount_out <= top
+                if quote.amount_out > 0:
+                    want = Assets(**{unit_out: quote.amount_out})
+                    needed = pool.get_amount_in(want, unit_in)[0].quantity()
+                    assert needed <= quote.spent
+                    paid = pool.get_amount_out(Assets(**{unit_in: needed}), unit_out)
+                    assert paid[0].quantity() >= quote.amount_out
+            if top > 0:
+                needed = pool.get_amount_in(Assets(**{unit_out: top}), unit_in)[0]
+                assert pool.get_amount_out(needed, unit_out)[0].quantity() == top
 
 
 # ── each rounding rule of the spec's table, in isolation ─────────────────────
@@ -527,17 +490,15 @@ def test_r20_proportional_check_is_the_pinned_deposit_and_withdrawal() -> None:
 
 
 def test_the_state_derivation_matches_the_oracle_port_field_for_field() -> None:
-    for rec in FIXTURE["ladders"][:12]:
-        ladder = _ladder(rec)
-        bands = _oracle_bands(rec)
-        idx = oracle.build_index(bands, tuple(rec["closing"]), rec["weight_total"])
+    for shape, ladder, _state in CASES[:20]:
+        bands = oracle_bands(shape)
+        closing, wt = shape["closing"], shape["weight_total"]
+        idx = oracle.build_index(bands, closing, wt)
         assert idx == list(ladder.index)
         for x in (ladder.weight_total, 10**6 + 3, 10**12 + 11):
             for k in range(ladder.n):
                 st: BandState = ladder.at(x, k)
-                ost = oracle.ladder_at_upper(
-                    bands, idx, tuple(rec["closing"]), rec["weight_total"], x, k
-                )
+                ost = oracle.ladder_at_upper(bands, idx, closing, wt, x, k)
                 assert (st.ca, st.cb, st.a_sat, st.b_sat, st.liquidity) == (
                     ost.ca,
                     ost.cb,
@@ -545,3 +506,42 @@ def test_the_state_derivation_matches_the_oracle_port_field_for_field() -> None:
                     ost.b_sat_k,
                     ost.l_k,
                 )
+
+
+def test_a_last_step_may_end_bounded_in_a_band_far_from_its_own() -> None:
+    # A 50% sell fee in the top band: one step there leaves more A in the pool
+    # than band 8 holds at any counter the walk may end on, but the state is
+    # bounded in band 2 at a far higher counter, so the whole offer executes.
+    den = 9223372036854775808
+    shape = {
+        "starts": [
+            (30932469293718972488, den),
+            (32612286819563209311, den),
+            (37787725851959984833, den),
+            (43926395007499411313, den),
+            (47814864482958151664, den),
+            (55936378533002115319, den),
+            (59889841501956611787, den),
+            (59905877031671215597, den),
+            (59917467184599434007, den),
+        ],
+        "closing": (63455918188860887148, den),
+        "weights": [1000000, 1000, 1000000, 1, 1, 1000, 3, 1, 1000000],
+        "curves": [1, 1, 1, 1, 0, 1, 1, 0, 0],
+        "fees_buy": [(3, 1000), (99, 100), (1, 2 * den), (1, 2 * den), (3, 1000)]
+        + [(99, 100)] * 4,
+        "fees_sell": [(25, 10000), (1, 10), (1, 10), (0, 1), (25, 10000)]
+        + [(den, 2 * den), (1, 10), (den, 2 * den), (den, 2 * den)],
+        "weight_total": 3002006,
+    }
+    ladder = Ladder.from_shape(**shape)
+    state = (107_748_310, 93_364_091_608)
+    quote = banded_quote(ladder, *state, 933_640_916, True)
+    assert quote.spent == 933_640_916
+    assert [(s.witness.band, s.amount_out) for s in quote.steps] == [
+        (8, 20_860_330_112)
+    ]
+    entries = _transcript(shape, state, quote, True)
+    assert entries is not None
+    assert (entries[-1].k, entries[-1].x) == (2, 274_283_275_824)
+    assert _accepted(shape, state, quote.steps[0].witness, entries)

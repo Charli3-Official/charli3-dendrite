@@ -1,12 +1,20 @@
-"""Straight port of the banded CL validator checks (``banded_cl_check.ak``).
+"""Python port of the banded CL validator checks (``banded_cl_check.ak``).
 
 Every predicate is integer-exact and mirrors the Aiken source clause for clause:
 ``ladder_at`` / ``ladder_at_upper``, ``band_proof`` (P2-P6), ``band_proof_tight``
 (P7), ``banded_swap`` with ``cl_check.swap_output_pair`` and ``cs_output_pair``,
-``cl_check.budget_pair_form3``, ``cl_check.check_proportional`` and
-``banded_step``. These are the *checks* the chain runs on a declared step, not
-the quote arithmetic, so they are an independent test of the quote: a quote is
-right when the step it declares passes and one more unit out fails.
+``cl_check.budget_pair_form3``, ``cl_check.check_proportional``, ``banded_step``,
+``final_boundary_bounded`` and the transcript walk ``banded_walk_check_raw``.
+These are the *checks* the chain runs on a declared transcript, not the quote
+arithmetic, so they are an independent test of the quote: a quote is right when
+the transcript it declares passes and one more unit out fails.
+
+The prefix sums ``C_A`` / ``C_B`` follow the deployed module
+(``banded_concentrated_liquidity.withdraw`` ``33485bba...`` on preview): each is
+read from the config's ladder index, ``ceil(index[k] * X / 2**64)``, where the
+published pre-index source sums one rounded-up saturation constant per band. The
+two rules differ by rounding, and recorded preview scoops pass only the index
+rule.
 
 Ladders are plain Python: ``bands`` is a list of dicts with ``start``, ``weight``,
 ``curve``, ``fee_buy``, ``fee_sell`` (rationals as ``(num, den)`` tuples),
@@ -267,3 +275,113 @@ def banded_step(
 def swap_fee_budget(x_before: int, lp_before: int, x_after: int, lp_after: int) -> int:
     """The one ``fee_budget`` the budget pair admits: ``floor(lp_before * x_after / x_before) - lp_after``."""
     return lp_before * x_after // x_before - lp_after
+
+
+def final_boundary_bounded(
+    after: tuple[int, int],
+    x: int,
+    k: int,
+    bands: list[dict],
+    closing: tuple[int, int],
+    wt: int,
+    index: list | None = None,
+) -> bool:
+    """``banded_cl_check.final_boundary_bounded``: P1 and P2-P6 on the last boundary."""
+    index = index if index is not None else build_index(bands, closing, wt)
+    if x < wt:
+        return False
+    return band_proof(*after, ladder_at_upper(bands, index, closing, wt, x, k))
+
+
+@dataclass(frozen=True)
+class Entry:
+    """One transcript entry: the state after a step and the pair declared for it.
+
+    ``assets`` is ``(a, b)``; ``x`` / ``k`` the declared counter and band; ``lp``
+    the total LP after the step; ``fee_budget`` the step's declared budget.
+    """
+
+    assets: tuple[int, int]
+    x: int
+    k: int
+    lp: int
+    fee_budget: int
+
+
+def banded_walk_check(
+    transcript: list[Entry],
+    before: tuple[int, int],
+    x_before: int,
+    k_before: int,
+    lp_before: int,
+    bands: list[dict],
+    closing: tuple[int, int],
+    wt: int,
+    index: list | None = None,
+) -> bool:
+    """``banded_cl_check.banded_walk_check_raw``: thread the pair, bound the end.
+
+    Every step runs ``banded_step`` from the previous boundary's pair; a swap's
+    budget pair needs ``fee_budget >= 0``, so the counter never falls within one
+    transcript while the LP holds. The last boundary owes P1-P6 only.
+    """
+    index = index if index is not None else build_index(bands, closing, wt)
+    assets, x, k, lp = before, x_before, k_before, lp_before
+    for entry in transcript:
+        if not banded_step(
+            assets,
+            x,
+            k,
+            lp,
+            entry.assets,
+            entry.x,
+            entry.lp,
+            entry.fee_budget,
+            bands,
+            closing,
+            wt,
+            index,
+        ):
+            return False
+        assets, x, k, lp = entry.assets, entry.x, entry.k, entry.lp
+    return final_boundary_bounded(assets, x, k, bands, closing, wt, index)
+
+
+def bounded_pair(
+    after: tuple[int, int],
+    x_min: int,
+    bands: list[dict],
+    closing: tuple[int, int],
+    wt: int,
+    index: list | None = None,
+) -> tuple[int, int] | None:
+    """A pair ``(x, k)``, ``x >= x_min``, the last boundary may declare; else ``None``.
+
+    Per band, P2, P3 and P6 hold up to some counter and P4, P5 from some
+    counter on, so the largest counter at which P6 still holds is the one to try;
+    it is found by doubling and bisection on the oracle's own predicates.
+    """
+    index = index if index is not None else build_index(bands, closing, wt)
+    x_min = max(x_min, wt)
+
+    def holds(x: int, k: int) -> bool:
+        st = ladder_at_upper(bands, index, closing, wt, x, k)
+        ra, rb = after[0] - st.ca, after[1] - st.cb
+        return ra >= 0 and rb >= 0 and g_of(st, ra, rb, st.l_k) >= 0
+
+    for k in range(len(bands)):
+        if not holds(x_min, k):
+            continue
+        lo, step = x_min, 1
+        while holds(lo + step, k):
+            lo, step = lo + step, step * 2
+        hi = lo + step
+        while lo + 1 < hi:
+            mid = (lo + hi) // 2
+            if holds(mid, k):
+                lo = mid
+            else:
+                hi = mid
+        if final_boundary_bounded(after, lo, k, bands, closing, wt, index):
+            return (lo, k)
+    return None
