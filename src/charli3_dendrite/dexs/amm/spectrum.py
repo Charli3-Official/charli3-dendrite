@@ -367,6 +367,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
         """Create a PlutusData object representing a swap datum.
 
@@ -380,10 +381,20 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             Defaults to None.
             datum_target (PlutusData | None): The target datum for the swap.
             Defaults to None.
+            minimum_receive (Assets | None): Overrides the baked on-chain minimum.
+            Defaults to None.
+            swap_all (bool): Request an order that swaps whatever amount of the
+            input token it holds. Defaults to False.
 
         Returns:
             PlutusData: A PlutusData object representing the swap datum.
+
+        Raises:
+            ValueError: If ``swap_all`` is set; the Spectrum order datum has no
+            swap-all form.
         """
+        swap_all_kwargs = self._swap_all_kwargs(SpectrumOrderDatum, swap_all)
+
         if self.swap_forward and address_source is not None:
             print(  # noqa: T201
                 f"{self.__class__.__name__} does not support swap forwarding.",
@@ -407,6 +418,7 @@ class SpectrumCPPState(AbstractConstantProductPoolState):
             ],
             volume_fee=volume_fee,
             pool_token=self.pool_nft,
+            **swap_all_kwargs,
         )
 
     @classmethod
