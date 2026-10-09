@@ -14,9 +14,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+import cbor2  # type: ignore[import-not-found]
 import pytest
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dexs.amm.minswap import MinswapV2OrderDatum
+from charli3_dendrite.dexs.amm.minswap import SAOAll
 from charli3_dendrite.dexs.amm.sundae import SundaeV3OrderDatum
 from charli3_dendrite.dexs.amm.sundae import SundaeV3PlutusNone
 from charli3_dendrite.dexs.amm.sundae import SundaeV3ReceiverInlineDatum
@@ -140,3 +142,62 @@ def test_reconstruct_forwarded_order(fx: dict) -> None:
     if handler is None:
         pytest.skip(f"no reconstruction handler for source DEX {fx['source']}")
     handler(fx["datum_cbor"])
+
+
+# Forwards into a Minswap V2 order that swaps whatever the forward delivers
+# (``SAOAll``). The inner datum names its pool only by the LP-token hash, so each
+# case pins the pair's units.
+_USDA = "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+_ASCEND = "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+_MINSWAP_V2_DEPOSIT = Assets(root={"lovelace": 2_000_000})
+
+
+def _forward_into_minswap_v2(source: str) -> dict:
+    return next(f for f in _FIX if f["source"] == source and f["dest"] == "MinswapV2")
+
+
+def _rebuild_swap_all_minswap_v2(
+    original: MinswapV2OrderDatum,
+    in_unit: str,
+    out_unit: str,
+) -> MinswapV2OrderDatum:
+    """Rebuild a swap-all Minswap V2 order from its owner, pair and floor."""
+    return MinswapV2OrderDatum.create_datum(
+        address_source=original.refund_address.to_address(),
+        # A swap-all datum does not carry the input amount.
+        in_assets=Assets(root={in_unit: 1_000_000}),
+        out_assets=Assets(root={out_unit: original.step.minimum_receive}),
+        batcher_fee=Assets(root={"lovelace": original.max_batcher_fee}),
+        deposit=_MINSWAP_V2_DEPOSIT,
+        swap_all=True,
+    )
+
+
+def test_reconstruct_swap_all_next_hop_token_input_byte_exact() -> None:
+    """Sundae V3 forward into a USDA -> ADA Minswap V2 order, ``SAOAll(0)``."""
+    fx = _forward_into_minswap_v2("SundaeV3")
+    inner = SundaeV3OrderDatum.from_cbor(fx["datum_cbor"]).destination.datum.datum
+    cbor = inner.to_cbor_hex()
+    original = MinswapV2OrderDatum.from_cbor(cbor)
+    assert original.step.swap_amount_option == SAOAll(deducted_amount=0)
+
+    rebuilt = _rebuild_swap_all_minswap_v2(original, _USDA, "lovelace")
+    assert rebuilt.to_cbor_hex() == cbor
+
+
+def test_reconstruct_swap_all_next_hop_ada_input() -> None:
+    """WingRiders V2 forward into an ADA -> ASCEND Minswap V2 order, whose
+    ``SAOAll`` deducts the batcher fee and deposit. The forward encodes the inner
+    datum with definite-length arrays, so the rebuilt datum is compared decoded.
+    """
+    fx = _forward_into_minswap_v2("WingRidersV2")
+    inner = WingRidersV2OrderDatum.from_cbor(fx["datum_cbor"]).compensation_datum
+    cbor = cbor2.dumps(inner).hex()
+    original = MinswapV2OrderDatum.from_cbor(cbor)
+    assert original.step.swap_amount_option == SAOAll(
+        deducted_amount=original.max_batcher_fee + _MINSWAP_V2_DEPOSIT.quantity(),
+    )
+
+    rebuilt = _rebuild_swap_all_minswap_v2(original, "lovelace", _ASCEND)
+    assert rebuilt == original
+    assert cbor2.loads(rebuilt.to_cbor()) == inner

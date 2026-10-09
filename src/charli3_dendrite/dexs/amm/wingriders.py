@@ -921,8 +921,12 @@ class WingRidersV2SSPState(AbstractStableSwapPoolState, WingRidersV2CPPState):
         address_target: Address | None = None,
         datum_target: PlutusData | None = None,
         minimum_receive: Assets | None = None,
+        swap_all: bool = False,
     ) -> PlutusData:
-        return self.order_datum_class().create_datum(
+        datum_class = self.order_datum_class()
+        swap_all_kwargs = self._swap_all_kwargs(datum_class, swap_all)
+
+        return datum_class.create_datum(
             address_source=address_source,
             in_assets=in_assets,
             out_assets=out_assets if minimum_receive is None else minimum_receive,
@@ -936,4 +940,5 @@ class WingRidersV2SSPState(AbstractStableSwapPoolState, WingRidersV2CPPState):
             datum_target=datum_target,
             a_scale=self.asset_mulitipliers[0],
             b_scale=self.asset_mulitipliers[1],
+            **swap_all_kwargs,
         )
