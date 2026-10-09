@@ -13,9 +13,9 @@ from charli3_dendrite.dexs.amm.sundae import SundaeSwapCPPState
 @pytest.fixture(scope="module")
 def blockfrost_backend() -> BlockFrostBackend:
     """Fixture to set up and return a BlockFrost backend instance."""
-    project_id = os.environ.get("PROJECT_ID")
+    project_id = os.environ.get("BLOCKFROST_PROJECT_ID") or os.environ.get("PROJECT_ID")
     if not project_id:
-        pytest.skip("BLOCKFROST_PROJECT_ID environment variable not set")
+        pytest.skip("BLOCKFROST_PROJECT_ID or PROJECT_ID environment variable not set")
     backend = BlockFrostBackend(project_id)
     set_backend(backend)
     return backend
