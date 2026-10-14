@@ -34,6 +34,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_terms import (
 from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import captured_output_view
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
+from tests.lending.fluidtokens_v4.transactions.replay import captured_scripts
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 from tests.lending.fluidtokens_v4.transactions.replay import output_view
 from tests.lending.fluidtokens_v4.transactions.replay import pool_fixture_backend
@@ -83,7 +84,7 @@ def test_edit_redeemers_and_outputs_are_byte_exact(name: str) -> None:
         for h in (
             c.POOL_POLICY,
             c.POOL_MANAGER_POLICY,
-            c.POOL_EDIT_ACTION_SKH,
+            captured_scripts(fix).pool_edit_action_script_hash.hex(),
             c.POOL_MANAGER_EDIT_POOL_ACTION_SKH,
         )
     }

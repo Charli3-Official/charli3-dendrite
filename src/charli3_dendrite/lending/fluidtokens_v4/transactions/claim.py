@@ -41,6 +41,7 @@ from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerDatum
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     add_zero_withdrawals,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
@@ -165,9 +166,7 @@ class ClaimSnapshot(PoolActionSnapshot):
         """Rebuild the snapshot of a captured mainnet claim (for byte-exact replay)."""
         inputs = [utxo_from_dict(u) for u in fix["inputs"]]
         refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
-        config = next(
-            u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-        )
+        config, scripts = captured_config(refs)
         lender_manager_config = next(
             u
             for u in refs
@@ -176,7 +175,6 @@ class ClaimSnapshot(PoolActionSnapshot):
                 c.LENDER_MANAGER_CONFIG_NFT_NAME,
             )
         )
-        scripts = ConfigDatum.from_cbor(config.datum or "")
         am_spend = scripts.asset_manager_spend_script_hash.hex()
         repayments = [u for u in inputs if _payment_script(u) == am_spend]
         positions = []

@@ -5,8 +5,18 @@ from pathlib import Path
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
+from charli3_dendrite.lending.fluidtokens.datums import Asset
 
 FIX = json.loads((Path(__file__).parent / "fixtures" / "entities.json").read_text())
+
+# Oracle tokens no feed can hold, so a side naming one names no oracle. A feed holds
+# its oracle NFT, and an NFT's policy id is a 28-byte script hash.
+NO_ORACLE_TOKENS = {
+    "no-oracle-marker": Asset(b"NONE", b"NONE"),
+    "empty-token": Asset(b"", b""),
+    "empty-policy": Asset(b"", b"oracle"),
+    "marker-policy": Asset(b"NONE", b"oracle"),
+}
 
 
 def record_info(rec: dict, **overrides) -> PoolStateInfo:

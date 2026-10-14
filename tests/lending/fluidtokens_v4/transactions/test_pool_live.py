@@ -1,9 +1,10 @@
 """Gated: dbsync resolves V4 pool actions and Ogmios evaluates them.
 
-The captured cancel replays against its spent pool with ``allow_spent``. The live
-pool edited and cancelled here is the first live pool whose manager a key owns; its
-owner's wallet is that key with the pool's stake credential. The create is funded by
-a synthetic wallet, and every funding UTxO reaches Ogmios only as an additional
+The captured cancels replay against their spent pools with ``allow_spent``, under the
+live config, so only a cancel captured under that config reproduces its capture. The
+live pool edited and cancelled here is the first live pool whose manager a key owns;
+its owner's wallet is that key with the pool's stake credential. The create is funded
+by a synthetic wallet, and every funding UTxO reaches Ogmios only as an additional
 UTxO. Needs ``DBSYNC_*`` and ``OGMIOS_HOST``.
 """
 
@@ -52,6 +53,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
     resolve_pool_manager_utxo,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import resolve_utxo
+from tests.lending.fluidtokens_v4.transactions.replay import Built
 from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
 from tests.lending.fluidtokens_v4.transactions.replay import evaluate
@@ -108,8 +110,15 @@ def _live_pool(backend) -> tuple[PoolPosition, str]:  # noqa: ANN001
     pytest.skip("no live pool is managed by a key")
 
 
-def test_live_cancel_reproduces_the_capture(backend) -> None:  # noqa: ANN001
-    fix = fixture("pool_cancel")
+_CANCELS = ["pool_cancel", "pool_cancel_after_config_update"]
+
+
+def _live_cancel(
+    backend,  # noqa: ANN001
+    name: str,
+) -> tuple[PoolCancelSnapshot, PoolCancelSnapshot, Built]:
+    """The captured cancel, its live resolution and that resolution built."""
+    fix = fixture(name)
     capture = PoolCancelSnapshot.from_capture(fix)
     snapshot = PoolCancelSnapshot.from_backend(
         backend,
@@ -119,8 +128,28 @@ def test_live_cancel_reproduces_the_capture(backend) -> None:  # noqa: ANN001
         allow_spent=True,
     )
     built = build(build_pool_cancel, snapshot, slot=fix["invalid_before"])
-    assert redeemers(built.tx) == captured_redeemers(fix)
-    assert evaluate(built, fixture_utxos(fix)) == sorted(_EDIT + ["mint", "mint"])
+    return capture, snapshot, built
+
+
+@pytest.mark.parametrize("name", _CANCELS)
+def test_live_cancel_reproduces_the_capture(backend, name: str) -> None:  # noqa: ANN001
+    # The live config's reference input, and the indexes the redeemers carry, match
+    # only a cancel captured under that config.
+    capture, snapshot, built = _live_cancel(backend, name)
+    if snapshot.config.out_ref != capture.config.out_ref:
+        pytest.skip(
+            f"captured under config {capture.config.out_ref}, not the live config "
+            f"{snapshot.config.out_ref}, whose reference inputs sit elsewhere",
+        )
+    assert redeemers(built.tx) == captured_redeemers(fixture(name))
+
+
+@pytest.mark.parametrize("name", _CANCELS)
+def test_live_cancel_evaluates(backend, name: str) -> None:  # noqa: ANN001
+    _, _, built = _live_cancel(backend, name)
+    assert evaluate(built, fixture_utxos(fixture(name))) == sorted(
+        _EDIT + ["mint", "mint"],
+    )
 
 
 def test_live_pool_edit_evaluates(backend) -> None:  # noqa: ANN001

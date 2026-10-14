@@ -34,6 +34,7 @@ from charli3_dendrite.lending.fluidtokens_v4.state import auth_method
 from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
 from charli3_dendrite.lending.fluidtokens_v4.state import decode_repayment_mode
 from charli3_dendrite.lending.fluidtokens_v4.state import names_under
+from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import has_oracle
 from charli3_dendrite.lending.markets import LendingSnapshot
 from charli3_dendrite.lending.markets import WatchSpec
 from charli3_dendrite.lending.normalized import BorrowRequest
@@ -63,9 +64,6 @@ if TYPE_CHECKING:
 _AMORTIZED, _FLAT_TERM, _PERPETUAL = 0, 1, 2
 _FULL_CLAIM, _DUTCH_AUCTION, _LIQUIDATION = 0, 1, 2
 _OPTION_NONE = 1
-
-# The oracle-token placeholder of a collateral with no price feed.
-_NO_ORACLE = b"NONE"
 
 _PER_MILLE = 1000
 
@@ -142,10 +140,13 @@ def _price_source(
 ) -> OracleRef | None:
     """The feed pricing ``collateral`` in lovelace; None when not oracle-priced.
 
-    The contract's feeds price every token in lovelace, the principal included.
+    The contract's feeds price every token in lovelace, the principal included. An
+    option whose oracle token no feed can hold (the no-oracle marker, the empty token)
+    has no feed to read, so it is not oracle-priced even in a dynamically priced pool
+    or request.
     """
     feed = collateral.oracle_token_asset
-    if not dynamic or feed.policy_id == _NO_ORACLE:
+    if not dynamic or not has_oracle(feed):
         return None
     return OracleRef(
         source=OracleSource.FLUID_AGGREGATED,

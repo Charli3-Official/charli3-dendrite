@@ -3,6 +3,10 @@
 A validator that needs a price reads a feed reference input and finds its signed
 price as the withdraw redeemer of the feed's own payment credential (one oracle
 validator per priced token). ADA is priced 1:1 without a feed.
+
+A pool or loan names the oracle it reads by the NFT its feed holds. FluidTokens may
+run several oracles for one token (one per oracle version), so a signed price is
+fetched from the oracle holding that NFT.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
+from pycardano import SCRIPT_HASH_SIZE
 from pycardano import Address
 from pycardano import RawPlutusData
 from pycardano import Redeemer
@@ -30,10 +35,14 @@ if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.lending.fluidtokens.datums import Asset
     from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
+        FluidTokensProviderClient,
+    )
+    from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
         OracleWitnessBundle,
     )
 
-# A collateral option without an oracle names this token.
+# A collateral option without an oracle names this token. Pools also name the empty
+# token (ADA) where no oracle exists.
 NO_ORACLE_TOKEN = (b"NONE", b"NONE")
 
 
@@ -91,8 +100,42 @@ class OracleWitness:
 
 
 def has_oracle(oracle_token: Asset) -> bool:
-    """False for the no-oracle marker token."""
-    return (oracle_token.policy_id, oracle_token.asset_name) != NO_ORACLE_TOKEN
+    """True if a feed can hold ``oracle_token``.
+
+    A feed holds its oracle NFT, whose policy id is a script hash. A token with any
+    other policy id (the no-oracle marker, the empty token) names no oracle. An empty
+    asset name is a valid NFT name.
+    """
+    return len(oracle_token.policy_id) == SCRIPT_HASH_SIZE
+
+
+def oracle_token_unit(oracle_token: Asset) -> str:
+    """The ``policy + name`` hex unit of an oracle NFT."""
+    return oracle_token.policy_id.hex() + oracle_token.asset_name.hex()
+
+
+def fetch_witness(
+    backend: AbstractBackend,
+    provider: FluidTokensProviderClient,
+    *,
+    unit: str,
+    oracle_token: Asset,
+) -> OracleWitness:
+    """The registry's signed price of ``unit`` from the oracle holding ``oracle_token``.
+
+    Raises ``ValueError`` if the feed the registry names does not hold that NFT.
+    """
+    bundle = provider.fetch_oracle_witness(
+        collateral_unit=unit,
+        oracle_token=oracle_token_unit(oracle_token),
+    )
+    witness = OracleWitness.from_bundle(backend, bundle)
+    if not witness.serves(oracle_token):
+        raise ValueError(
+            f"the registry's oracle feed {witness.feed.out_ref} for {unit} does not "
+            f"hold oracle token {oracle_token_unit(oracle_token)}",
+        )
+    return witness
 
 
 def witness_for(oracles: Sequence[OracleWitness], oracle_token: Asset) -> OracleWitness:

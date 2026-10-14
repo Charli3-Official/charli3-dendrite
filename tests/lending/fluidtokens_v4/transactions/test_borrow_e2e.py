@@ -10,6 +10,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.borrow_terms import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.fluidtokens_v4.transactions.borrow import build_borrow
 from tests.lending.fluidtokens_v4.transactions.replay import build
+from tests.lending.fluidtokens_v4.transactions.replay import captured_purposes
 from tests.lending.fluidtokens_v4.transactions.replay import evaluate
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 from tests.lending.fluidtokens_v4.transactions.replay import fixture_utxos
@@ -20,17 +21,22 @@ pytestmark = needs_ogmios
 
 @pytest.mark.parametrize(
     ("name", "pools"),
-    [("borrow_single", 1), ("borrow_multi", 6)],
+    [
+        ("borrow_single", 1),
+        ("borrow_multi", 6),
+        ("borrow_single_oracle_v2", 1),
+        ("borrow_two_oracle_v2", 2),
+    ],
 )
 def test_borrow_evaluates(name: str, pools: int) -> None:
     fix = fixture(name)
     built = build(
         build_borrow, BorrowSnapshot.from_capture(fix), slot=fix["invalid_before"]
     )
-    # Pool spends, three mints, pool dispatch + borrow action + one oracle withdraw.
-    assert evaluate(built, fixture_utxos(fix)) == sorted(
-        ["spend"] * pools + ["mint"] * 3 + ["withdraw"] * 3,
-    )
+    # Pool spends, three mints, pool dispatch + borrow action + the oracle withdraws.
+    purposes = evaluate(built, fixture_utxos(fix))
+    assert purposes == captured_purposes(fix)
+    assert purposes.count("spend") == pools
 
 
 def _at_minimum(delta: int) -> list[str]:

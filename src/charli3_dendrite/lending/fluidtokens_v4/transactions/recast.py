@@ -122,9 +122,10 @@ class RecastSnapshot(LoanActionSnapshot):
     ) -> RecastSnapshot:
         """Resolve a recast for each ``(loan out-ref, amount paid)``.
 
-        Raises ``ValueError`` while the recast action's reward account is unregistered
-        (the ledger rejects its withdrawal, so no recast can be submitted), for a
-        recast the contract rejects, and for a payment above a loan's payoff. The
+        Raises ``ValueError`` while the recast action is unavailable: its reward
+        account unregistered (the ledger rejects its withdrawal) or no reference
+        script for it published (the build attaches it by reference). Also raises for
+        a recast the contract rejects and for a payment above a loan's payoff. The
         window defaults to :data:`~.common.LOAN_ACTION_VALIDITY_SLOTS` slots from the
         tip.
         """
@@ -137,9 +138,6 @@ class RecastSnapshot(LoanActionSnapshot):
         from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
             resolve_script,
         )
-        from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
-            reward_account_registered,
-        )
 
         context = resolve_loan_action(
             backend,
@@ -148,13 +146,8 @@ class RecastSnapshot(LoanActionSnapshot):
             borrower_address=borrower_address,
             funding=funding,
             allow_spent=allow_spent,
+            require_available=True,
         )
-        action_hash = context.scripts.loan_recast_action_script_hash.hex()
-        if not reward_account_registered(backend, action_hash):
-            raise ValueError(
-                f"the recast action's reward account ({action_hash}) is not "
-                "registered, so the ledger rejects every recast",
-            )
         window = default_window(
             backend,
             valid_from=valid_from,

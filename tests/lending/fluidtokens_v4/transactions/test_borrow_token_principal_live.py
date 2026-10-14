@@ -4,15 +4,14 @@ The pool is the first live pool this builder serves that lends a token and offer
 wanted collateral (ADA, or a token); the borrow takes 1% of its principal (or a single
 unit, whose ADA collateral falls below the loan's minimum ADA), sized and priced by
 ``BorrowSnapshot.from_backend`` with signed prices fetched from the FluidTokens
-registry. The borrow is evaluated as built, then with one unit less collateral. The
-borrower is synthetic, and so is its funding UTxO, which reaches Ogmios only as an
-additional UTxO; every other input is read from the live ledger. Needs ``DBSYNC_*``,
-``OGMIOS_HOST`` and ``FLUIDTOKENS_API_KEY``.
+registry, which is public. The borrow is evaluated as built, then with one unit less
+collateral. The borrower is synthetic, and so is its funding UTxO, which reaches Ogmios
+only as an additional UTxO; every other input is read from the live ledger. Needs
+``DBSYNC_*`` and ``OGMIOS_HOST``.
 """
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 
 import pytest
@@ -47,13 +46,7 @@ from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import evaluate
 from tests.lending.fluidtokens_v4.transactions.replay import needs_dbsync
 
-pytestmark = [
-    needs_dbsync,
-    pytest.mark.skipif(
-        not os.environ.get("FLUIDTOKENS_API_KEY"),
-        reason="needs FLUIDTOKENS_API_KEY",
-    ),
-]
+pytestmark = needs_dbsync
 
 # A synthetic borrower: a key-hash payment credential with a stake credential.
 _BORROWER = Address(

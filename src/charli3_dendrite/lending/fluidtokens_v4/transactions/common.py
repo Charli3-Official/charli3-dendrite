@@ -20,6 +20,7 @@ from charli3_dendrite.lending.fluidtokens.transactions._common import reward_add
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import AuthCardanoSignature
+from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.units import constr
 from charli3_dendrite.utility import asset_to_value
@@ -109,6 +110,23 @@ def ledger_order(utxos: Iterable[Utxo]) -> list[Utxo]:
         utxos,
         key=lambda u: (bytes.fromhex(out_ref_of(u)[0]), out_ref_of(u)[1]),
     )
+
+
+def captured_config(refs: Iterable[Utxo]) -> tuple[Utxo, ConfigDatum]:
+    """The config UTxO among a captured transaction's reference inputs, and its datum.
+
+    The config moves when FluidTokens upgrades an action script, so a capture names
+    the scripts it ran through the config it referenced, not through the constants.
+    """
+    config = next(
+        (u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)),
+        None,
+    )
+    if config is None:
+        raise ValueError("the transaction has no config reference input")
+    if config.datum is None:
+        raise ValueError("config UTxO is missing its datum")
+    return config, ConfigDatum.from_cbor(config.datum)
 
 
 def script_hash_of(script_ref: Utxo) -> str:

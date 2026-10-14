@@ -16,14 +16,19 @@ CONFIRMED SCHEMA
 ----------------
 The witness is assembled from a single public registry endpoint,
 ``GET /get-oracle-tokens`` on ``https://api.fluidtokens.com`` (verified live against the
-protocol API). It returns one entry per oracle-priced token; the entry for the borrow
-collateral carries everything needed:
+protocol API). It returns one entry per oracle of an oracle-priced token; the entry for
+the borrow collateral carries everything needed:
 
+* ``fluidOracle.policyId`` / ``fluidOracle.assetName`` -> the oracle NFT its feed holds.
 * ``fluidOracle.referenceInput`` -> the oracle feed reference-input out-ref.
 * ``fluidOracle.referenceScript`` -> the oracle withdraw reference-script out-ref.
 * ``supportedOracle.multisig`` -> the current signed price window: ``validFrom`` /
   ``validTo`` (POSIX ms), ``tokenPriceInLovelaces`` / ``tokenPriceDenominator``, and a
   ``multisigOracle.signatures`` list of ``{publicKey, signature}`` pairs.
+
+A token may be listed once per oracle version (``oracleVersion``), each oracle with its
+own NFT, feed and withdraw script. A pool or loan names the oracle it reads by that
+NFT, so the caller passes it to select the matching entry.
 
 The signed ``oracle_reward_cbor`` redeemer is reconstructed from those parts via
 :func:`build_oracle_reward_cbor`; the token identity in the signed message is the
@@ -32,9 +37,10 @@ lending collaterals use them); ``c3``-backed oracles price from an on-chain Char
 and are not handled here. ``lender_bond_datum`` is not served by this endpoint and is
 returned as ``None`` -- the borrow caller injects the ``Unit`` fallback / preimage.
 
-Credentials are read from the environment and NEVER committed: ``FLUIDTOKENS_API_BASE``
-(default ``https://api.fluidtokens.com``) and ``FLUIDTOKENS_API_KEY`` (sent as the
-``x-api-key`` header).
+Configuration is read from the environment and NEVER committed:
+``FLUIDTOKENS_API_BASE`` (default ``https://api.fluidtokens.com``) and the optional
+``FLUIDTOKENS_API_KEY``, sent as the ``x-api-key`` header when set. The registry
+endpoint is public and needs no key.
 """
 
 from __future__ import annotations
@@ -63,9 +69,9 @@ _HTTP_OK_MAX = 300
 class FluidTokensApiError(RuntimeError):
     """Raised when the FluidTokens registry cannot yield a usable witness.
 
-    Covers the failure modes the caller must act on: missing credentials, a non-2xx
-    HTTP response, a response whose shape does not match the registry, an unknown
-    collateral token, or an unsupported oracle type. Each carries an actionable message.
+    Covers the failure modes the caller must act on: a non-2xx HTTP response, a
+    response whose shape does not match the registry, an unknown collateral token or
+    oracle, or an unsupported oracle type. Each carries an actionable message.
     """
 
 
@@ -93,8 +99,7 @@ class FluidTokensProviderClient:
 
     Configuration comes from the environment unless overridden: ``api_base`` defaults to
     :data:`FLUIDTOKENS_API_BASE` (then :data:`DEFAULT_API_BASE`) and ``api_key`` to
-    :data:`FLUIDTOKENS_API_KEY`. A missing key raises :class:`FluidTokensApiError` at
-    construction with instructions to set the env vars or inject the witness directly.
+    :data:`FLUIDTOKENS_API_KEY`. The key is optional: it is sent only when set.
 
     The client owns the credential/transport concerns; the registry-shape parsing and
     the reward reconstruction are isolated in the ``_select_entry`` / ``_bundle_from_*``
@@ -109,24 +114,13 @@ class FluidTokensProviderClient:
         session: requests.Session | None = None,
         timeout: float = 30.0,
     ) -> None:
-        """Build a client, resolving credentials from args then the environment.
+        """Build a client, resolving its configuration from args then the environment.
 
-        Raises :class:`FluidTokensApiError` if no API key is available -- the
-        deterministic ``from_backend`` path stays fully usable without this client, so
-        the actionable remedy is to set the env vars or inject the witness directly.
+        Without an API key the client reads the public registry with no key header.
         """
         resolved_base = api_base or os.environ.get(ENV_API_BASE) or DEFAULT_API_BASE
-        resolved_key = api_key or os.environ.get(ENV_API_KEY)
-        if not resolved_key:
-            raise FluidTokensApiError(
-                "FluidTokens API key is required to fetch an oracle witness. Set the "
-                f"{ENV_API_KEY} environment variable (and optionally {ENV_API_BASE}), "
-                "or skip this client entirely and inject oracle_reward_cbor / "
-                "oracle_feed_outref / oracle_script_ref_outref directly into "
-                "BorrowSnapshot.from_backend / ChangeCollateralSnapshot.from_backend.",
-            )
         self._api_base = resolved_base.rstrip("/")
-        self._api_key = resolved_key
+        self._api_key = api_key or os.environ.get(ENV_API_KEY) or None
         self._session = session or requests.Session()
         self._timeout = timeout
 
@@ -137,32 +131,41 @@ class FluidTokensProviderClient:
         principal_unit: str | None = None,
         borrower_address: str | None = None,
         principal_amount: int | None = None,
+        oracle_token: str | None = None,
     ) -> OracleWitnessBundle:
         """Fetch a fresh, time-bound oracle witness for ``collateral_unit``.
 
         Returns an :class:`OracleWitnessBundle` ready to inject into
         ``BorrowSnapshot.from_backend`` / ``ChangeCollateralSnapshot.from_backend``.
-        The witness is keyed solely by the collateral token (``policy + name`` hex, or
-        ``policy.name``). The ``principal_unit`` / ``borrower_address`` /
-        ``principal_amount`` args are accepted for call-site symmetry with the borrow
-        resolver but do not affect the oracle lookup.
+        The witness is keyed by the collateral token (``policy + name`` hex, or
+        ``policy.name``) and, when given, by ``oracle_token``: the NFT (same formats)
+        held by the feed of the oracle the pool or loan reads. Without it the first
+        entry pricing the token is taken, whichever oracle it is. The
+        ``principal_unit`` / ``borrower_address`` / ``principal_amount`` args are
+        accepted for call-site symmetry with the borrow resolver but do not affect the
+        oracle lookup.
 
         Raises :class:`FluidTokensApiError` on a non-2xx response, an unexpected
-        registry shape, an unknown collateral token, or a non-``multisig`` oracle.
+        registry shape, an unknown collateral token or oracle, or a non-``multisig``
+        oracle.
         """
         tokens = self._get(ORACLE_TOKENS_PATH)
-        entry = self._select_entry(tokens, collateral_unit)
+        entry = self._select_entry(tokens, collateral_unit, oracle_token=oracle_token)
         return self._bundle_from_entry(entry, collateral_unit=collateral_unit)
 
     def _select_entry(
         self,
         tokens: object,
         collateral_unit: str,
+        *,
+        oracle_token: str | None = None,
     ) -> dict[str, Any]:
-        """Return the active registry entry whose token matches ``collateral_unit``.
+        """Return the registry entry whose token matches ``collateral_unit``.
 
-        Raises :class:`FluidTokensApiError` if the registry is not a list, no active
-        entry prices the collateral, or the matched entry is not a ``multisig`` oracle.
+        With ``oracle_token``, only the entry of the oracle holding that NFT matches.
+        Raises :class:`FluidTokensApiError` if the registry is not a list, no entry
+        prices the collateral (through that oracle), or the matched entry is inactive
+        or not a ``multisig`` oracle.
         """
         if not isinstance(tokens, list):
             raise FluidTokensApiError(
@@ -170,12 +173,15 @@ class FluidTokensProviderClient:
                 f"oracle token (got {type(tokens).__name__}).",
             )
         want = _normalize_unit(collateral_unit)
+        want_oracle = None if oracle_token is None else _normalize_unit(oracle_token)
         for entry in tokens:
             if not isinstance(entry, dict):
                 continue
             token = entry.get("token") or {}
             unit = f"{token.get('policyId', '')}{token.get('assetName', '')}"
             if _normalize_unit(unit) != want:
+                continue
+            if want_oracle is not None and _oracle_unit(entry) != want_oracle:
                 continue
             if not entry.get("active", True):
                 raise FluidTokensApiError(
@@ -188,9 +194,10 @@ class FluidTokensProviderClient:
                     "only multisig oracles are supported by this client.",
                 )
             return entry
+        through = "" if oracle_token is None else f" from oracle {oracle_token}"
         raise FluidTokensApiError(
             "FluidTokens registry has no oracle token for collateral "
-            f"{collateral_unit}.",
+            f"{collateral_unit}{through}.",
         )
 
     def _bundle_from_entry(
@@ -249,12 +256,9 @@ class FluidTokensProviderClient:
         body that is not valid JSON -- each with the status/URL for diagnosis.
         """
         url = f"{self._api_base}{path}"
+        headers = {"x-api-key": self._api_key} if self._api_key else {}
         try:
-            response = self._session.get(
-                url,
-                headers={"x-api-key": self._api_key},
-                timeout=self._timeout,
-            )
+            response = self._session.get(url, headers=headers, timeout=self._timeout)
         except requests.RequestException as exc:
             raise FluidTokensApiError(
                 f"FluidTokens API request to {url} failed: {exc}",
@@ -298,6 +302,12 @@ def _parse_signatures(
 def _normalize_unit(unit: str) -> str:
     """Normalize an asset unit for comparison: drop ``.`` separators, lowercase."""
     return unit.replace(".", "").lower()
+
+
+def _oracle_unit(entry: dict[str, Any]) -> str:
+    """The normalized unit of the NFT held by a registry entry's oracle feed."""
+    fluid = entry.get("fluidOracle") or {}
+    return _normalize_unit(f"{fluid.get('policyId', '')}{fluid.get('assetName', '')}")
 
 
 def _parse_outref(value: Any, *, what: str) -> tuple[str, int]:  # noqa: ANN401
