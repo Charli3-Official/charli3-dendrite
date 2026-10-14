@@ -25,6 +25,9 @@ from pycardano import TransactionOutput
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens.datums import Asset
+from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
+    FluidTokensProviderClient,
+)
 from charli3_dendrite.lending.fluidtokens.oracles.witness import (
     build_oracle_reward_cbor,
 )
@@ -58,14 +61,31 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.repay import build_rep
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.units import script_payment_address
 from charli3_dendrite.utility import slot_to_posix_ms
+from tests.lending.fluidtokens_v4.records import NO_ORACLE_TOKENS
+from tests.lending.fluidtokens_v4.transactions.replay import ORACLE_V2_POLICY
+from tests.lending.fluidtokens_v4.transactions.replay import RegistrySession
 from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import captured_output_view
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
+from tests.lending.fluidtokens_v4.transactions.replay import captured_scripts
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
+from tests.lending.fluidtokens_v4.transactions.replay import other_oracle
 from tests.lending.fluidtokens_v4.transactions.replay import output_view
 from tests.lending.fluidtokens_v4.transactions.replay import redeemers
+from tests.lending.fluidtokens_v4.transactions.replay import registry_backend
+from tests.lending.fluidtokens_v4.transactions.replay import registry_entry
 
-CAPTURES = ["borrow_single", "borrow_multi"]
+# The first two ran an earlier borrow action, under the config of 2026-09-19; the
+# others run the current one.
+CAPTURES = [
+    "borrow_single",
+    "borrow_multi",
+    "borrow_single_oracle_v2",
+    "borrow_two_oracle_v2",
+]
+# The captures whose pool managers the entity snapshot holds; the others' pools came
+# later, and only the live replay resolves their pool managers.
+SNAPSHOT_CAPTURES = ["borrow_single", "borrow_multi"]
 _ENTITIES = json.loads(
     (Path(__file__).parents[1] / "fixtures" / "entities.json").read_text(),
 )
@@ -149,7 +169,7 @@ def _fixture_backend(
     monkeypatch.setattr(
         resolve,
         "resolve_pool_manager",
-        lambda _backend, pool_id: managers[pool_id.hex()],
+        lambda _backend, pool_id, **_: managers[pool_id.hex()],
     )
     monkeypatch.setattr(
         resolve,
@@ -188,7 +208,7 @@ def _from_backend(capture: BorrowSnapshot, **overrides: object) -> BorrowSnapsho
     return BorrowSnapshot.from_backend(object(), **(kwargs | overrides))  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("name", CAPTURES)
+@pytest.mark.parametrize("name", SNAPSHOT_CAPTURES)
 def test_from_backend_reproduces_the_capture(
     monkeypatch: pytest.MonkeyPatch,
     name: str,
@@ -205,6 +225,56 @@ def test_from_backend_reproduces_the_capture(
         assert resolved.borrower_bond_lovelace == captured.borrower_bond_lovelace
         # FluidTokens pads each loan to 3 ADA; the least it needs is less.
         assert resolved.loan_lovelace < captured.loan_lovelace
+
+
+@pytest.mark.parametrize("allow_spent", [False, True])
+def test_from_backend_resolves_pool_managers_like_their_pools(
+    monkeypatch: pytest.MonkeyPatch,
+    allow_spent: bool,
+) -> None:
+    # A replay resolves spent pools, whose pool managers may be spent as well (a
+    # cancelled pool burns its manager).
+    fix = fixture("borrow_multi")
+    _fixture_backend(monkeypatch, fix)
+    managers = resolve.resolve_pool_manager
+    asked: list[bool] = []
+
+    def resolve_pool_manager(backend: object, pool_id: bytes, **kwargs: bool) -> object:
+        asked.append(kwargs.get("allow_spent", False))
+        return managers(backend, pool_id)
+
+    monkeypatch.setattr(resolve, "resolve_pool_manager", resolve_pool_manager)
+    capture = BorrowSnapshot.from_capture(fix)
+    _from_backend(capture, allow_spent=allow_spent)
+    assert asked == [allow_spent] * len(capture.legs)
+
+
+@pytest.mark.parametrize("allow_spent", [False, True])
+def test_resolve_pool_manager_passes_allow_spent(
+    monkeypatch: pytest.MonkeyPatch,
+    allow_spent: bool,
+) -> None:
+    rec = _ENTITIES["pool_manager"][0]
+    manager = Utxo(
+        address=rec["address"],
+        lovelace=rec["assets"]["lovelace"],
+        assets=[],
+        datum=rec["datum_cbor"],
+    )
+    asked: list[bool] = []
+
+    def resolve_utxo(_backend: object, _pool_id: bytes, **kwargs: bool) -> Utxo:
+        asked.append(kwargs.get("allow_spent", False))
+        return manager
+
+    monkeypatch.setattr(resolve, "resolve_pool_manager_utxo", resolve_utxo)
+    datum = resolve.resolve_pool_manager(
+        object(),  # type: ignore[arg-type]
+        b"\x00",
+        allow_spent=allow_spent,
+    )
+    assert datum == PoolManagerDatum.from_cbor(rec["datum_cbor"])
+    assert asked == [allow_spent]
 
 
 def test_from_backend_defaults_to_the_least_collateral(
@@ -365,9 +435,14 @@ def _floor(pool: Utxo, index: int, principal: int, collateral: Fraction) -> int:
     return ceil(principal * Fraction(*_USDM_PRICE) / ltv / collateral)
 
 
-def _borrow_data(tx: Transaction) -> list[BorrowData]:
+def _borrow_action(fix: dict) -> str:
+    """The borrow action a capture's config names."""
+    return captured_scripts(fix).pool_borrow_action_script_hash.hex()
+
+
+def _borrow_data(tx: Transaction, fix: dict) -> list[BorrowData]:
     """The borrow action's withdraw redeemer entries, one per leg in input order."""
-    position = sorted(_withdraw_scripts(tx)).index(c.POOL_BORROW_ACTION_SKH)
+    position = sorted(_withdraw_scripts(tx)).index(_borrow_action(fix))
     return PoolBorrowActionWithdrawRedeemer.from_cbor(
         next(
             cbor
@@ -421,7 +496,7 @@ def test_from_backend_borrows_a_token_against_ada(
     assert leg.collateral_amount == _floor(pool, index, principal, Fraction(1))
 
     tx = build(build_borrow, snapshot, slot=fix["invalid_before"]).tx
-    (data,) = _borrow_data(tx)
+    (data,) = _borrow_data(tx, fix)
     assert _reference_inputs(tx)[data.principal_oracle_ref_input_index] == (
         usdm.feed.out_ref
     )
@@ -429,7 +504,7 @@ def test_from_backend_borrows_a_token_against_ada(
     assert data.chosen_collateral_oracle_ref_input_index == 0
     assert _withdraw_scripts(tx) == {
         c.POOL_POLICY,
-        c.POOL_BORROW_ACTION_SKH,
+        _borrow_action(fix),
         usdm.script_hash,
     }
     continuing, loan = tx.transaction_body.outputs[:2]
@@ -475,13 +550,13 @@ def test_from_backend_borrows_a_token_against_a_token(
     assert leg.collateral_amount == _floor(pool, index, principal, strike.price)
 
     tx = build(build_borrow, snapshot, slot=fix["invalid_before"]).tx
-    (data,) = _borrow_data(tx)
+    (data,) = _borrow_data(tx, fix)
     refs = _reference_inputs(tx)
     assert refs[data.principal_oracle_ref_input_index] == usdm.feed.out_ref
     assert refs[data.chosen_collateral_oracle_ref_input_index] == strike.feed.out_ref
     assert _withdraw_scripts(tx) == {
         c.POOL_POLICY,
-        c.POOL_BORROW_ACTION_SKH,
+        _borrow_action(fix),
         usdm.script_hash,
         strike.script_hash,
     }
@@ -518,7 +593,7 @@ def test_legs_share_the_signed_price_of_a_token(
     )
     tx = build(build_borrow, snapshot, slot=fix["invalid_before"]).tx
     refs = _reference_inputs(tx)
-    legs = _borrow_data(tx)
+    legs = _borrow_data(tx, fix)
     assert [data.pool_id for data in legs] == [
         leg.pool_id for leg in snapshot.ordered_legs
     ]
@@ -531,7 +606,7 @@ def test_legs_share_the_signed_price_of_a_token(
     # One signed price per token, however many legs it serves.
     assert _withdraw_scripts(tx) == {
         c.POOL_POLICY,
-        c.POOL_BORROW_ACTION_SKH,
+        _borrow_action(fix),
         usdm.script_hash,
         strike.script_hash,
     }
@@ -563,7 +638,7 @@ def test_a_borrow_mixes_ada_and_token_principal_legs(
     tx = build(build_borrow, snapshot, slot=fix["invalid_before"]).tx
     refs = _reference_inputs(tx)
     legs = snapshot.ordered_legs
-    entries = _borrow_data(tx)
+    entries = _borrow_data(tx, fix)
     assert [data.pool_id for data in entries] == [leg.pool_id for leg in legs]
     by_pool = {
         leg.out_ref: (i, data) for i, (leg, data) in enumerate(zip(legs, entries))
@@ -588,7 +663,7 @@ def test_a_borrow_mixes_ada_and_token_principal_legs(
 
     assert _withdraw_scripts(tx) == {
         c.POOL_POLICY,
-        c.POOL_BORROW_ACTION_SKH,
+        _borrow_action(fix),
         usdm.script_hash,
         strike.script_hash,
     }
@@ -609,10 +684,20 @@ def test_from_backend_fetches_each_price_the_pool_reads(
     pool, index = _entity_pool(_USDM, collateral)
     _fixture_backend(monkeypatch, fix, pools=[pool])
     prices = {_USDM: _usdm_price(capture, pool), _STRIKE: capture.oracles[0]}
+    datum = PoolDatum.from_cbor(pool.datum)
+    oracle_tokens = {
+        _USDM: datum.common_data.principal_oracle_asset,
+        _STRIKE: list(datum.collateral_options)[index].oracle_token_asset,
+    }
     asked: list[str] = []
 
     class _Registry:
-        def fetch_oracle_witness(self, *, collateral_unit: str) -> str:
+        def fetch_oracle_witness(
+            self, *, collateral_unit: str, oracle_token: str
+        ) -> str:
+            # Each price is asked of the oracle the pool names for that side.
+            wanted = oracle_tokens[collateral_unit]
+            assert oracle_token == wanted.policy_id.hex() + wanted.asset_name.hex()
             asked.append(collateral_unit)
             return collateral_unit
 
@@ -629,6 +714,89 @@ def test_from_backend_fetches_each_price_the_pool_reads(
     )
     assert sorted(asked) == sorted(fetched)
     assert snapshot.oracles == [prices[unit] for unit in asked]
+
+
+@pytest.mark.parametrize("first", ["other-oracle", "named-oracle"])
+def test_from_backend_prices_through_the_oracle_the_pool_names(
+    monkeypatch: pytest.MonkeyPatch,
+    first: str,
+) -> None:
+    # The registry lists a token once per oracle version; only the oracle the pool
+    # names prices its collateral.
+    fix = fixture("borrow_single")
+    _fixture_backend(monkeypatch, fix)
+    capture = BorrowSnapshot.from_capture(fix)
+    (leg,) = capture.legs
+    (named,) = capture.oracles
+    token = leg.collateral_oracle_token
+    other, other_token = other_oracle(named, ORACLE_V2_POLICY)
+    entries = [
+        registry_entry(other, other_token),
+        registry_entry(named, token.policy_id.hex() + token.asset_name.hex()),
+    ]
+    if first == "named-oracle":
+        entries.reverse()
+    registry_backend(
+        monkeypatch,
+        [named.feed, named.script_ref, other.feed, other.script_ref],
+    )
+    provider = FluidTokensProviderClient(session=RegistrySession(entries))
+    snapshot = _from_backend(capture, oracles=None, provider=provider)
+    (resolved,) = snapshot.legs
+    witness = snapshot.oracle_for(resolved)
+    assert (witness.feed, witness.script_ref) == (named.feed, named.script_ref)
+    tx = build(build_borrow, snapshot, slot=fix["invalid_before"]).tx
+    (data,) = _borrow_data(tx, fix)
+    refs = _reference_inputs(tx)
+    assert refs[data.chosen_collateral_oracle_ref_input_index] == named.feed.out_ref
+    assert other.feed.out_ref not in refs
+
+
+def test_from_backend_refuses_a_registry_oracle_that_does_not_feed_the_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fix = fixture("borrow_single")
+    _fixture_backend(monkeypatch, fix)
+    capture = BorrowSnapshot.from_capture(fix)
+    (leg,) = capture.legs
+    (named,) = capture.oracles
+    token = leg.collateral_oracle_token
+    other, _ = other_oracle(named, ORACLE_V2_POLICY)
+    # A registry entry that names the pool's oracle but points at another feed.
+    entry = registry_entry(other, token.policy_id.hex() + token.asset_name.hex())
+    registry_backend(monkeypatch, [other.feed, other.script_ref])
+    provider = FluidTokensProviderClient(session=RegistrySession([entry]))
+    with pytest.raises(ValueError, match="does not hold"):
+        _from_backend(capture, oracles=None, provider=provider)
+
+
+@pytest.mark.parametrize(
+    "oracle_token",
+    list(NO_ORACLE_TOKENS.values()),
+    ids=list(NO_ORACLE_TOKENS),
+)
+@pytest.mark.parametrize("oracles", [None, []], ids=["registry", "given"])
+def test_from_backend_refuses_a_priced_side_that_names_no_oracle(
+    monkeypatch: pytest.MonkeyPatch,
+    oracle_token: Asset,
+    oracles: list | None,
+) -> None:
+    # An oracle-priced pool may offer a token collateral whose oracle token no feed
+    # can hold (the no-oracle marker, the empty token): no signed price exists.
+    fix = fixture("borrow_single")
+    capture = BorrowSnapshot.from_capture(fix)
+    (leg,) = capture.legs
+    datum = PoolDatum.from_cbor(leg.pool.datum)
+    options = list(datum.collateral_options)
+    chosen = leg.chosen_collateral_index
+    options[chosen] = replace(options[chosen], oracle_token_asset=oracle_token)
+    pool = replace(
+        leg.pool,
+        datum=replace(datum, collateral_options=options).to_cbor_hex(),
+    )
+    _fixture_backend(monkeypatch, fix, pools=[pool])
+    with pytest.raises(ValueError, match="names no oracle for its collateral"):
+        _from_backend(capture, oracles=oracles, provider=_StubProvider())
 
 
 def test_from_backend_needs_the_principal_price_of_a_token_pool(

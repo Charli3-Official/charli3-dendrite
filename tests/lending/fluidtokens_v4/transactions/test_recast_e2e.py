@@ -1,8 +1,10 @@
 """Gated: V4 recasts evaluate on Ogmios against mainnet (OGMIOS_HOST).
 
-No recast exists on mainnet, and the recast action's reward account is not yet
-registered, so a recast cannot be submitted today; Ogmios evaluates the scripts
-without checking registration.
+No recast exists on mainnet. The live config names a recast action with no published
+script and an unregistered reward account, so a recast cannot be built against it.
+These evaluations run an earlier recast deployment (reference script ef0f25ea#0,
+hash c0af09a3), whose reward account was never registered either; Ogmios evaluates
+the scripts without checking registration.
 """
 
 from __future__ import annotations

@@ -13,13 +13,19 @@ datum_cbor, assets}`` where ``assets`` is the charli3 ``Assets`` shape
 
 The captured CBOR is the source of truth for the byte-exact datum tests.
 
+``--config-only`` refreshes just ``config`` and ``lender_manager_config`` in the
+existing file and keeps every entity record: the transaction fixtures and their tests
+are coupled to the captured entities, so a config update need not re-capture them.
+
 Run: PYTHONPATH=src python tests/lending/fluidtokens_v4/fixtures/_capture_entities.py
+[--config-only]
 Requires dbsync env (DBSYNC_*). Not run in CI.
 """
 from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import psycopg
@@ -102,15 +108,27 @@ def _records(cur, where: str, args: tuple, *, by_out_ref: bool = True) -> list[d
     return sorted(out, key=lambda r: r["out_ref"]) if by_out_ref else out
 
 
-def capture() -> dict:
-    conn = psycopg.connect(**CONN)
-    cur = conn.cursor()
+def _configs(cur) -> dict:
     out: dict = {"config": _records(cur, _HOLDS_ASSET, CONFIG_NFT, by_out_ref=False)}
     (out["lender_manager_config"],) = _records(
         cur,
         "o.consumed_by_tx_id is null and " + _HOLDS_ASSET,
         LENDER_MANAGER_CONFIG_NFT,
     )
+    return out
+
+
+def capture_configs() -> dict:
+    conn = psycopg.connect(**CONN)
+    out = _configs(conn.cursor())
+    conn.close()
+    return out
+
+
+def capture() -> dict:
+    conn = psycopg.connect(**CONN)
+    cur = conn.cursor()
+    out = _configs(cur)
     for entity, credential in ENTITY_CREDENTIALS.items():
         out[entity] = _records(
             cur,
@@ -122,9 +140,12 @@ def capture() -> dict:
 
 
 if __name__ == "__main__":
-    here = Path(__file__).parent
-    data = capture()
-    (here / "entities.json").write_text(json.dumps(data, indent=2) + "\n")
+    path = Path(__file__).parent / "entities.json"
+    if "--config-only" in sys.argv[1:]:
+        data = json.loads(path.read_text()) | capture_configs()
+    else:
+        data = capture()
+    path.write_text(json.dumps(data, indent=2) + "\n")
     for key, value in data.items():
         count = len(value) if isinstance(value, list) else 1
         print(f"{key}: {count}")

@@ -38,6 +38,7 @@ from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import PoolManagerDatum
 from charli3_dendrite.lending.fluidtokens_v4.datums import TxOutRef
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import settled_min_ada
@@ -278,9 +279,7 @@ class PoolCreateSnapshot(PoolActionSnapshot):
             offers=offers,
             lender_address=lender.encode(),
             funding=[utxo_from_dict(u) for u in fix["inputs"]],
-            config=next(
-                u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-            ),
+            config=captured_config(refs)[0],
             pool_policy_script_ref=script_ref_by_hash(refs, c.POOL_POLICY),
             pool_manager_policy_script_ref=script_ref_by_hash(
                 refs,

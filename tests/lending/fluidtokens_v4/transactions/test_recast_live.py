@@ -1,4 +1,8 @@
-"""Gated: a live recast resolves only once its reward account is registered."""
+"""Gated: a live recast resolves only while its action can run on chain.
+
+The action can run once its reward account is registered and a reference script for
+it is published; the current config names a recast action with neither.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,9 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.repay import RepaySnap
 from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import config_datum
 from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
     resolve_config_utxo,
+)
+from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
+    resolve_script,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.resolve import (
     reward_account_registered,
@@ -26,7 +33,7 @@ def backend():  # noqa: ANN201
     return DbsyncBackend()
 
 
-def test_live_recast_follows_the_reward_account(backend) -> None:  # noqa: ANN001
+def test_live_recast_follows_the_action_availability(backend) -> None:  # noqa: ANN001
     capture = RepaySnapshot.from_capture(fixture("repay_single"))
     (position,) = capture.positions
     action = config_datum(resolve_config_utxo(backend)).loan_recast_action_script_hash
@@ -42,11 +49,20 @@ def test_live_recast_follows_the_reward_account(backend) -> None:  # noqa: ANN00
             allow_spent=True,
         )
 
-    if reward_account_registered(backend, action.hex()):
+    registered = reward_account_registered(backend, action.hex())
+    try:
+        resolve_script(backend, action)
+    except ValueError:
+        published = False
+    else:
+        published = True
+    if registered and published:
         assert resolve().positions[0].amount_paid == 10_000_000
     else:
-        with pytest.raises(ValueError, match="not registered"):
+        with pytest.raises(ValueError, match="recast action .* is unavailable") as err:
             resolve()
+        assert ("not registered" in str(err.value)) == (not registered)
+        assert ("no reference script" in str(err.value)) == (not published)
 
 
 def test_the_other_v4_withdraw_accounts_are_registered(backend) -> None:  # noqa: ANN001

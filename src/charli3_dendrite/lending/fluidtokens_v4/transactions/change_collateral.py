@@ -29,6 +29,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_di
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_value
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import is_policy_wide
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
@@ -53,6 +54,8 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_terms import (
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import OracleWitness
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import add_oracles
+from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import fetch_witness
+from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import has_oracle
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import (
     oracles_from_capture,
 )
@@ -121,10 +124,12 @@ class ChangeCollateralSnapshot(LoanActionSnapshot):
         """Rebuild the snapshot of a captured mainnet change collateral."""
         inputs = [utxo_from_dict(u) for u in fix["inputs"]]
         refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+        config, scripts = captured_config(refs)
+        change_action = scripts.loan_change_collateral_action_script_hash.hex()
         action = next(
             LoanChangeCollateralActionWithdrawRedeemer.from_cbor(r["cbor"])
             for r in fix["redeemers"]
-            if r["script_hash"] == c.LOAN_CHANGE_COLLATERAL_ACTION_SKH
+            if r["script_hash"] == change_action
         )
         loans = ledger_order(
             u for u in inputs if u.holds_policy(c.LOAN_POLICY) and u.datum
@@ -145,21 +150,16 @@ class ChangeCollateralSnapshot(LoanActionSnapshot):
         return cls(
             positions=positions,
             funding=[u for u in inputs if u.out_ref not in used],
-            config=next(
-                u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-            ),
+            config=config,
             loan_spend_script_ref=script_ref_by_hash(refs, c.LOAN_SPEND_SKH),
             loan_policy_script_ref=script_ref_by_hash(refs, c.LOAN_POLICY),
-            action_script_ref=script_ref_by_hash(
-                refs,
-                c.LOAN_CHANGE_COLLATERAL_ACTION_SKH,
-            ),
+            action_script_ref=script_ref_by_hash(refs, change_action),
             valid_from=fix["invalid_before"],
             valid_to=fix["invalid_hereafter"],
             oracles=oracles_from_capture(
                 fix,
                 refs,
-                exclude={c.LOAN_POLICY, c.LOAN_CHANGE_COLLATERAL_ACTION_SKH},
+                exclude={c.LOAN_POLICY, change_action},
             ),
         )
 
@@ -180,7 +180,8 @@ class ChangeCollateralSnapshot(LoanActionSnapshot):
         """Resolve a collateral change for each ``(loan out-ref, new amount)``.
 
         Every side that is not ADA needs a signed price: pass ``oracles``, or leave
-        them out to fetch each from the FluidTokens registry through ``provider``.
+        them out to fetch each from the FluidTokens registry through ``provider``,
+        from the oracle the loan names for that side.
         The window defaults to the tip, inside every signed price, and each new amount
         is checked against the least the loan may keep at the window's upper bound.
         """
@@ -221,23 +222,33 @@ class ChangeCollateralSnapshot(LoanActionSnapshot):
         )
         for position in positions:
             datum = position.loan_datum
-            needed = [(datum.collateral.policy_id, datum.collateral.oracle_token_asset)]
-            needed.append(
-                (datum.principal_asset.policy_id, datum.principal_oracle_asset),
-            )
-            for policy, token in needed:
+            for side, policy, token, unit in (
+                (
+                    "collateral",
+                    datum.collateral.policy_id,
+                    datum.collateral.oracle_token_asset,
+                    position.collateral_unit,
+                ),
+                (
+                    "principal",
+                    datum.principal_asset.policy_id,
+                    datum.principal_oracle_asset,
+                    datum.principal_asset.unit(),
+                ),
+            ):
                 if not policy or any(w.serves(token) for w in snapshot.oracles):
                     continue
+                if not has_oracle(token):
+                    raise ValueError(
+                        f"loan {position.out_ref} names no oracle for its {side}, "
+                        "so no signed price of it exists",
+                    )
                 if oracles is not None:
                     raise ValueError("no oracle witness prices this loan's assets")
                 provider = provider or FluidTokensProviderClient()
-                unit = (
-                    position.collateral_unit
-                    if token == datum.collateral.oracle_token_asset
-                    else datum.principal_asset.unit()
+                snapshot.oracles.append(
+                    fetch_witness(backend, provider, unit=unit, oracle_token=token),
                 )
-                bundle = provider.fetch_oracle_witness(collateral_unit=unit)
-                snapshot.oracles.append(OracleWitness.from_bundle(backend, bundle))
         tip = current_slot(backend) if valid_from is None or valid_to is None else 0
         snapshot.valid_from, snapshot.valid_to = signed_window(
             [w.reward for w in snapshot.oracles],

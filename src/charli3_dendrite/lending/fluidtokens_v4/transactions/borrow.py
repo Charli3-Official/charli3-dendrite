@@ -73,6 +73,7 @@ from charli3_dendrite.lending.fluidtokens_v4.state import collateral_asset_unit
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     add_zero_withdrawals,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import is_policy_wide
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import loan_address
@@ -89,6 +90,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.lender_bond import (
 from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_terms import with_fields
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import OracleWitness
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import add_oracles
+from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import fetch_witness
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import has_oracle
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import (
     oracles_from_capture,
@@ -278,13 +280,15 @@ class BorrowSnapshot(PoolActionSnapshot):
         inputs = [utxo_from_dict(u) for u in fix["inputs"]]
         outputs = [utxo_from_dict(u) for u in fix["outputs"]]
         refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+        config, scripts = captured_config(refs)
+        borrow_action = scripts.pool_borrow_action_script_hash.hex()
         pools = ledger_order(
             u for u in inputs if u.holds_policy(c.POOL_POLICY) and u.datum
         )
         action = next(
             PoolBorrowActionWithdrawRedeemer.from_cbor(r["cbor"])
             for r in fix["redeemers"]
-            if r["script_hash"] == c.POOL_BORROW_ACTION_SKH
+            if r["script_hash"] == borrow_action
         )
         legs = []
         for pool, data in zip(pools, action.actions_for_each_input):
@@ -320,12 +324,10 @@ class BorrowSnapshot(PoolActionSnapshot):
         return cls(
             legs=legs,
             funding=[u for u in inputs if u not in pools],
-            config=next(
-                u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-            ),
+            config=config,
             pool_spend_script_ref=script_ref_by_hash(refs, c.POOL_SPEND_SKH),
             pool_policy_script_ref=script_ref_by_hash(refs, c.POOL_POLICY),
-            borrow_action_script_ref=script_ref_by_hash(refs, c.POOL_BORROW_ACTION_SKH),
+            borrow_action_script_ref=script_ref_by_hash(refs, borrow_action),
             loan_policy_script_ref=script_ref_by_hash(refs, c.LOAN_POLICY),
             lender_bond_policy_script_ref=script_ref_by_hash(
                 refs,
@@ -341,7 +343,7 @@ class BorrowSnapshot(PoolActionSnapshot):
             oracles=oracles_from_capture(
                 fix,
                 refs,
-                exclude={c.POOL_POLICY, c.POOL_BORROW_ACTION_SKH},
+                exclude={c.POOL_POLICY, borrow_action},
             ),
         )
 
@@ -361,18 +363,19 @@ class BorrowSnapshot(PoolActionSnapshot):
     ) -> BorrowSnapshot:
         """Resolve a borrow from each of ``borrows`` live from the backend.
 
-        Each pool is resolved by out-ref (``allow_spent`` replays a spent one), and its
-        lender-bond datum is rebuilt from the pool and its pool manager. The scripts
-        come from the live config. An oracle-priced pool needs a signed price for its
-        collateral and for its principal, unless that side is ADA: pass ``oracles``,
-        or leave them out to fetch each from the FluidTokens registry through
-        ``provider`` (a default client reads the API key from the environment). The
-        validity window defaults to one hour from the tip, inside every signed price.
-        Every output carries the least ADA it needs; the loan carries enough for the
-        largest output later actions can turn it into, and an ADA collateral is the
-        loan's ADA. Refuses permissioned pools, pools that send borrower bonds to a
-        script, policy-wide collateral, a collateral option the pool does not offer,
-        a principal the pool cannot lend, and a borrow that would leave the
+        Each pool is resolved by out-ref (``allow_spent`` replays a spent one, and
+        resolves its pool manager the same way), and its lender-bond datum is rebuilt
+        from the pool and its pool manager. The scripts come from the live config. An
+        oracle-priced pool needs a signed price for its collateral and for its
+        principal, unless that side is ADA: pass ``oracles``, or leave them out to
+        fetch each from the FluidTokens registry through ``provider`` (by default a
+        client of the public registry), from the oracle the pool names for that side.
+        The validity window defaults to one hour from the tip, inside every signed
+        price. Every output carries the least ADA it needs; the loan carries enough
+        for the largest output later actions can turn it into, and an ADA collateral
+        is the loan's ADA. Refuses permissioned pools, pools that send borrower bonds
+        to a script, policy-wide collateral, a collateral option the pool does not
+        offer, a principal the pool cannot lend, and a borrow that would leave the
         continuing pool below its minimum ADA.
         """
         from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
@@ -421,13 +424,19 @@ class BorrowSnapshot(PoolActionSnapshot):
             ):
                 if token is None or any(w.serves(token) for w in witnesses):
                     continue
-                if oracles is not None or not has_oracle(token):
+                if not has_oracle(token):
+                    raise ValueError(
+                        f"pool {borrow.pool_out_ref} names no oracle for its {side}, "
+                        "so no signed price of it exists",
+                    )
+                if oracles is not None:
                     raise ValueError(
                         f"no oracle witness prices the {side} of {borrow.pool_out_ref}",
                     )
                 provider = provider or FluidTokensProviderClient()
-                bundle = provider.fetch_oracle_witness(collateral_unit=unit)
-                witnesses.append(OracleWitness.from_bundle(backend, bundle))
+                witnesses.append(
+                    fetch_witness(backend, provider, unit=unit, oracle_token=token),
+                )
 
         tip = current_slot(backend) if valid_from is None or valid_to is None else 0
         window = signed_window(
@@ -450,7 +459,11 @@ class BorrowSnapshot(PoolActionSnapshot):
                     lender_bond_datum=lender_bond_datum(
                         PoolDatum.from_cbor(pool.datum or ""),
                         pool_id=pool_id,
-                        pool_manager=resolve_pool_manager(backend, pool_id),
+                        pool_manager=resolve_pool_manager(
+                            backend,
+                            pool_id,
+                            allow_spent=allow_spent,
+                        ),
                     ),
                     witnesses=witnesses,
                     borrower_address=borrower_address,

@@ -25,6 +25,7 @@ from charli3_dendrite.lending.fluidtokens_v4.datums import LoanRepaymentData
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
     LOAN_ACTION_VALIDITY_SLOTS,
 )
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
     LoanActionSnapshot,
@@ -121,10 +122,12 @@ class RepaySnapshot(LoanActionSnapshot):
         inputs = [utxo_from_dict(u) for u in fix["inputs"]]
         outputs = [utxo_from_dict(u) for u in fix["outputs"]]
         refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+        config, scripts = captured_config(refs)
+        repay_action = scripts.loan_repay_action_script_hash.hex()
         action = next(
             LoanRepayActionWithdrawRedeemer.from_cbor(r["cbor"])
             for r in fix["redeemers"]
-            if r["script_hash"] == c.LOAN_REPAY_ACTION_SKH
+            if r["script_hash"] == repay_action
         )
         loans = ledger_order(
             u for u in inputs if u.holds_policy(c.LOAN_POLICY) and u.datum
@@ -162,12 +165,10 @@ class RepaySnapshot(LoanActionSnapshot):
         return cls(
             positions=positions,
             funding=[u for u in inputs if u.out_ref not in used],
-            config=next(
-                u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-            ),
+            config=config,
             loan_spend_script_ref=script_ref_by_hash(refs, c.LOAN_SPEND_SKH),
             loan_policy_script_ref=script_ref_by_hash(refs, c.LOAN_POLICY),
-            action_script_ref=script_ref_by_hash(refs, c.LOAN_REPAY_ACTION_SKH),
+            action_script_ref=script_ref_by_hash(refs, repay_action),
             valid_from=fix["invalid_before"],
             valid_to=fix["invalid_hereafter"],
             asset_manager_policy_script_ref=receipt_script,

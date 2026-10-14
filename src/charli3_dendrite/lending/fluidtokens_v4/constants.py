@@ -2,10 +2,16 @@
 
 The protocol is parameterized by a config NFT whose UTxO carries a
 :class:`~charli3_dendrite.lending.fluidtokens_v4.datums.ConfigDatum` with every
-policy id and script hash. The constants below are the live mainnet values:
+policy id and script hash. The constants below mirror the mainnet config of
+2026-10-01, held at
+``3d800e98a4da21dc9abcce30c145729406fef7db4d5cd3b4ecd6813aa228a75c#0``:
 :func:`default_config` assembles them into that datum as an offline fallback, and
 :func:`resolve_config` re-reads the live datum through the backend so discovery
 follows a config update.
+
+That config names a recast action and a sell-lender-position action whose scripts
+are not published on chain and whose reward accounts are not registered, so neither
+action can run against it.
 
 The lender-manager spend script is not listed in the config datum: pools opt into it
 by pointing ``lender_bond_address`` at it, and it ships as a constant here, as does
@@ -50,17 +56,17 @@ REPAYMENT_POLICY = "addd060da203f54e8ffc8a5d363094bc5e63d85734fe9d2869614d79"
 POOL_SPEND_SKH = "ecd0c0fc554beb43ade65d45dd471ede4d9cfc9b22bb70de8e113458"
 REQUEST_SPEND_SKH = "390d27f97868840864922fb0b5657ae4982b5be8bf03bf9cec81125e"
 LOAN_SPEND_SKH = "b5763e3c9cb7f1a2167f74f76cb635d24d138a4cc5cf9d87659c662d"
-LOAN_CLAIM_ACTION_SKH = "63b26ff93c96ae391e0f838de5d62053ec562ea82371c3aaab444902"
+LOAN_CLAIM_ACTION_SKH = "6a6f2aecc2ece13cc35df625c44b6865d07c82f0e07cd3410f4c2c86"
 LOAN_REPAY_ACTION_SKH = "41ac9c9f0bd2acc2db8af9882b772daee90fcf1ad877f0451bd7af28"
 LOAN_CHANGE_COLLATERAL_ACTION_SKH = (
     "7aa6795463a8dcb3534246a6c3d6b1f29a72f920ae1dad6d0bacd43d"
 )
-LOAN_RECAST_ACTION_SKH = "c0af09a3656074f444e1daec043896c235d18aba0567aba7afb55fe8"
+LOAN_RECAST_ACTION_SKH = "64d9b13f973be664a05c22365f90b222b0f9018b94918d3cb5d0220f"
 ASSET_MANAGER_SPEND_SKH = "b256da41be022ba1a28fe92b32eeea00109310e3f0aea1cb7791d98f"
 POOL_CANCEL_ACTION_SKH = "f7ed285d6a9b9772666c7f379ac3e70d777b9d651026385fd26c3e4d"
-POOL_BORROW_ACTION_SKH = "d86664db37ebf149386d3b26cc9b2e9c73bc11319052a6b4927c0a8f"
+POOL_BORROW_ACTION_SKH = "b8f1870006e7372cc6eaa19e69b742d86c756dbf77e9be6264c000b3"
 POOL_SELL_LENDER_POSITION_ACTION_SKH = (
-    "fc16ccaa435f24833da06681fdc8a71ae460c41517e87d12baf644fa"
+    "efa39cdbbd267439e9b8acca5f7fa144e9ac603c16d79828b6b0a528"
 )
 POOL_COMPOUND_ACTION_SKH = "fef12ea655d7d562bd419cad05723e201b1f292e6b6be5a874f073ba"
 POOL_EDIT_ACTION_SKH = "1ec1853344febb4f5de40fceca2316deb68baa3300161afed4ed6ae0"
