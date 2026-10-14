@@ -110,6 +110,7 @@ from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Ladder
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import banded_quote
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import directed_witness
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import fillable_input
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import find_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import marginal_price
 from charli3_dendrite.dexs.amm.sundae_v4_stableswap_math import STABLESWAP_PRECISION
@@ -4084,6 +4085,31 @@ class SundaeV4BandedCLPool(_SundaeV4TwoAssetPool, AbstractMultiAssetPoolState):
         if key not in cached:
             cached[key] = super().max_output(out_unit)
         return cached[key]
+
+    def fillable_input(self, unit_in: str, amount: int) -> int:
+        """The largest offer of at most ``amount`` that fills: ``0`` when none does.
+
+        The largest ``x <= min(amount, cap_in)`` that :meth:`get_amount_out`
+        quotes a non-zero output for, where ``cap_in`` is the most the ladder
+        absorbs: the ledger-max quote's ``spent``, memoised per state with the
+        quote. The offers that fill are not an interval (see
+        :func:`~.sundae_v4_banded_cl_math.fillable_input`).
+
+        Raises:
+            ValueError: ``unit_in`` is not a reserve of this pool.
+        """
+        a_is_input = self._a_is_input(unit_in)
+        if amount <= 0:
+            return 0
+        drain = self.quote(unit_in, _LEDGER_MAX)
+        return fillable_input(
+            self.ladder,
+            *self._ab(),
+            a_is_input,
+            amount,
+            self.witness(a_is_input),
+            drain,
+        )
 
     def get_amount_in(
         self,

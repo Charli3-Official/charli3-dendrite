@@ -88,6 +88,13 @@ a partial fill, as a constant-sum step does; `get_amount_in` only names offers t
 ladder absorbs in full. A quote assumes its order is the first on the pool in its
 scoop: the counter floor carries from one order's steps to the next's.
 
+So the offers that fill are not an interval. Past a band's edge, a remainder too
+small to buy a unit in the next band fills nothing, and in a band's last output
+units the walk's final boundary holds only at some inputs.
+`fillable_input(unit_in, amount)` is the largest offer of at most `amount` that
+fills, or zero when none does. It never exceeds the most the ladder absorbs, the
+ledger-max quote's `spent`, and no filling offer up to `amount` buys more.
+
 The ladder is not in the datum; `module_state` holds only its hash, and it is
 recovered from the module's `Create` / `Operate` redeemers like every other
 config. Only the current build of the module is priced: a vault still bound to a
