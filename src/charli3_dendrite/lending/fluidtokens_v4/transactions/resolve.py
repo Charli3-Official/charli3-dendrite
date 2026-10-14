@@ -133,9 +133,17 @@ def resolve_pool_manager_utxo(
     )
 
 
-def resolve_pool_manager(backend: AbstractBackend, pool_id: bytes) -> PoolManagerDatum:
-    """The datum of the pool manager of pool ``pool_id``."""
-    manager = resolve_pool_manager_utxo(backend, pool_id)
+def resolve_pool_manager(
+    backend: AbstractBackend,
+    pool_id: bytes,
+    *,
+    allow_spent: bool = False,
+) -> PoolManagerDatum:
+    """The datum of the pool manager of pool ``pool_id``.
+
+    ``allow_spent`` also finds a spent one, as for the pool it manages.
+    """
+    manager = resolve_pool_manager_utxo(backend, pool_id, allow_spent=allow_spent)
     if manager.datum is None:
         raise ValueError(f"the pool manager of pool {pool_id.hex()} has no datum")
     return PoolManagerDatum.from_cbor(manager.datum)
@@ -207,10 +215,13 @@ def resolve_loan_action(
     borrower_address: str,
     funding: Sequence[Utxo] | None = None,
     allow_spent: bool = False,
+    require_available: bool = False,
 ) -> LoanActionContext:
     """Resolve the loans, their bonds, the funding and the scripts of a loan action.
 
     ``action`` is ``"repay"``, ``"change_collateral"`` or ``"recast"``.
+    ``require_available`` resolves the action script through
+    :func:`resolve_available_action`, which names what keeps the action from running.
     """
     if not loan_out_refs:
         raise ValueError("a loan action needs at least one loan")
@@ -225,6 +236,12 @@ def resolve_loan_action(
     ]
     config = resolve_config_utxo(backend)
     scripts = config_datum(config)
+    action_hash = getattr(scripts, _ACTION_SCRIPT_FIELD[action])
+    action_script_ref = (
+        resolve_available_action(backend, action_hash, action=action)
+        if require_available
+        else resolve_script(backend, action_hash)
+    )
     spent = [u for p in positions for u in (p.loan, p.borrower_bond)]
     return LoanActionContext(
         positions=positions,
@@ -235,10 +252,7 @@ def resolve_loan_action(
         scripts=scripts,
         loan_spend_script_ref=resolve_script(backend, scripts.loan_spend_script_hash),
         loan_policy_script_ref=resolve_script(backend, scripts.loan_policy_id),
-        action_script_ref=resolve_script(
-            backend,
-            getattr(scripts, _ACTION_SCRIPT_FIELD[action]),
-        ),
+        action_script_ref=action_script_ref,
     )
 
 
@@ -489,6 +503,38 @@ def default_window(
 
 # Header byte of a mainnet reward address with a script credential.
 _SCRIPT_REWARD_HEADER = 0xF1
+
+
+def resolve_available_action(
+    backend: AbstractBackend,
+    script_hash: bytes | str,
+    *,
+    action: str,
+) -> Utxo:
+    """The reference script of withdraw action ``action``, if the action can run.
+
+    An action runs only through a withdrawal from its script's reward account, which
+    the ledger rejects while that account is unregistered, and these builders attach
+    its script by reference. The config may name an action whose script is not
+    published and whose account is not registered, which disables it. Raises
+    ``ValueError`` naming what is missing.
+    """
+    hex_hash = script_hash.hex() if isinstance(script_hash, bytes) else script_hash
+    reasons = []
+    if not reward_account_registered(backend, hex_hash):
+        reasons.append(
+            f"its reward account is not registered, so the ledger rejects every "
+            f"{action}",
+        )
+    try:
+        script_ref = resolve_script(backend, hex_hash)
+    except ValueError:
+        reasons.append("no reference script for it is published to build one from")
+    if reasons:
+        raise ValueError(
+            f"the {action} action ({hex_hash}) is unavailable: {'; '.join(reasons)}",
+        )
+    return script_ref
 
 
 def reward_account_registered(backend: AbstractBackend, script_hash: str) -> bool:

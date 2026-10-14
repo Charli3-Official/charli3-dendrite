@@ -9,6 +9,7 @@ import pytest
 from charli3_dendrite.lending.fluidtokens import math as finance
 from charli3_dendrite.lending.fluidtokens.datums import InterestOnRemainingPrincipal
 from charli3_dendrite.lending.fluidtokens.datums import PerpetualLoan
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import AssetManagerDatumWithToken
 from charli3_dendrite.lending.fluidtokens_v4.datums import LoanDatum
@@ -17,6 +18,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_terms import (
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import script_hash_of
 from charli3_dendrite.lending.fluidtokens_v4.transactions.recast import RecastSnapshot
 from charli3_dendrite.lending.fluidtokens_v4.transactions.recast import build_recast
 from charli3_dendrite.lending.fluidtokens_v4.transactions.redeemers import (
@@ -49,7 +51,7 @@ def test_recast_redeemer_points_at_the_bond() -> None:
     snapshot, _, slot = recast_snapshot(amount_paid=10_000_000)
     built = build(build_recast, snapshot, slot=slot)
     # Withdraw redeemers follow their script hashes: the loan dispatch, then recast.
-    assert c.LOAN_POLICY < c.LOAN_RECAST_ACTION_SKH
+    assert c.LOAN_POLICY < script_hash_of(snapshot.action_script_ref)
     (cbor,) = [
         cbor
         for purpose, i, cbor in redeemers(built.tx)
@@ -84,45 +86,112 @@ def test_a_recast_the_contract_rejects_raises() -> None:
         build(build_recast, snapshot, slot=slot)
 
 
-def _resolve_from(monkeypatch: pytest.MonkeyPatch, snapshot: RecastSnapshot) -> None:
-    """Resolve the snapshot's loan, config and scripts for ``from_backend``."""
-    (position,) = snapshot.positions
-    context = resolve.LoanActionContext(
-        positions=[position],
-        funding=snapshot.funding,
-        config=snapshot.config,
-        scripts=resolve.config_datum(snapshot.config),
-        loan_spend_script_ref=snapshot.loan_spend_script_ref,
-        loan_policy_script_ref=snapshot.loan_policy_script_ref,
-        action_script_ref=snapshot.action_script_ref,
-    )
-    monkeypatch.setattr(resolve, "resolve_loan_action", lambda _backend, **_: context)
-
-
-def test_from_backend_refuses_while_the_reward_account_is_unregistered(
+def _resolve_from(
     monkeypatch: pytest.MonkeyPatch,
+    snapshot: RecastSnapshot,
+    *,
+    registered: bool = True,
+    published: bool = True,
 ) -> None:
-    snapshot, _, _ = recast_snapshot(amount_paid=10_000_000)
+    """Resolve the snapshot's loan, config and scripts for ``from_backend``.
+
+    ``registered`` and ``published`` set whether the recast action's reward account
+    is registered and whether a reference script for it is published.
+    """
     (position,) = snapshot.positions
-    _resolve_from(monkeypatch, snapshot)
-    monkeypatch.setattr(resolve, "reward_account_registered", lambda *_: False)
-    with pytest.raises(ValueError, match="not registered"):
-        RecastSnapshot.from_backend(
-            object(),  # type: ignore[arg-type]
-            recasts=[(position.out_ref, 10_000_000)],
-            borrower_address=position.borrower_bond.address,
-            valid_from=snapshot.valid_from,
-            valid_to=snapshot.valid_to,
+    action = script_hash_of(snapshot.action_script_ref)
+    assert resolve.config_datum(snapshot.config).loan_recast_action_script_hash == (
+        bytes.fromhex(action)
+    )
+    scripts = {
+        script_hash_of(u): u
+        for u in (
+            snapshot.loan_spend_script_ref,
+            snapshot.loan_policy_script_ref,
+            snapshot.action_script_ref,
         )
-    monkeypatch.setattr(resolve, "reward_account_registered", lambda *_: True)
-    resolved = RecastSnapshot.from_backend(
+    }
+    if not published:
+        del scripts[action]
+
+    def resolve_script(_backend: object, script_hash: bytes | str) -> Utxo:
+        hex_hash = script_hash.hex() if isinstance(script_hash, bytes) else script_hash
+        if hex_hash not in scripts:
+            raise ValueError(f"no reference-script UTxO for hash {hex_hash}")
+        return scripts[hex_hash]
+
+    monkeypatch.setattr(
+        resolve,
+        "resolve_loan_position",
+        lambda _backend, _out_ref, **_: position,
+    )
+    monkeypatch.setattr(
+        resolve, "resolve_config_utxo", lambda _backend: snapshot.config
+    )
+    monkeypatch.setattr(resolve, "resolve_script", resolve_script)
+    monkeypatch.setattr(
+        resolve,
+        "reward_account_registered",
+        lambda _backend, script_hash: registered or script_hash != action,
+    )
+
+
+def _from_backend(snapshot: RecastSnapshot, amount_paid: int) -> RecastSnapshot:
+    (position,) = snapshot.positions
+    return RecastSnapshot.from_backend(
         object(),  # type: ignore[arg-type]
-        recasts=[(position.out_ref, 10_000_000)],
+        recasts=[(position.out_ref, amount_paid)],
         borrower_address=position.borrower_bond.address,
+        funding=snapshot.funding,
         valid_from=snapshot.valid_from,
         valid_to=snapshot.valid_to,
     )
+
+
+_UNREGISTERED = (
+    "its reward account is not registered, so the ledger rejects every recast"
+)
+_UNPUBLISHED = "no reference script for it is published to build one from"
+
+
+@pytest.mark.parametrize(
+    ("registered", "published", "named", "unnamed"),
+    [
+        (False, False, [_UNREGISTERED, _UNPUBLISHED], []),
+        (False, True, [_UNREGISTERED], [_UNPUBLISHED]),
+        # The ledger accepts a recast whose script is attached inline; only a build
+        # from a reference script is out of reach.
+        (True, False, [_UNPUBLISHED], ["ledger"]),
+    ],
+    ids=["neither", "unregistered", "unpublished"],
+)
+def test_from_backend_refuses_while_the_recast_action_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    registered: bool,
+    published: bool,
+    named: list[str],
+    unnamed: list[str],
+) -> None:
+    snapshot, _, _ = recast_snapshot(amount_paid=10_000_000)
+    _resolve_from(monkeypatch, snapshot, registered=registered, published=published)
+    action = script_hash_of(snapshot.action_script_ref)
+    with pytest.raises(ValueError, match="recast action") as raised:
+        _from_backend(snapshot, 10_000_000)
+    message = str(raised.value)
+    assert action in message
+    assert all(reason in message for reason in named)
+    assert not any(reason in message for reason in unnamed)
+    assert "no reference-script UTxO" not in message
+
+
+def test_from_backend_resolves_an_available_recast_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot, _, _ = recast_snapshot(amount_paid=10_000_000)
+    _resolve_from(monkeypatch, snapshot)
+    resolved = _from_backend(snapshot, 10_000_000)
     assert resolved.positions[0].amount_paid == 10_000_000
+    assert resolved.action_script_ref == snapshot.action_script_ref
 
 
 def test_a_batch_keeps_open_loans_before_closing_ones() -> None:
@@ -226,15 +295,8 @@ def test_from_backend_refuses_an_overpayment(
         valid_to_ms=slot_to_posix_ms(snapshot.valid_to),
     )
     _resolve_from(monkeypatch, snapshot)
-    monkeypatch.setattr(resolve, "reward_account_registered", lambda *_: True)
     with pytest.raises(ValueError, match=f"paid off by {payoff};"):
-        RecastSnapshot.from_backend(
-            object(),  # type: ignore[arg-type]
-            recasts=[(position.out_ref, payoff + 1)],
-            borrower_address=position.borrower_bond.address,
-            valid_from=snapshot.valid_from,
-            valid_to=snapshot.valid_to,
-        )
+        _from_backend(snapshot, payoff + 1)
 
 
 def test_a_continuing_recast_needs_the_loan_ada_to_cover_its_output() -> None:

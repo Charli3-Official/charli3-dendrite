@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -23,7 +24,12 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_value
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import (
+    captured_config,
+)
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
+from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import OracleWitness
 from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_action import (
     PoolPosition,
 )
@@ -52,6 +58,19 @@ def fixture(name: str) -> dict[str, Any]:
 def reference_script(label: str) -> Utxo:
     """A captured reference-script UTxO from ``reference_scripts.json``."""
     return utxo_from_dict(fixture("reference_scripts")[label])
+
+
+def captured_scripts(fix: dict[str, Any]) -> ConfigDatum:
+    """The config datum a capture referenced, which names the scripts it ran."""
+    return captured_config(utxo_from_dict(u) for u in fix["ref_inputs"])[1]
+
+
+def captured_purposes(fix: dict[str, Any]) -> list[str]:
+    """The sorted redeemer purposes of a capture, as Ogmios names them."""
+    return sorted(
+        "withdraw" if r["purpose"] == "reward" else r["purpose"]
+        for r in fix["redeemers"]
+    )
 
 
 def fixture_utxos(fix: dict[str, Any]) -> list[Utxo]:
@@ -216,6 +235,112 @@ def pool_fixture_backend(
             refs,
             h.hex() if isinstance(h, bytes) else h,
         ),
+    )
+
+
+# The oracle NFT policy of FluidTokens' version-2 oracles, listed in the registry next
+# to the version-1 oracles of the same tokens.
+ORACLE_V2_POLICY = "26e60b2083c14b849e622f8e05dd46ab01a7986fe5d72eeba8680d26"
+# The signer of the registry entries below (one key, as FluidTokens' multisig oracles).
+_REGISTRY_SIGNER = "cb1506c82c3143948618c50834a527b8d471ebae067bc0a5dee1627dc511e914"
+
+
+def registry_entry(
+    witness: OracleWitness,
+    oracle_token: str,
+    *,
+    token: str | None = None,
+) -> dict[str, Any]:
+    """A ``get-oracle-tokens`` registry entry serving ``witness``.
+
+    ``oracle_token`` is the unit of the oracle NFT its feed holds, and ``token`` the
+    unit it prices (by default the token of the witness's signed price). The entry
+    carries the witness's signed price, window and signature; the reward the client
+    rebuilds from it is the same message, not necessarily the same bytes.
+    """
+    reward = witness.reward
+    priced = token or reward.collateral_policy + reward.collateral_name
+    return {
+        "token": {"policyId": priced[:56], "assetName": priced[56:]},
+        "fluidOracle": {
+            "policyId": oracle_token[:56],
+            "assetName": oracle_token[56:],
+            "referenceInput": "{}#{}".format(*witness.feed.out_ref),
+            "referenceScript": "{}#{}".format(*witness.script_ref.out_ref),
+        },
+        "multisigOracle": {"publicKeys": [_REGISTRY_SIGNER], "requiredSignatures": 1},
+        "preferredOracle": "multisig",
+        "active": True,
+        "supportedOracle": {
+            "multisig": {
+                "validFrom": reward.valid_from_ms,
+                "validTo": reward.valid_to_ms,
+                "tokenPriceInLovelaces": reward.price_num,
+                "tokenPriceDenominator": reward.price_den,
+                "multisigOracle": {
+                    "signatures": [
+                        {
+                            "publicKey": _REGISTRY_SIGNER,
+                            "signature": reward.signature.hex(),
+                        },
+                    ],
+                    "requiredSignatures": 1,
+                },
+            },
+        },
+    }
+
+
+def other_oracle(witness: OracleWitness, policy: str) -> tuple[OracleWitness, str]:
+    """A stand-in second oracle for ``witness``'s token: its NFT under ``policy``.
+
+    Returns the witness and its oracle NFT unit. The feed and script sit at other
+    out-refs, as a second oracle version's do; the signed price is the same.
+    """
+    name = next(n for _, n, _ in witness.feed.assets)
+    feed = replace(
+        witness.feed,
+        assets=[(policy, name, 1)],
+        out_ref=(hashlib.blake2b(bytes.fromhex(policy + name)).hexdigest()[:64], 7),
+    )
+    script_ref = replace(
+        witness.script_ref,
+        ref_script=(b"stand-in oracle for " + bytes.fromhex(name)).hex(),
+        out_ref=(feed.out_ref[0], 8),
+    )
+    return OracleWitness(feed, script_ref, witness.reward_cbor), policy + name
+
+
+class RegistrySession:
+    """A ``requests`` session answering every GET with ``entries``; never online."""
+
+    def __init__(self, entries: list[dict[str, Any]]) -> None:
+        self._entries = entries
+        self.calls: list[str] = []
+
+    def get(self, url: str, **_: Any) -> Any:  # noqa: ANN401
+        self.calls.append(url)
+        entries = self._entries
+
+        class _Response:
+            status_code = 200
+            text = ""
+
+            def json(self) -> list[dict[str, Any]]:
+                return entries
+
+        return _Response()
+
+
+def registry_backend(monkeypatch: pytest.MonkeyPatch, utxos: Iterable[Utxo]) -> None:
+    """Resolve the registry's out-refs (feeds, oracle scripts) from ``utxos``."""
+    from charli3_dendrite.lending.fluidtokens.transactions import resolve
+
+    by_ref = {u.out_ref: u for u in utxos}
+    monkeypatch.setattr(
+        resolve,
+        "resolve_utxo_by_outref",
+        lambda _backend, tx_hash, index, **_: by_ref[(tx_hash, index)],
     )
 
 

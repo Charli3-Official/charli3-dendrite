@@ -37,13 +37,16 @@ from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
+from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from tests.lending.fluidtokens_v4.records import FIX
+from tests.lending.fluidtokens_v4.records import NO_ORACLE_TOKENS
 from tests.lending.fluidtokens_v4.records import record_info
 from tests.lending.fluidtokens_v4.records import v4_request_record
 from tests.lending.views import prices
 
 _FALSE = RawPlutusData(cbor2.CBORTag(121, []))
+_TRUE = RawPlutusData(cbor2.CBORTag(122, []))
 _NONE = RawPlutusData(cbor2.CBORTag(122, []))
 NOW_MS = 1_790_000_000_000
 
@@ -244,6 +247,65 @@ def test_a_pool_without_oracles_borrows_at_a_fixed_ratio():
     assert (terms.max_ltv, terms.fixed_ratio) == (None, Fraction(2, 3))
     assert terms.price_source is None
     assert market.required_collateral(terms.unit, 3) == 2
+
+
+def _priced_through(kind, oracle_token):
+    """A dynamically priced pool or request record whose collateral names a token."""
+    if kind == "pool":
+        rec = dict(FIX["pool"][ADA])
+        datum = v4.PoolDatum.from_cbor(rec["datum_cbor"])
+        (option,) = datum.collateral_options
+        datum = replace(
+            datum,
+            collateral_options=[replace(option, oracle_token_asset=oracle_token)],
+        )
+    else:
+        rec = v4_request_record()
+        datum = v4.RequestDatum.from_cbor(rec["datum_cbor"])
+        datum = replace(
+            datum,
+            collateral=replace(datum.collateral, oracle_token_asset=oracle_token),
+            dynamic_collateral_price=_TRUE,
+        )
+    rec["datum_cbor"] = datum.to_cbor_hex()
+    return rec
+
+
+_FEED = (
+    v4.PoolDatum.from_cbor(FIX["pool"][ADA]["datum_cbor"])
+    .collateral_options[0]
+    .oracle_token_asset
+)
+
+
+@pytest.mark.parametrize("kind", ["pool", "request"])
+@pytest.mark.parametrize(
+    ("oracle_token", "priced"),
+    [
+        pytest.param(_FEED, True, id="feed"),
+        # An NFT may have an empty asset name; its policy alone names the feed.
+        pytest.param(v4.Asset(_FEED.policy_id, b""), True, id="empty-name-feed"),
+        *(pytest.param(t, False, id=i) for i, t in NO_ORACLE_TOKENS.items()),
+    ],
+)
+def test_only_a_collateral_naming_a_feed_has_a_price_source(
+    kind,
+    oracle_token,
+    priced,
+):
+    view = FluidTokensV4MarketSource().parse(
+        record_info(_priced_through(kind, oracle_token)),
+    )
+    terms = view.collateral[0] if kind == "pool" else view.principal_limit
+    assert (terms.max_ltv is None, terms.fixed_ratio is None) == (False, True)
+    expected = OracleRef(
+        source=OracleSource.FLUID_AGGREGATED,
+        token=terms.unit,
+        quote="lovelace",
+        feed_policy=oracle_token.policy_id.hex(),
+        feed_name=oracle_token.asset_name.hex(),
+    )
+    assert terms.price_source == (expected if priced else None)
 
 
 def test_a_policy_wide_collateral():

@@ -11,11 +11,14 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_di
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import LenderManagerConfigDatum
 from charli3_dendrite.lending.fluidtokens_v4.transactions import redeemers as r
+from tests.lending.fluidtokens_v4.transactions.replay import captured_scripts
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 
 CAPTURES = [
     "borrow_single",
     "borrow_multi",
+    "borrow_single_oracle_v2",
+    "borrow_two_oracle_v2",
     "repay_single",
     "repay_multi",
     "change_collateral_single",
@@ -25,6 +28,7 @@ CAPTURES = [
     "pool_edit",
     "pool_edit_deposit",
     "pool_cancel",
+    "pool_cancel_after_config_update",
     "claim",
     "claim_bond_first",
 ]
@@ -39,7 +43,8 @@ _WITHDRAW_BONDS = LenderManagerConfigDatum.from_cbor(
 ).withdraw_bonds_action_script_hash.hex()
 
 # (purpose, script hash) -> the class of that redeemer. Oracle rewards are signed
-# messages replayed verbatim and have no class here.
+# messages replayed verbatim and have no class here. The action scripts come from
+# each capture's config (see :func:`_classes`).
 _CLASS: dict[tuple[str, str], type[PlutusData]] = {
     ("spend", c.POOL_SPEND_SKH): r.LoanSpendRedeemer,
     ("spend", c.LOAN_SPEND_SKH): r.LoanSpendRedeemer,
@@ -47,19 +52,11 @@ _CLASS: dict[tuple[str, str], type[PlutusData]] = {
     ("mint", c.LENDER_BOND_POLICY): r.BondMintRedeemer,
     ("mint", c.BORROWER_BOND_POLICY): r.BondMintRedeemer,
     ("reward", c.POOL_POLICY): r.PoolWithdrawRedeemer,
-    ("reward", c.POOL_BORROW_ACTION_SKH): r.PoolBorrowActionWithdrawRedeemer,
     ("reward", c.LOAN_POLICY): r.LoanWithdrawRedeemer,
-    ("reward", c.LOAN_REPAY_ACTION_SKH): r.LoanRepayActionWithdrawRedeemer,
-    (
-        "reward",
-        c.LOAN_CHANGE_COLLATERAL_ACTION_SKH,
-    ): r.LoanChangeCollateralActionWithdrawRedeemer,
     ("spend", c.POOL_MANAGER_SPEND_SKH): r.LoanSpendRedeemer,
     ("mint", c.POOL_POLICY): r.PoolMintRedeemer,
     ("mint", c.POOL_MANAGER_POLICY): r.PoolManagerMintRedeemer,
     ("reward", c.POOL_MANAGER_POLICY): r.PoolManagerWithdrawRedeemer,
-    ("reward", c.POOL_EDIT_ACTION_SKH): r.PoolEditActionWithdrawRedeemer,
-    ("reward", c.POOL_CANCEL_ACTION_SKH): r.PoolCancelWithdrawRedeemer,
     (
         "reward",
         c.POOL_MANAGER_EDIT_POOL_ACTION_SKH,
@@ -77,11 +74,27 @@ _CLASS: dict[tuple[str, str], type[PlutusData]] = {
 }
 
 
+def _classes(name: str) -> dict[tuple[str, str], type[PlutusData]]:
+    """:data:`_CLASS` plus the action scripts the capture's config names."""
+    scripts = captured_scripts(fixture(name))
+    actions: dict[bytes, type[PlutusData]] = {
+        scripts.pool_borrow_action_script_hash: r.PoolBorrowActionWithdrawRedeemer,
+        scripts.loan_repay_action_script_hash: r.LoanRepayActionWithdrawRedeemer,
+        scripts.loan_change_collateral_action_script_hash: (
+            r.LoanChangeCollateralActionWithdrawRedeemer
+        ),
+        scripts.pool_edit_action_script_hash: r.PoolEditActionWithdrawRedeemer,
+        scripts.pool_cancel_action_script_hash: r.PoolCancelWithdrawRedeemer,
+    }
+    return _CLASS | {("reward", h.hex()): cls for h, cls in actions.items()}
+
+
 def _typed_redeemers() -> list[tuple[str, type[PlutusData], str]]:
     out = []
     for name in CAPTURES:
+        classes = _classes(name)
         for red in fixture(name)["redeemers"]:
-            cls = _CLASS.get((red["purpose"], red["script_hash"]))
+            cls = classes.get((red["purpose"], red["script_hash"]))
             if cls is not None:
                 out.append((name, cls, red["cbor"]))
     return out
@@ -101,16 +114,19 @@ def test_every_non_oracle_redeemer_has_a_class() -> None:
         red
         for name in CAPTURES
         for red in fixture(name)["redeemers"]
-        if (red["purpose"], red["script_hash"]) not in _CLASS
+        if (red["purpose"], red["script_hash"]) not in _classes(name)
     ]
-    # Only oracle rewards, one oracle validator per priced token: STRIKE, IAG, FLDT.
+    # Only oracle rewards, one oracle validator per priced token and oracle version:
+    # STRIKE, IAG, FLDT (version 1); NIGHT, USDM (version 2).
     assert {red["purpose"] for red in untyped} == {"reward"}
     assert {red["script_hash"] for red in untyped} == {
         "d97da4f3f2c3757971332b9bfb3c46df18715b059e6ab0fe66ddb036",
         "81dd5229d086ea5f3a9e3a8133f2e1b7a4d0020cc67063f8c21cdc3b",
         "4a48df8eac9f3abb39bfcd15e8cc82e8f465ece322a45ed47ef7ebb9",
+        "756897fd5f7f838ae49b244efd813207ef525e6c5ab85c3e2fdc79a5",
+        "df6f292ece90837f738ef156f8940e5f98db2027b3afa8d2041c492d",
     }
-    assert len(_typed_redeemers()) == 69  # noqa: PLR2004
+    assert len(_typed_redeemers()) == 90  # noqa: PLR2004
 
 
 def test_recast_redeemer_layout() -> None:

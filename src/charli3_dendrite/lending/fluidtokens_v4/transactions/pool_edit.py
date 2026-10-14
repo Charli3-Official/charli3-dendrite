@@ -26,6 +26,7 @@ from charli3_dendrite.lending.fluidtokens.transactions.utxos import to_pycardano
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_value
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
+from charli3_dendrite.lending.fluidtokens_v4.transactions.common import captured_config
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import ledger_order
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import out_ref_of
@@ -147,6 +148,7 @@ class PoolEditSnapshot(ManagedPoolSnapshot):
         inputs = [utxo_from_dict(u) for u in fix["inputs"]]
         outputs = [utxo_from_dict(u) for u in fix["outputs"]]
         refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+        config, scripts = captured_config(refs)
         pools = ledger_order(
             u for u in inputs if u.holds_policy(c.POOL_POLICY) and u.datum
         )
@@ -173,9 +175,7 @@ class PoolEditSnapshot(ManagedPoolSnapshot):
         return cls(
             positions=positions,
             funding=[u for u in inputs if u.out_ref not in used],
-            config=next(
-                u for u in refs if u.holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
-            ),
+            config=config,
             pool_spend_script_ref=script_ref_by_hash(refs, c.POOL_SPEND_SKH),
             pool_manager_spend_script_ref=script_ref_by_hash(
                 refs,
@@ -186,7 +186,10 @@ class PoolEditSnapshot(ManagedPoolSnapshot):
                 refs,
                 c.POOL_MANAGER_POLICY,
             ),
-            action_script_ref=script_ref_by_hash(refs, c.POOL_EDIT_ACTION_SKH),
+            action_script_ref=script_ref_by_hash(
+                refs,
+                scripts.pool_edit_action_script_hash.hex(),
+            ),
             manager_action_script_ref=script_ref_by_hash(
                 refs,
                 c.POOL_MANAGER_EDIT_POOL_ACTION_SKH,

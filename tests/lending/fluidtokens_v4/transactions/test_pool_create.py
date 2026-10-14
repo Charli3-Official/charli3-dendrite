@@ -10,6 +10,7 @@ from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 
+from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
 from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_action import (
@@ -58,6 +59,18 @@ def test_create_redeemers_outputs_and_mints_are_byte_exact(name: str) -> None:
         for n, q in names.items()
     )
     assert minted == sorted([p, n, int(q)] for p, n, q in fix["mints"])
+
+
+def test_a_capture_without_the_config_reference_input_is_refused() -> None:
+    fix = fixture("pool_create")
+    refs = [
+        u
+        for u in fix["ref_inputs"]
+        if not utxo_from_dict(u).holds(c.CONFIG_NFT_POLICY, c.CONFIG_NFT_NAME)
+    ]
+    assert len(refs) == len(fix["ref_inputs"]) - 1
+    with pytest.raises(ValueError, match="no config reference input"):
+        PoolCreateSnapshot.from_capture({**fix, "ref_inputs": refs})
 
 
 def test_the_names_derive_from_the_input_ref() -> None:

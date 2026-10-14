@@ -19,6 +19,7 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.pool_cancel import (
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
+from tests.lending.fluidtokens_v4.transactions.replay import captured_scripts
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
 from tests.lending.fluidtokens_v4.transactions.replay import pool_fixture_backend
 from tests.lending.fluidtokens_v4.transactions.replay import redeemers
@@ -55,7 +56,7 @@ def test_cancel_burns_both_nfts_and_needs_the_owner() -> None:
         for h in (
             c.POOL_POLICY,
             c.POOL_MANAGER_POLICY,
-            c.POOL_CANCEL_ACTION_SKH,
+            captured_scripts(fix).pool_cancel_action_script_hash.hex(),
             c.POOL_MANAGER_CANCEL_ACTION_SKH,
         )
     }

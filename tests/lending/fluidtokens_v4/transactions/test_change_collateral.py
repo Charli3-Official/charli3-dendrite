@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 
 import pytest
 from pycardano import TransactionOutput
 
+from charli3_dendrite.lending.fluidtokens.datums import Asset
+from charli3_dendrite.lending.fluidtokens.oracles.fluid_api import (
+    FluidTokensProviderClient,
+)
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
+from charli3_dendrite.lending.fluidtokens_v4.datums import LoanDatum
+from charli3_dendrite.lending.fluidtokens_v4.transactions import resolve
 from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral import (
     ChangeCollateralPosition,
 )
@@ -18,15 +25,24 @@ from charli3_dendrite.lending.fluidtokens_v4.transactions.change_collateral impo
     build_change_collateral,
 )
 from charli3_dendrite.lending.fluidtokens_v4.transactions.common import min_ada
+from charli3_dendrite.lending.fluidtokens_v4.transactions.loan_action import (
+    LoanPosition,
+)
 import cbor2
 from pycardano import RawPlutusData
+from tests.lending.fluidtokens_v4.records import NO_ORACLE_TOKENS
+from tests.lending.fluidtokens_v4.transactions.replay import ORACLE_V2_POLICY
+from tests.lending.fluidtokens_v4.transactions.replay import RegistrySession
 from tests.lending.fluidtokens_v4.transactions.replay import at_minimum_ada
 from tests.lending.fluidtokens_v4.transactions.replay import build
 from tests.lending.fluidtokens_v4.transactions.replay import captured_output_view
 from tests.lending.fluidtokens_v4.transactions.replay import captured_redeemers
 from tests.lending.fluidtokens_v4.transactions.replay import fixture
+from tests.lending.fluidtokens_v4.transactions.replay import other_oracle
 from tests.lending.fluidtokens_v4.transactions.replay import output_view
 from tests.lending.fluidtokens_v4.transactions.replay import redeemers
+from tests.lending.fluidtokens_v4.transactions.replay import registry_backend
+from tests.lending.fluidtokens_v4.transactions.replay import registry_entry
 
 
 @pytest.mark.parametrize(
@@ -140,3 +156,191 @@ def test_an_ada_collateral_must_cover_the_minimum_ada() -> None:
         build(build_change_collateral, snapshot, slot=fix["invalid_before"])
     position.new_collateral_amount = floor
     assert _continuing(snapshot, fix).amount.coin == floor
+
+
+# A token principal and the units of the NFTs held by the feeds of its two oracles,
+# one per oracle version.
+_USDM = "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+_OTHER_ORACLE_POLICY = "ab" * 28
+
+
+def _from_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    capture: ChangeCollateralSnapshot,
+    *,
+    loan: Utxo | None = None,
+    **overrides: object,
+) -> ChangeCollateralSnapshot:
+    """``from_backend`` of ``capture``'s one loan, or of ``loan`` in its place."""
+    (position,) = capture.positions
+    loan = loan or position.loan
+    context = resolve.LoanActionContext(
+        positions=[LoanPosition(loan, position.borrower_bond)],
+        funding=capture.funding,
+        config=capture.config,
+        scripts=resolve.config_datum(capture.config),
+        loan_spend_script_ref=capture.loan_spend_script_ref,
+        loan_policy_script_ref=capture.loan_policy_script_ref,
+        action_script_ref=capture.action_script_ref,
+    )
+    monkeypatch.setattr(resolve, "resolve_loan_action", lambda _backend, **_: context)
+    kwargs: dict = {
+        "changes": [(loan.out_ref, position.new_collateral_amount)],
+        "borrower_address": position.borrower_bond.address,
+        "funding": capture.funding,
+        "valid_from": capture.valid_from,
+        "valid_to": capture.valid_to,
+    }
+    return ChangeCollateralSnapshot.from_backend(object(), **(kwargs | overrides))  # type: ignore[arg-type]
+
+
+def _unit(token: Asset) -> str:
+    return token.policy_id.hex() + token.asset_name.hex()
+
+
+def _with_datum(loan: Utxo, edit: Callable[[LoanDatum], LoanDatum]) -> Utxo:
+    return replace(loan, datum=edit(LoanDatum.from_cbor(loan.datum)).to_cbor_hex())
+
+
+@pytest.mark.parametrize("first", ["other-oracle", "named-oracle"])
+def test_from_backend_prices_through_the_oracle_the_loan_names(
+    monkeypatch: pytest.MonkeyPatch,
+    first: str,
+) -> None:
+    # The registry lists a token once per oracle version; only the oracle the loan
+    # names prices its collateral.
+    fix = fixture("change_collateral_single")
+    capture = ChangeCollateralSnapshot.from_capture(fix)
+    (position,) = capture.positions
+    (named,) = capture.oracles
+    token = position.loan_datum.collateral.oracle_token_asset
+    other, other_token = other_oracle(named, ORACLE_V2_POLICY)
+    entries = [registry_entry(other, other_token), registry_entry(named, _unit(token))]
+    if first == "named-oracle":
+        entries.reverse()
+    registry_backend(
+        monkeypatch,
+        [named.feed, named.script_ref, other.feed, other.script_ref],
+    )
+    snapshot = _from_backend(
+        monkeypatch,
+        capture,
+        provider=FluidTokensProviderClient(session=RegistrySession(entries)),
+    )
+    witness = snapshot.collateral_oracle(snapshot.positions[0])
+    assert witness is not None
+    assert (witness.feed, witness.script_ref) == (named.feed, named.script_ref)
+    body = build(
+        build_change_collateral,
+        snapshot,
+        slot=fix["invalid_before"],
+    ).tx.transaction_body
+    refs = {(bytes(i.transaction_id).hex(), i.index) for i in body.reference_inputs}
+    assert named.feed.out_ref in refs
+    assert other.feed.out_ref not in refs
+
+
+@pytest.mark.parametrize("first", ["other-oracle", "named-oracle"])
+def test_from_backend_prices_the_principal_through_the_oracle_the_loan_names(
+    monkeypatch: pytest.MonkeyPatch,
+    first: str,
+) -> None:
+    # A token principal is priced too, through the oracle the loan names for it,
+    # never through the collateral's oracle nor another version's oracle.
+    fix = fixture("change_collateral_single")
+    capture = ChangeCollateralSnapshot.from_capture(fix)
+    (position,) = capture.positions
+    (collateral,) = capture.oracles
+    collateral_token = position.loan_datum.collateral.oracle_token_asset
+    named, named_token = other_oracle(collateral, ORACLE_V2_POLICY)
+    other, other_token = other_oracle(collateral, _OTHER_ORACLE_POLICY)
+    loan = _with_datum(
+        position.loan,
+        lambda d: replace(
+            d,
+            principal_asset=Asset(bytes.fromhex(_USDM[:56]), bytes.fromhex(_USDM[56:])),
+            principal_oracle_asset=Asset(
+                bytes.fromhex(named_token[:56]),
+                bytes.fromhex(named_token[56:]),
+            ),
+        ),
+    )
+    principal = [
+        registry_entry(other, other_token, token=_USDM),
+        registry_entry(named, named_token, token=_USDM),
+    ]
+    if first == "named-oracle":
+        principal.reverse()
+    registry_backend(
+        monkeypatch,
+        [u for w in (collateral, named, other) for u in (w.feed, w.script_ref)],
+    )
+    entries = [*principal, registry_entry(collateral, _unit(collateral_token))]
+    snapshot = _from_backend(
+        monkeypatch,
+        capture,
+        loan=loan,
+        changes=[(loan.out_ref, 10**15)],
+        provider=FluidTokensProviderClient(session=RegistrySession(entries)),
+    )
+    (resolved,) = snapshot.positions
+    witness = snapshot.principal_oracle(resolved)
+    assert witness is not None
+    assert (witness.feed, witness.script_ref) == (named.feed, named.script_ref)
+    assert snapshot.collateral_oracle(resolved) is not None
+    assert other.feed not in [w.feed for w in snapshot.oracles]
+
+
+class _NoRegistry:
+    """A provider that fails the test if the registry is asked for a price."""
+
+    def fetch_oracle_witness(self, **_: object) -> None:
+        raise AssertionError("the price registry must not be called")
+
+
+@pytest.mark.parametrize(
+    "oracle_token",
+    list(NO_ORACLE_TOKENS.values()),
+    ids=list(NO_ORACLE_TOKENS),
+)
+@pytest.mark.parametrize("side", ["collateral", "principal"])
+def test_from_backend_refuses_a_priced_side_that_names_no_oracle(
+    monkeypatch: pytest.MonkeyPatch,
+    oracle_token: Asset,
+    side: str,
+) -> None:
+    # No feed can hold the side's oracle token, so no signed price of that side
+    # exists and the registry is not asked for one.
+    fix = fixture("change_collateral_single")
+    capture = ChangeCollateralSnapshot.from_capture(fix)
+    (position,) = capture.positions
+    if side == "collateral":
+        loan = _with_datum(
+            position.loan,
+            lambda d: replace(
+                d,
+                collateral=replace(d.collateral, oracle_token_asset=oracle_token),
+            ),
+        )
+        oracles = None
+    else:
+        loan = _with_datum(
+            position.loan,
+            lambda d: replace(
+                d,
+                principal_asset=Asset(
+                    bytes.fromhex(_USDM[:56]),
+                    bytes.fromhex(_USDM[56:]),
+                ),
+                principal_oracle_asset=oracle_token,
+            ),
+        )
+        oracles = capture.oracles
+    with pytest.raises(ValueError, match=f"names no oracle for its {side}"):
+        _from_backend(
+            monkeypatch,
+            capture,
+            loan=loan,
+            oracles=oracles,
+            provider=_NoRegistry(),
+        )
