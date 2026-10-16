@@ -12,6 +12,9 @@ to zero, and where a band can pay nothing.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from itertools import accumulate
+
 import pytest
 
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import CURVE_CONSTANT_SUM
@@ -19,10 +22,14 @@ from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import Ladder
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import achievable
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import band_output
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import banded_quote
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import directed_witness
+from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import fillable_input
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import find_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import is_witness
 from charli3_dendrite.dexs.amm.sundae_v4_banded_cl_math import marginal_price
 from charli3_dendrite.lending.math import ceil_div
+
+from tests.sundae_v4_bcl_ladders import random_cases
 
 # Pool P1's ladder: eight CL bands of weight 1, sqrt-price edges 76000/80000 to
 # 84000/80000 in steps of 1000/80000, fees 3/1000 both ways.
@@ -312,3 +319,142 @@ def test_a_band_that_pays_nothing_hands_the_trade_to_the_next_band() -> None:
     assert (sell.amount_out, sell.spent, sell.bands) == (15, 7, (3,))
     buy = banded_quote(ladder, *SLIVER_STATE, 10, False)
     assert (buy.amount_out, buy.spent, buy.bands) == (4, 10, (5,))
+
+
+# Draining band 0 (selling A) leaves a final boundary the walk may end at only at
+# some inputs: offers that pay the whole B reserve fill in runs of about 69, with
+# runs of about 33 between them that do not.
+FLICKER_LADDER = {
+    "starts": [(9_664, 1_000_000), (573_249, 1_000_000), (588_345, 1_000_000)],
+    "closing": (598_712, 1_000_000),
+    "weights": [100, 199, 1],
+    "curves": [0, 1, 0],
+    "fees_buy": [(7, 997), (3, 1000), (0, 1)],
+    "fees_sell": [(1, 10), (25, 10000), (0, 1)],
+    "weight_total": 300,
+}
+FLICKER_STATE = (15_680_407_428, 267_537)
+
+
+def _fills(
+    ladder: Ladder,
+    state: tuple[int, int],
+    a_is_input: bool,
+    dx: int,
+) -> int:
+    """The output ``dx`` buys when one scoop absorbs all of it, else ``0``."""
+    quote = banded_quote(ladder, *state, dx, a_is_input)
+    return quote.amount_out if quote.spent == dx else 0
+
+
+def test_fillable_input_steps_down_to_the_last_offer_that_fills() -> None:
+    ladder = Ladder.from_shape(**FLICKER_LADDER)
+    drain = banded_quote(ladder, *FLICKER_STATE, 2**64 - 1, True)
+    assert (drain.spent, drain.amount_out) == (2_755_272_798, FLICKER_STATE[1])
+    for dx, want in [
+        (2_755_272_652, 2_755_272_652),
+        (2_755_272_653, 2_755_272_652),
+        (2_755_272_700, 2_755_272_700),
+        (2_755_272_787, 2_755_272_754),
+        (2_755_272_798, 2_755_272_798),
+        (2_755_272_799, 2_755_272_798),
+    ]:
+        assert fillable_input(ladder, *FLICKER_STATE, True, dx) == want
+        assert _fills(ladder, FLICKER_STATE, True, want) == FLICKER_STATE[1]
+    # The walk's own cut of an unfilled offer lands many runs lower.
+    cut = banded_quote(ladder, *FLICKER_STATE, 2_755_272_653, True)
+    assert cut.spent == 2_755_268_274
+    assert not any(
+        _fills(ladder, FLICKER_STATE, True, dx)
+        for dx in range(2_755_272_755, 2_755_272_788)
+    )
+
+
+def test_fillable_input_derives_its_start_and_drain() -> None:
+    ladder = p1_ladder()
+    for a_is_input in (True, False):
+        start = directed_witness(ladder, *P1_RESERVES, a_is_input)
+        drain = banded_quote(ladder, *P1_RESERVES, 2**64 - 1, a_is_input, start)
+        for dx in (1, 2, 1_000, 5_000_000, drain.spent, drain.spent + 1):
+            assert fillable_input(
+                ladder, *P1_RESERVES, a_is_input, dx
+            ) == fillable_input(ladder, *P1_RESERVES, a_is_input, dx, start, drain)
+    # One tOKENA buys nothing; no offer fills on an empty pool or for nothing.
+    assert fillable_input(ladder, *P1_RESERVES, True, 1) == 0
+    assert fillable_input(ladder, *P1_RESERVES, True, 2) == 2
+    assert fillable_input(ladder, *P1_RESERVES, True, 0) == 0
+    assert fillable_input(ladder, 0, 0, True, 1_000) == 0
+
+
+def assert_fillable_input_is_the_largest_fill(
+    fillable: Callable[[int], int],
+    output: Callable[[int], int],
+    cap_in: int,
+    edges: list[int],
+    width: int,
+) -> tuple[int, int]:
+    """Check ``fillable`` on every offer near 1, each edge and ``cap_in``.
+
+    ``output(x)`` is what an offer of ``x`` buys when it fills, else ``0``. The
+    offers within ``width`` of each point are taken in ascending order. A run of
+    them opens with the largest filling offer below it, found by probing every
+    offer downward; each filling offer of the run then replaces it. So
+    ``fillable(x)`` must fill, no offer between it and ``min(x, cap_in)`` fills,
+    and no filling offer up to ``x`` buys more. Returns how many offers were
+    checked and how many of those up to ``cap_in`` do not fill.
+    """
+    offers = sorted(
+        {
+            x
+            for point in (0, *edges, cap_in)
+            for x in range(point - width, point + width + 1)
+            if x >= 1
+        },
+    )
+    best, best_out, unfilled, previous = 0, 0, 0, 0
+    for x in offers:
+        if x != previous + 1:
+            best = min(x - 1, cap_in)
+            while best > 0 and output(best) == 0:
+                best -= 1
+            assert output(best) >= best_out if best else best_out == 0
+            best_out = output(best) if best else 0
+        got = output(x) if x <= cap_in else 0
+        if got > 0:
+            assert got >= best_out
+            best, best_out = x, got
+        elif x <= cap_in:
+            unfilled += 1
+        assert fillable(x) == best
+        previous = x
+    return len(offers), unfilled
+
+
+@pytest.mark.parametrize("a_is_input", [True, False])
+def test_fillable_input_is_the_largest_offer_that_fills_on_random_ladders(
+    a_is_input: bool,
+) -> None:
+    checked, unfilled = 0, 0
+    for _shape, ladder, state in random_cases(seed=20261012, count=60):
+        start = directed_witness(ladder, *state, a_is_input)
+        if start is None:
+            assert fillable_input(ladder, *state, a_is_input, 10**9) == 0
+            continue
+        drain = banded_quote(ladder, *state, 2**64 - 1, a_is_input, start)
+        lad, at = ladder, state
+        edges = list(accumulate(step.amount_in for step in drain.steps))
+
+        def output(dx: int) -> int:
+            quote = banded_quote(lad, *at, dx, a_is_input, start, drain)
+            return quote.amount_out if quote.spent == dx else 0
+
+        def fillable(dx: int) -> int:
+            return fillable_input(lad, *at, a_is_input, dx, start, drain)
+
+        counts = assert_fillable_input_is_the_largest_fill(
+            fillable, output, drain.spent, edges, 32
+        )
+        checked, unfilled = checked + counts[0], unfilled + counts[1]
+        assert fillable(2**64 - 1) == drain.spent
+    assert checked > 8_000
+    assert unfilled > 100

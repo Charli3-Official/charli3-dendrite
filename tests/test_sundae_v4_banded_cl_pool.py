@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from functools import partial
+from itertools import accumulate
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,9 @@ from tests.test_sundae_v4_banded_cl_math import P1_QUOTES
 from tests.test_sundae_v4_banded_cl_math import P1_RESERVES
 from tests.test_sundae_v4_banded_cl_math import P1_STARTS
 from tests.test_sundae_v4_banded_cl_math import P1_WITNESS
+from tests.test_sundae_v4_banded_cl_math import (
+    assert_fillable_input_is_the_largest_fill,
+)
 
 TOKEN_POLICY = "09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed22771878972"
 TOKENA = TOKEN_POLICY + "74" + "4f4b454e41"  # tOKENA
@@ -427,6 +432,30 @@ def _recorded(index: int) -> BandedCLConfig:
     return BandedCLConfig.from_cbor(SCOOPS["ladders"][index])
 
 
+def _recorded_pool(index: int, reserves: tuple[int, int]) -> SundaeV4BandedCLPool:
+    """A vault on recorded ladder ``index`` at ``reserves``, bound as its pool."""
+    config = _recorded(index)
+    bands = list(config.bands)
+    values, built = build_banded_cl_vault_utxo(
+        [(TOKENA, reserves[0]), (TOKENC, reserves[1])],
+        starts=[(band.start.num, band.start.den) for band in bands],
+        closing=(config.closing.num, config.closing.den),
+        weights=[band.weight for band in bands],
+        curves=[band.curve for band in bands],
+        fee_buy=[(band.fee_buy.num, band.fee_buy.den) for band in bands],
+        fee_sell=[(band.fee_sell.num, band.fee_sell.den) for band in bands],
+        total_lp=P1_TOTAL_LP,
+    )
+    assert built.to_cbor_hex() == config.to_cbor_hex()
+    vault = SundaeV4Vault.model_validate(values)
+    vault.supply_module_config(
+        SundaeV4Deployment.for_network("preview").banded_cl_hash, config
+    )
+    (pool,) = vault.pools()
+    assert isinstance(pool, SundaeV4BandedCLPool)
+    return pool
+
+
 def test_the_recorded_ladders_rebuild_their_on_chain_index() -> None:
     for index, cbor_hex in enumerate(SCOOPS["ladders"]):
         config = _recorded(index)
@@ -460,26 +489,7 @@ def test_the_recorded_scoops_cover_long_walks_bins_and_both_directions() -> None
     ids=[f"{s['tx'][:16]}-{i}" for i, s in enumerate(SCOOPS["scoops"])],
 )
 def test_the_pool_type_reproduces_a_recorded_scoop(scoop: dict) -> None:
-    config = _recorded(scoop["ladder"])
-    bands = list(config.bands)
-    a, b = scoop["reserves"]
-    values, built = build_banded_cl_vault_utxo(
-        [(TOKENA, a), (TOKENC, b)],
-        starts=[(band.start.num, band.start.den) for band in bands],
-        closing=(config.closing.num, config.closing.den),
-        weights=[band.weight for band in bands],
-        curves=[band.curve for band in bands],
-        fee_buy=[(band.fee_buy.num, band.fee_buy.den) for band in bands],
-        fee_sell=[(band.fee_sell.num, band.fee_sell.den) for band in bands],
-        total_lp=P1_TOTAL_LP,
-    )
-    assert built.to_cbor_hex() == config.to_cbor_hex()
-    vault = SundaeV4Vault.model_validate(values)
-    vault.supply_module_config(
-        SundaeV4Deployment.for_network("preview").banded_cl_hash, config
-    )
-    (pool,) = vault.pools()
-    assert isinstance(pool, SundaeV4BandedCLPool)
+    pool = _recorded_pool(scoop["ladder"], tuple(scoop["reserves"]))
     unit_in, unit_out = (TOKENA, TOKENC) if scoop["a_is_input"] else (TOKENC, TOKENA)
     quote = pool.quote(unit_in, scoop["offer"])
     assert quote.spent == scoop["offer"]
@@ -489,3 +499,127 @@ def test_the_pool_type_reproduces_a_recorded_scoop(scoop: dict) -> None:
     ] == scoop["steps"]
     out = pool.get_amount_out(Assets(**{unit_in: scoop["offer"]}), unit_out)[0]
     assert out.quantity() == sum(step[1] for step in scoop["steps"])
+
+
+def _out(pool: SundaeV4BandedCLPool, unit_in: str, dx: int) -> int:
+    """What :meth:`get_amount_out` pays for ``dx`` of ``unit_in`` (0 unless it fills)."""
+    unit_out = pool.asset_b if unit_in == pool.asset_a else pool.asset_a
+    return pool.get_amount_out(Assets(**{unit_in: dx}), unit_out)[0].quantity()
+
+
+def _preprod_pool() -> SundaeV4BandedCLPool:
+    SundaeV4Vault.select_network("preprod")
+    vaults = json.loads(
+        (Path(__file__).parent / "sundae_v4_banded_cl_vaults.json").read_text()
+    )
+    vault = SundaeV4Vault.model_validate(
+        {**vaults["preprod_pool"], "block_time": 0, "block_index": 0}
+    )
+    vault.supply_module_config(
+        SundaeV4Deployment.for_network("preprod").banded_cl_hash,
+        BandedCLConfig.from_cbor(vaults["preprod_config"]),
+    )
+    (pool,) = vault.pools()
+    assert isinstance(pool, SundaeV4BandedCLPool)
+    return pool
+
+
+FIXTURE_STATES = [f"scoop{i}" for i in range(len(SCOOPS["scoops"]))] + ["P1", "preprod"]
+
+
+def _fixture_pool(case: str) -> SundaeV4BandedCLPool:
+    """P1, the preprod vault, or a recorded scoop's ladder at its reserves."""
+    if case == "P1":
+        return _pool()
+    if case == "preprod":
+        return _preprod_pool()
+    scoop = SCOOPS["scoops"][int(case.removeprefix("scoop"))]
+    return _recorded_pool(scoop["ladder"], tuple(scoop["reserves"]))
+
+
+def test_fillable_input_steps_back_out_of_a_crossing_gap() -> None:
+    # Selling tOKENA on preview ladder 0 fills band 4 to its edge at 8,010,580,640;
+    # one unit more buys nothing in band 3, two units more do.
+    pool = _fixture_pool("scoop0")
+    assert pool._ab() == (15_426_259_308, 15_458_017_441)
+    edge = 8_010_580_640
+    first = pool.quote(TOKENA, 2**64 - 1).steps[0]
+    assert (first.witness.band, first.amount_in) == (4, edge)
+    outs = [_out(pool, TOKENA, dx) for dx in (edge, edge + 1, edge + 2)]
+    assert outs == [7_994_367_418, 0, 7_994_367_419]
+    assert pool.fillable_input(TOKENA, edge + 1) == edge
+    assert pool.fillable_input(TOKENA, edge) == edge
+    assert pool.fillable_input(TOKENA, edge + 2) == edge + 2
+
+
+@pytest.mark.parametrize(
+    ("unit_in", "cap_in", "cap_out"),
+    [(TOKENA, 6_598_864, P1_RESERVES[1]), (TOKENC, 6_269_544, P1_RESERVES[0])],
+)
+def test_fillable_input_is_the_ladder_end_past_what_the_ladder_absorbs(
+    unit_in: str, cap_in: int, cap_out: int
+) -> None:
+    pool = _pool()
+    drain = pool.quote(unit_in, 2**64 - 1)
+    assert (drain.spent, drain.amount_out) == (cap_in, cap_out)
+    for amount in (cap_in, cap_in + 1, 10 * cap_in, 2**64 - 1):
+        assert pool.fillable_input(unit_in, amount) == cap_in
+    assert _out(pool, unit_in, cap_in) == cap_out
+    assert _out(pool, unit_in, cap_in + 1) == 0
+
+
+def test_fillable_input_is_zero_when_no_offer_fills() -> None:
+    pool = _pool()
+    assert pool.fillable_input(TOKENA, 0) == 0
+    assert pool.fillable_input(TOKENA, -5) == 0
+    # One tOKENA buys nothing: P1's smallest filling sale of A is 2.
+    assert _out(pool, TOKENA, 1) == 0
+    assert pool.fillable_input(TOKENA, 1) == 0
+    assert pool.fillable_input(TOKENA, 2) == 2
+    # An unpriceable pool fills nothing; a pool drained of B fills no sale of A.
+    assert _pool((0, 0)).fillable_input(TOKENA, 1_000) == 0
+    drained = _pool(pool.quote(TOKENA, 2**64 - 1).reserves_after)
+    assert drained.reserves.root[TOKENC] == 0
+    assert drained.fillable_input(TOKENA, 10**6) == 0
+    assert drained.fillable_input(TOKENC, 10**6) == 10**6
+    with pytest.raises(ValueError, match="not a reserve"):
+        pool.fillable_input("lovelace", 1_000)
+
+
+@pytest.mark.parametrize("case", FIXTURE_STATES)
+def test_fillable_input_is_the_largest_offer_that_fills_on_every_fixture_state(
+    case: str,
+) -> None:
+    pool = _fixture_pool(case)
+    for unit_in in pool.units():
+        drain = pool.quote(unit_in, 2**64 - 1)
+        checked, _ = assert_fillable_input_is_the_largest_fill(
+            partial(pool.fillable_input, unit_in),
+            partial(_out, pool, unit_in),
+            drain.spent,
+            list(accumulate(step.amount_in for step in drain.steps)),
+            16,
+        )
+        assert checked > 32
+
+
+@pytest.mark.parametrize("case", FIXTURE_STATES)
+def test_get_amount_in_names_an_offer_that_fills(case: str) -> None:
+    pool = _fixture_pool(case)
+    for unit_in in pool.units():
+        unit_out = pool.asset_b if unit_in == pool.asset_a else pool.asset_a
+        top = pool.max_output(unit_out) - 1
+        edges = accumulate(
+            step.amount_out for step in pool.quote(unit_in, 2**64 - 1).steps
+        )
+        wanted = sorted(
+            {
+                want
+                for point in (0, *edges, top)
+                for want in range(point - 4, point + 5)
+                if 1 <= want <= top
+            },
+        )
+        for want in wanted:
+            needed = pool.get_amount_in(Assets(**{unit_out: want}), unit_in)[0]
+            assert _out(pool, unit_in, needed.quantity()) >= want
