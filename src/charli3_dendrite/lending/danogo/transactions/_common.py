@@ -49,7 +49,6 @@ from charli3_dendrite.lending.danogo.oracles.forward import LiveLeaf
 from charli3_dendrite.lending.danogo.oracles.forward import compose_cross_quote
 from charli3_dendrite.lending.danogo.oracles.forward import leaf_discriminator
 from charli3_dendrite.lending.danogo.oracles.forward import replay_recipe
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_market_state
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_orcfax_fs
 from charli3_dendrite.lending.danogo.oracles.locator import Recipe
 from charli3_dendrite.lending.danogo.oracles.locator import load_registry
@@ -77,6 +76,7 @@ from charli3_dendrite.lending.danogo.transactions.context import TopupWithdrawSn
 from charli3_dendrite.lending.danogo.transactions.oracle_synth import (
     synthesize_oracle_redeemer,
 )
+from charli3_dendrite.lending.liqwid.datums import parse_liqwid_market_state
 from charli3_dendrite.lending.math import floor_div
 from charli3_dendrite.lending.transactions.infra import OUTPUT_MIN_ADA
 from charli3_dendrite.lending.transactions.infra import PLACEHOLDER_FEE

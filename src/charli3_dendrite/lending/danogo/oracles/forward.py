@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
-from charli3_dendrite.lending.danogo.oracles.leaves import liqwid_oracle_feed_id
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_oracle_v2
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_minswap_lp
 from charli3_dendrite.lending.danogo.oracles.locator import LeafHandle
 from charli3_dendrite.lending.danogo.oracles.locator import Recipe
@@ -19,6 +17,8 @@ from charli3_dendrite.lending.danogo.oracles.redeemer import OracleUtxoType
 from charli3_dendrite.lending.danogo.oracles.reproduce import OracleLeaf
 from charli3_dendrite.lending.danogo.oracles.reproduce import leaf_forward_rates
 from charli3_dendrite.lending.danogo.oracles.reproduce import splash_lp_candidate
+from charli3_dendrite.lending.liqwid.datums import liqwid_oracle_feed_id
+from charli3_dendrite.lending.liqwid.datums import parse_liqwid_oracle_v2
 from charli3_dendrite.lending.oracles.models import OraclePrice
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.models import PriceMap
@@ -57,9 +57,9 @@ def leaf_discriminator(otype: str, datum: str | None) -> str:
     Some source kinds live many-to-one behind a shared marker token at a common
     address, so the value alone cannot pin a UTxO; a stable datum field can:
 
-    * Liqwid V2 oracles -> ``feed_id:priced_asset``. Neither part is unique on its own
-      (one feed id spans many assets; one asset, e.g. ADA, can have several feeds), but
-      together they pin the UTxO.
+    * Liqwid V2 oracles -> ``updater_key:priced_asset``. Neither part is unique on
+      its own (one updater key spans many assets; one asset, e.g. ADA, can have
+      several feeds), but together they pin the UTxO.
     * Minswap pools -> the ``asset_a|asset_b`` pair (all pools carry one MSP token).
 
     Returns "" for kinds already pinned by a unique NFT (no datum disambiguation
