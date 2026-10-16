@@ -1,0 +1,27 @@
+{
+  "_note": "Real Cardano mainnet Liqwid datum CBOR (public on-chain data), captured to lock datum layouts.",
+  "oracle_v2": {
+    "note": "Oracle V2 price feed for ADA: field 0 is the oracle updater's key, field 1 the priced asset, field 2 the [num, denom] rate.",
+    "datum": "9f581c49afdaa6689e72e3f96ddac9872fad0ee2503fc3268a8868c17eee1fd87a9f9f4040ffff9f193f8f1a000186a0ff1b0000019ee4a453381a000dbba0d8799f9f9f18771903e8ff9f186f1901f4ffffffff"
+  },
+  "market_state": {
+    "note": "qToken price (in ADA) = field9 / 100 / ada_usd; ada_usd=3133/12500 from the sibling Liqwid ADA oracle.",
+    "datum": "9f1b0000c6cb9e88acc23b0000006b69a1596b1b002ac04c770c72de1b00007e99a6b340451b0000029cb31fec631b0071afe871471c8d9fc24b079f0deb4837f450cddc4fc24d0b614b2766ee12c4adf7ba8000ff1b0000019cce6fb7d01b0000019cce83dc109f1b0001477c3aef10891b002ac04c770c72deff1a002dc6c0ff",
+    "exchange_rate": [
+      360073866973321,
+      12033383669199582
+    ],
+    "ada_usd": [
+      3133,
+      12500
+    ],
+    "expected_qtoken_price_ada": [
+      45009233371665125,
+      37700591035602290406
+    ]
+  },
+  "market_param": {
+    "note": "Market interest-model and risk configuration: field 0 is the initial qToken exchange rate, field 12 the maximum loan-to-value on weighted collateral.",
+    "datum": "9f9f011832ff1ab2d05e009f0a080000ff1a00e4e1c01a000493e0041a000dbba00480581c4986257bffd6bc8bda0e56fd7796c5d125fe496deb3a00c5196068a31a001e84809f9f1b000000039a290d2f1b0011c37937e08000ff9f1b000000150e136c311b0011c37937e08000ff9f1b000001fe2f977f3f1b0011c37937e08000ff9f090affff9f1921f8192710ff9f0101ff069f011904e2ff9f0102ff9f0102ff9f0101ff9f0101ff581c469772d2f93d70f92a4930fa608457392e58e480babf723ade7f9857581c6bb0851fa2bf40c6729c9d5df97a4201fdea2b3ae169ad5242bfe47a581ca50ecf6e4d5621d034f0a09714da50cea8e94fcd77388954654d0479d8799f43d87980ff581c7fc0d659f74debe817faa6487f0cbc7d8cec93997adaad543fbfff98d8799f43d87980ff80000000d87a80d87a80d87a80d87a80ff"
+  }
+}

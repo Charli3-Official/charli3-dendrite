@@ -43,12 +43,12 @@ from charli3_dendrite.lending.danogo.oracles.leaves import danogo_pool_dtoken_ra
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_danogo_staking_rate
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_djed
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_indigo
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_market_state
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_oracle_v2
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_minswap_lp
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_splash_cpamm_g3
 from charli3_dendrite.lending.danogo.oracles.leaves import splash_lp_token_price
 from charli3_dendrite.lending.danogo.oracles.redeemer import OracleUtxoType
+from charli3_dendrite.lending.liqwid.datums import parse_liqwid_market_state
+from charli3_dendrite.lending.liqwid.datums import parse_liqwid_oracle_v2
 
 # Liqwid market qToken: the on-chain price divides the field-9 exchange rate by the
 # underlying's (cent-denominated) price; that constant is folded into the leaf rate so

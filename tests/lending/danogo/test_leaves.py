@@ -2,58 +2,14 @@ from fractions import Fraction
 
 import pytest
 
+from charli3_dendrite.lending.danogo.oracles import leaves
 from charli3_dendrite.lending.danogo.oracles.leaves import cpamm_price_from_reserves
 from charli3_dendrite.lending.danogo.oracles.leaves import danogo_pool_dtoken_rate
-from charli3_dendrite.lending.danogo.oracles.leaves import liqwid_qtoken_rate
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_danogo_staking_rate
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_indigo
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_market_param
-from charli3_dendrite.lending.danogo.oracles.leaves import parse_liqwid_market_state
-
-
-def test_liqwid_market_param_surfaces_base_rate_and_collateral_ratio():
-    # tx daf74541...: interest-model/risk config record (not a price source).
-    datum = (
-        "9f9f011832ff1ab2d05e009f0a080000ff1a00e4e1c01a000493e0041a000dbba0048058"
-        "1c4986257bffd6bc8bda0e56fd7796c5d125fe496deb3a00c5196068a31a001e84809f9f"
-        "1b000000039a290d2f1b0011c37937e08000ff9f1b000000150e136c311b0011c37937e0"
-        "8000ff9f1b000001fe2f977f3f1b0011c37937e08000ff9f090affff9f1921f8192710ff"
-        "9f0101ff069f011904e2ff9f0102ff9f0102ff9f0101ff9f0101ff581c469772d2f93d70"
-        "f92a4930fa608457392e58e480babf723ade7f9857581c6bb0851fa2bf40c6729c9d5df9"
-        "7a4201fdea2b3ae169ad5242bfe47a581ca50ecf6e4d5621d034f0a09714da50cea8e94f"
-        "cd77388954654d0479d8799f43d87980ff581c7fc0d659f74debe817faa6487f0cbc7d8c"
-        "ec93997adaad543fbfff98d8799f43d87980ff80000000d87a80d87a80d87a80d87a80ff"
-    )
-    base_rate, collateral_ratio = parse_liqwid_market_param(datum)
-    assert base_rate == (1, 50)
-    assert collateral_ratio == (8696, 10000)
-
-
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_splash_cpamm_g3
 from charli3_dendrite.lending.danogo.oracles.leaves import splash_lp_token_price
-
-
-def test_liqwid_market_state_reproduces_qtoken_price():
-    # tx 578fae97: exchange rate at state field 9; qToken price in ADA =
-    # rate / 100 / ada_usd, with ada_usd = 3133/12500 from the sibling ADA oracle.
-    datum = (
-        "9f1b0000c6cb9e88acc23b0000006b69a1596b1b002ac04c770c72de1b00007e99a6b34045"
-        "1b0000029cb31fec631b0071afe871471c8d9fc24b079f0deb4837f450cddc4fc24d0b614b"
-        "2766ee12c4adf7ba8000ff1b0000019cce6fb7d01b0000019cce83dc109f1b0001477c3aef"
-        "10891b002ac04c770c72deff1a002dc6c0ff"
-    )
-    num, denom = parse_liqwid_market_state(datum)
-    assert (num, denom) == (360073866973321, 12033383669199582)
-    ada_usd = Fraction(3133, 12500)
-    qtoken_price = Fraction(num, denom) / 100 / ada_usd
-    assert qtoken_price == Fraction(45009233371665125, 37700591035602290406)
-
-
-def test_liqwid_market_state_zero_rate_rejected():
-    # 10-element array: ints 0..8 then a zero rational [0,1] at index 9.
-    zero = "9f0001020304050607089f0001ffff"
-    with pytest.raises(ValueError):
-        parse_liqwid_market_state(zero)
+from charli3_dendrite.lending.liqwid import datums as liqwid_datums
 
 
 def test_splash_g3_datum_surfaces_pool_assets():
@@ -146,12 +102,14 @@ def test_cpamm_zero_reserve_rejected():
         cpamm_price_from_reserves(reserve_token=0, reserve_quote=2_000_000)
 
 
-def test_liqwid_qtoken_rate_passthrough():
-    assert liqwid_qtoken_rate(
-        qtoken_rate_num=1_050_000, qtoken_rate_denom=1_000_000
-    ) == (1_050_000, 1_000_000)
-
-
-def test_liqwid_qtoken_zero_denom_rejected():
-    with pytest.raises(ValueError):
-        liqwid_qtoken_rate(qtoken_rate_num=1, qtoken_rate_denom=0)
+def test_liqwid_parsers_reexported_for_compatibility():
+    # The Liqwid parsers live in ``lending.liqwid.datums``; ``leaves`` re-exports the
+    # same objects so existing imports keep working.
+    for name in (
+        "liqwid_oracle_feed_id",
+        "liqwid_qtoken_rate",
+        "parse_liqwid_market_param",
+        "parse_liqwid_market_state",
+        "parse_liqwid_oracle_v2",
+    ):
+        assert getattr(leaves, name) is getattr(liqwid_datums, name)

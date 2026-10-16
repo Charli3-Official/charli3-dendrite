@@ -25,6 +25,26 @@ def asset_unit(policy: bytes, name: bytes) -> str:
     return policy.hex() + name.hex()
 
 
+def plutus_fields(obj: object) -> list:
+    """Positional fields of a compact-form CBOR Constr (or a bare list) as a list.
+
+    Any ``cbor2.CBORTag`` is unwrapped without checking its tag, so this suits the
+    compact constructor tags (121-127, 1280+) and bare lists. A general-form
+    constructor (tag 102) wraps ``[alt, fields]`` and would come back as that pair;
+    use ``constr`` for it.
+    """
+    inner = obj.value if isinstance(obj, cbor2.CBORTag) else obj
+    return list(inner)
+
+
+def tuple_asset_unit(arr: object) -> str:
+    """Dendrite unit string from a ``[policy, name]`` value (Constr-wrapped or bare)."""
+    seq = plutus_fields(arr)
+    policy = seq[0] if len(seq) > 0 and isinstance(seq[0], bytes) else b""
+    name = seq[1] if len(seq) > 1 and isinstance(seq[1], bytes) else b""
+    return asset_unit(policy, name)
+
+
 def script_payment_address(script_hash_hex: str) -> str:
     """Mainnet enterprise address whose payment credential is ``script_hash_hex``.
 
