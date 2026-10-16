@@ -44,6 +44,9 @@ _WITNESS_SCAN = 2
 _COUNTER_CEILING = 1 << 80
 """An upper bound on any ladder counter: the search's doubling stops here."""
 
+_LEDGER_MAX = (1 << 64) - 1
+"""The largest ledger quantity: the offer a drain quote makes."""
+
 Edge = tuple[int, int]
 """A sqrt-price edge ``p / q`` as ``(p, q)``, both positive."""
 
@@ -739,3 +742,133 @@ def _walk(
         reserves_after=(a, b),
         steps=tuple(steps),
     )
+
+
+def _bounded_top(
+    ladder: Ladder,
+    a: int,
+    b: int,
+    a_is_input: bool,
+    k: int,
+    floor: int,
+) -> int | None:
+    """The input reserve that caps every state band ``k`` bounds below ``(a, b)``.
+
+    ``(a, b)`` is a state band ``k`` does not bound at any counter of at least
+    ``floor`` (:func:`_bounded`). Among the states with the same output reserve
+    and a smaller input reserve, band ``k`` bounds none whose input reserve
+    exceeds the returned one: the prefix only shrinks as the input reserve
+    falls, and the band's input-side ceiling (prefix sum plus saturation) only
+    falls with the counter. ``None`` when band ``k`` bounds none of them: the
+    prefix fails at ``floor``, or the output side overflows the band at the
+    prefix's end.
+    """
+    if not achievable(ladder, a, b, floor, k):
+        return None
+    end = _prefix_end(ladder, a, b, k, floor)
+    if end is None:
+        return None
+    state = ladder.at(end, k)
+    if a_is_input:
+        return None if b - state.cb > state.b_sat else state.ca + state.a_sat
+    return None if a - state.ca > state.a_sat else state.cb + state.b_sat
+
+
+def _below_unfilled(
+    ladder: Ladder,
+    a: int,
+    b: int,
+    a_is_input: bool,
+    drain: BandedQuote,
+    dx: int,
+) -> int:
+    """An offer below ``dx``, which one scoop does not fill, with none filled between.
+
+    ``dx``'s walk reuses ``drain``'s steps up to the one it resumes at (see
+    :func:`banded_quote`), and its input left there decides the case:
+
+    * No band the walk tries there pays for it, so none pays for less: a
+      crossing gap, and the step's start is next.
+    * The step's own band pays, so the walk's final boundary failed. Next is the
+      larger of the most input that buys less and, at the same output, the
+      highest input reserve any band may still bound (:func:`_bounded_top`).
+    * Otherwise the walk leaves ``drain``'s bands, and the offer one less is next.
+    """
+    steps = drain.steps
+    j, done = 0, 0
+    while j < len(steps) - 1 and dx > done + steps[j].amount_in:
+        a, b = _moved(a, b, a_is_input, steps[j].amount_in, steps[j].amount_out)
+        done += steps[j].amount_in
+        j += 1
+    witness = steps[j].witness
+    floor = steps[j - 1].witness.counter if j else None
+    left = dx - done
+    found: Witness | None = witness
+    while found is not None:
+        band = ladder.bands[found.band]
+        spend = _fill(found, band, a_is_input, left, _capacity(found, a_is_input))
+        if band_output(found, band, a_is_input, spend) > 0:
+            break
+        found = _beyond(ladder, a, b, a_is_input, found, floor)
+    if found is None:
+        return done
+    if found is not witness:
+        return dx - 1
+    # The step fits the band (``left`` is at most the drain step's input), so
+    # the walk is this one step and the output is the band's for all of ``left``.
+    band = ladder.bands[witness.band]
+    got = band_output(witness, band, a_is_input, left)
+    less, same = 0, left
+    while less + 1 < same:
+        mid = (less + same) // 2
+        if band_output(witness, band, a_is_input, mid) < got:
+            less = mid
+        else:
+            same = mid
+    after = _moved(a, b, a_is_input, left, got)
+    base = a if a_is_input else b
+    below = less
+    for k in range(ladder.n):
+        top = _bounded_top(ladder, *after, a_is_input, k, witness.counter)
+        if top is not None:
+            below = max(below, top - base)
+    return done + below
+
+
+def fillable_input(
+    ladder: Ladder,
+    a: int,
+    b: int,
+    a_is_input: bool,
+    amount: int,
+    start: Witness | None = None,
+    drain: BandedQuote | None = None,
+) -> int:
+    """The largest offer of at most ``amount`` that one scoop fills: ``0`` if none.
+
+    An offer fills when :func:`banded_quote` absorbs all of it, and no offer
+    above the ledger-max ("drain") quote's ``spent`` is considered. The offers
+    that fill are not an interval: past a band's edge a remainder too small to
+    buy a unit in the next band fills nothing, and in a band's last output units
+    the walk's final boundary holds only at some inputs. The clamped offer is
+    probed; while it does not fill, the search steps below the run of offers
+    that provably cannot (:func:`_below_unfilled`) and probes again.
+
+    ``start`` is the witness a trade in this direction opens with
+    (:func:`directed_witness`) and ``drain`` the ledger-max quote from it; each
+    is derived when ``None``.
+    """
+    if amount <= 0:
+        return 0
+    if start is None:
+        start = directed_witness(ladder, a, b, a_is_input)
+    if start is None:
+        return 0
+    if drain is None:
+        drain = banded_quote(ladder, a, b, _LEDGER_MAX, a_is_input, start)
+    dx = min(amount, drain.spent)
+    while dx > 0:
+        if banded_quote(ladder, a, b, dx, a_is_input, start, drain).spent == dx:
+            return dx
+        dx = _below_unfilled(ladder, a, b, a_is_input, drain, dx)
+    return 0
