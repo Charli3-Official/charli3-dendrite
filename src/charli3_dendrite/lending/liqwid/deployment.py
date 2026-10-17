@@ -426,6 +426,9 @@ def default_deployment() -> LiqwidDeployment:
 # --- Deployment drift --------------------------------------------------------
 
 DRIFT_KINDS: Final[frozenset[str]] = frozenset({"registry", "params", "identity"})
+# The all-zero payment key hash: no one holds its key, so an identity token
+# (MarketState NFT, loan token or oracle token) sent there is retired, not drift.
+BURN_CREDENTIAL: Final[str] = "00" * 28
 
 # Drift reads the loader's own role table (``MARKET_TAGS`` / ``ORACLE_TAG``,
 # ``MARKET_FAMILIES`` / ``ORACLE_FAMILIES``), so the two can never disagree.
@@ -528,7 +531,8 @@ def check_deployment(
     ``Constr0 []`` output. ``registry`` is a freshly fetched v6 registry document
     (``scriptInfos``). ``observed_credentials`` are ``(payment credential,
     identity policy)`` pairs seen on chain; policies that are not a MarketState
-    NFT, loan token or oracle token are ignored. ``deployment`` defaults to
+    NFT, loan token or oracle token are ignored, as is a pair at
+    :data:`BURN_CREDENTIAL` (a retired token). ``deployment`` defaults to
     :func:`default_deployment`.
 
     Returns:
@@ -881,12 +885,15 @@ def _identity_drift(
     observed: Iterable[tuple[str, str]],
     deployment: LiqwidDeployment,
 ) -> list[DriftFinding]:
-    """Identity tokens observed at a credential the snapshot does not list."""
+    """Identity tokens observed at a credential the snapshot does not list.
+
+    A token at :data:`BURN_CREDENTIAL` is retired and never a finding.
+    """
     homes = _identity_homes(deployment)
     findings: list[DriftFinding] = []
     for credential, policy in observed:
         home = homes.get(policy)
-        if home is None or credential in home[2]:
+        if home is None or credential == BURN_CREDENTIAL or credential in home[2]:
             continue
         findings.append(
             DriftFinding(

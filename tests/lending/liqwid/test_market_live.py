@@ -53,9 +53,6 @@ LIVE_MARKETS = 35
 LOAN_FIELDS = 5
 POLICY_HEX_LEN = 56
 SWEEP_CHUNK = 500
-# The all-zero payment key hash: nobody holds its key, so a token sent there is
-# retired, not moved to another validator.
-BURN_CREDENTIAL = bytes(28)
 
 # Outputs shaped by PoolSelector.select(), as the dbsync backend builds them.
 _OUTPUTS_FROM = """
@@ -114,7 +111,6 @@ JOIN address ON tx_out.address_id = address.id
 WHERE ma.policy = ANY(%(policies)b)
   AND tx_out.consumed_by_tx_id IS NULL
   AND address.payment_cred IS NOT NULL
-  AND address.payment_cred <> %(burn)b
 """
 
 _SPENDING_TXS = """
@@ -334,7 +330,7 @@ def test_live_deployment_has_no_drift(backend, deployment):
         (row["credential"], row["policy"])
         for row in backend.db_query(
             _IDENTITY_CREDENTIALS,
-            {"policies": _hex_bytes(identities), "burn": BURN_CREDENTIAL},
+            {"policies": _hex_bytes(identities)},
         )
     ]
     assert observed, "no live identity tokens"

@@ -18,6 +18,7 @@ from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid import deployment
+from charli3_dendrite.lending.liqwid.deployment import BURN_CREDENTIAL
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
 from charli3_dendrite.lending.liqwid.deployment import MARKET_COMPONENT_ROLES
@@ -48,7 +49,7 @@ from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.records import spend_of
 
 PACKAGE = "charli3_dendrite.lending.liqwid"
-UNKNOWN = "00" * 28
+UNKNOWN = "01" * 28
 LAUNCH = {
     "Ada": "0fd1b854729d2e29290d47fe2173319aae3c4c885a955dc203f72759",
     "DJED": "63d65418f841e9901d5ee634cc07377cca2be7fb2b797e3f0e0d8334",
@@ -963,6 +964,24 @@ def test_loan_and_oracle_tokens_at_unlisted_credentials_are_identity_drift() -> 
 
 def test_untracked_policy_is_not_identity_drift() -> None:
     assert check_deployment(observed_credentials=[(UNKNOWN, "ff" * 28)]) == []
+
+
+def test_identity_token_at_burn_credential_is_not_drift() -> None:
+    deployment = default_deployment()
+    market = _by_name()["Ada"]
+    policies = [
+        STRIKE_ADA_STATE_NFT,
+        deployment.oracle_token_policy,
+        *sorted(market.loan_token_policies),
+    ]
+    burned = [(BURN_CREDENTIAL, policy) for policy in policies]
+    assert BURN_CREDENTIAL == "00" * 28
+    assert check_deployment(observed_credentials=burned) == []
+    # Any other unlisted key credential is still drift.
+    findings = check_deployment(
+        observed_credentials=[*burned, (UNKNOWN, STRIKE_ADA_STATE_NFT)],
+    )
+    assert [(f.kind, f.script_hash) for f in findings] == [("identity", UNKNOWN)]
 
 
 def test_findings_are_sorted_and_deduplicated() -> None:
