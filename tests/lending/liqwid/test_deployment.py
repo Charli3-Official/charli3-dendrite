@@ -10,8 +10,10 @@ from datetime import timezone
 from importlib.resources import files
 from pathlib import Path
 
+import cbor2
 import pytest
 
+from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid import deployment
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
@@ -23,6 +25,17 @@ from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import OracleValidator
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
+from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
+from tests.lending.liqwid.records import API
+from tests.lending.liqwid.records import CONTEXT_KINDS
+from tests.lending.liqwid.records import RECORDS
+from tests.lending.liqwid.records import SPEND_RULES
+from tests.lending.liqwid.records import UTXO_KINDS
+from tests.lending.liqwid.records import context_at
+from tests.lending.liqwid.records import live_context
+from tests.lending.liqwid.records import record_info
+from tests.lending.liqwid.records import records_of
+from tests.lending.liqwid.records import spend_of
 
 PACKAGE = "charli3_dendrite.lending.liqwid"
 UNKNOWN = "00" * 28
@@ -355,3 +368,309 @@ def test_refresh_script_trim_is_idempotent_on_the_snapshot():
     assert module.HAND_KEPT == bundled["handKept"]
     allowed = {"tag", "market", "componentName", "name", "type", "scriptHash"}
     assert all(set(entry) <= allowed for entry in bundled["scriptInfos"])
+
+
+# --- captured mainnet records (fixtures/records.json.gz, fixtures/api_snapshot.json)
+
+# One MarketParams output per datum layout, keyed by the list length.
+MARKET_PARAMS_LAYOUTS = {
+    27: "36d4bfe57e1ebd90e0e586f228b84903403e72c9d6d54b88994f66a0372f18ee#1",
+    30: "8eb900a137226047109f92f1bd1c73d18d3ce1b55ba621345ffc9acb727d9f56#0",
+    32: "e51f0164dba6c22842e7ae8f539582c2e5b425ea6ac2e824beaa7bfb29665fba#3",
+    34: "6e8dab3ab0d52a00f848ec209ec6fd37504afa4076d1bbfc5abccf85d061d9da#10",
+    36: "52474aff233de3dc5a75b80de64ceb4ae63aabb99cd7bd408c51349979ed9a2b#0",
+}
+PARKED_MARKET_PARAMS = (
+    "88d368eaf1347e4b8643e17983dff1826252b38e0bc740f7c65bd2d7c3651f62#0"
+)
+DEAD_COLLATERAL_PARAMS_PREFIX = "90316fe4"
+REJECT_LABELS = {
+    "oracle_decoy",
+    "param_dust",
+    "dead_policy_collateral_params",
+    "parked_market_params",
+    "parking_loan",
+    "datumless_loan",
+    "state_list0",
+    "state_list27",
+}
+
+
+def _credential(rec):
+    credential = script_credential(rec["address"])
+    assert credential is not None, rec["out_ref"]
+    return credential
+
+
+def _policies(rec):
+    return {unit[:56] for unit in rec["assets"] if unit != "lovelace"}
+
+
+def _script_class_policies():
+    """Policies named by script-class (``C0[policy]``) CollateralParams records."""
+    policies = set()
+    for rec in records_of("collateral_params"):
+        if rec["label"] is not None:
+            continue
+        collateral = cbor2.loads(bytes.fromhex(rec["datum_cbor"]))[0]
+        if collateral.tag == 121:
+            policies.add(collateral.value[0].hex())
+    return policies
+
+
+def _every_loan_output():
+    spends = [
+        rec for spend in RECORDS["spends"] for rec in spend["spent"] + spend["created"]
+    ]
+    return records_of("loan") + spends
+
+
+def test_captured_entries_carry_consistent_chain_points():
+    for kind in UTXO_KINDS:
+        entries = records_of(kind)
+        assert entries, kind
+        out_refs = [rec["out_ref"] for rec in entries]
+        assert out_refs == sorted(set(out_refs)), kind
+        for rec in entries:
+            assert rec["block_time"] == rec["slot"] + POSIX_SLOT_OFFSET, rec["out_ref"]
+            spent = rec["spent_slot"]
+            assert spent is None or spent >= rec["slot"], rec["out_ref"]
+            alive = rec["slot"] <= API["slot"] and (
+                spent is None or spent > API["slot"]
+            )
+            assert rec["live"] is alive, rec["out_ref"]
+
+
+def test_captured_records_start_at_the_deployment_floors():
+    assert min(rec["slot"] for rec in records_of("oracle")) == FIRST_ORACLE_SLOT
+    genuine = [
+        rec
+        for kind in ("market_state", "market_params", "collateral_params")
+        for rec in records_of(kind)
+        if rec["label"] is None
+    ]
+    assert min(rec["slot"] for rec in genuine) == FIRST_SLOT
+
+
+def test_every_market_params_layout_and_non_record_is_captured():
+    by_ref = {rec["out_ref"]: rec for rec in records_of("market_params")}
+    for length, out_ref in MARKET_PARAMS_LAYOUTS.items():
+        rec = by_ref[out_ref]
+        assert rec["label"] is None
+        assert len(cbor2.loads(bytes.fromhex(rec["datum_cbor"]))) == length
+    assert by_ref[PARKED_MARKET_PARAMS]["label"] == "parked_market_params"
+    rejects = records_of("reject")
+    assert {rec["label"] for rec in rejects} == REJECT_LABELS
+    assert len([rec for rec in rejects if rec["label"] == "oracle_decoy"]) == 4
+
+
+def test_snapshot_covers_every_captured_market_state():
+    deployment = default_deployment()
+    for rec in records_of("market_state"):
+        markets = {deployment.market_of_state_policy(p) for p in _policies(rec)}
+        (market,) = markets - {None}
+        assert rec["market_id"] == market.market_id, rec["out_ref"]
+        assert _credential(rec) in market.market_state_validators, rec["out_ref"]
+    live = {
+        rec["market_id"]
+        for rec in records_of("market_state", live=True)
+        if rec["label"] is None
+    }
+    assert live == {market.market_id for market in deployment.markets}
+
+
+def test_snapshot_covers_every_captured_parameter_record():
+    deployment = default_deployment()
+    for rec in records_of("market_params"):
+        assert _credential(rec) == deployment.param_credential, rec["out_ref"]
+        markets = {deployment.market_of_params_policy(p) for p in _policies(rec)}
+        if rec["label"] == "param_dust":
+            assert markets <= {None}, rec["out_ref"]
+            continue
+        (market,) = markets - {None}
+        assert rec["market_id"] == market.market_id, rec["out_ref"]
+    dead = []
+    for rec in records_of("collateral_params"):
+        assert _credential(rec) == deployment.param_credential, rec["out_ref"]
+        markets = {
+            deployment.market_of_collateral_params_policy(p) for p in _policies(rec)
+        }
+        if rec["label"] == "dead_policy_collateral_params":
+            assert markets <= {None}, rec["out_ref"]
+            assert any(
+                p.startswith(DEAD_COLLATERAL_PARAMS_PREFIX) for p in _policies(rec)
+            )
+            dead.append(rec)
+            continue
+        (market,) = markets - {None}
+        assert rec["market_id"] == market.market_id, rec["out_ref"]
+    assert dead
+
+
+def test_snapshot_covers_every_captured_loan_output():
+    deployment = default_deployment()
+    script_class = _script_class_policies()
+    assert script_class
+    holds_script_class = False
+    for rec in _every_loan_output():
+        found = deployment.market_of_loan_validator(_credential(rec))
+        assert found is not None, rec["out_ref"]
+        market, generation = found
+        assert (rec["market_id"], rec["generation"]) == (market.market_id, generation)
+        if rec["label"] is not None:
+            continue
+        for policy in _policies(rec):
+            if policy in script_class:
+                holds_script_class = True
+                continue
+            assert (
+                policy in deployment.loan_token_policies
+                or deployment.market_of_qtoken(policy) is not None
+            ), (rec["out_ref"], policy)
+    assert holds_script_class
+
+
+def test_snapshot_covers_every_captured_oracle_output():
+    deployment = default_deployment()
+    assert deployment.oracle_token_policy == ORACLE_TOKEN_POLICY
+    roles = {v.script_hash: v.role for v in deployment.oracle_validators}
+    seen = set()
+    for rec in records_of("oracle"):
+        role = roles.get(_credential(rec))
+        assert role is not None, rec["out_ref"]
+        assert (rec["market_id"], rec["generation"]) == (None, None)
+        if rec["label"] == "oracle_decoy":
+            assert role == "hard_caps", rec["out_ref"]
+            assert not _policies(rec), rec["out_ref"]
+            continue
+        assert _policies(rec) == {ORACLE_TOKEN_POLICY}, rec["out_ref"]
+        assert rec["assets"][ORACLE_TOKEN_POLICY] == 1, rec["out_ref"]
+        seen.add(role)
+    assert seen == {"v1", "hard_caps", "pegs"}
+
+
+def test_spends_cover_every_lifecycle_rule_once():
+    assert sorted(spend["rule"] for spend in RECORDS["spends"]) == sorted(SPEND_RULES)
+    assert {n for n in SPEND_RULES.values() if n is not None} == set(range(1, 9))
+    transitions = {transition.value for transition in LoanTransition}
+    for rule in SPEND_RULES:
+        spend = spend_of(rule)
+        assert spend["spent"], rule
+        assert set(spend["expected"]) == {rec["out_ref"] for rec in spend["spent"]}
+        created = {rec["out_ref"] for rec in spend["created"]}
+        for outcome in spend["expected"].values():
+            assert outcome["transition"] in transitions, rule
+            assert outcome["successor"] is None or outcome["successor"] in created
+    with pytest.raises(KeyError):
+        spend_of("no_such_rule")
+
+
+def test_spend_evidence_names_bundled_scripts():
+    deployment = default_deployment()
+
+    def market_of(rule):
+        (market_id,) = {rec["market_id"] for rec in spend_of(rule)["spent"]}
+        return deployment.market(market_id)
+
+    staking = (
+        ("partial_liquidation", market_of("partial_liquidation").liquidation_staking),
+        ("new_modification", market_of("new_modification").borrow_staking),
+        ("full_repay", market_of("full_repay").borrow_staking),
+    )
+    for rule, scripts in staking:
+        assert set(spend_of(rule)["withdrawals"]) & set(scripts), rule
+    liquidation = market_of("legacy_liquidation").liquidation_policy
+    assert spend_of("legacy_liquidation")["minted"][liquidation] > 0
+    repay = market_of("legacy_repay").borrow_policy
+    assert repay in spend_of("legacy_repay")["burned_any"]
+    flip = market_of("legacy_flip").borrow_policy
+    assert flip in spend_of("legacy_flip")["burned_any"]
+    assert spend_of("legacy_flip")["minted"][flip] == 0
+
+
+def test_max_borrows_reference_their_market_records():
+    deployment = default_deployment()
+    names = set()
+    for entry in RECORDS["max_borrows"]:
+        market = deployment.market(entry["market_id"])
+        names.add(market.name)
+        assert market.market_state_policy in _policies(entry["state"])
+        assert market.market_params_policy in _policies(entry["params"])
+        assert entry["state"]["slot"] <= entry["slot"]
+        assert entry["params"]["slot"] <= entry["slot"]
+        assert entry["borrowed"] > 0
+    assert names == {"USDM", "STRIKE-ADA", "DJED"}
+
+
+def test_api_snapshot_matches_the_captured_live_records():
+    deployment = default_deployment()
+    live_loans = {
+        rec["out_ref"] for rec in records_of("loan", live=True) if rec["label"] is None
+    }
+    assert set(API["loans"]) == live_loans
+    assert len(API["markets"]) == 35
+    assert set(API["markets"]) == {market.market_id for market in deployment.markets}
+    for values in API["loans"].values():
+        assert set(values) == {"debt", "interest", "healthFactor", "LTV"}
+    for values in API["markets"].values():
+        assert set(values) == {
+            "borrowAPR",
+            "supplyAPR",
+            "utilization",
+            "exchangeRate",
+            "liquidity",
+            "borrowCap",
+        }
+
+
+def test_record_helpers_build_contexts_from_the_captured_records():
+    live = live_context()
+    assert live.slot == API["slot"]
+    live_refs = {f"{info.tx_hash}#{info.tx_index}" for info in live.utxos}
+    assert live_refs == {
+        rec["out_ref"] for kind in CONTEXT_KINDS for rec in records_of(kind, live=True)
+    }
+    assert not live_refs & {rec["out_ref"] for rec in records_of("loan")}
+
+    genesis = min(
+        (rec for rec in records_of("market_state") if rec["label"] is None),
+        key=lambda rec: (rec["slot"], rec["block_index"]),
+    )
+    info = record_info(genesis)
+    assert (info.block_time, info.block_index, info.datum_cbor) == (
+        genesis["block_time"],
+        genesis["block_index"],
+        genesis["datum_cbor"],
+    )
+    assert record_info(genesis, block_time=1).block_time == 1
+    early = context_at(genesis["slot"] + 1)
+    assert early.slot == genesis["slot"] + 1
+    early_refs = {f"{info.tx_hash}#{info.tx_index}" for info in early.utxos}
+    assert genesis["out_ref"] in early_refs
+    assert all(info.block_time <= genesis["block_time"] for info in early.utxos)
+    # Oracle feeds predate the first market; no genuine market record does.
+    before = {f"{i.tx_hash}#{i.tx_index}" for i in context_at(genesis["slot"]).utxos}
+    market_records = {
+        rec["out_ref"]
+        for kind in ("market_state", "market_params", "collateral_params")
+        for rec in records_of(kind)
+        if rec["label"] is None
+    }
+    assert not before & market_records
+
+
+def test_every_captured_historical_state_has_its_parameters():
+    params = {
+        rec["out_ref"]: rec["market_id"]
+        for rec in records_of("market_params")
+        if rec["label"] is None
+    }
+    states = [
+        rec for rec in records_of("market_state", live=False) if rec["label"] is None
+    ]
+    assert states
+    for state in states:
+        context = context_at(state["slot"] + 1)
+        held = {f"{info.tx_hash}#{info.tx_index}" for info in context.utxos}
+        markets = {params[ref] for ref in held if ref in params}
+        assert state["market_id"] in markets, state["out_ref"]

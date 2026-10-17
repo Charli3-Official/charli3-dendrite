@@ -1,0 +1,5189 @@
+{
+  "slot": 200697336,
+  "loans": {
+    "004bfdc79b56d0ead785f29f121ee7c6f4300ca652565d193c20a2d824cbb4a1#0": {
+      "debt": 41893.296064,
+      "interest": 1893.296064,
+      "healthFactor": 1.864004670274262,
+      "LTV": 0.43454826745730196
+    },
+    "010da53fdda16da50e0971b44d384af41ff8cbad0696015e68dde428553acd2d#1": {
+      "debt": 25.99230013,
+      "interest": 0.876456556,
+      "healthFactor": 2.5054795974391664,
+      "LTV": 0.32329139731486756
+    },
+    "010da53fdda16da50e0971b44d384af41ff8cbad0696015e68dde428553acd2d#2": {
+      "debt": 65.657557926,
+      "interest": 0.401332678,
+      "healthFactor": 3.520146577977154,
+      "LTV": 0.22726326369617214
+    },
+    "010da53fdda16da50e0971b44d384af41ff8cbad0696015e68dde428553acd2d#3": {
+      "debt": 2447.133311752,
+      "interest": 4.618254288,
+      "healthFactor": 1.8314272050187403,
+      "LTV": 0.4422780210866812
+    },
+    "012cc5b2bfc069ad0805b0db7e84709bb04483ad8d41a278b8a7b7280a1d3ce0#0": {
+      "debt": 249133.91357743,
+      "interest": 10318.84863924,
+      "healthFactor": 71.0413116618877,
+      "LTV": 1.407631667556162
+    },
+    "01de90e7a5501a3e30fbf2ea09f662a2edb5a9b7d42d747853dab3786db3ea09#0": {
+      "debt": 7005.6,
+      "interest": 2.8901,
+      "healthFactor": 2.1541313429586815,
+      "LTV": 0.3760216398353276
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#1": {
+      "debt": 8.2e-07,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#10": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#13": {
+      "debt": 0.14803974,
+      "interest": 0.00298573,
+      "healthFactor": 1.4815088286220608,
+      "LTV": 0.5467399075531493
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#14": {
+      "debt": 0.01569298,
+      "interest": 0.00038862,
+      "healthFactor": 1.5358361754853649,
+      "LTV": 0.5274000006830276
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#15": {
+      "debt": 0.11313179,
+      "interest": 0.00242785,
+      "healthFactor": 1.5491209197750828,
+      "LTV": 0.5228771941945011
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#16": {
+      "debt": 0.02759929,
+      "interest": 0.00067868,
+      "healthFactor": 1.7558210843528614,
+      "LTV": 0.46123956293453316
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#17": {
+      "debt": 0.01671362,
+      "interest": 0.00040926,
+      "healthFactor": 1.9660779193155609,
+      "LTV": 0.4119877406903489
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#18": {
+      "debt": 0.00897666,
+      "interest": 0.00026711,
+      "healthFactor": 1.9523388719230756,
+      "LTV": 0.4148869910079396
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#19": {
+      "debt": 0.02759929,
+      "interest": 0.00067868,
+      "healthFactor": 1.804866190068659,
+      "LTV": 0.4487867324774845
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#2": {
+      "debt": 0.00052061,
+      "interest": 2.061e-05,
+      "healthFactor": 1.2257120334963945,
+      "LTV": 0.65504751170015
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#20": {
+      "debt": 0.03967318,
+      "interest": 0.00066477,
+      "healthFactor": 1.7145888350420135,
+      "LTV": 0.46826619707737477
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#4": {
+      "debt": 1.179e-05,
+      "interest": 4.3e-07,
+      "healthFactor": 56.88319508799877,
+      "LTV": 0.014239706450154977
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#7": {
+      "debt": 0.00255064,
+      "interest": 0.00010064,
+      "healthFactor": 1.2912720626153114,
+      "LTV": 0.6272884107470315
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#8": {
+      "debt": 0.00046346,
+      "interest": 1.147e-05,
+      "healthFactor": 1.3454195784105556,
+      "LTV": 0.6020426735256175
+    },
+    "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#9": {
+      "debt": 1.11e-06,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "02b93badd6ad42dc72b2b1d745bb003ba7468bd1ddc349c826f41121ebae96dc#0": {
+      "debt": 199.131879,
+      "interest": 6.806204,
+      "healthFactor": 1.5497122750104901,
+      "LTV": 0.5226776693076894
+    },
+    "036232ba8ff0d8e7d9a920c5c66214f73aa0f5cc0e4781c02f5b6b672d4dcfff#0": {
+      "debt": 1351.08,
+      "interest": 0.000561,
+      "healthFactor": 1.2508360764118098,
+      "LTV": 0.6475668676934816
+    },
+    "04fd870e006ffed9d3796f8c882fdc0cb4ef6920c3f585186564cd880a1dfa32#0": {
+      "debt": 221.39774,
+      "interest": 1.280563,
+      "healthFactor": 1.2525721264983531,
+      "LTV": 0.3878192357553785
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#1": {
+      "debt": 0.0980759,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#10": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#13": {
+      "debt": 34432.77253504,
+      "interest": 14099.70901212,
+      "healthFactor": 1.523439729506759,
+      "LTV": 0.5316915295771183
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#15": {
+      "debt": 68672.28119907,
+      "interest": 34672.28119907,
+      "healthFactor": 2.2146787186902563,
+      "LTV": 0.3657415376615113
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#16": {
+      "debt": 1613.60667528,
+      "interest": 813.60667528,
+      "healthFactor": 1.7410977590593553,
+      "LTV": 0.4652237335815137
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#17": {
+      "debt": 331.91258252,
+      "interest": 29.77947064,
+      "healthFactor": 1.468581099726333,
+      "LTV": 0.5515527880284866
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#18": {
+      "debt": 320.51688552,
+      "interest": 28.75703931,
+      "healthFactor": 1.529433688180813,
+      "LTV": 0.5296077929102343
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#19": {
+      "debt": 329.66867772,
+      "interest": 29.57814565,
+      "healthFactor": 1.5807573581716134,
+      "LTV": 0.5124126076736333
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#20": {
+      "debt": 70692.32867276,
+      "interest": 35692.32867276,
+      "healthFactor": 2.2133663748836976,
+      "LTV": 0.3659583922442853
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#21": {
+      "debt": 1477.72170282,
+      "interest": 118.55010832,
+      "healthFactor": 1.5296941024978352,
+      "LTV": 0.5295176327589629
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#22": {
+      "debt": 1979.18028358,
+      "interest": 158.77958384,
+      "healthFactor": 1.5519749260609397,
+      "LTV": 0.5219156485059054
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#23": {
+      "debt": 157.0626951,
+      "interest": 12.60034246,
+      "healthFactor": 1.5139383142939893,
+      "LTV": 0.5350284039662051
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#24": {
+      "debt": 151.74988721,
+      "interest": 12.16137136,
+      "healthFactor": 1.5600068009255383,
+      "LTV": 0.5192285056189717
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#25": {
+      "debt": 1.43861555,
+      "interest": 0.11459854,
+      "healthFactor": 1.5640505924994295,
+      "LTV": 0.5178860606456345
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#26": {
+      "debt": 127.84300267,
+      "interest": 10.1600464,
+      "healthFactor": 1.5687724300576165,
+      "LTV": 0.5163272788840706
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#27": {
+      "debt": 0.10011974,
+      "interest": 0.00792815,
+      "healthFactor": 1.497320595741472,
+      "LTV": 0.5409663116260608
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#29": {
+      "debt": 58573.16943094,
+      "interest": 29573.16943094,
+      "healthFactor": 2.2547010827848593,
+      "LTV": 0.3592493950459903
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#5": {
+      "debt": 4.61911947,
+      "interest": 1.5674741,
+      "healthFactor": 9.88092943252127,
+      "LTV": 0.08197609400326586
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "05056f9c33cf27f3b41a5be1f9332294cc93a1c1ebfbd4745d3a886c2b10f1e7#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "0701c11d2303d3b92a9c0bf350fb3edccdc1538ddfb4d978fb18b4eb3256139e#0": {
+      "debt": 5934.8272,
+      "interest": 0.884107,
+      "healthFactor": 4.408565595291942,
+      "LTV": 0.18146491930489755
+    },
+    "0c0ee59ffff4dc87e4d2fd3e79ff271d40bf069aaac304db234fb24a772be6a0#0": {
+      "debt": 3244.636823,
+      "interest": 9.089526,
+      "healthFactor": 1.4284734287745506,
+      "LTV": 0.28001920927794177
+    },
+    "0c7204bad0531d37cbf0c5047888447ff25a6bad04de7b5481a9aeaf30ad0e1f#0": {
+      "debt": 2010.845361,
+      "interest": 10.845361,
+      "healthFactor": 2.5583709584846877,
+      "LTV": 0.3126989842293381
+    },
+    "0c9ac9fc90df5b14bf23bbee47d7f196c25983e1a103498ee2aede763d2952d2#1": {
+      "debt": 1.119602,
+      "interest": 0.034427,
+      "healthFactor": 1.603943023232744,
+      "LTV": 0.5050054698124168
+    },
+    "0ca5f85bcd36fdaa0a9d81c07b0f8790756f3a57daff9dfde4ecb52e90de7b09#0": {
+      "debt": 14.387103,
+      "interest": 0.34678,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "0e556f4fbe6507f14f5aaa948dcbb6ee41cb31dc5fe7ba7b367f4a08fad26f8c#0": {
+      "debt": 1328.178022,
+      "interest": 2.327912,
+      "healthFactor": 3.249835202336336,
+      "LTV": 0.24924340760961775
+    },
+    "0fe2316321084db3b9f46baf13fdee255042d6da0d0d9d6b57d848c096d094e8#0": {
+      "debt": 82501.85,
+      "interest": 5.008142,
+      "healthFactor": 3.3142461877911975,
+      "LTV": 0.2413821890923455
+    },
+    "104e89d791ba87c78bbe9d418ac20de67c4aab9b73c1ebc825cb174f08ffc90a#3": {
+      "debt": 22043.398174,
+      "interest": 1057.971339,
+      "healthFactor": 2.421523362046431,
+      "LTV": 0.3345001798022995
+    },
+    "105d05f32f2ebc323ab893ac60513326ebf2a2bc7adce949f5f8b5b47c65ad55#0": {
+      "debt": 41488.914472,
+      "interest": 1488.914472,
+      "healthFactor": 2.2394196063253733,
+      "LTV": 0.36170086111245386
+    },
+    "1197e687ac7f724d295c60bd8ff88436566bd1b13e6dbad7c2ed5e3b2bc6dcaf#0": {
+      "debt": 2287.466763,
+      "interest": 107.413359,
+      "healthFactor": 2.3241132652761487,
+      "LTV": 0.34852001927012655
+    },
+    "119ea5c052b3180864ca038943ec10e04625fb5702c889a669ab61f24419c4f8#0": {
+      "debt": 505.548905,
+      "interest": 5.548905,
+      "healthFactor": 2.372870779027212,
+      "LTV": 0.3413586644326539
+    },
+    "11e57b0165a273320916938fb15aceb1aad743a22c9237ba2abdefc60b5e0563#0": {
+      "debt": 1017442701,
+      "interest": 6203188,
+      "healthFactor": 1.497637000701176,
+      "LTV": 0.5341748365094141
+    },
+    "149ef889934c618d860da1d42c1a4111a6135ee765824336284d0f853ccac74c#0": {
+      "debt": 71431.29990802,
+      "interest": 3931.29990802,
+      "healthFactor": 1.3072878633172718,
+      "LTV": 0.6182663585100641
+    },
+    "14eb52a0a027ce40a86f05464882a991e4dc288a9b3a0f84eb7738a2b91137ce#0": {
+      "debt": 11209.655272,
+      "interest": 345.929034,
+      "healthFactor": 2.454638626472383,
+      "LTV": 0.3259135545950803
+    },
+    "15067301a7f86554528d6a96512ad455206ee337e7d7d572e4bf75c30a52ce6a#0": {
+      "debt": 4718.1345158,
+      "interest": 250.1345158,
+      "healthFactor": 1.598668311127529,
+      "LTV": 0.5063258539814862
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#10": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#12": {
+      "debt": 2567.213737,
+      "interest": 1260.480095,
+      "healthFactor": 2.2927601086644898,
+      "LTV": 0.3532859791737292
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#13": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#14": {
+      "debt": 8.233052,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#18": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#19": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#2": {
+      "debt": 0.029441,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#20": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#21": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#22": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#23": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#24": {
+      "debt": 0.002778,
+      "interest": 0.001192,
+      "healthFactor": 3327.9005383067097,
+      "LTV": 0.0002433966973099927
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#25": {
+      "debt": 0.002792,
+      "interest": 0.001198,
+      "healthFactor": 3151.078670104482,
+      "LTV": 0.0002570548325831365
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#26": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#27": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#29": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#30": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#31": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#32": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#33": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#34": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#35": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#36": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#37": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#38": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#39": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#40": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "16037f6b5711f67fb551a471397baaeccc19ed694383a9f8492e4353b9b8966e#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#10": {
+      "debt": 249.428753,
+      "interest": 25.972248,
+      "healthFactor": 1.8821757958127963,
+      "LTV": 0.4303529998642931
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#11": {
+      "debt": 579.0959,
+      "interest": 251.443685,
+      "healthFactor": 1.933190049686425,
+      "LTV": 0.41899657001203106
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#12": {
+      "debt": 58.327098,
+      "interest": 3.290497,
+      "healthFactor": 1.5314166281445907,
+      "LTV": 0.528922035397622
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#13": {
+      "debt": 365.268582,
+      "interest": 165.268582,
+      "healthFactor": 1.18275163198946,
+      "LTV": 0.677447862252406
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#14": {
+      "debt": 5.551789,
+      "interest": 0.276941,
+      "healthFactor": 1.1288518731118489,
+      "LTV": 0.708684654790619
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#15": {
+      "debt": 2.510264,
+      "interest": 0.12522,
+      "healthFactor": 1.5245771493350138,
+      "LTV": 0.5312948579567153
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#16": {
+      "debt": 1.163812,
+      "interest": 0.058055,
+      "healthFactor": 1.522933311818166,
+      "LTV": 0.5318683318004089
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#17": {
+      "debt": 29.255354,
+      "interest": 1.45003,
+      "healthFactor": 1.5387068459770847,
+      "LTV": 0.526416063019234
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#18": {
+      "debt": 0.563229,
+      "interest": 0.027878,
+      "healthFactor": 1.5577011741223228,
+      "LTV": 0.5199970401616918
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#19": {
+      "debt": 40.108749,
+      "interest": 1.985272,
+      "healthFactor": 1.5764694013222937,
+      "LTV": 0.5138063569902448
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#2": {
+      "debt": 277.157836,
+      "interest": 35.898358,
+      "healthFactor": 4.5593566449523015,
+      "LTV": 0.17546335202482702
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#20": {
+      "debt": 11.387847,
+      "interest": 0.563667,
+      "healthFactor": 1.5780623954445707,
+      "LTV": 0.5132876889647999
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#21": {
+      "debt": 29.534923,
+      "interest": 1.461897,
+      "healthFactor": 1.587818011606282,
+      "LTV": 0.5101340292648405
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#22": {
+      "debt": 0.563303,
+      "interest": 0.027882,
+      "healthFactor": 1.5826678779932328,
+      "LTV": 0.5117940480519839
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#23": {
+      "debt": 3.551644,
+      "interest": 0.175797,
+      "healthFactor": 1.5672835038968276,
+      "LTV": 0.5168177920497793
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#24": {
+      "debt": 2.640739,
+      "interest": 0.130554,
+      "healthFactor": 1.57184150742465,
+      "LTV": 0.5153191312062545
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#25": {
+      "debt": 3.518646,
+      "interest": 0.173956,
+      "healthFactor": 1.588203290652112,
+      "LTV": 0.5100102768754597
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#26": {
+      "debt": 5.187762,
+      "interest": 0.256474,
+      "healthFactor": 1.598677380669697,
+      "LTV": 0.5066688312242625
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#27": {
+      "debt": 74.693408,
+      "interest": 3.692715,
+      "healthFactor": 1.5550310452783882,
+      "LTV": 0.4475939735036242
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#28": {
+      "debt": 59036.518992,
+      "interest": 6142.586294,
+      "healthFactor": 1.8206175642048215,
+      "LTV": 0.44490397979532736
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#29": {
+      "debt": 1265.40537,
+      "interest": 175.40537,
+      "healthFactor": 3.4918993255415054,
+      "LTV": 0.2319654504570774
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#30": {
+      "debt": 1360.366292,
+      "interest": 160.366292,
+      "healthFactor": 1.554726723622486,
+      "LTV": 0.3784020778041476
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#31": {
+      "debt": 265.279068,
+      "interest": 10.588492,
+      "healthFactor": 1.6923556949634417e-11,
+      "LTV": 47862278740.25606
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#32": {
+      "debt": 54.602339,
+      "interest": 2.176368,
+      "healthFactor": 8.222111904114476e-11,
+      "LTV": 9851483529.367474
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#33": {
+      "debt": 105.220095,
+      "interest": 4.175189,
+      "healthFactor": 0.05970199773153349,
+      "LTV": 13.567385192743274
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#34": {
+      "debt": 3747.250427,
+      "interest": 397.250427,
+      "healthFactor": 1.6726069575382436,
+      "LTV": 0.3702538975084851
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#37": {
+      "debt": 12686.926946,
+      "interest": 961.821542,
+      "healthFactor": 2.007737548777535,
+      "LTV": 0.3984584541376444
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#4": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 24901577.044718474,
+      "LTV": 3.252806031302334e-08
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#5": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 1474113.686628305,
+      "LTV": 5.494827212768699e-07
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#8": {
+      "debt": 2204.939195,
+      "interest": 125.199683,
+      "healthFactor": 2.2958255064808633,
+      "LTV": 0.35281426994928794
+    },
+    "1698ed8ed07dda945f7aa0826f1233a74b7ccdaba4c8a1416fdafda0d7526b06#9": {
+      "debt": 19465.729557,
+      "interest": 5239.19221,
+      "healthFactor": 1.6844567025970345,
+      "LTV": 0.4771577748581049
+    },
+    "16fc38a2d4b62167463ee29af607099d0c640361d031da1baad8d4968899eabe#0": {
+      "debt": 890.317283,
+      "interest": 40.317283,
+      "healthFactor": 2.390098162374411,
+      "LTV": 0.33889821462199543
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#1": {
+      "debt": 251.610234,
+      "interest": 21.269737,
+      "healthFactor": 1.4631884737800465,
+      "LTV": 0.5535855527261098
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#10": {
+      "debt": 54.131419,
+      "interest": 4.554986,
+      "healthFactor": 1.5222396219246475,
+      "LTV": 0.5321107060502568
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#11": {
+      "debt": 552.382501,
+      "interest": 46.425415,
+      "healthFactor": 1.5271932765312002,
+      "LTV": 0.530384734170516
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#12": {
+      "debt": 83.291759,
+      "interest": 7.000321,
+      "healthFactor": 1.5057897182378515,
+      "LTV": 0.5379237155025215
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#13": {
+      "debt": 38.162589,
+      "interest": 3.207405,
+      "healthFactor": 1.5528192813993762,
+      "LTV": 0.5216318535599589
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#14": {
+      "debt": 2.238787,
+      "interest": 0.188161,
+      "healthFactor": 1.525690366903946,
+      "LTV": 0.5309071995018998
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#15": {
+      "debt": 8405.791215,
+      "interest": 1905.791215,
+      "healthFactor": 1.655514712593783,
+      "LTV": 0.48927381547152177
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#16": {
+      "debt": 6.569445,
+      "interest": 0.548412,
+      "healthFactor": 1.5676752684730153,
+      "LTV": 0.5166886384505993
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#17": {
+      "debt": 4478.744448,
+      "interest": 373.063058,
+      "healthFactor": 1.5693465675151042,
+      "LTV": 0.5161383831759674
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#18": {
+      "debt": 13.095883,
+      "interest": 1.100654,
+      "healthFactor": 1.5316896756267195,
+      "LTV": 0.5288277468270937
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#19": {
+      "debt": 1313.661615,
+      "interest": 213.661615,
+      "healthFactor": 3.3033377253659624,
+      "LTV": 0.24520653573508402
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#2": {
+      "debt": 17.599682,
+      "interest": 1.48778,
+      "healthFactor": 1.4611270462925434,
+      "LTV": 0.554366577537039
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#20": {
+      "debt": 3043.940602,
+      "interest": 227.763549,
+      "healthFactor": 2.9978339771854894,
+      "LTV": 0.27019508290464667
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#22": {
+      "debt": 3195.39421,
+      "interest": 301.340434,
+      "healthFactor": 1.4873295222319047,
+      "LTV": 0.5414216970094349
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#23": {
+      "debt": 280.410689,
+      "interest": 25.627434,
+      "healthFactor": 2.6935400081349736,
+      "LTV": 0.3007194983381181
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#28": {
+      "debt": 869.541904,
+      "interest": 81.741492,
+      "healthFactor": 1.226396467674908,
+      "LTV": 0.6604715696349462
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#3": {
+      "debt": 15679.983483,
+      "interest": 3679.983483,
+      "healthFactor": 1.7914448034995236,
+      "LTV": 0.4521490131416239
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#31": {
+      "debt": 808.856585,
+      "interest": 19.231187,
+      "healthFactor": 1.6883368330800206,
+      "LTV": 0.32576437901709404
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#4": {
+      "debt": 12354.365871,
+      "interest": 2854.365871,
+      "healthFactor": 1.8059894651621167,
+      "LTV": 0.44850759964277503
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#5": {
+      "debt": 254.161141,
+      "interest": 32.013515,
+      "healthFactor": 1.6459700377403854,
+      "LTV": 0.4261343111242589
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#6": {
+      "debt": 56.751513,
+      "interest": 4.781148,
+      "healthFactor": 1.502352037924801,
+      "LTV": 0.53915459196824
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#8": {
+      "debt": 1391.127834,
+      "interest": 117.058945,
+      "healthFactor": 1.5202410096312948,
+      "LTV": 0.5328102549979559
+    },
+    "17884cc45591d433c7e462287b489871ee5aef558532e714abc8e7ca85e493c8#9": {
+      "debt": 5841.277942,
+      "interest": 491.5248,
+      "healthFactor": 1.4967613469279748,
+      "LTV": 0.5411684378825543
+    },
+    "17a4aabef5ee2bc954b6612496cdef0a7c1393530f660a1e0aa872797abd993f#1": {
+      "debt": 25.25848687,
+      "interest": 0.1297167,
+      "healthFactor": 1.109291077416638,
+      "LTV": 0.7211813168668699
+    },
+    "197b91e972aa5bdb9b0cc0a5ce2192ba1ff48560e72cf58248dbfaca04882293#0": {
+      "debt": 6042.903412,
+      "interest": 42.903412,
+      "healthFactor": 1.2406622530207845,
+      "LTV": 0.6528771210922222
+    },
+    "199ce0a5740add0382257d3d5aee53dc1b1507b8f4613a07772f2e6c95cd1d44#0": {
+      "debt": 338.766851,
+      "interest": 8.178101,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "19da601cdf3a9a6fcf34daa14d3b86c2745a5555fad6e22713f95a34bd4eacd0#0": {
+      "debt": 10008,
+      "interest": 0.471558,
+      "healthFactor": 2.149960318924224,
+      "LTV": 0.3767511394839603
+    },
+    "1a50dc5f1879180b434bcb36955ffc96146b50fdd9d138cc4fd0a2e663b00f94#0": {
+      "debt": 1061.329504,
+      "interest": 30.329504,
+      "healthFactor": 2.10796711899782,
+      "LTV": 0.3842564680919189
+    },
+    "1a9016c6adbb214d65e8147b4979301e74da204a5c1a873514abbd7aab2d4bb0#0": {
+      "debt": 6241.480663,
+      "interest": 141.480663,
+      "healthFactor": 2.437684090418461,
+      "LTV": 0.33228259690571826
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#1": {
+      "debt": 96.591508,
+      "interest": 7.769786,
+      "healthFactor": 1.5393403518021749,
+      "LTV": 0.5261994198045263
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#10": {
+      "debt": 14.552194,
+      "interest": 1.170573,
+      "healthFactor": 1.549688296329771,
+      "LTV": 0.5226857568185658
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#11": {
+      "debt": 5.577216,
+      "interest": 0.44863,
+      "healthFactor": 1.5363011670397795,
+      "LTV": 0.5272403727284107
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#12": {
+      "debt": 5.756963,
+      "interest": 0.463088,
+      "healthFactor": 1.54956183009131,
+      "LTV": 0.5227284153948666
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#13": {
+      "debt": 5.703046,
+      "interest": 0.458751,
+      "healthFactor": 1.5448472041688162,
+      "LTV": 0.5243236986895474
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#14": {
+      "debt": 1568.367031,
+      "interest": 788.668594,
+      "healthFactor": 1.768590262955761,
+      "LTV": 0.45799189160200704
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#15": {
+      "debt": 626.870467,
+      "interest": 49.903113,
+      "healthFactor": 1.558079730988338,
+      "LTV": 0.519870699740245
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#16": {
+      "debt": 8516.8907,
+      "interest": 749.277033,
+      "healthFactor": 1.9055712542136358,
+      "LTV": 0.4250693844215546
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#17": {
+      "debt": 23986.43942,
+      "interest": 2198.442213,
+      "healthFactor": 1.789408841903315,
+      "LTV": 0.4526634612682694
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#18": {
+      "debt": 8055.749899,
+      "interest": 2414.494205,
+      "healthFactor": 2.348565964929944,
+      "LTV": 0.34489131329302974
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#2": {
+      "debt": 3.947081,
+      "interest": 0.317502,
+      "healthFactor": 1.536688736269781,
+      "LTV": 0.5271073971468198
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#20": {
+      "debt": 123.33603,
+      "interest": 8.052008,
+      "healthFactor": 0.1676782273276417,
+      "LTV": 4.830680839780513
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#21": {
+      "debt": 13.031835,
+      "interest": 0.849431,
+      "healthFactor": 0.1517372073147021,
+      "LTV": 5.3381609185582315
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#22": {
+      "debt": 2261.601514,
+      "interest": 142.445669,
+      "healthFactor": 1.3767566836674454,
+      "LTV": 0.5883392538483038
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#23": {
+      "debt": 1340.230973,
+      "interest": 82.266045,
+      "healthFactor": 1.4519334223475033,
+      "LTV": 0.5578768196476215
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#24": {
+      "debt": 8705.638742,
+      "interest": 534.369434,
+      "healthFactor": 1.6624560522900458,
+      "LTV": 0.48656925714978067
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#26": {
+      "debt": 2021.571983,
+      "interest": 321.571983,
+      "healthFactor": 1.859755555095686,
+      "LTV": 0.43554111064791246
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#29": {
+      "debt": 2135707.566048,
+      "interest": 308298.110335,
+      "healthFactor": 51.03589858815683,
+      "LTV": 1.9594051004562025
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#3": {
+      "debt": 3.249247,
+      "interest": 0.261369,
+      "healthFactor": 1.5267137891175786,
+      "LTV": 0.5305513094685349
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#32": {
+      "debt": 1750.05698,
+      "interest": 61.053737,
+      "healthFactor": 1.6068479418004387,
+      "LTV": 0.5040925024258439
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#4": {
+      "debt": 763.953772,
+      "interest": 61.452165,
+      "healthFactor": 1.5445549849237044,
+      "LTV": 0.5244228971492466
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#5": {
+      "debt": 4.007906,
+      "interest": 0.322395,
+      "healthFactor": 1.5029706492931376,
+      "LTV": 0.5389326800100529
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#6": {
+      "debt": 9.256802,
+      "interest": 0.744614,
+      "healthFactor": 1.517989288272254,
+      "LTV": 0.5336006032835227
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#7": {
+      "debt": 6.588858,
+      "interest": 0.530005,
+      "healthFactor": 1.5210360272284764,
+      "LTV": 0.5325317648628772
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#8": {
+      "debt": 2.554824,
+      "interest": 0.205509,
+      "healthFactor": 1.52940166616764,
+      "LTV": 0.5296188816308082
+    },
+    "1aa3776c1fa997b7b5bfb861830cbdcb0f3e2135c9ab41da852451927d22d899#9": {
+      "debt": 12.455341,
+      "interest": 1.001903,
+      "healthFactor": 1.536447075490931,
+      "LTV": 0.5271903034741278
+    },
+    "1b390a7c3a98b93ef6165f789669034f4b6408d3d1ef14303ef83d9f2b1673f3#0": {
+      "debt": 190.406276,
+      "interest": 0.406276,
+      "healthFactor": 1.4363814785973081,
+      "LTV": 0.3272925162349517
+    },
+    "1bbfd92e30c6715dc1f7041b2f2b54529872c29a32c76f649e332f9684a6c69a#1": {
+      "debt": 3292.524534,
+      "interest": 101.459081,
+      "healthFactor": 1.5456357145861617,
+      "LTV": 0.5240562134764559
+    },
+    "1d3d9a4f49325734f183a942816152f699f7c44d1d23b504b195c971dde85901#0": {
+      "debt": 10.523705,
+      "interest": 0.523705,
+      "healthFactor": 8.036269174794414,
+      "LTV": 0.0995486814340643
+    },
+    "1de0dfdcd35ce824bc15e6960d77696721d85f63ce596efea8969c3c24900ce1#0": {
+      "debt": 30.029718,
+      "interest": 0.029718,
+      "healthFactor": 1.8070299561254621,
+      "LTV": 0.49805483132650014
+    },
+    "1e0ca9ac3e7eaf7965d597074144df0f51f837b0badf7e994882a5c466460a0e#0": {
+      "debt": 150.535386,
+      "interest": 0.535386,
+      "healthFactor": 2.5545485618112447,
+      "LTV": 0.15658343943024872
+    },
+    "1ff5c7f28690457b8306914b937787418c450692394ab41df3724d15f6d2d1a8#0": {
+      "debt": 208.954102,
+      "interest": 10.986941,
+      "healthFactor": 3.9002267480735324,
+      "LTV": 0.1917033343398824
+    },
+    "230ada101e4ca9f6369c2d3e62275b34decec6eb5342233d7bbb4c710c749dfb#0": {
+      "debt": 1340.999673,
+      "interest": 60.999673,
+      "healthFactor": 2.4465534768931683,
+      "LTV": 0.33107798691104173
+    },
+    "234b9c19a32d260bc1dee91b7c94959e412c2b56b130c51c5448bfe763b5bc52#0": {
+      "debt": 10532.460018,
+      "interest": 532.460018,
+      "healthFactor": 1.8857996668251227,
+      "LTV": 0.4295260065262883
+    },
+    "24d0b4b481c2ea2e469017862c6a638cb53c7e754aa265f4faa0af45de8632ac#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "24d0b4b481c2ea2e469017862c6a638cb53c7e754aa265f4faa0af45de8632ac#2": {
+      "debt": 1090.787614,
+      "interest": 3.531397,
+      "healthFactor": 3.9398488137537533,
+      "LTV": 0.20559164533733967
+    },
+    "24d0b4b481c2ea2e469017862c6a638cb53c7e754aa265f4faa0af45de8632ac#3": {
+      "debt": 476.600905,
+      "interest": 1.467564,
+      "healthFactor": 3.3861096608109675,
+      "LTV": 0.23921257169385543
+    },
+    "24d0b4b481c2ea2e469017862c6a638cb53c7e754aa265f4faa0af45de8632ac#4": {
+      "debt": 0.378248,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "24d0b4b481c2ea2e469017862c6a638cb53c7e754aa265f4faa0af45de8632ac#6": {
+      "debt": 11933.982736,
+      "interest": 46.641453,
+      "healthFactor": 11.487265048684916,
+      "LTV": 0.06964233841645236
+    },
+    "254548716d98ed9f84ec3e1ea04fa961354021139fdbd85733949b6c04dabbe7#0": {
+      "debt": 9281.572765,
+      "interest": 166.99222,
+      "healthFactor": 1.5359373616878627,
+      "LTV": 0.5273652560348424
+    },
+    "258ee47df830b878c2d3f8ea1267014631c0769d716db9a3bf19388c86a96677#0": {
+      "debt": 1778.131389,
+      "interest": 68.131389,
+      "healthFactor": 2.002159958412174,
+      "LTV": 0.4045630802857409
+    },
+    "263dcabb1d3fef70a3e7da592d7aa77a001cc926797025bb9e0f813f0e27a5c9#0": {
+      "debt": 2459.414002,
+      "interest": 9.414002,
+      "healthFactor": 2.26858684309714,
+      "LTV": 0.35495661803283257
+    },
+    "2640ae7c4a2f2ad0a2b2f300d2ee17ce85db6b7105a68b6730e3604f689121c3#0": {
+      "debt": 62.436022,
+      "interest": 0.644482,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "26a85ab3bed4b1c1e08d783fab0f85568fc0ddf76bf55c166a99678616ca1f9e#0": {
+      "debt": 20999.357092,
+      "interest": 9.896083,
+      "healthFactor": 1.059591576712726,
+      "LTV": 0.8493838756175823
+    },
+    "277a6aec18a1aaf7cd5b20b85144d58bda5339ad9e1e139555fc84fa547b4777#0": {
+      "debt": 1857.06647,
+      "interest": 28.795933,
+      "healthFactor": 2.4373938920793043,
+      "LTV": 0.33232215877467436
+    },
+    "27ed4c839c644bac0b5ee76f881d0da102dfeb39263c0573141588a73d5dc47a#0": {
+      "debt": 13421.921554,
+      "interest": 171.921554,
+      "healthFactor": 2.118697351107356,
+      "LTV": 0.3823103849998426
+    },
+    "28f686a887d7da2a7d328b22b1e38c0996c903e8e1f2e59dff182195006d0635#0": {
+      "debt": 2709313804,
+      "interest": 37322432,
+      "healthFactor": 2.9094535962068186,
+      "LTV": 0.27840279049510613
+    },
+    "29d3ec0cf208d54cf7dc12652cd9617214f0292ec0bb66f6099f893c8c09e97a#0": {
+      "debt": 100467.95958,
+      "interest": 467.95958,
+      "healthFactor": 1.4164965689129114,
+      "LTV": 0.5718333653442123
+    },
+    "29eb52fdd28af2002ee98d925b676365556fd7f3bbc2343778fd6df438160cf1#0": {
+      "debt": 34383.717477,
+      "interest": 386.209079,
+      "healthFactor": 2.79106352809042,
+      "LTV": 0.29021195391929433
+    },
+    "2b72eed9bbd2741bf5ae70153d7f5fcc93b316208371ca9667d4c1a7b5420ffd#0": {
+      "debt": 15007.159285,
+      "interest": 95.921934,
+      "healthFactor": 1.2037902805450202,
+      "LTV": 0.6645675853420225
+    },
+    "2b93e6f92384943f095c048945e0a4e652c728678b2d56f1ab9dad5dff56b268#0": {
+      "debt": 2190.358856,
+      "interest": 81.575281,
+      "healthFactor": 1.9083900647138439,
+      "LTV": 0.424441530574336
+    },
+    "2c5c7287565e61976018c9848df02b74a834ea2b96e33d1655564599c47600e1#0": {
+      "debt": 26939.11950481,
+      "interest": 1301.55901358,
+      "healthFactor": 1.1194312272653013,
+      "LTV": 0.7146486363028738
+    },
+    "2d49c0d8e0bda30d72a6566c6a57e1b08ae39ca36b1a19ea0b5a2161fb7c6acc#0": {
+      "debt": 12359.577363,
+      "interest": 536.577363,
+      "healthFactor": 1.266484038023465,
+      "LTV": 0.6379298700333847
+    },
+    "2ec184faa6b7e26f9d658fbf3fd0816822384a19133a69eff46d9c188188575e#0": {
+      "debt": 1042.191088,
+      "interest": 2.779278,
+      "healthFactor": 1.2040386911785397,
+      "LTV": 0.4628126743654953
+    },
+    "30beb9a87464e0aacf4476d4e58990bfe6e0fcb70cdbca1a33d23a5554b5b0b9#0": {
+      "debt": 5094.47873,
+      "interest": 4.871361,
+      "healthFactor": 1.141214556076554,
+      "LTV": 0.709770126648879
+    },
+    "3430f667c9ed6801fc33ce294f2b7122cb1520f13f0724dfe27d06a809528c7f#0": {
+      "debt": 9215585894,
+      "interest": 113263652,
+      "healthFactor": 2.144115769449726,
+      "LTV": 0.3731141813323425
+    },
+    "35a0b20327f4ef3b338d0b6b0bb2dc6f36567d05f2dd5710529abb9b1f2b60e6#2": {
+      "debt": 32.12424461,
+      "interest": 2.12424461,
+      "healthFactor": 1.4523054040492003,
+      "LTV": 0.5508483255446855
+    },
+    "3b6d4904f36970a2046cdbb29acc6c297371ce7d2a54753496520462e986a66e#0": {
+      "debt": 18077.025713,
+      "interest": 77.025713,
+      "healthFactor": 2.3365872925843365,
+      "LTV": 0.34237967592264684
+    },
+    "3bab1252692f25613e6e5940cd59df9f98c46b6ff623cccaf44ae4bee5fbbaad#0": {
+      "debt": 152.088147,
+      "interest": 2.088147,
+      "healthFactor": 1.2331372333674306,
+      "LTV": 0.6487518001669396
+    },
+    "3dda90b10e4421b2878d2f085698bc70df263fba848c415af13d54351014b34a#0": {
+      "debt": 13284.949223,
+      "interest": 94.03592,
+      "healthFactor": 2.3282505949777996,
+      "LTV": 0.23622886693828776
+    },
+    "3e58f3995de62aff6dedaddc49735989fd4b42a8222ee57d84392ad174c6dc8b#0": {
+      "debt": 15133.847590201,
+      "interest": 5.691070463,
+      "healthFactor": 1.5483984894874263,
+      "LTV": 0.5212438514518709
+    },
+    "3e9173db7cb16d166152d553f67abb8e2573736ec6cc8b5d48e25f61dd16c020#0": {
+      "debt": 87.352591,
+      "interest": 0.352591,
+      "healthFactor": 1.5992361252549085,
+      "LTV": 0.5002388248780241
+    },
+    "3e9569f4a60472029c1e6ee0153d91241aadc08b6655e661cb9944b86d9e0884#0": {
+      "debt": 3659.24618,
+      "interest": 89.24618,
+      "healthFactor": 3.369596827501447,
+      "LTV": 0.24038484170838156
+    },
+    "4017f161b4b4427649a594b72941e2473e2039c40cad16fc8676b71dc5224102#0": {
+      "debt": 13052.492691,
+      "interest": 202.492691,
+      "healthFactor": 2.0425663472071465,
+      "LTV": 0.3965599458287041
+    },
+    "40b6bf5fa69136f5161434e62b4536feb81170014af974bc736fdebe0169891a#0": {
+      "debt": 1352.09823,
+      "interest": 32.640726,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "418fe343b666a60c68a2fd09fbab0e1193637a1e4a3c6e16265195410e18b96b#0": {
+      "debt": 40208.493983,
+      "interest": 208.493983,
+      "healthFactor": 1.592880712195158,
+      "LTV": 0.508512654964435
+    },
+    "4255b450412a793a3c454bb8568e7cff85e585a14da23e7667b61f5522435969#0": {
+      "debt": 302.2416,
+      "interest": 0.044822,
+      "healthFactor": 1.7625423537034621,
+      "LTV": 0.45956342455999666
+    },
+    "42f8237e928a80aae5d2ba89afeb572b9a623bd7e4a9f61531e52339ea2c0717#0": {
+      "debt": 749.71609,
+      "interest": 39.71609,
+      "healthFactor": 1.1754513883849866,
+      "LTV": 0.4404306319874362
+    },
+    "4533f32e56dd14e1d2d4dadfb608167841f801b21fd4e40f06ee6424a8e38b38#0": {
+      "debt": 1601.734327,
+      "interest": 1.734327,
+      "healthFactor": 3.4398601656637307,
+      "LTV": 0.23256759329507157
+    },
+    "4878073f1840b479a81853538c7372d5d0e40d76f4bc15d363baa80bc4a93dea#0": {
+      "debt": 39037.263189,
+      "interest": 2256.616333,
+      "healthFactor": 1.7900104847230323,
+      "LTV": 0.45251131594647115
+    },
+    "492100d0b197d724f8fe1f4806477eba0911775371ae67863dd7db5ce23dcffa#0": {
+      "debt": 33334570008,
+      "interest": 70516815,
+      "healthFactor": 1.148921796106018,
+      "LTV": 0.696305007626628
+    },
+    "4956dacb29641c4246a26dfde13331dc91353211398a5892330ee9354b8fe656#0": {
+      "debt": 738.212603,
+      "interest": 6.548834,
+      "healthFactor": 6.664872597700711,
+      "LTV": 0.1009152962442539
+    },
+    "4a1c4d933f8c2381708bb174b2959ccf4440454dff7865349c963a0ef4dd6a8a#0": {
+      "debt": 2158.841801,
+      "interest": 0.030256,
+      "healthFactor": 1.730721483921645,
+      "LTV": 0.46223497392964613
+    },
+    "4b620f616ef2521c72223777e317d7baf4f4cee06c55d14e6d91284ecc9eb15b#0": {
+      "debt": 11261.616536,
+      "interest": 258.186073,
+      "healthFactor": 2.9781805899003975,
+      "LTV": 0.2719781341490409
+    },
+    "4d0ff9b22fb61ffe9ae15b54f5aaf9d78639354a4fa13d4e7c5151394c467eb9#0": {
+      "debt": 40583.813114,
+      "interest": 178.813114,
+      "healthFactor": 2.194001335373856,
+      "LTV": 0.36918847173900043
+    },
+    "4f931377ef5d8081f8471ab25171481b6eaa41db9116af1bae7b7ab0209177a6#0": {
+      "debt": 500.4,
+      "interest": 0.289962,
+      "healthFactor": 1.2206947868970977,
+      "LTV": 0.6635565324719302
+    },
+    "50762d6a308c53a8e470f26878f83b6a137f8ae3429e89278b7bd4b82cab401d#0": {
+      "debt": 132919.641916,
+      "interest": 4.23742,
+      "healthFactor": 3.2973676466404735,
+      "LTV": 0.24261777445869004
+    },
+    "518c669a981cde3cf50e5bd2cf605fc9cdfebef6ae3cb96ac654a3ed0ad5fe24#0": {
+      "debt": 706.068696,
+      "interest": 24.472141,
+      "healthFactor": 2.584526869985179,
+      "LTV": 0.3134035901915947
+    },
+    "51ae0faad59b2bc26873b2c0edeb4f7a31f7f7899b5127c7001bfb8325c2bf99#0": {
+      "debt": 13.924716,
+      "interest": 0.014801,
+      "healthFactor": 1.4285990328203562,
+      "LTV": 0.5599891793435077
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#1": {
+      "debt": 1.060572,
+      "interest": 0.480926,
+      "healthFactor": 1.6350704175560486,
+      "LTV": 0.4953915080982951
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#10": {
+      "debt": 0.004235,
+      "interest": 0.00186,
+      "healthFactor": 1.093853832252202,
+      "LTV": 0.7313591417902988
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#13": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#18": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#19": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#2": {
+      "debt": 35.504592,
+      "interest": 16.082085,
+      "healthFactor": 1.2043189036071165,
+      "LTV": 0.6642758804199449
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#20": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#21": {
+      "debt": 715.587945,
+      "interest": 265.587945,
+      "healthFactor": 1.4152497262930794,
+      "LTV": 0.5652712628289395
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#22": {
+      "debt": 2315.380027,
+      "interest": 823.425663,
+      "healthFactor": 2.9742366444985344,
+      "LTV": 0.2707166348019078
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#23": {
+      "debt": 0.166537,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#24": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#25": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#26": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#27": {
+      "debt": 1240.24735,
+      "interest": 388.91553,
+      "healthFactor": 13.877080361005689,
+      "LTV": 0.057938468656083555
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#29": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#3": {
+      "debt": 150.940469,
+      "interest": 68.240469,
+      "healthFactor": 1.1353239800522077,
+      "LTV": 0.7046446776920999
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#30": {
+      "debt": 0.518342,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#31": {
+      "debt": 1.92,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#32": {
+      "debt": 0.663005,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#33": {
+      "debt": 1.122742,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#34": {
+      "debt": 1.312946,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#35": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#36": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#37": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#38": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 850723.441600571,
+      "LTV": 9.521308105440788e-07
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#39": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#4": {
+      "debt": 166.061249,
+      "interest": 75.067107,
+      "healthFactor": 1.7476196893905298,
+      "LTV": 0.45776549947145223
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#40": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 15754380.970728137,
+      "LTV": 5.1414270196016685e-08
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#5": {
+      "debt": 19.349233,
+      "interest": 8.706204,
+      "healthFactor": 9.62980436204171,
+      "LTV": 0.08411385834512052
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#8": {
+      "debt": 180.963549,
+      "interest": 80.963549,
+      "healthFactor": 1.683124855741093,
+      "LTV": 0.47530639053378715
+    },
+    "52985ce3cc38280ba84a163df0e78053d0400ad17b689c11f172cd9379188279#9": {
+      "debt": 1889.471464,
+      "interest": 839.471464,
+      "healthFactor": 1.0591959525652415,
+      "LTV": 0.7552898951912524
+    },
+    "541f5d7c9c7863218dbcc4c06dba44da2565cf6bd0dff9eb47dacd6f070e06ae#0": {
+      "debt": 30076.935198,
+      "interest": 26.935198,
+      "healthFactor": 2.440869777326429,
+      "LTV": 0.32775201996899167
+    },
+    "560019b7ee724fc9fa401b7963284167cfa739c83dfd2bc8e3283227a2700ff7#0": {
+      "debt": 56216.504166,
+      "interest": 6061.882286,
+      "healthFactor": 1.1643941070761137,
+      "LTV": 0.6882123057491717
+    },
+    "576e773d5c8932214a8c0cbdda72321418d8385810fb6a1ac8f45f99fd5f8184#0": {
+      "debt": 301.844473,
+      "interest": 9.301332,
+      "healthFactor": 1.5876254791136684,
+      "LTV": 0.510195893588331
+    },
+    "5ca5499265a241d5707bc3f75bd50544db016711c84dfb7d9f477512b60b668c#0": {
+      "debt": 5885.220651,
+      "interest": 385.220651,
+      "healthFactor": 4.561369690034475,
+      "LTV": 0.1775782396611396
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#10": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#13": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#17": {
+      "debt": 0.161027,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#18": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#19": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#20": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 630579.1835865282,
+      "LTV": 1.2845333640622021e-06
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#21": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#22": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 240556.83544124954,
+      "LTV": 3.3671876274653762e-06
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#23": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#24": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#25": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#26": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#27": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#29": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 13955106.67934612,
+      "LTV": 5.804326821799354e-08
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#30": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#31": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 110193154.4657606,
+      "LTV": 4.991235641329216e-09
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#32": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#33": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 2168267.473851635,
+      "LTV": 3.735701474879131e-07
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#34": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#35": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#36": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#37": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#38": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#39": {
+      "debt": 0.316823,
+      "interest": 0.056624,
+      "healthFactor": 1510.7528940541797,
+      "LTV": 0.0005361565105636338
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#40": {
+      "debt": 174.0726,
+      "interest": 31.03463,
+      "healthFactor": 2.9466073372784916,
+      "LTV": 0.1866553419051702
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#41": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#42": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#43": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#44": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#45": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5da0d789c3d709b65791cef980380474721329e267743deaac4d68e1ab8a6aef#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "5ea2b205fd90d60e6f75df0a07c713f3d87ebc4e3a82b6673d68f6758a4f3796#0": {
+      "debt": 3.29616,
+      "interest": 0.033542,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "6043452c256128a25b2fb20c2d5b7b515990582743e3e5c00d4e1e22ed80a4ab#0": {
+      "debt": 1235.019881,
+      "interest": 0.220643,
+      "healthFactor": 1.0808796496418216,
+      "LTV": 0.7493896293342327
+    },
+    "60dc320e7f7298abe480b27122838d078daa44ee169f32a8aa7d56886bb6221e#0": {
+      "debt": 1283.924196,
+      "interest": 2.863301,
+      "healthFactor": 3.687431443501882,
+      "LTV": 0.21695318604764502
+    },
+    "60e1c646d3bdd4e401753486fc862c13e5dc4dc57d3b9e5c0148b25befc965f2#0": {
+      "debt": 2075.375067,
+      "interest": 14.467771,
+      "healthFactor": 3.7658948564491697,
+      "LTV": 0.21508832053897067
+    },
+    "613607b9d95f6713773e209b91355f27cc9754454db159d411811ed3a4234e01#0": {
+      "debt": 342.56608,
+      "interest": 8.56608,
+      "healthFactor": 2.594348700278258,
+      "LTV": 0.31221708936548237
+    },
+    "61c37e69f9cafbce26eb3695dee45f4d686a44b40ee43d21ed262008a02819b3#0": {
+      "debt": 1173.555004,
+      "interest": 7.955453,
+      "healthFactor": 3.786326440876048,
+      "LTV": 0.21392767175473362
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#10": {
+      "debt": 11.481544,
+      "interest": 0.17913,
+      "healthFactor": 1.6096696831022512,
+      "LTV": 0.5032088312502058
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#6": {
+      "debt": 3.290974,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "6380f0bb5aefc9cfa008cf0c65752403b9d1a593b29b208c068d54fcbd6f2f79#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "63a813eca4999bf982a8e5e9d5f8db89fa46ab571a614fe6a014b386e234e88d#1": {
+      "debt": 12.865544,
+      "interest": 0.440165,
+      "healthFactor": 1.5063002716891034,
+      "LTV": 0.5377413887681898
+    },
+    "650d40277f8464dfe6214e30b3311ac2738c53c13e90255a6745e8563a62b7b8#0": {
+      "debt": 5647.05124,
+      "interest": 10.968277,
+      "healthFactor": 1.7799702618918452,
+      "LTV": 0.2566885495523531
+    },
+    "65843d6cfb8f4fa01c5df841023a369a5a6b4acacbcab3e6285be27e1ee25215#0": {
+      "debt": 30881.103772,
+      "interest": 537.09466,
+      "healthFactor": 2.1642295403599032,
+      "LTV": 0.37426713982718307
+    },
+    "66cf948dd80fbcb18947e9c06478d035136bb2b47b080d6fc9c4e04024c1f904#0": {
+      "debt": 900.72,
+      "interest": 0.184292,
+      "healthFactor": 1.508457662834161,
+      "LTV": 0.5369723128179376
+    },
+    "67da4109e7c6b61d3933be02dc67674136a3be527befc46d589e877f2cff7677#0": {
+      "debt": 140442.509362,
+      "interest": 1024.844356,
+      "healthFactor": 1.0206107713509436,
+      "LTV": 0.7936424175965083
+    },
+    "6833d98eb7ae95b16287fe86200466494a124bf29f0a19148240c7cc5735fff9#0": {
+      "debt": 1475.402595,
+      "interest": 32.189607,
+      "healthFactor": 3.6167303713932624,
+      "LTV": 0.2239591887763439
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#10": {
+      "debt": 2.4e-05,
+      "interest": 4e-06,
+      "healthFactor": 430971.3456396974,
+      "LTV": 9.28135951776191e-07
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#11": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 13519864.564066801,
+      "LTV": 5.991184276748039e-08
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#13": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#18": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 5567925.91552909,
+      "LTV": 1.454760735484804e-07
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#19": {
+      "debt": 0.024747,
+      "interest": 0.003708,
+      "healthFactor": 484.97487966143683,
+      "LTV": 0.0016701895994395929
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#20": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#21": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#22": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#23": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 19763931.816886548,
+      "LTV": 4.098374794573648e-08
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#24": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#25": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#26": {
+      "debt": 443.795244,
+      "interest": 143.795244,
+      "healthFactor": 1.9579437349833013,
+      "LTV": 0.39199276866175875
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#27": {
+      "debt": 821.312104,
+      "interest": 266.312104,
+      "healthFactor": 1.987883787570472,
+      "LTV": 0.3672061581445124
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#28": {
+      "debt": 161.405572,
+      "interest": 52.405572,
+      "healthFactor": 2.2193587786364817,
+      "LTV": 0.34428272020043343
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#29": {
+      "debt": 80142.049986,
+      "interest": 29613.138615,
+      "healthFactor": 1.6108124224312295,
+      "LTV": 0.5028518458887049
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#31": {
+      "debt": 591.423693,
+      "interest": 45.242781,
+      "healthFactor": 1.8125702032978657,
+      "LTV": 0.3725559748887151
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#32": {
+      "debt": 209.298997,
+      "interest": 15.963033,
+      "healthFactor": 3.095868624631242,
+      "LTV": 0.261639009341516
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#35": {
+      "debt": 244.988683,
+      "interest": 18.462994,
+      "healthFactor": 3.940700287425656,
+      "LTV": 0.20554722280824592
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#37": {
+      "debt": 32.599009,
+      "interest": 2.197961,
+      "healthFactor": 1.5302180246197212,
+      "LTV": 0.5293363344097946
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#38": {
+      "debt": 9672.850958,
+      "interest": 650.61168,
+      "healthFactor": 2.088755787719659,
+      "LTV": 0.3877906669425893
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#39": {
+      "debt": 6607.901779,
+      "interest": 672.357692,
+      "healthFactor": 2.0581873390954417,
+      "LTV": 0.3935501810811785
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#40": {
+      "debt": 93.27362,
+      "interest": 6.273735,
+      "healthFactor": 1.5605218671926822,
+      "LTV": 0.5190571289187753
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#41": {
+      "debt": 0.365195,
+      "interest": 0.024564,
+      "healthFactor": 1.482162323829024,
+      "LTV": 0.5464988462987258
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#42": {
+      "debt": 8.472709,
+      "interest": 0.569888,
+      "healthFactor": 1.5567581188476296,
+      "LTV": 0.5203120447507877
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#43": {
+      "debt": 8.470318,
+      "interest": 0.569728,
+      "healthFactor": 1.5582367374911075,
+      "LTV": 0.5198183180459269
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#44": {
+      "debt": 42.753764,
+      "interest": 2.84755,
+      "healthFactor": 1.598761093565146,
+      "LTV": 0.5066423015046896
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#45": {
+      "debt": 28175.181706,
+      "interest": 9946.379786,
+      "healthFactor": 1.8418214563217352,
+      "LTV": 0.4397820414241643
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "693c290354b45758b96cc42769d3ec44e1b26077e103f500ddf0e6d55495575f#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "69c5020f7e0f29e616389ab43e2f124cdfc5d3f0951804dff32f1798f9bbf3e2#0": {
+      "debt": 660.109599,
+      "interest": 15.109599,
+      "healthFactor": 3.62255660679892,
+      "LTV": 0.22359899041460618
+    },
+    "6a689dad2aae16b2951c7bed7188e71d753b16f86406d4a1dc0111a733247e05#0": {
+      "debt": 6423.801563,
+      "interest": 207.907781,
+      "healthFactor": 1.7467014083345007,
+      "LTV": 0.4637312342768098
+    },
+    "6bb0596e9616f7045404c46f7e379fc38ce9e95ca215c50b73eff74c8f7df61a#0": {
+      "debt": 40.032,
+      "interest": 0.015007,
+      "healthFactor": 2.47844773647022,
+      "LTV": 0.36313051381175016
+    },
+    "6c41839866af95682649a27745cb26c0eb47b9b98f5f8338abca051fecd35d82#0": {
+      "debt": 62.230817,
+      "interest": 0.538111,
+      "healthFactor": 2.1860465623307674,
+      "LTV": 0.3705319062995512
+    },
+    "6cb1b4fe678f58484d7691b9a0dcf72e70a56728ff2b5e1727bed6cd65065566#0": {
+      "debt": 261.959095,
+      "interest": 11.959095,
+      "healthFactor": 2.775925245449723,
+      "LTV": 0.2917946012154852
+    },
+    "6f5dd0e908b337c10f9769d149ab646bc0850c94370327d31a94a1a947edb2f7#0": {
+      "debt": 3284.912315,
+      "interest": 1.355687,
+      "healthFactor": 2.51520348839636,
+      "LTV": 0.32204153808503133
+    },
+    "6f6a5a2913f02877efb51ecfc98a15ae9164470666cc5a528d48786aeb568a6b#0": {
+      "debt": 30.024,
+      "interest": 0.01452,
+      "healthFactor": 1.9537858476497376,
+      "LTV": 0.4606441392144562
+    },
+    "729d94eb5c37c6002e0e483b85a504f4889b0ba88a75d5df44109927365c7997#0": {
+      "debt": 15.704942,
+      "interest": 0.159557,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "73f33651618f4702b120a26c7cb3e11be17e5fc71ead7586629fc653167c3243#0": {
+      "debt": 31.188999,
+      "interest": 0.188999,
+      "healthFactor": 2.446748487664039,
+      "LTV": 0.3310515993302293
+    },
+    "759224e9aebdee551f5c99f94e40ab3755833c43538bd9b6c9520562d11fcf70#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "7594f8fd0fa66d317ebdf7c918e94e8195550e39e1cd2b9ac4f0e3902cfecff1#0": {
+      "debt": 3772.951802,
+      "interest": 22.951802,
+      "healthFactor": 2.018086102912745,
+      "LTV": 0.32208734754272467
+    },
+    "760240e89bab1277d559b1865382478b55bc06d75c520474acd2aca9806c2ba8#0": {
+      "debt": 2006.604,
+      "interest": 0.640689,
+      "healthFactor": 1.2381439921641506,
+      "LTV": 0.6461284027245335
+    },
+    "760ac66ea7282938f1c28e02631af10c2b33c67ff84456b819db301a27c055c2#0": {
+      "debt": 13596.993586,
+      "interest": 383.772166,
+      "healthFactor": 1.9140454269612734,
+      "LTV": 0.4225120106475138
+    },
+    "76ddd7fdf10e90ee903ec9a5409ad2ffbc6bf8a772cd5c1bd28933b09883a9bb#0": {
+      "debt": 33232.500481,
+      "interest": 68.500481,
+      "healthFactor": 1.3054478987333777,
+      "LTV": 0.6140576528215881
+    },
+    "77ff5312e71cf592f9eca762140edd79b6215ad53b038bc903be68c52f4ffb70#0": {
+      "debt": 3287869665,
+      "interest": 36443674,
+      "healthFactor": 1.4037509633123442,
+      "LTV": 0.569901656994977
+    },
+    "79429269b591ff93d5abb0ecdc0782d592732298f126830aa2c0b295871989bb#0": {
+      "debt": 1285.558217,
+      "interest": 1.744099,
+      "healthFactor": 2.510484649016766,
+      "LTV": 0.2190812041871708
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#1": {
+      "debt": 235.306489,
+      "interest": 35.306489,
+      "healthFactor": 1.8221829545900228,
+      "LTV": 0.4445217742596235
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#10": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#13": {
+      "debt": 126.453101,
+      "interest": 9.150237,
+      "healthFactor": 2.170638026778659,
+      "LTV": 0.37316217167819665
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#18": {
+      "debt": 0.493134,
+      "interest": 0.025515,
+      "healthFactor": 80.42229838158447,
+      "LTV": 0.006838899298679357
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#2": {
+      "debt": 306.554565,
+      "interest": 45.345051,
+      "healthFactor": 1.2421974737364914,
+      "LTV": 0.6520702361143476
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#20": {
+      "debt": 137.997026,
+      "interest": 7.997026,
+      "healthFactor": 6.785412946616672,
+      "LTV": 0.11789997252840659
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#21": {
+      "debt": 482.825295,
+      "interest": 33.360629,
+      "healthFactor": 4.159091755715777,
+      "LTV": 0.1559130404401623
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#22": {
+      "debt": 1722.759386,
+      "interest": 75.001783,
+      "healthFactor": 1.975612523016656,
+      "LTV": 0.20246885223688557
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#23": {
+      "debt": 136.450918,
+      "interest": 5.369135,
+      "healthFactor": 1.393478675575339,
+      "LTV": 0.3946956703682001
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#24": {
+      "debt": 2.891712,
+      "interest": 0.09763,
+      "healthFactor": 246.74448734364265,
+      "LTV": 0.0016211101788179666
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#26": {
+      "debt": 2.88775,
+      "interest": 0.097496,
+      "healthFactor": 467.11761208810066,
+      "LTV": 0.0008841214725288966
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#27": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#29": {
+      "debt": 2536.979365,
+      "interest": 84.188671,
+      "healthFactor": 2.320101052402071,
+      "LTV": 0.2827713764949517
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#3": {
+      "debt": 3211.779678,
+      "interest": 461.779678,
+      "healthFactor": 1.8424760076512838,
+      "LTV": 0.4396258060546233
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#30": {
+      "debt": 17219.352053,
+      "interest": 569.352053,
+      "healthFactor": 2.2700356325481397,
+      "LTV": 0.35682259273206485
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#32": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#33": {
+      "debt": 1.315825,
+      "interest": 0.038138,
+      "healthFactor": 401.47978909383386,
+      "LTV": 0.0009963141629192
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#34": {
+      "debt": 32124.008178,
+      "interest": 880.998296,
+      "healthFactor": 1.296277803622339,
+      "LTV": 0.4242917671374696
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#35": {
+      "debt": 18391.303904,
+      "interest": 496.011258,
+      "healthFactor": 3.1216117045605154,
+      "LTV": 0.2544925469314755
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#36": {
+      "debt": 7685.815375,
+      "interest": 185.815375,
+      "healthFactor": 4.85917410130133,
+      "LTV": 0.16463703158644857
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#37": {
+      "debt": 217.959989,
+      "interest": 5.241403,
+      "healthFactor": 1.0767355398983178,
+      "LTV": 0.7522738592584145
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#38": {
+      "debt": 24573.7082,
+      "interest": 1073.7082,
+      "healthFactor": 3.997907104267258,
+      "LTV": 0.17787012923770854
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#4": {
+      "debt": 119.154042,
+      "interest": 16.920977,
+      "healthFactor": 3.5990462845170366,
+      "LTV": 0.22505962301307153
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#40": {
+      "debt": 391.093266,
+      "interest": 7.771397,
+      "healthFactor": 1.4975766636186303,
+      "LTV": 0.22606571751726987
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#41": {
+      "debt": 1897.245609,
+      "interest": 37.289241,
+      "healthFactor": 1.554851633245154,
+      "LTV": 0.25725927249094116
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#42": {
+      "debt": 1514.174832,
+      "interest": 29.227933,
+      "healthFactor": 2.887092636825766,
+      "LTV": 0.1440404508128931
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#43": {
+      "debt": 425.767346,
+      "interest": 8.018448,
+      "healthFactor": 1.2407687078519591,
+      "LTV": 0.299504959513307
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#44": {
+      "debt": 243.313773,
+      "interest": 5.239535,
+      "healthFactor": 1.335651569709878,
+      "LTV": 0.4077098652272022
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#45": {
+      "debt": 303.213387,
+      "interest": 5.022103,
+      "healthFactor": 1.7478391514858536,
+      "LTV": 0.2288540107709319
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#5": {
+      "debt": 1164.510341,
+      "interest": 164.510341,
+      "healthFactor": 1.4731723496277356,
+      "LTV": 0.5498338332271058
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#6": {
+      "debt": 115.904123,
+      "interest": 15.904123,
+      "healthFactor": 1.036086615013459,
+      "LTV": 0.7817879202980322
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#8": {
+      "debt": 0.070101,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "7a03b5f4cdc86b28cbb062a35303dec153ad4f89aae3f8fab342fbae836444c8#0": {
+      "debt": 105.112984,
+      "interest": 5.112984,
+      "healthFactor": 6.773422565372827,
+      "LTV": 0.11958503875734727
+    },
+    "7ab8a5c2dac4bb9ea8ad8a9f4a847dda0d1fd02d6821264dc7e7b4fcc11458ba#0": {
+      "debt": 8725.320426,
+      "interest": 125.320426,
+      "healthFactor": 2.0373664026757923,
+      "LTV": 0.39757208076867256
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#1": {
+      "debt": 440.993696,
+      "interest": 29.371722,
+      "healthFactor": 2.2607366358778522,
+      "LTV": 0.3582902966870682
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#10": {
+      "debt": 61.080907,
+      "interest": 1.585757,
+      "healthFactor": 6.786626714986377e-05,
+      "LTV": 11935.237254339338
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#2": {
+      "debt": 736.037065,
+      "interest": 49.022642,
+      "healthFactor": 2.2709082495090067,
+      "LTV": 0.35668548043503306
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#3": {
+      "debt": 755.305381,
+      "interest": 50.305979,
+      "healthFactor": 2.118892065424626,
+      "LTV": 0.3822752528159928
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#4": {
+      "debt": 531.611498,
+      "interest": 35.407184,
+      "healthFactor": 2.414338970293526,
+      "LTV": 0.3354955579835268
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#5": {
+      "debt": 755.342564,
+      "interest": 49.264298,
+      "healthFactor": 3.5987485905399956,
+      "LTV": 0.22507824028864953
+    },
+    "7ad33c710b9685098b58d80960124df30224626fd87efd1256289ffb8dbdba7c#6": {
+      "debt": 571.095019,
+      "interest": 37.107489,
+      "healthFactor": 2.312665057483775,
+      "LTV": 0.3502452710905296
+    },
+    "7b88dd462b857577c326013dcff4ab8d2671fa84799cfdfb42275de1030ea2f3#0": {
+      "debt": 21133.492591,
+      "interest": 1016.116092,
+      "healthFactor": 1.4873851710387918,
+      "LTV": 0.543153956585064
+    },
+    "7b91cbd7a1f4577af07b09f53b9b51815d9119b7f23dae2807d6f29a553ad5d4#0": {
+      "debt": 15705.883974,
+      "interest": 2205.883974,
+      "healthFactor": 1.244184208652778,
+      "LTV": 0.6510289990555985
+    },
+    "7c759ae7a12eeed459475add86b17a68ef8bdccca17f74de43e7fec835725ded#0": {
+      "debt": 704063710,
+      "interest": 9239494,
+      "healthFactor": 1.1644426333337001,
+      "LTV": 0.6870239693214153
+    },
+    "7e939e8e1aedf6183fa3c663e414d74fce8a1a970cb09c6f230479671e875464#0": {
+      "debt": 20038.666145,
+      "interest": 18.666145,
+      "healthFactor": 1.812278817320248,
+      "LTV": 0.4414331792405605
+    },
+    "7f5bc5216deda489310924e7e55b5a204b6e1df9590f711d6c3b60334730f195#0": {
+      "debt": 6328.023795,
+      "interest": 0.18793,
+      "healthFactor": 1.4793999071668837,
+      "LTV": 0.5475192989238359
+    },
+    "7fbc330d7af5bcfdaf54232f89c3d29910a5fac81fcf78cf2b1981eb411f9be8#0": {
+      "debt": 983461362,
+      "interest": 13461362,
+      "healthFactor": 1.2081770279575803,
+      "LTV": 0.6636848647487058
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#10": {
+      "debt": 0.020156,
+      "interest": 0.003318,
+      "healthFactor": 400.2293613299671,
+      "LTV": 0.0020238395236880174
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#13": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#15": {
+      "debt": 0.07813,
+      "interest": 0.012824,
+      "healthFactor": 85.41655119227467,
+      "LTV": 0.009482939649210032
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#16": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#18": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#19": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#2": {
+      "debt": 190.835537,
+      "interest": 40.835537,
+      "healthFactor": 1.475118629232414,
+      "LTV": 0.5423292636581265
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#20": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#21": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#22": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#23": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#24": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#25": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#26": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#27": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 738145.6214618327,
+      "LTV": 1.0973444486412668e-06
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#29": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#30": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#31": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#32": {
+      "debt": 104.01884,
+      "interest": 14.00058,
+      "healthFactor": 1.8851186509807165,
+      "LTV": 0.42968117660848804
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#33": {
+      "debt": 37914.783684,
+      "interest": 8914.783684,
+      "healthFactor": 1.5382981441357024,
+      "LTV": 0.5265559235625946
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#34": {
+      "debt": 34007.599939,
+      "interest": 8007.599939,
+      "healthFactor": 1.5398718188388352,
+      "LTV": 0.5260178088139786
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#35": {
+      "debt": 19735.998074,
+      "interest": 4735.998074,
+      "healthFactor": 1.5677088466939588,
+      "LTV": 0.5166775716729273
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#36": {
+      "debt": 23434.572123,
+      "interest": 5434.572123,
+      "healthFactor": 1.593446627044511,
+      "LTV": 0.508332055967491
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#37": {
+      "debt": 12529.135565,
+      "interest": 2529.135565,
+      "healthFactor": 1.6202072762553827,
+      "LTV": 0.4999360340314414
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#38": {
+      "debt": 43.813692,
+      "interest": 4.148117,
+      "healthFactor": 2.373248504935986,
+      "LTV": 0.19717370050693825
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#39": {
+      "debt": 55864.030466,
+      "interest": 5284.559794,
+      "healthFactor": 1.4680319842573848,
+      "LTV": 0.5517590956369691
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#4": {
+      "debt": 121.778491,
+      "interest": 21.778491,
+      "healthFactor": 1.4619023764384456,
+      "LTV": 0.5540725653469143
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#40": {
+      "debt": 215710.41298,
+      "interest": 20319.260827,
+      "healthFactor": 1.6503174911320584,
+      "LTV": 0.490814648909992
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#41": {
+      "debt": 724.357061,
+      "interest": 68.093356,
+      "healthFactor": 1.9224070016110084,
+      "LTV": 0.30911778580753474
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#42": {
+      "debt": 328.126083,
+      "interest": 30.84557,
+      "healthFactor": 1.4557563124178832,
+      "LTV": 0.5564118067636342
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#43": {
+      "debt": 77981.444103,
+      "interest": 17981.444103,
+      "healthFactor": 1.8264785523471032,
+      "LTV": 0.44347632714280455
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#45": {
+      "debt": 23282.329035,
+      "interest": 1972.593125,
+      "healthFactor": 1.991912206470928,
+      "LTV": 0.40664442808705786
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#5": {
+      "debt": 0.589041,
+      "interest": 0.013567,
+      "healthFactor": 1203.8776634470105,
+      "LTV": 0.0006229868887612364
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#7": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 3764634.841378825,
+      "LTV": 1.4609650687888723e-07
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "808ca0aec00d572c99eee58ade99b40a96a0cdfc122cf6cd69ed40149a5feb93#9": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "80bcccfb0cb0c978e13b91341ea5b235676fb27f9458a426e4b3eb9f6cc41126#0": {
+      "debt": 11008.8,
+      "interest": 0.32694,
+      "healthFactor": 1.9799779067421512,
+      "LTV": 0.4090954738645398
+    },
+    "815a59c15d08bee12e4aef49b32599abb1d11e1f854b5f7a4b1f02d4df96e591#0": {
+      "debt": 6311.404,
+      "interest": 0.373931,
+      "healthFactor": 4.31101732363821,
+      "LTV": 0.1855710473751596
+    },
+    "819e14fd44f21229e7e6629a59c85650d4355ea3a5138859f2688cec9d8b52be#0": {
+      "debt": 15671.838835,
+      "interest": 2171.838835,
+      "healthFactor": 1.2468870455547623,
+      "LTV": 0.6496177844558618
+    },
+    "826db018971a84ff72528f674e2c51b4e70292337444c536a55b2b318ba88fbb#0": {
+      "debt": 18095.22993,
+      "interest": 48.384795,
+      "healthFactor": 1.9619350070614885,
+      "LTV": 0.412857712964298
+    },
+    "836aae7c3c52a9784b6ae7052350327d6335e148289b60a96c139691feb35c4c#0": {
+      "debt": 1.710509,
+      "interest": 0.031802,
+      "healthFactor": 2.5555832427971956,
+      "LTV": 0.3169530878256269
+    },
+    "84cb76faf7d3d4b022b59e7cb8e440fb2a5346784d7156a035ec24d7dba87035#0": {
+      "debt": 26064.407034,
+      "interest": 0.880075,
+      "healthFactor": 1.6711440360241465,
+      "LTV": 0.48469789709275324
+    },
+    "84eaf7e02b18a72c4ff6ca7992769ddcb4a9c4a4f4c9164a4546e98c1db2b403#0": {
+      "debt": 1453702.409452,
+      "interest": 9258.409452,
+      "healthFactor": 5.079943945550171,
+      "LTV": 0.1582658602890483
+    },
+    "852f9f7512731e4f43c721e4e4deb9c38b11f5eb648422ae98d4ebc00f12f921#0": {
+      "debt": 233.860824,
+      "interest": 3.860824,
+      "healthFactor": 1.1785263874799616,
+      "LTV": 0.35096496764536234
+    },
+    "856ac4d2f7dc9cd0d5e2ca2cdde284e545d503fd718d4213378bf322dc937135#0": {
+      "debt": 4629.093005,
+      "interest": 161.314335,
+      "healthFactor": 2.194394623026602,
+      "LTV": 0.3691223043933701
+    },
+    "8575fedc4f3b7e30738b1967a2904ec51aec291f176c125c2666a85dacd4c221#0": {
+      "debt": 1030.147363,
+      "interest": 38.542275,
+      "healthFactor": 2.011071422859908,
+      "LTV": 0.40277037940706945
+    },
+    "8798dccb2fe61fe2d9c1efa630970c50f3a9dafc7a3158db999369da2e4d626d#0": {
+      "debt": 598.140362,
+      "interest": 14.439584,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "879e690e7e101421c8884dcc9a23148cd96546e546298e91ef997aedd97724d5#0": {
+      "debt": 9141.189403,
+      "interest": 64.533668,
+      "healthFactor": 2.262731169681159,
+      "LTV": 0.35797447388066733
+    },
+    "888bfbfdeac75e7a4585ff0f0fd130c08f724b3c4a6d308bf48c275cb337af84#0": {
+      "debt": 32373.203961,
+      "interest": 873.203961,
+      "healthFactor": 1.467592691684656,
+      "LTV": 0.5519242529548151
+    },
+    "88c3e12e5f6b2e2180fc041babb4d41af9d861ebb2477daa1e9816b0d922751b#0": {
+      "debt": 20001.80215,
+      "interest": 0.086551,
+      "healthFactor": 1.3933540509260065,
+      "LTV": 0.5741541422787192
+    },
+    "89144e676e2b82150623889302dc3b31b8a968350457a54330700dc9aae5fff2#0": {
+      "debt": 751.730913,
+      "interest": 42.40856,
+      "healthFactor": 1.7355506387466382,
+      "LTV": 0.4633024905577859
+    },
+    "896cc419eba4c3bc339188bb49a50ce6933e9e318bf29ba4ea937f726cbb7e1e#0": {
+      "debt": 2446.63987,
+      "interest": 4.06312,
+      "healthFactor": 1.1066544535024532,
+      "LTV": 0.7319357884807034
+    },
+    "8aa0d8e51350c2a8a2e4dcdeeb021b3224539d8cc39ec103a471cf12358b45f9#0": {
+      "debt": 286.669414,
+      "interest": 0.274115,
+      "healthFactor": 1.6652491809956038,
+      "LTV": 0.4804085833699095
+    },
+    "8b2512c65f504f8c8e389654a9c0f3c26379e7f52504f7326babddfd74cea8ed#0": {
+      "debt": 12671.780838,
+      "interest": 171.780838,
+      "healthFactor": 8.04272055613532,
+      "LTV": 0.10071218990470812
+    },
+    "8c38ee5a2e27f1ab0a8dda1f89ab95b728d9789864ff2d0b3ba7ce6f370e27c7#0": {
+      "debt": 3590.808898,
+      "interest": 104.954987,
+      "healthFactor": 1.9348288778168057,
+      "LTV": 0.418641673838348
+    },
+    "8cf974905b3f004e816edc7426f1cfb7acb906fa329db1fe82cddf3d1ca08a36#0": {
+      "debt": 19015.2,
+      "interest": 0.564714,
+      "healthFactor": 2.290511154244545,
+      "LTV": 0.3536328554868591
+    },
+    "8d6e8dd0eb6f03e39e36147fca9c43037cc5ccd99589838f2b28b63b855ad394#0": {
+      "debt": 481.831947,
+      "interest": 4.16565,
+      "healthFactor": 1.2123290145431236,
+      "LTV": 0.42766342480900094
+    },
+    "8f60ead1502b66bf89d4a8379b451e714afc149d499813633e206a7ba14efb0b#0": {
+      "debt": 482.269375,
+      "interest": 12.269375,
+      "healthFactor": 1.2516362801554128,
+      "LTV": 0.3638217526208251
+    },
+    "9028abe64e39e16ffea948b5d6db4fe943606aec9731e1ad59e5f3afdddd254b#0": {
+      "debt": 11206.906852,
+      "interest": 0.326599,
+      "healthFactor": 1.9541418227482674,
+      "LTV": 0.4093868677734431
+    },
+    "942a9ceed8872a2621423c7a6b334011a809d5278bf17fab76f41aa1e5b4c296#0": {
+      "debt": 112075.921538,
+      "interest": 3848.657195,
+      "healthFactor": 1.5724533033368318,
+      "LTV": 0.5151186354985142
+    },
+    "957322b231cc53bbb4d75ef7119cbfdee27c18bfa92e5229e427e23dc841d275#0": {
+      "debt": 888.605396,
+      "interest": 7.667176,
+      "healthFactor": 2.1656923288001777,
+      "LTV": 0.37401434600304045
+    },
+    "957d6934c113ae752bacea38875525c45ef0c0118d39bf178e9abc0da62b764d#0": {
+      "debt": 438.993543,
+      "interest": 10.613801,
+      "healthFactor": 3.7346256581923307,
+      "LTV": 0.2168892076835524
+    },
+    "96aff8827bfb1a245f97419927629286967ef8d35eaa59d5b277fc2b14936356#0": {
+      "debt": 1940.778375,
+      "interest": 36.59346,
+      "healthFactor": 2.663829087063994,
+      "LTV": 0.3027532076431001
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#1": {
+      "debt": 0.00025116,
+      "interest": 1.078e-05,
+      "healthFactor": 1.5017841747762117,
+      "LTV": 0.5393584601600306
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#2": {
+      "debt": 0.14353374,
+      "interest": 0.00594129,
+      "healthFactor": 2.682310039822509,
+      "LTV": 0.2989611717313141
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#3": {
+      "debt": 0.02454387,
+      "interest": 0.00054387,
+      "healthFactor": 1.4795285987216984,
+      "LTV": 0.5474716748968786
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#4": {
+      "debt": 0.71968258,
+      "interest": 0.0125914,
+      "healthFactor": 1.4413149797509741,
+      "LTV": 0.5619868046746792
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#5": {
+      "debt": 0.56364237,
+      "interest": 0.01009678,
+      "healthFactor": 1.4459990968156387,
+      "LTV": 0.5601663249885647
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "96eafc5c02e4ee81f8286d38c24cc6ed2973efd6e175e77067bba4b983f3c3e4#7": {
+      "debt": 0.00499005,
+      "interest": 2.185e-05,
+      "healthFactor": 1.169318638582549,
+      "LTV": 0.6927110996724417
+    },
+    "98620c4a2f2eb2e8d46a997a70a15223b5320af1d887b795e788137990d3f413#0": {
+      "debt": 403280290,
+      "interest": 3280290,
+      "healthFactor": 2.037803789067915,
+      "LTV": 0.39257950362626304
+    },
+    "98cfedf69f3ee77799723106495c0849a69090e251ab8c1cd2595571ba061089#0": {
+      "debt": 458.103012,
+      "interest": 7.406522,
+      "healthFactor": 1.6673329482279948,
+      "LTV": 0.48580578993586754
+    },
+    "999c72539ed5cee11db35e8c67a8b9f5e77c72085dfbe30fcfe0c2906bdf0856#0": {
+      "debt": 2476.572449,
+      "interest": 16.788524,
+      "healthFactor": 2.873414299167829,
+      "LTV": 0.28189460887508794
+    },
+    "99cf251a15aa61e266d43c8db3763a5d29a503b1feeecc85f05724712ae9395f#0": {
+      "debt": 1012.227225,
+      "interest": 12.227225,
+      "healthFactor": 4.958195719212033,
+      "LTV": 0.10704798072958634
+    },
+    "9baa6241f27ba08440ca1f34ef0a8c6a4900e9a156110510f89e8d77f1003b54#0": {
+      "debt": 17079.28693,
+      "interest": 147.963996,
+      "healthFactor": 2.2085242769540203,
+      "LTV": 0.3667607408496074
+    },
+    "9bb853566333868ab9cc117b606d8ae8e43f76c3628891ebe7d7b191e4002f07#0": {
+      "debt": 9390.011344,
+      "interest": 390.011344,
+      "healthFactor": 1.8943784661778171,
+      "LTV": 0.42758087386534344
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#1": {
+      "debt": 2120.055318,
+      "interest": 120.055318,
+      "healthFactor": 4.580793676213872,
+      "LTV": 0.1768252528390414
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#10": {
+      "debt": 2049.991699,
+      "interest": 49.991699,
+      "healthFactor": 4.6408741794886845,
+      "LTV": 0.17453608278801538
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#11": {
+      "debt": 153743.529298,
+      "interest": 3743.143523,
+      "healthFactor": 3.094022250342499,
+      "LTV": 0.26179514381654345
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#13": {
+      "debt": 20375.26036,
+      "interest": 437.88042,
+      "healthFactor": 2.7940295230437133,
+      "LTV": 0.2899038801557171
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#14": {
+      "debt": 4595.971127,
+      "interest": 117.127207,
+      "healthFactor": 3.103360333562527,
+      "LTV": 0.2610073961569761
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#15": {
+      "debt": 61057.950014,
+      "interest": 997.689066,
+      "healthFactor": 1.9917134382023445,
+      "LTV": 0.4066850102347452
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#16": {
+      "debt": 83045.433863,
+      "interest": 3045.433863,
+      "healthFactor": 6.885588671203422,
+      "LTV": 0.11763700079668468
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#17": {
+      "debt": 1665.796761,
+      "interest": 25.796761,
+      "healthFactor": 7.028136941034534,
+      "LTV": 0.11384528939503011
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#18": {
+      "debt": 5587.373902,
+      "interest": 77.438383,
+      "healthFactor": 2.5507369018889943,
+      "LTV": 0.3175552913356685
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#19": {
+      "debt": 192201.515187,
+      "interest": 2630.627859,
+      "healthFactor": 1.8784874393261373,
+      "LTV": 0.4311979856999035
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#2": {
+      "debt": 1121.444813,
+      "interest": 65.359771,
+      "healthFactor": 5.366232279368552,
+      "LTV": 0.1509438946789894
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#20": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#21": {
+      "debt": 1801.54244,
+      "interest": 21.388246,
+      "healthFactor": 1.5464661272609692,
+      "LTV": 0.5237748087212458
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#22": {
+      "debt": 99437.488889,
+      "interest": 1937.488889,
+      "healthFactor": 7.046390680188221,
+      "LTV": 0.11353330184335318
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#23": {
+      "debt": 228061.470012,
+      "interest": 2467.420458,
+      "healthFactor": 3.964906532950133,
+      "LTV": 0.2017702040014424
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#24": {
+      "debt": 2237.953787,
+      "interest": 22.953787,
+      "healthFactor": 2.122481299355528,
+      "LTV": 0.3816288041011005
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#26": {
+      "debt": 232601.771658,
+      "interest": 2601.771658,
+      "healthFactor": 4.771382347994679,
+      "LTV": 0.16976212362030207
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#27": {
+      "debt": 23205.753015,
+      "interest": 205.753015,
+      "healthFactor": 3.7155900115530223,
+      "LTV": 0.21530900812859607
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#28": {
+      "debt": 212823.138611,
+      "interest": 1680.966039,
+      "healthFactor": 2.1196236239843063,
+      "LTV": 0.3821433158389809
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#29": {
+      "debt": 192021.132001,
+      "interest": 2021.132001,
+      "healthFactor": 2.589760001464811,
+      "LTV": 0.3127702951400325
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#3": {
+      "debt": 1056.077331,
+      "interest": 56.077331,
+      "healthFactor": 4.591303659122449,
+      "LTV": 0.17642048100883356
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#30": {
+      "debt": 14476.755408,
+      "interest": 235.230773,
+      "healthFactor": 3.282995870671013,
+      "LTV": 0.2467258662236586
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#31": {
+      "debt": 303412.496519,
+      "interest": 3939.136519,
+      "healthFactor": 3.7814827343274433,
+      "LTV": 0.21155722667666343
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#32": {
+      "debt": 25248.981222,
+      "interest": 85.589067,
+      "healthFactor": 1.4494987250632865,
+      "LTV": 0.5550604167121267
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#4": {
+      "debt": 1823.187098,
+      "interest": 73.187098,
+      "healthFactor": 5.281242599097006,
+      "LTV": 0.15337299599501353
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#5": {
+      "debt": 14061.465576,
+      "interest": 561.465576,
+      "healthFactor": 5.315985820130015,
+      "LTV": 0.15237060959282045
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#6": {
+      "debt": 14457.411268,
+      "interest": 483.411268,
+      "healthFactor": 4.656584715609493,
+      "LTV": 0.17394722730690843
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#7": {
+      "debt": 513585.263329,
+      "interest": 13585.263329,
+      "healthFactor": 3.8061085434470168,
+      "LTV": 0.21281579091972516
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#8": {
+      "debt": 616298.247184,
+      "interest": 16298.247184,
+      "healthFactor": 3.8680160004348108,
+      "LTV": 0.20940968183920294
+    },
+    "9bfc2ea5b2b1e13ef9d05ce9779a1ac22945664a5737c516a8ac6829814996d9#9": {
+      "debt": 2461.437557,
+      "interest": 61.437557,
+      "healthFactor": 3.865664431920794,
+      "LTV": 0.20953707034459854
+    },
+    "9c07ea18418a8d6916d8b4b1986c476d70420acfcbd68f3ddc38f982b1e85e07#0": {
+      "debt": 4003.2,
+      "interest": 0.136449,
+      "healthFactor": 2.4579010349001,
+      "LTV": 0.3254809647095965
+    },
+    "9dfed18b04a824b08473af8e11633088b976ee21d355bcaa4b37a72a22885cb2#0": {
+      "debt": 48.145269,
+      "interest": 0.00267,
+      "healthFactor": 1.0591863888442048,
+      "LTV": 0.8497088043041124
+    },
+    "9f4b36df49f404904647459b3ab42363e47ce3edf1ed9048a231ae094a0412ee#0": {
+      "debt": 4780.050374,
+      "interest": 86.499076,
+      "healthFactor": 1.3757559038462623,
+      "LTV": 0.5887672353325519
+    },
+    "9fd94318bfb59431a16d90c91b9fd76ce3a0be8c7b8f9e304240a231b66d4e84#0": {
+      "debt": 3211.296068,
+      "interest": 301.878644,
+      "healthFactor": 1.5889757907217015,
+      "LTV": 0.5097623291240351
+    },
+    "a1133e5b0ce7a8cc3e939a44477d477aef00f8b99badc24ea50a8837785be482#0": {
+      "debt": 426.067518,
+      "interest": 1.116193,
+      "healthFactor": 1.193082279802182,
+      "LTV": 0.4750786604012577
+    },
+    "a1df62b71d96cfdd1cb86d914011a152d265de7ad63868fe218c96d5018a8f55#0": {
+      "debt": 14043.274907,
+      "interest": 2543.274907,
+      "healthFactor": 1.1267672322099271,
+      "LTV": 0.6962602680821591
+    },
+    "a23589c3b2796bebd2c8a527d5192189bbd171c11433477aad432153f8990b17#0": {
+      "debt": 12948.913704,
+      "interest": 132.055014,
+      "healthFactor": 2.9386196335193286,
+      "LTV": 0.27563962030360956
+    },
+    "a54d438715ed49a35bf543815c6546178a594d8c87748b38978f26da9e2a0e50#0": {
+      "debt": 10.108071,
+      "interest": 0.065192,
+      "healthFactor": 1.207292945082484,
+      "LTV": 0.6626395053980397
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#1": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#10": {
+      "debt": 1823.718569,
+      "interest": 166.967992,
+      "healthFactor": 3.1323473844297482,
+      "LTV": 0.25603477430148514
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#11": {
+      "debt": 6743.249666,
+      "interest": 625.842741,
+      "healthFactor": 1.501443881934964,
+      "LTV": 0.5100571395191477
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#12": {
+      "debt": 6315.066687,
+      "interest": 586.102967,
+      "healthFactor": 1.5614737076897527,
+      "LTV": 0.489741331143091
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#13": {
+      "debt": 5200.593739,
+      "interest": 1276.160525,
+      "healthFactor": 1.7747819683205306,
+      "LTV": 0.4563940892224074
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#14": {
+      "debt": 1168.604792,
+      "interest": 106.76924,
+      "healthFactor": 1.744117539914985,
+      "LTV": 0.46441824100884993
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#15": {
+      "debt": 941.596734,
+      "interest": 86.206567,
+      "healthFactor": 1.7206581082422314,
+      "LTV": 0.4656542939813302
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#16": {
+      "debt": 279.641275,
+      "interest": 75.653088,
+      "healthFactor": 2.1927215424921327,
+      "LTV": 0.3694039504347626
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#17": {
+      "debt": 2015.207294,
+      "interest": 340.207294,
+      "healthFactor": 1.9544615704159198,
+      "LTV": 0.41443639120907744
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#18": {
+      "debt": 2141.931557,
+      "interest": 195.242296,
+      "healthFactor": 4.521303942607576,
+      "LTV": 0.17915185757957428
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#19": {
+      "debt": 13.078825,
+      "interest": 1.192167,
+      "healthFactor": 1.4232255118418855,
+      "LTV": 0.5691297642295128
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#20": {
+      "debt": 33.533704,
+      "interest": 3.070131,
+      "healthFactor": 2.562613967676486,
+      "LTV": 0.3160835031014931
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#21": {
+      "debt": 533294.573244,
+      "interest": 83016.664752,
+      "healthFactor": 1.626161463740804,
+      "LTV": 0.49810551907722916
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#22": {
+      "debt": 309.68897,
+      "interest": 47.706204,
+      "healthFactor": 1.9077034720180353,
+      "LTV": 0.42459428935418025
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#23": {
+      "debt": 8.962117,
+      "interest": 0.815157,
+      "healthFactor": 1.425296281701282,
+      "LTV": 0.5683028928084739
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#24": {
+      "debt": 934.011334,
+      "interest": 84.95376,
+      "healthFactor": 1.464187133250994,
+      "LTV": 0.5532079756783029
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#25": {
+      "debt": 13.032935,
+      "interest": 1.185421,
+      "healthFactor": 1.436610206264223,
+      "LTV": 0.5638272625852583
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#26": {
+      "debt": 11.967227,
+      "interest": 1.088489,
+      "healthFactor": 1.4228769934761123,
+      "LTV": 0.5692691664239763
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#27": {
+      "debt": 0.006017,
+      "interest": 0.000489,
+      "healthFactor": 1.4259600486983792,
+      "LTV": 0.5680383547486976
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#28": {
+      "debt": 23744.141998,
+      "interest": 2166.855132,
+      "healthFactor": 2.275815294470928,
+      "LTV": 0.3525744109826033
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#29": {
+      "debt": 52951.671097,
+      "interest": 7267.699724,
+      "healthFactor": 3.3821388789292057,
+      "LTV": 0.23949341792151604
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#30": {
+      "debt": 11215.092955,
+      "interest": 907.838102,
+      "healthFactor": 1.465559043892204,
+      "LTV": 0.5526901173826593
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#31": {
+      "debt": 2788.39483,
+      "interest": 938.39483,
+      "healthFactor": 1.9009347932650333,
+      "LTV": 0.42610614675990505
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#32": {
+      "debt": 27.500991,
+      "interest": 2.217692,
+      "healthFactor": 1.4752860141989053,
+      "LTV": 0.5490460779836227
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#33": {
+      "debt": 0.200077,
+      "interest": 0.016135,
+      "healthFactor": 1.4464773469314527,
+      "LTV": 0.5599811166889883
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#34": {
+      "debt": 0.32908,
+      "interest": 0.026537,
+      "healthFactor": 1.4966295087669337,
+      "LTV": 0.5412161094346959
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#35": {
+      "debt": 13.716514,
+      "interest": 1.106106,
+      "healthFactor": 1.4961262605977048,
+      "LTV": 0.5413981569146572
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#36": {
+      "debt": 2.202584,
+      "interest": 0.177617,
+      "healthFactor": 1.4961777034303794,
+      "LTV": 0.541379542111116
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#37": {
+      "debt": 19.520201,
+      "interest": 1.572027,
+      "healthFactor": 1.496256709922283,
+      "LTV": 0.5413509557742082
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#38": {
+      "debt": 13.607215,
+      "interest": 1.095835,
+      "healthFactor": 1.4942695602070029,
+      "LTV": 0.5420708696547294
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#39": {
+      "debt": 84.314048,
+      "interest": 6.790092,
+      "healthFactor": 1.5107574595817017,
+      "LTV": 0.5361548902921007
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#40": {
+      "debt": 3.396603,
+      "interest": 0.27354,
+      "healthFactor": 1.5120692641970603,
+      "LTV": 0.5356897459522971
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#41": {
+      "debt": 923.206125,
+      "interest": 74.262367,
+      "healthFactor": 1.5258260046912113,
+      "LTV": 0.5308600046857398
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#42": {
+      "debt": 156.281325,
+      "interest": 12.571214,
+      "healthFactor": 1.6714173029276755,
+      "LTV": 0.43160319933213265
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#43": {
+      "debt": 279.793728,
+      "interest": 22.506506,
+      "healthFactor": 1.542256509236635,
+      "LTV": 0.5252044618705631
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#45": {
+      "debt": 0.422343,
+      "interest": 0.033973,
+      "healthFactor": 1.5036363996839874,
+      "LTV": 0.5386940620553174
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#5": {
+      "debt": 4e-06,
+      "interest": 1e-06,
+      "healthFactor": 954647.7983607004,
+      "LTV": 8.484804567620789e-07
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#7": {
+      "debt": 63.100674,
+      "interest": 9.687923,
+      "healthFactor": 5.51807963182581,
+      "LTV": 0.14679019768549245
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#8": {
+      "debt": 3004.510846,
+      "interest": 1348.284277,
+      "healthFactor": 1.548948573795501,
+      "LTV": 0.5229353728737413
+    },
+    "a55cd789d712dec1b9748f2db9967a08ac91401bcbd9af1850ada888118dbc96#9": {
+      "debt": 33941.831504,
+      "interest": 15941.831504,
+      "healthFactor": 1.5349417084482326,
+      "LTV": 0.5277073360778495
+    },
+    "a7bad51dddc041bd4d377adc5fea151ce8e05d3d04d9532f339bb659cf679a53#0": {
+      "debt": 600.48,
+      "interest": 0.049844,
+      "healthFactor": 2.0852392417228924,
+      "LTV": 0.431605152057464
+    },
+    "a7f1ba5247919498355d5ae2838e8274dae0122de4ded196ae62d82ea5004cd2#0": {
+      "debt": 125.713683,
+      "interest": 0.713683,
+      "healthFactor": 1.6050509978754144,
+      "LTV": 0.2492132652043299
+    },
+    "a829fe760d8b2ec1816f3e398991d000a7b18d120467bd680379cb964b6c4c84#0": {
+      "debt": 32523.600079,
+      "interest": 685.417844,
+      "healthFactor": 1.143520446405143,
+      "LTV": 0.7083388867653194
+    },
+    "aaefaabb101a3e5645b17d03b8a4240ae7947f43d168c6a9dc8203d76bfd2055#1": {
+      "debt": 0.704336,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "aafc7c474c04cd431ab4ef56f35d46e803d5c9b5930b24152db5339167c0ca31#0": {
+      "debt": 531.221739,
+      "interest": 0.335055,
+      "healthFactor": 1.4781547363540644,
+      "LTV": 0.5479805192776378
+    },
+    "ab3f46b5859156307289bc969c64669b3c412a6da820ea66c9b57e857827fc17#0": {
+      "debt": 2145.937118,
+      "interest": 2.934047,
+      "healthFactor": 2.3834360915303416,
+      "LTV": 0.2307592815072543
+    },
+    "ab4beb801fd7cf8ce73a9803593ae5914893ad679e75eb8aedfee5ba33315186#0": {
+      "debt": 1517.845208,
+      "interest": 16.854132,
+      "healthFactor": 3.3058178466578374,
+      "LTV": 0.2450225746161136
+    },
+    "ab681a133b75be9f68faefa3b21269df56cdb4a3c70e0f59136fa769e27eb015#0": {
+      "debt": 4561.663524,
+      "interest": 0.224746,
+      "healthFactor": 1.1499652730491055,
+      "LTV": 0.6956731813986166
+    },
+    "ac08db15dc1b05a4a93b1125c85f84f82d6f01375b95e12db27e1444f921b000#0": {
+      "debt": 519.686021,
+      "interest": 23.686021,
+      "healthFactor": 1.1553148062998413,
+      "LTV": 0.42554643806026904
+    },
+    "ac8babf9965e5a9111281dbce617871bf685e48158a7d9250fa48927a069af33#0": {
+      "debt": 2136.258936,
+      "interest": 86.258936,
+      "healthFactor": 3.0537322105370777,
+      "LTV": 0.26524919153193877
+    },
+    "ac9b419c6b27810a1b95b84b18f854f8be497a1560ec4f01e7f79c3a08ba71a4#0": {
+      "debt": 3612.304799,
+      "interest": 154.491743,
+      "healthFactor": 2.377169381459688,
+      "LTV": 0.21325072829538536
+    },
+    "ace9e2c569a5523f59798b0299bcc7a6190db88028f40d788cd6cd8db3bd76bc#0": {
+      "debt": 466.682328,
+      "interest": 16.682328,
+      "healthFactor": 1.663198620802165,
+      "LTV": 0.48100087986734735
+    },
+    "ad2ac50b067048eb6fefe3eecdcf067bbae36d0bb11f831751c38f92a8e3f60f#0": {
+      "debt": 59752.358825,
+      "interest": 2752.358825,
+      "healthFactor": 3.508497094424054,
+      "LTV": 0.23086808345582155
+    },
+    "ae44af0bb2dcf08ac0b399abe55f26ba11d8ae35ef847d4d06db3d20e3b9454e#0": {
+      "debt": 1508.026173,
+      "interest": 0.11714,
+      "healthFactor": 9.505382631664506,
+      "LTV": 0.06838230770791993
+    },
+    "aef5187f030db3d5248f5214e82338e4581846f64823d10236f828afbe0c0cc5#0": {
+      "debt": 3790238188,
+      "interest": 40238188,
+      "healthFactor": 2.7691071668780918,
+      "LTV": 0.29251305608124906
+    },
+    "b0084be356fb92773a7f2ff93879ebb1d846caa2209ae1bd25b733b2f2a73aec#0": {
+      "debt": 4481881958,
+      "interest": 31403150,
+      "healthFactor": 1.190284090423474,
+      "LTV": 0.6721084541383558
+    },
+    "b13900ee5e81eccc4c5e850603f06909b651e33ad09fcae91560659425c383ff#0": {
+      "debt": 2488.534628,
+      "interest": 0.143388,
+      "healthFactor": 1.7508906559456499,
+      "LTV": 0.4626216932790254
+    },
+    "b147ef40aa74b92a241d98cb3269d1fd9ccaaa92bae61ed1dd0d50c45666dce8#0": {
+      "debt": 2948.170792,
+      "interest": 2.819053,
+      "healthFactor": 2.390228537256815,
+      "LTV": 0.338879729437759
+    },
+    "b172c8c38bc761a43ca4b55fbe9f180a26dbb5bfd809bd9aa41ef04ac7778ee2#0": {
+      "debt": 60.182835,
+      "interest": 0.182835,
+      "healthFactor": 1.5956038514906896,
+      "LTV": 0.5013775814420363
+    },
+    "b19d40d830f21e680d75617fd33802a651935f25f756e499e3894fdec2cf5986#1": {
+      "debt": 95.447423,
+      "interest": 2.938273,
+      "healthFactor": 1.601822040808983,
+      "LTV": 0.5056741506634022
+    },
+    "b25ea3c7d3c0db660c80d3304348f872a9927cb14adffe85d7e46755d4e5095a#0": {
+      "debt": 2986423267,
+      "interest": 25893262,
+      "healthFactor": 1.1520813264543068,
+      "LTV": 0.694395422988161
+    },
+    "b29751cdcb1a3fdfd84fb9822677f6c542f79b2d9dd376e4df47397e8d8cb80c#0": {
+      "debt": 191.939027,
+      "interest": 0.939027,
+      "healthFactor": 1.2899363561042256,
+      "LTV": 0.3405020319925451
+    },
+    "b33693ab7b035d3af7136e01c4893e558dc90e498d9a550e42e2ac1129d3bd54#0": {
+      "debt": 14967994.980146,
+      "interest": 70017.453042,
+      "healthFactor": 52.29284430229634,
+      "LTV": 1.9123075314457259
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#1": {
+      "debt": 0.33446493,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#10": {
+      "debt": 0.16091453,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#11": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#12": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#13": {
+      "debt": 1.56528216,
+      "interest": 0.50416797,
+      "healthFactor": 66.47638206307755,
+      "LTV": 0.01218477863659027
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#14": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#15": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#16": {
+      "debt": 5143.49625322,
+      "interest": 1674.49625322,
+      "healthFactor": 1.1477077387742143,
+      "LTV": 0.6403470299661079
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#17": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#18": {
+      "debt": 0.02352084,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#19": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#2": {
+      "debt": 0.30474087,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#20": {
+      "debt": 0.17099706,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#21": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#22": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#23": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#24": {
+      "debt": 0.04081067,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#25": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#26": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#27": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#28": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#29": {
+      "debt": 0.01481726,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#3": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#30": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#31": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#32": {
+      "debt": 82.87562084,
+      "interest": 32.87562084,
+      "healthFactor": 1.932895497016636,
+      "LTV": 0.4190604206229513
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#33": {
+      "debt": 2239.27267186,
+      "interest": 252.27267186,
+      "healthFactor": 1.666518506492003,
+      "LTV": 0.48604320734789686
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#35": {
+      "debt": 1921.07775848,
+      "interest": 221.07775848,
+      "healthFactor": 1.7697330738386767,
+      "LTV": 0.37212351830209267
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#36": {
+      "debt": 6359.4149906,
+      "interest": 859.4149906,
+      "healthFactor": 1.6763902226259584,
+      "LTV": 0.48318105717127524
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#37": {
+      "debt": 305.71067136,
+      "interest": 24.01015852,
+      "healthFactor": 1.5468423388511128,
+      "LTV": 0.5236474200736009
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#38": {
+      "debt": 2.14222549,
+      "interest": 0.14779042,
+      "healthFactor": 1.4883182404947446,
+      "LTV": 0.5442384417265094
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#39": {
+      "debt": 2.08762614,
+      "interest": 0.14365998,
+      "healthFactor": 1.4520128566992831,
+      "LTV": 0.557846300232694
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#4": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#40": {
+      "debt": 1.26933489,
+      "interest": 0.08723132,
+      "healthFactor": 1.5257502858233833,
+      "LTV": 0.5308863498346829
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#42": {
+      "debt": 1918.01722315,
+      "interest": 81.08470694,
+      "healthFactor": 1.1279157614906592,
+      "LTV": 0.6649432746722971
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#43": {
+      "debt": 353.97857415,
+      "interest": 12.35142954,
+      "healthFactor": 6.378159658696192,
+      "LTV": 0.12542802984074783
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#8": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#9": {
+      "debt": 34.08967394,
+      "interest": 7.85513454,
+      "healthFactor": 1.6218607548802775,
+      "LTV": 0.49326059440846043
+    },
+    "b4c22f836594d66cf9072f9de9cb5b0b1b4264fa54b10d3d4e69b0725b8e2d09#0": {
+      "debt": 17038.349241,
+      "interest": 38.349241,
+      "healthFactor": 1.3218973613343075,
+      "LTV": 0.6127555918429216
+    },
+    "b4d3859d83b34109d699a362a777ce5ab49b583c6615043e090af492a3fdb92c#0": {
+      "debt": 1040.636666,
+      "interest": 31.720044,
+      "healthFactor": 1.6732311424555362,
+      "LTV": 0.4840933087172232
+    },
+    "b52c44c74ae45d7a8c161eefb326e4013e108e634aea0a0de354a40a56f698e2#0": {
+      "debt": 3936.385332,
+      "interest": 26.385332,
+      "healthFactor": 1.6691729607151926,
+      "LTV": 0.48527026201822626
+    },
+    "b6ca5ce51b2e5e3b4ac5723f95c835fdab90986ef4a5889481889c3206b8a080#0": {
+      "debt": 31007.301216,
+      "interest": 275.868497,
+      "healthFactor": 2.1896746976719204,
+      "LTV": 0.369917961266666
+    },
+    "b7875a771fab9231f9af4f882133185c0ef5c145d355c95b89abd93023e657d0#0": {
+      "debt": 1297.575892,
+      "interest": 39.899304,
+      "healthFactor": 1.5949663919042778,
+      "LTV": 0.5078476914067869
+    },
+    "b955ec95cb7ef465e6ee74abaf8fa8b88ab965da741e26e8f2ff8351497ee7cc#0": {
+      "debt": 1347.553108,
+      "interest": 113.545235,
+      "healthFactor": 1.1938441373323345,
+      "LTV": 0.6784805274580977
+    },
+    "ba9ef592b118e40133cf65cef7e6495ec65506d158f35c8b66a4f5d8fcbc08cb#0": {
+      "debt": 70692.32867276,
+      "interest": 35692.32867276,
+      "healthFactor": 2.224785424280053,
+      "LTV": 0.36408005516402475
+    },
+    "bb29d45beebd5f2ff03950a991651315fa9a5dfa786ba14d1e8e29b0ffacc79f#2": {
+      "debt": 40.523511,
+      "interest": 0.523511,
+      "healthFactor": 1.429650566567938,
+      "LTV": 0.5665720134287852
+    },
+    "befb3d60af75a41299d61c3631ce72109e34411b95ba0570c32a0a71596ac9d3#0": {
+      "debt": 500.62723969,
+      "interest": 21.03907888,
+      "healthFactor": 2.299230008711304,
+      "LTV": 0.34794257076019647
+    },
+    "bfa2ab96c8677f6596e72562f076b7b2b3cf4f877285c7f8a96d6c50eae3df48#0": {
+      "debt": 7870.910808,
+      "interest": 13.547096,
+      "healthFactor": 1.0592179646339128,
+      "LTV": 0.7644859793490459
+    },
+    "c0b1d1e17a8df24bb6c789cfa0c7a5a0c92490d7d1a82219bf38400f59419550#0": {
+      "debt": 131.918678,
+      "interest": 3.918678,
+      "healthFactor": 2.6952012803706156,
+      "LTV": 0.3005341403995687
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#1": {
+      "debt": 40588,
+      "interest": 588,
+      "healthFactor": 5.042099025744093,
+      "LTV": 0.16064738035970313
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#10": {
+      "debt": 6348733,
+      "interest": 10944,
+      "healthFactor": 2.765304011445799,
+      "LTV": 0.2929153527595338
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#2": {
+      "debt": 60962,
+      "interest": 874,
+      "healthFactor": 3.09871100602363,
+      "LTV": 0.2613990134689647
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#3": {
+      "debt": 389,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#4": {
+      "debt": 50719,
+      "interest": 719,
+      "healthFactor": 2.52029857348512,
+      "LTV": 0.3213904925875173
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#5": {
+      "debt": 41269,
+      "interest": 556,
+      "healthFactor": 1.8577820966414151,
+      "LTV": 0.43600377109046085
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#6": {
+      "debt": 543459,
+      "interest": 7219,
+      "healthFactor": 4.870979728750923,
+      "LTV": 0.1662909815080898
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#7": {
+      "debt": 55663,
+      "interest": 424,
+      "healthFactor": 1.890615282805184,
+      "LTV": 0.4231426706828514
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#8": {
+      "debt": 43119949,
+      "interest": 331021,
+      "healthFactor": 2.9606412128312343,
+      "LTV": 0.27358938208706635
+    },
+    "c1483fad859afbb71a1ce543892e6970d56703ef7bb876fbe7e86e97e5c7d97f#9": {
+      "debt": 597102,
+      "interest": 2793,
+      "healthFactor": 3.207169525746234,
+      "LTV": 0.2525591470914004
+    },
+    "c2100a6cf245e92e099561522a17893225c6ec16eb592cb4f06fa9948d6e7c4d#0": {
+      "debt": 30.024,
+      "interest": 0.017614,
+      "healthFactor": 1.9584051550532964,
+      "LTV": 0.45955761384600075
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#0": {
+      "debt": 19272.947015,
+      "interest": 195.028058,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#1": {
+      "debt": 24505.9961,
+      "interest": 248.546698,
+      "healthFactor": 9.126459468476178e-07,
+      "LTV": 887529.279889788
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#2": {
+      "debt": 38148.015201,
+      "interest": 386.85496,
+      "healthFactor": 0.00018435289175711884,
+      "LTV": 4393.7471893153615
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#3": {
+      "debt": 2017.750931,
+      "interest": 10.009254,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#4": {
+      "debt": 3376.129203,
+      "interest": 220.411017,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#6": {
+      "debt": 2913.4392155,
+      "interest": 158.21292737,
+      "healthFactor": 0.00028646494039864155,
+      "LTV": 2827.5711466569437
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#7": {
+      "debt": 2673.31976424,
+      "interest": 144.41070916,
+      "healthFactor": 0.0009108971759284133,
+      "LTV": 889.2331883392043
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#8": {
+      "debt": 124.77709398,
+      "interest": 6.74036413,
+      "healthFactor": 0.16333179038628753,
+      "LTV": 4.959230521408668
+    },
+    "c3115839d26da42d8f38b002136fd490bb17f137978923b2a2e93b2ba2151e32#9": {
+      "debt": 156.26543042,
+      "interest": 9.91116927,
+      "healthFactor": 0.025394157546143784,
+      "LTV": 31.897100682633283
+    },
+    "c33d40a99c55bb4f021c3532a7543ba6bef45e5b6e979d14def29106ed91b912#0": {
+      "debt": 44653.44387961,
+      "interest": 2399.65893111,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "c4f269b33abd701d9dc6e3d148df40c79a38eeb270d004d452c5c86b9c121e20#0": {
+      "debt": 309.539233,
+      "interest": 7.736766,
+      "healthFactor": 2.5840586056976997,
+      "LTV": 0.3134603829084978
+    },
+    "c51d6a1fdd315de12f6bbe0a82956597ccd73b4a2f56aee3652869a620d43ba3#0": {
+      "debt": 3602.88,
+      "interest": 1.189126,
+      "healthFactor": 1.5816072598595041,
+      "LTV": 0.5121372546506604
+    },
+    "c8c4a384af4d75619a8a4827ca1756da8e769710989a799110199cd88dd6a83a#0": {
+      "debt": 464.259271,
+      "interest": 14.259271,
+      "healthFactor": 2.8720320407558595,
+      "LTV": 0.2820302797829598
+    },
+    "c9be9383c0bdb5f9f91cb689e532350d390100b48fb5143298685611a851483e#0": {
+      "debt": 30.4933615,
+      "interest": 0.45085418,
+      "healthFactor": 1.3096844378806014,
+      "LTV": 0.6184695920421743
+    },
+    "ca7a4b568d236b0ab7bf4c4d6a5a0190b5089e13ee9783b19af1616042a44a56#1": {
+      "debt": 1.207916,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "cae7609fd7780686f95dd55989d3751272bdcd0e2b0b32165a2906395b054cce#0": {
+      "debt": 42881.449692,
+      "interest": 968.449692,
+      "healthFactor": 2.163183049722953,
+      "LTV": 0.37444820035167153
+    },
+    "cb2ea6295ffa4d024c7861ef90182da9df78094011bba9ee83973c629cbb53ad#0": {
+      "debt": 12960716857,
+      "interest": 104021058,
+      "healthFactor": 1.1936910046261056,
+      "LTV": 0.670190189001701
+    },
+    "cb9c2a0a93ddef57c9261920ebc6731c548cfacd56e8594f98576cc8d659091a#0": {
+      "debt": 5204.16,
+      "interest": 0.409708,
+      "healthFactor": 1.6248259066135913,
+      "LTV": 0.4923604410440093
+    },
+    "cbb1781a9ad8ce585a1ad4d2a75ffdc52d33ac5d19801b2d4bfdd44ab0e28fc9#0": {
+      "debt": 8690.233066,
+      "interest": 4.285057,
+      "healthFactor": 2.9788679419585713,
+      "LTV": 0.27132263544257446
+    },
+    "cc53a9f1c2f17bc346a256dc4215a5e17270a48d657d821892f75fd28063ff20#0": {
+      "debt": 29.829727,
+      "interest": 0.373924,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "cc9294181c20d5d32681896b8f85d8fae6e0e2e128d382943dce226ed2191777#0": {
+      "debt": 1410.252152,
+      "interest": 14.252152,
+      "healthFactor": 1.2375436485430638,
+      "LTV": 0.6545223685270393
+    },
+    "cf6a3608b5b4c97970aa058c737dde5e149f63ca836b3b175a5233b72d4ee4b6#0": {
+      "debt": 9572.982582,
+      "interest": 21.556937,
+      "healthFactor": 3.0171735837625433,
+      "LTV": 0.25107367749609844
+    },
+    "cfc55464fe27f6af7bedfeb9ef14f441dd085d3bb99ededc36d8de34277e3fb4#0": {
+      "debt": 349.218065,
+      "interest": 6.987462,
+      "healthFactor": 3.0269423993639166,
+      "LTV": 0.2666223743733613
+    },
+    "d0542f1738decb881af543437857943612f55f02ff0e307e38a0f507cce71e87#0": {
+      "debt": 11824.059415,
+      "interest": 12.393574,
+      "healthFactor": 1.150175351163318,
+      "LTV": 0.6955461175470842
+    },
+    "d09d8eab8043571ccc2e95017a8dc44960176003567e2ab92b65472956d2ef51#0": {
+      "debt": 9.66173,
+      "interest": 0.216695,
+      "healthFactor": 2.5279603633367587,
+      "LTV": 0.32041641623322276
+    },
+    "d40c0a4902fe565b429c68fee699a166c88f794b4de22dfebb89e7efabc41119#0": {
+      "debt": 9730.478938,
+      "interest": 18.033934,
+      "healthFactor": 1.1543704689237015,
+      "LTV": 0.6930184213269893
+    },
+    "d453861614975ee6af036dbd7564b36bd0034d971d8143eaf5103b29fa38d6c6#0": {
+      "debt": 105.688894,
+      "interest": 0.398894,
+      "healthFactor": 2.519870269164694,
+      "LTV": 0.3214451195809001
+    },
+    "d4700d913a0e6a7152ee837b0268df0c48cd44aa378edca225c74c2c69653451#0": {
+      "debt": 3644.63850243,
+      "interest": 169.08292194,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "d49588b39c959c3fc76ed943e96a43cfdbae20dd5afd720dc2e2ee7002027ef2#0": {
+      "debt": 4348.418735,
+      "interest": 16.418735,
+      "healthFactor": 2.0272398723640848,
+      "LTV": 0.39955804492707164
+    },
+    "d4e459d0fc9e9538df9e5426cb4a91b6ed382a2a88b1e1d65ec2551b1b538b39#0": {
+      "debt": 6004.8,
+      "interest": 2.09686,
+      "healthFactor": 1.4516001762327875,
+      "LTV": 0.5580048922990096
+    },
+    "d5d9c792e4e685ad979487847ad63c4612d7436f583aa0cf1347e51ce1babaf5#0": {
+      "debt": 494.235104,
+      "interest": 11.931229,
+      "healthFactor": 0.009163833680351034,
+      "LTV": 88.3909538577496
+    },
+    "d6ef4d7361313c581de6ae54048772604d024f6b32a4eb876af1f0f79e80b129#0": {
+      "debt": 60.083099,
+      "interest": 0.083099,
+      "healthFactor": 1.1814618073961867,
+      "LTV": 0.6855913538036001
+    },
+    "dac98f4325c27f4ac800a8dd79d90efb6e278a8bad45831c9a79e014cbbe38fd#0": {
+      "debt": 969.120368,
+      "interest": 4.120368,
+      "healthFactor": 1.5770541392595503,
+      "LTV": 0.5114418310936806
+    },
+    "dacc57811db2ac81318d2d083b8bdf1a24bc9a83752309706eb9feb7f4fb3871#0": {
+      "debt": 6097.594816,
+      "interest": 97.594816,
+      "healthFactor": 3.4808568121635566,
+      "LTV": 0.23270132720470554
+    },
+    "db425d859c0dad536f959b76f440722b3c7a3d8b7bdc839241e549211d2dac35#0": {
+      "debt": 1238.208878,
+      "interest": 92.412122,
+      "healthFactor": 1.6514703855143933,
+      "LTV": 0.4904720103398672
+    },
+    "db5b3f4fdaa56eecb06f939e9fbe1e6215c893299a32bd4f1c1b49bae094f677#0": {
+      "debt": 5263.009189,
+      "interest": 158.646615,
+      "healthFactor": 2.5477198874672027,
+      "LTV": 0.31793134087643193
+    },
+    "dd5f2b90220d00e8c364fbdae25a95c03a203943a8862fd7f753104ced5c4a5c#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "e029570d8298affc1ba109a2c43962cbda1310a81f3270ae5b23cb82b4450b3c#0": {
+      "debt": 150746.613094,
+      "interest": 746.613094,
+      "healthFactor": 3.6229788185955334,
+      "LTV": 0.2235729328149925
+    },
+    "e76657bbc660dda52397fb1537b4f7e8c448bb90ad4670ca4230a66e49b90c0b#0": {
+      "debt": 80120.068253,
+      "interest": 120.068253,
+      "healthFactor": 1.2991591377736884,
+      "LTV": 0.6157829143017265
+    },
+    "e796dd27e366f445ff5b450a7a678372770f708ff52c7d10e6ba02fa8c487da8#0": {
+      "debt": 4003.2,
+      "interest": 1.094988,
+      "healthFactor": 1.6114010117616684,
+      "LTV": 0.5585201904621325
+    },
+    "e9122e77c6d86187f34d9924382ce69e6973b91c52aa9bcfffbf93bba7b3b566#0": {
+      "debt": 152424247,
+      "interest": 13081,
+      "healthFactor": 2.019357869146495,
+      "LTV": 0.3961655396614416
+    },
+    "eb2c400d39d4580c3871cc7c933e03aeaf4102cda4a4d8ccbdbf163d5d1c5c44#0": {
+      "debt": 5533.261839,
+      "interest": 96.065388,
+      "healthFactor": 2.055447219391521,
+      "LTV": 0.39407482340499417
+    },
+    "ed2998eaf05f169831e7a0794c17126f5a9951bfaec02bcfb2ab19d341fd07df#0": {
+      "debt": 20408.728937,
+      "interest": 69.045286,
+      "healthFactor": 1.6224260617951451,
+      "LTV": 0.49925233517499684
+    },
+    "ed51e9e63dc2f042c6134450b1f52a5f19b2a7ee06512c4a47572a42ec591a80#0": {
+      "debt": 464.052876,
+      "interest": 22.327493,
+      "healthFactor": 2.343361490892233,
+      "LTV": 0.34565729749685065
+    },
+    "ed5d923ab4fa85aa95c1ee7a5bc6d7576f5b9c17b0370f60ff4955788ca149d1#0": {
+      "debt": 539.23111745,
+      "interest": 39.23111745,
+      "healthFactor": 3.29656644443106,
+      "LTV": 0.24571019988641377
+    },
+    "ee7cd414b96791b3ae76940040a90ae4b1f82fe4f5ca6948a8cc0d5b6bc72b9b#0": {
+      "debt": 190.75012,
+      "interest": 0.369888,
+      "healthFactor": 3.2165038175560214,
+      "LTV": 0.24934082307585656
+    },
+    "eec2f46285233d02e6c3ef925aa74de79d53a50b921c2e39d3094a1f298c028b#0": {
+      "debt": 125.369125,
+      "interest": 0.369125,
+      "healthFactor": 1.5223145860543663,
+      "LTV": 0.3297235728927577
+    },
+    "ef1c8e1fdaf94a4ecb436f49317bbd8e6a9acfdaa8a73ddc7317bf7d80dbc42d#0": {
+      "debt": 305.492596,
+      "interest": 0.008564,
+      "healthFactor": 1.2319133436651752,
+      "LTV": 0.6575137806285114
+    },
+    "ef2c1d56f62f28ca25a3e321433b7e78ef6c7a21c7a1f0e6d24634d8ff574270#0": {
+      "debt": 4274.040189,
+      "interest": 359.215017,
+      "healthFactor": 1.2469155407956722,
+      "LTV": 0.6496029390115139
+    },
+    "efac5202df8509aa07b7a91f9d709dc34295eeaaa561588f887dfbc396506cc1#0": {
+      "debt": 990581.47027,
+      "interest": 95882.687346,
+      "healthFactor": 67.0015561485413,
+      "LTV": 1.4925026484206085
+    },
+    "f19bbc375ced0ae1bc619a42266067e2b7bf240bf480181da070a09edeb8f2a1#0": {
+      "debt": 2673.303231,
+      "interest": 23.303231,
+      "healthFactor": 1.6713250256845702,
+      "LTV": 0.48464540861417793
+    },
+    "f2693d07a73bba0da122ddf2ecc5e08f78439b6b94026c86a6deef37810a7141#0": {
+      "debt": 68672.28119907,
+      "interest": 34672.28119907,
+      "healthFactor": 2.219814659072522,
+      "LTV": 0.3648953288462526
+    },
+    "f5dfc5aaf71deeb6b451c8933137a91886ca2934ba7b7bdede83a83085a251b4#0": {
+      "debt": 20.520527,
+      "interest": 0.494617,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#1": {
+      "debt": 260.963505,
+      "interest": 10.963505,
+      "healthFactor": 3.3718672519799444,
+      "LTV": 0.2402229801675531
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#10": {
+      "debt": 110.189583,
+      "interest": 0.567844,
+      "healthFactor": 10.991536890373517,
+      "LTV": 0.07278327025410312
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#2": {
+      "debt": 104.02828,
+      "interest": 4.02828,
+      "healthFactor": 2.754414560447704,
+      "LTV": 0.2940733801045338
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#3": {
+      "debt": 1.353342,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#4": {
+      "debt": 1465.135381,
+      "interest": 54.610246,
+      "healthFactor": 2.394118231676146,
+      "LTV": 0.33832915571296196
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#5": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#6": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#7": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#8": {
+      "debt": 1.004401,
+      "interest": 0.004993,
+      "healthFactor": 24.227689253701506,
+      "LTV": 0.033020070202434845
+    },
+    "f618cbcc3ea06e14db09351baccaf548004d8ad858497f3f03f3a37c0b78b7a2#9": {
+      "debt": 4530.656863,
+      "interest": 130.017524,
+      "healthFactor": 7.476561576508466,
+      "LTV": 0.10722738155273898
+    },
+    "f62254e5614260ddabe7cd18bdf8cbc52b80bc21ca81128693f510e4a8b53f5a#0": {
+      "debt": 5159.406653,
+      "interest": 173.365452,
+      "healthFactor": 16.474206102981704,
+      "LTV": 0.04916777142015944
+    },
+    "f63ede22fd6780dfaadf40579353b48be92f5bf2c8d321cf506a465c9983d89e#0": {
+      "debt": 310.112564,
+      "interest": 7.371161,
+      "healthFactor": 1.4113428222444813,
+      "LTV": 0.34999016267972005
+    },
+    "f7352ff4a7069fff0d0906d80fa403772cb88c4f99d5b10ff8449a652c71a543#0": {
+      "debt": 564.387859,
+      "interest": 25.827245,
+      "healthFactor": 2.238733709697415,
+      "LTV": 0.3618116779549806
+    },
+    "f766c7cb3cbceb030a1129b13e297762fef7c82f2114f059aa2e8a8bec4d4ecb#0": {
+      "debt": 19.791607,
+      "interest": 0.031744,
+      "healthFactor": 1.2554391724525136,
+      "LTV": 0.6451925491679987
+    },
+    "f7d1c34f63b08be0b2f911b7479dbb00bef153e5d1bbda217624ab441de19d9f#1": {
+      "debt": 36.23366783,
+      "interest": 1.23366783,
+      "healthFactor": 1.1604257648531449,
+      "LTV": 0.689402135173414
+    },
+    "f7ecc7d35b0be793ec8b45cc288b85f9002a8e0927196ee8bd16754646e01fab#0": {
+      "debt": 850.685962,
+      "interest": 0.428921,
+      "healthFactor": 1.0634676721243317,
+      "LTV": 0.846288066474276
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#13": {
+      "debt": 93.31175,
+      "interest": 0.830185,
+      "healthFactor": 1.4633111277078712,
+      "LTV": 0.46391632788138687
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#15": {
+      "debt": 190.393587,
+      "interest": 5.393587,
+      "healthFactor": 1.8011085172698094,
+      "LTV": 0.2638514713824191
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#16": {
+      "debt": 12.864219,
+      "interest": 0.111237,
+      "healthFactor": 2.151020275586223,
+      "LTV": 0.37656548810505686
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#17": {
+      "debt": 364.303924,
+      "interest": 19.303924,
+      "healthFactor": 1.3858817196579387,
+      "LTV": 0.36847185846339214
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#2": {
+      "debt": 499.837729,
+      "interest": 9.308219,
+      "healthFactor": 1.253646098691539,
+      "LTV": 0.4491323339126676
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#22": {
+      "debt": 11401.523048,
+      "interest": 401.523048,
+      "healthFactor": 1.7717904679475234,
+      "LTV": 0.3239355138174853
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#24": {
+      "debt": 2934.496826,
+      "interest": 16.895383,
+      "healthFactor": 2.9429631618609284,
+      "LTV": 0.27523280294402713
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#25": {
+      "debt": 9060.984323,
+      "interest": 93.029019,
+      "healthFactor": 2.8925178315503848,
+      "LTV": 0.27952909319852903
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#3": {
+      "debt": 1048.198824,
+      "interest": 16.213729,
+      "healthFactor": 1.6028832073096009,
+      "LTV": 0.3431316751537757
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#4": {
+      "debt": 241.347446,
+      "interest": 3.681172,
+      "healthFactor": 6.853346635357796,
+      "LTV": 0.05836564546966287
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#5": {
+      "debt": 149.327612,
+      "interest": 2.271561,
+      "healthFactor": 20.639125192519096,
+      "LTV": 0.0253971700014564
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#7": {
+      "debt": 206.557127,
+      "interest": 6.557127,
+      "healthFactor": 4.874638574571558,
+      "LTV": 0.16510991349237217
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#8": {
+      "debt": 90.180913,
+      "interest": 0.932634,
+      "healthFactor": 2.335864529254777,
+      "LTV": 0.326152988287895
+    },
+    "f8cdc0936fe6539e85ab48b3c4b5643fb078cb71d3772574ba293d3ff1157e1c#9": {
+      "debt": 15.990837,
+      "interest": 0.162722,
+      "healthFactor": 0,
+      "LTV": -1
+    },
+    "fb0764c4d1e03ac7dcb82e700f59f1217a4600c4784b13d99784c8729d70ed4a#0": {
+      "debt": 215.478557,
+      "interest": 0.478557,
+      "healthFactor": 1.8642980482441203,
+      "LTV": 0.4331243815451436
+    },
+    "fc3c997fe64138615e5bec2659798df2d6169889ab8faf1086cc1d01b8d9e6c7#0": {
+      "debt": 778.19670309,
+      "interest": 11.90375289,
+      "healthFactor": 1.714697223701622,
+      "LTV": 0.4665546715431142
+    },
+    "ff2db16f9af30639aee9f2cb989380063ea45057518a2714e1e8e493a1a4948c#2": {
+      "debt": 0,
+      "interest": 0,
+      "healthFactor": 0,
+      "LTV": 0
+    },
+    "ff908d9c1dd8e1645cd8cebf593048f4c5e0b3a0b037cd8f3f7cb342c78fd9f6#0": {
+      "debt": 3016.879202,
+      "interest": 16.879202,
+      "healthFactor": 1.9229349285023984,
+      "LTV": 0.4176089562904764
+    }
+  },
+  "markets": {
+    "037d0a01f547818ecc5bad52416ed759f573f8deb16b82d097309e90": {
+      "borrowAPR": 0.0193205586,
+      "supplyAPR": 0.0028709471,
+      "utilization": 0.16510605302583406,
+      "exchangeRate": 0.020005333391254338,
+      "liquidity": 134621.322307,
+      "borrowCap": null
+    },
+    "16c3b3f091a7c1b5f85aeb80384aa53d54262e55ef068cc6413a3227": {
+      "borrowAPR": 0.05,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.020407819758655348,
+      "liquidity": 117.344965,
+      "borrowCap": null
+    },
+    "191f768460713989c5ae88821f208522df7800f6b5572ca7905a7a60": {
+      "borrowAPR": 0.3011445855,
+      "supplyAPR": 0.2013312641,
+      "utilization": 0.8356918641546905,
+      "exchangeRate": 0.030398678006945266,
+      "liquidity": 71795.05351128,
+      "borrowCap": null
+    },
+    "3e46fe218fa7030e9f0bfc4b99141b49acd7f4d0efee389125c34dd4": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 1,
+      "liquidity": 12582945.220839,
+      "borrowCap": 0
+    },
+    "40314e19034c542c950e4a7cb67af00133c3ab2b23d2f0b2476a17bb": {
+      "borrowAPR": 0.0008863577,
+      "supplyAPR": 0.0002516044,
+      "utilization": 0.35482909611095514,
+      "exchangeRate": 0.020008431020641867,
+      "liquidity": 276949730,
+      "borrowCap": null
+    },
+    "416109f322b43051b80e83075b4baa8c5af14c88acaca47d5c251820": {
+      "borrowAPR": 0.2595661801,
+      "supplyAPR": 0.1547308801,
+      "utilization": 0.7451417591502288,
+      "exchangeRate": 0.027784974772751707,
+      "liquidity": 37769.378498,
+      "borrowCap": null
+    },
+    "43c4bdac04537dbd338935d00a8a0746a078d4f03d7ac302a4bf5d3d": {
+      "borrowAPR": 0.3289566358,
+      "supplyAPR": 0.237281677,
+      "utilization": 0.9016449707733412,
+      "exchangeRate": 0.03189624300290048,
+      "liquidity": 330744.464286,
+      "borrowCap": 0.875
+    },
+    "481e1bc8ebe7d0f2a8d107f5588703646588eac6b4975d4575c33c00": {
+      "borrowAPR": 0.0399999934,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.02,
+      "liquidity": 1e-06,
+      "borrowCap": 0.95
+    },
+    "4d79e8ef7e91551617b2dcc87261b7e119ae95c58f32642ff5101688": {
+      "borrowAPR": 0.0516855583,
+      "supplyAPR": 0.0002325655,
+      "utilization": 0.005624528524717349,
+      "exchangeRate": 0.026382197676195394,
+      "liquidity": 2029.852934,
+      "borrowCap": null
+    },
+    "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c": {
+      "borrowAPR": 0.0525875159,
+      "supplyAPR": 0.03153316332247784,
+      "utilization": 0.41967692682943397,
+      "exchangeRate": 0.021179314015021797,
+      "liquidity": 21207400.850174,
+      "borrowCap": 0.95
+    },
+    "5af40b3ceabec5fd25fa13f218008fe3a6f97f805607de6333d3dbd6": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.02,
+      "liquidity": 500574,
+      "borrowCap": 0
+    },
+    "5ebdbcb5c27cfef9c04e57e5c3d30022afb1f28ac05c7c4e245efa1d": {
+      "borrowAPR": 0.005,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.02,
+      "liquidity": 34588.575745,
+      "borrowCap": null
+    },
+    "62d34f15df19777fe0f7f90ce405b64aa3be21b15fae0d919028fafe": {
+      "borrowAPR": 0.0539289707,
+      "supplyAPR": 0.0288700404,
+      "utilization": 0.5948161475147714,
+      "exchangeRate": 0.020016801935301802,
+      "liquidity": 121760.911212,
+      "borrowCap": null
+    },
+    "7211aebe5303f1a8c7905198f637099f194a3b23e841b1dcbc064017": {
+      "borrowAPR": 0.0177507697,
+      "supplyAPR": 0.0072630888,
+      "utilization": 0.511462952030931,
+      "exchangeRate": 0.02026096892854461,
+      "liquidity": 4575030.826784,
+      "borrowCap": 0.9
+    },
+    "7bff651a687fd87f2f6ffe705f7a36c39941248e80ecf8b0b10a4949": {
+      "borrowAPR": 0.0022608842,
+      "supplyAPR": 0.0001187351,
+      "utilization": 0.06564640359112518,
+      "exchangeRate": 0.021084108170437113,
+      "liquidity": 318906.564099,
+      "borrowCap": 0.9
+    },
+    "9330ff6f3d301a9abc1979cffd1465cd27f7563837a7d635f59f1aa2": {
+      "borrowAPR": 0.322370071,
+      "supplyAPR": 0.223130048,
+      "utilization": 0.8651937170079989,
+      "exchangeRate": 0.022736230316336065,
+      "liquidity": 96215.329293,
+      "borrowCap": null
+    },
+    "a43e97c7fd3072e0679bc2e5003b6a9db9dafbe4e760f0dc68e6dc4b": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.02,
+      "liquidity": 20822.691106,
+      "borrowCap": 0
+    },
+    "a520004164acf96cd2c0bc34ba2ec2454ceaab4fbd364a32c26ddc65": {
+      "borrowAPR": 0.0055970401,
+      "supplyAPR": 0.0007264696,
+      "utilization": 0.16224413783275718,
+      "exchangeRate": 0.020107884875624,
+      "liquidity": 58075.838609164,
+      "borrowCap": 0.9
+    },
+    "a5667ec9e9334143dd828e260e1270be265dd84e9e46e4333d76ea57": {
+      "borrowAPR": 0.3219654702,
+      "supplyAPR": 0.2301836614,
+      "utilization": 0.8936659464963932,
+      "exchangeRate": 0.031021924585437913,
+      "liquidity": 48292.4205062,
+      "borrowCap": null
+    },
+    "aca430e2ba97649cbf5c21d1a0825d2c123b96a69d359ebddaafa787": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.020000000041306407,
+      "liquidity": 1621240.026437,
+      "borrowCap": 0
+    },
+    "aecc77dce9fb0959a8e544d4319fe2a6afa28f12709e1ac71fab0d41": {
+      "borrowAPR": 0.0195354012,
+      "supplyAPR": 0.0087892145,
+      "utilization": 0.5623902001752421,
+      "exchangeRate": 0.020540309586376686,
+      "liquidity": 0.31200672,
+      "borrowCap": 0.9
+    },
+    "b44553158796da29abd7d74ebd61cfe64274d00b72962acc6b5befba": {
+      "borrowAPR": 0.0527591639,
+      "supplyAPR": 0.03478474682417389,
+      "utilization": 0.4148190128115188,
+      "exchangeRate": 0.020111933869983358,
+      "liquidity": 7449.887556,
+      "borrowCap": 0.95
+    },
+    "b8d421c5fee7a0f6bfcf40c1d175ab6eacd77beccbab57272c18a1bf": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 3.1790877931681973e-10,
+      "exchangeRate": 0.02001559625806117,
+      "liquidity": 169860.046328,
+      "borrowCap": 0.9
+    },
+    "bcfc336181739c48126522d462a39114c80673556a37bd4805fa50b1": {
+      "borrowAPR": 0.0004208845,
+      "supplyAPR": 4.1186e-06,
+      "utilization": 0.012231921021763308,
+      "exchangeRate": 0.02003074299093156,
+      "liquidity": 1264613.996822,
+      "borrowCap": 0.9
+    },
+    "be82399bdf9cc082e9cd35d82fcecf58cda8a77e57d12fbf0d7f72ee": {
+      "borrowAPR": 0.0300000049,
+      "supplyAPR": 0.023913144874043404,
+      "utilization": 0,
+      "exchangeRate": 0.02,
+      "liquidity": 481.329827,
+      "borrowCap": 0.95
+    },
+    "c6f7898a261056bef6c9b52ed63aa3cd1e9b9051b0d9190e998259db": {
+      "borrowAPR": 0.0146046595,
+      "supplyAPR": 0.0049242931,
+      "utilization": 0.42146593322542714,
+      "exchangeRate": 0.020101333078006316,
+      "liquidity": 69811847,
+      "borrowCap": 0.9
+    },
+    "d8c6d5509d11856fe3c2cfc434e6f251f0ed6b0d54090b40656df6ae": {
+      "borrowAPR": 0,
+      "supplyAPR": 0,
+      "utilization": 4.5068445239569115e-11,
+      "exchangeRate": 0.02002052267003374,
+      "liquidity": 22188.473435,
+      "borrowCap": null
+    },
+    "d959ec7ee9b45b293ec2494304a5a5603bd9a7d46794d736f79813ce": {
+      "borrowAPR": 0.0791213059,
+      "supplyAPR": 0.055314694,
+      "utilization": 0.8738906253846969,
+      "exchangeRate": 0.020518998068968477,
+      "liquidity": 129828.755322,
+      "borrowCap": null
+    },
+    "d99b0f6281878e41f95f078ef2be8ca237873a6ca1ace73d5f4d0ddf": {
+      "borrowAPR": 0.0400001844,
+      "supplyAPR": 1.12e-07,
+      "utilization": 2.9471028158077296e-06,
+      "exchangeRate": 0.06003826681069711,
+      "liquidity": 30.199061,
+      "borrowCap": 0.95
+    },
+    "dae2eab1798b6a6184c34e305faf7b04c325201f9a24535b98ddbf8b": {
+      "borrowAPR": 0.2680519856,
+      "supplyAPR": 0.1651217192,
+      "utilization": 0.7700079091858951,
+      "exchangeRate": 0.02552116676451162,
+      "liquidity": 436677.706941,
+      "borrowCap": null
+    },
+    "e15fd1cdbff134b5ddc3938abd777ae55c3555e85644f671989be6e4": {
+      "borrowAPR": 0.0661969573,
+      "supplyAPR": 0.0434066636,
+      "utilization": 0.8196499004307967,
+      "exchangeRate": 0.02020071177399449,
+      "liquidity": 16695293805,
+      "borrowCap": null
+    },
+    "ef654dcff3df94784b088e9ed61e68a17dd2249cd51c410ffea24199": {
+      "borrowAPR": 0.0196589466,
+      "supplyAPR": 0.0089001943,
+      "utilization": 0.5659124629780466,
+      "exchangeRate": 0.0205606106460175,
+      "liquidity": 1.11732657,
+      "borrowCap": 0.9
+    },
+    "efc5a8764f5d7978d794dac3a6edce820828072ec10594590137b71c": {
+      "borrowAPR": 0.0008448,
+      "supplyAPR": 1.65897e-05,
+      "utilization": 0.024546728746525578,
+      "exchangeRate": 0.020056594524654626,
+      "liquidity": 14831461.922975,
+      "borrowCap": 0.9
+    },
+    "f15b5f281f9b8be3276dd9466a3bbf57272d04db962e63b312bdebf2": {
+      "borrowAPR": 0.05,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.02001948714742253,
+      "liquidity": 83.911682,
+      "borrowCap": null
+    },
+    "f4d8fa6f00d83af913345576f06f28c5ea188366f1636a0b4521d1c0": {
+      "borrowAPR": 0.03,
+      "supplyAPR": 0,
+      "utilization": 0,
+      "exchangeRate": 0.020045208472043642,
+      "liquidity": 3584.88590897,
+      "borrowCap": 0.5
+    }
+  }
+}
