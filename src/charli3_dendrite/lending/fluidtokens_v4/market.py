@@ -22,6 +22,7 @@ from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
 from charli3_dendrite.lending.fluidtokens_v4.indexing import entity_selectors
 from charli3_dendrite.lending.fluidtokens_v4.indexing import parse_utxo
 from charli3_dendrite.lending.fluidtokens_v4.rates import PROTOCOL_NAME
+from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS  # noqa: F401
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidAmortizedRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidPerpetualRate
@@ -416,3 +417,8 @@ class FluidTokensV4MarketSource:
             positions=convertible_views(loan_to_position, found.loans),
             requests=convertible_views(request_to_borrow_request, found.requests),
         )
+
+
+def market_source() -> FluidTokensV4MarketSource:
+    """The mainnet FluidTokens V4 source, as ``lending.builtins`` registers it."""
+    return FluidTokensV4MarketSource()

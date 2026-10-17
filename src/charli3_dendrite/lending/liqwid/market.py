@@ -17,6 +17,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
+import charli3_dendrite.lending.liqwid.oracles  # noqa: F401
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
@@ -34,6 +35,7 @@ from charli3_dendrite.lending.liqwid.math import apy_fraction
 from charli3_dendrite.lending.liqwid.math import supply_apy
 from charli3_dendrite.lending.liqwid.math import utilization
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
+from charli3_dendrite.lending.liqwid.rates import RATE_MODELS  # noqa: F401
 from charli3_dendrite.lending.liqwid.rates import LiqwidVariableRate
 from charli3_dendrite.lending.markets import LendingSnapshot
 from charli3_dendrite.lending.markets import ParseContext
@@ -466,3 +468,13 @@ class LiqwidV2MarketSource:
             markets=tuple(views.values()),
             positions=convertible_views(position, found.loans),
         )
+
+
+def market_source() -> LiqwidV2MarketSource:
+    """The mainnet Liqwid V2 source, for :mod:`charli3_dendrite.lending.builtins`.
+
+    Importing this module registers ``LiqwidOracleResolver`` (through
+    :mod:`charli3_dendrite.lending.liqwid.oracles`), so the built-ins load also makes
+    Liqwid's on-chain feeds resolvable.
+    """
+    return LiqwidV2MarketSource()

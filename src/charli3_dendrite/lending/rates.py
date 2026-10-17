@@ -13,9 +13,12 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from enum import Enum
+from importlib import import_module
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import ClassVar
+
+from charli3_dendrite.lending.builtins import BUILTIN_PROTOCOL_PACKAGES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -154,13 +157,13 @@ def rate_model_from_dict(data: Mapping[str, Any]) -> RateModel:
 
 
 def _load_builtins() -> None:
-    """Import the protocol packages that register models, once, on first lookup."""
+    """Register every built-in protocol's rate models, once, on first lookup."""
     global _BUILTINS_LOADED  # noqa: PLW0603
     if _BUILTINS_LOADED:
         return
     _BUILTINS_LOADED = True
-    from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS
-
-    for model in RATE_MODELS:
-        # A caller's own registration under the same key is kept.
-        _REGISTRY.setdefault((model.protocol, model.kind), model)
+    for module_name in BUILTIN_PROTOCOL_PACKAGES:
+        models: tuple[type[RateModel], ...] = import_module(module_name).RATE_MODELS
+        for model in models:
+            # A caller's own registration under the same key is kept.
+            _REGISTRY.setdefault((model.protocol, model.kind), model)

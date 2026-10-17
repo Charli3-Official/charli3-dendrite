@@ -15,12 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from importlib import import_module
 from typing import TYPE_CHECKING
 from typing import Final
 from typing import Protocol
 from typing import TypeVar
 from typing import runtime_checkable
 
+from charli3_dendrite.lending.builtins import BUILTIN_PROTOCOL_PACKAGES
 from charli3_dendrite.lending.normalized import LendingParseError
 from charli3_dendrite.lending.rates import MS_PER_HOUR
 
@@ -222,16 +224,15 @@ def load_all(backend: AbstractBackend, now_ms: int | None = None) -> LendingSnap
 
 
 def _load_builtins() -> None:
-    """Register the sources shipped with the library, once, on first use."""
+    """Register every built-in protocol's market source, once, on first use."""
     global _BUILTINS_LOADED  # noqa: PLW0603
     if _BUILTINS_LOADED:
         return
     _BUILTINS_LOADED = True
-    from charli3_dendrite.lending.fluidtokens_v4.market import FluidTokensV4MarketSource
-
-    source = FluidTokensV4MarketSource()
-    # A caller's own registration under the same name is kept.
-    _SOURCES.setdefault(source.name.lower(), source)
+    for module_name in BUILTIN_PROTOCOL_PACKAGES:
+        source: MarketSource = import_module(module_name).market_source()
+        # A caller's own registration under the same name is kept.
+        _SOURCES.setdefault(source.name.lower(), source)
 
 
 @dataclass(frozen=True)

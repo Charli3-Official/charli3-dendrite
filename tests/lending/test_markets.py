@@ -1,18 +1,29 @@
 """Market-source registry and the market book (offline)."""
 
 import dataclasses
+import importlib
+import subprocess
+import sys
 from fractions import Fraction
 
 import pytest
 
 from charli3_dendrite.lending import markets
+from charli3_dendrite.lending import rates
+from charli3_dendrite.lending.builtins import BUILTIN_PROTOCOL_PACKAGES
+from charli3_dendrite.lending.fluidtokens_v4 import market as v4_market
+from charli3_dendrite.lending.fluidtokens_v4 import rates as v4_rates
 from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
 from charli3_dendrite.lending.fluidtokens_v4.indexing import entity_selectors
 from charli3_dendrite.lending.fluidtokens_v4.market import FluidTokensV4MarketSource
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
 from charli3_dendrite.lending.liqwid.lifecycle import LoanKey
 from charli3_dendrite.lending.liqwid.lifecycle import LoanSpend
+from charli3_dendrite.lending.liqwid import market as liqwid_market
+from charli3_dendrite.lending.liqwid import rates as liqwid_rates
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
+from charli3_dendrite.lending.liqwid.market import LiqwidV2MarketSource
+from charli3_dendrite.lending.liqwid.rates import LiqwidVariableRate
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import LendingMarketBook
@@ -25,6 +36,9 @@ from charli3_dendrite.lending.markets import get_market_source
 from charli3_dendrite.lending.markets import load_all
 from charli3_dendrite.lending.markets import register_market_source
 from charli3_dendrite.lending.rates import MS_PER_HOUR
+from charli3_dendrite.lending.rates import RateKind
+from charli3_dendrite.lending.rates import rate_model_from_dict
+from charli3_dendrite.lending.rates import register_rate_model
 from tests.lending.fluidtokens_v4.records import FIX
 from tests.lending.fluidtokens_v4.test_loader import NOW_MS
 from tests.lending.fluidtokens_v4.test_loader import FakeBackend
@@ -59,10 +73,19 @@ class _Source:
 
 
 @pytest.fixture
-def registry(monkeypatch):
+def unloaded_registry(monkeypatch):
+    """An empty source registry whose built-ins load on first use."""
     monkeypatch.setattr(markets, "_SOURCES", {})
-    monkeypatch.setattr(markets, "_BUILTINS_LOADED", True)
+    monkeypatch.setattr(markets, "_BUILTINS_LOADED", False)
     return markets._SOURCES
+
+
+@pytest.fixture
+def unloaded_rates(monkeypatch):
+    """An empty rate-model registry whose built-ins load on first lookup."""
+    monkeypatch.setattr(rates, "_REGISTRY", {})
+    monkeypatch.setattr(rates, "_BUILTINS_LOADED", False)
+    return rates._REGISTRY
 
 
 def test_fluidtokens_v4_is_registered():
@@ -75,16 +98,22 @@ def test_an_unknown_source_names_the_known_ones():
         get_market_source("nope")
 
 
-def test_load_all_merges_every_source_in_name_order(registry):
-    register_market_source(_Source("b", LendingSnapshot(markets=(market("b1"),))))
-    register_market_source(
-        _Source(
-            "A",
-            LendingSnapshot(markets=(market("a1"),), requests=(request(),)),
-        ),
+def test_load_all_merges_every_source_in_name_order(unloaded_registry, monkeypatch):
+    v4 = LendingSnapshot(markets=(market("z-v4"),), requests=(request(),))
+    liqwid = LendingSnapshot(markets=(market("a-liqwid"),))
+    monkeypatch.setattr(
+        FluidTokensV4MarketSource,
+        "load",
+        lambda self, backend, now_ms=None: v4,
+    )
+    monkeypatch.setattr(
+        LiqwidV2MarketSource,
+        "load",
+        lambda self, backend, now_ms=None: liqwid,
     )
     merged = load_all(backend=None)
-    assert [m.market_id for m in merged.markets] == ["a1", "b1"]
+    assert available_market_sources() == ["fluidtokensv4", "liqwidv2"]
+    assert [m.market_id for m in merged.markets] == ["z-v4", "a-liqwid"]
     assert merged.requests == (request(),)
 
 
@@ -374,3 +403,105 @@ def test_borrow_options_stop_at_a_markets_borrow_cap():
     assert [o.market.market_id for o in at_cap] == ["capped", "open"]
     over_cap = book.borrow_options("lovelace", SNEK, 401, 0)
     assert [o.market.market_id for o in over_cap] == ["open"]
+
+
+_LIQWID_RATE = {
+    "protocol": "LiqwidV2",
+    "kind": "variable",
+    "params": {
+        "rate_num": 1,
+        "rate_den": 1_000_000,
+        "period_ms": 2_000_000,
+        "market_index": 1_100_000_000_000,
+        "loan_index": 1_000_000_000_000,
+        "interest": 5_000,
+        "min_interest": 800,
+        "min_rate_num": 1,
+        "min_rate_den": 1_250,
+    },
+}
+
+
+def test_the_builtin_sources_are_fluidtokens_v4_and_liqwid_v2(unloaded_registry):
+    assert available_market_sources() == ["fluidtokensv4", "liqwidv2"]
+    assert isinstance(get_market_source("FluidTokensV4"), FluidTokensV4MarketSource)
+    assert isinstance(get_market_source("LiqwidV2"), LiqwidV2MarketSource)
+    assert get_market_source("liqwidv2").name == "LiqwidV2"
+
+
+def test_a_liqwid_v2_source_registered_before_the_first_lookup_is_kept(
+    unloaded_registry,
+):
+    mine = _Source("LiqwidV2", LendingSnapshot())
+    register_market_source(mine)
+    assert get_market_source("liqwidv2") is mine
+    assert available_market_sources() == ["fluidtokensv4", "liqwidv2"]
+    assert isinstance(get_market_source("fluidtokensv4"), FluidTokensV4MarketSource)
+
+
+def test_every_builtin_module_offers_its_rate_models_and_market_source():
+    assert BUILTIN_PROTOCOL_PACKAGES == (
+        "charli3_dendrite.lending.fluidtokens_v4.market",
+        "charli3_dendrite.lending.liqwid.market",
+    )
+    for module_name in BUILTIN_PROTOCOL_PACKAGES:
+        module = importlib.import_module(module_name)
+        source = module.market_source()
+        assert module.RATE_MODELS
+        assert {model.protocol for model in module.RATE_MODELS} == {source.name}
+    assert v4_market.RATE_MODELS is v4_rates.RATE_MODELS
+    assert liqwid_market.RATE_MODELS is liqwid_rates.RATE_MODELS
+    assert liqwid_market.RATE_MODELS == (LiqwidVariableRate,)
+    assert isinstance(v4_market.market_source(), FluidTokensV4MarketSource)
+    assert isinstance(liqwid_market.market_source(), LiqwidV2MarketSource)
+
+
+def test_every_builtin_rate_model_resolves_on_first_lookup(unloaded_rates):
+    model = rate_model_from_dict(_LIQWID_RATE)
+    assert type(model) is LiqwidVariableRate
+    assert model.to_dict() == _LIQWID_RATE
+    month = FluidFlatTermRate(
+        interest_rate=100,
+        total_installments=1,
+        installment_period=720,
+        initial_grace_period=0,
+        repayment_time_window=0,
+        penalty_fee_for_late_repayment=0,
+    )
+    assert rate_model_from_dict(month.to_dict()) == month
+    assert set(unloaded_rates) == {
+        ("FluidTokensV4", RateKind.PERPETUAL),
+        ("FluidTokensV4", RateKind.FLAT_TERM),
+        ("FluidTokensV4", RateKind.AMORTIZED),
+        ("LiqwidV2", RateKind.VARIABLE),
+    }
+
+
+def test_a_liqwid_v2_rate_model_registered_before_the_first_lookup_is_kept(
+    unloaded_rates,
+):
+    @dataclasses.dataclass(frozen=True)
+    class CallerRate(LiqwidVariableRate):
+        pass
+
+    register_rate_model(CallerRate)
+    assert type(rate_model_from_dict(_LIQWID_RATE)) is CallerRate
+    assert unloaded_rates[("LiqwidV2", RateKind.VARIABLE)] is CallerRate
+
+
+def test_a_fresh_interpreter_resolves_a_liqwid_v2_rate_model():
+    # A fresh interpreter, so no earlier import in this process has loaded the
+    # Liqwid modules: the lookup itself must reach them through the built-ins.
+    code = (
+        "import sys; "
+        "from charli3_dendrite.lending.rates import rate_model_from_dict; "
+        "assert 'charli3_dendrite.lending.liqwid.rates' not in sys.modules; "
+        f"record = {_LIQWID_RATE!r}; "
+        "model = rate_model_from_dict(record); "
+        "assert type(model).__qualname__ == 'LiqwidVariableRate', type(model); "
+        "assert type(model).__module__ == 'charli3_dendrite.lending.liqwid.rates'; "
+        "assert model.to_dict() == record; "
+        "assert 'charli3_dendrite.lending.liqwid.oracles' in sys.modules"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
