@@ -221,6 +221,13 @@ class LiqwidOracleResolver:
     underlying unit and ``extra["market_state"]`` the market's MarketState NFT
     policy. The price is s9 (underlying per qToken) times the underlying's lovelace
     price from the Liqwid feeds.
+
+    The UTxOs passed to :meth:`resolve` must be the unspent outputs at
+    :meth:`selectors` (a backend read with ``historical=False``). The resolver cannot
+    tell a spent output from an unspent one: given historical outputs it prices from
+    the freshest feed and MarketState among them, which is a past price whenever the
+    read leaves out the current ones (a paged historical read returns the oldest
+    first).
     """
 
     source = OracleSource.LIQWID
@@ -241,7 +248,10 @@ class LiqwidOracleResolver:
 
         One selector per oracle validator, then one per distinct MarketState NFT
         policy named by ``refs`` (over all of that market's MarketState validators).
-        A ref naming no known market adds no MarketState selector.
+        A ref naming no known market adds no MarketState selector. Read each
+        selector's unspent outputs only (``historical=False``) and pass them to
+        :meth:`resolve`; a historical read yields stale prices (see the class
+        docstring).
         """
         active = self.deployment
         selectors: list[PoolSelector] = []
@@ -274,6 +284,11 @@ class LiqwidOracleResolver:
         None when ``ref`` names no known market, not that market's qToken or not its
         underlying, or when the underlying feed, the ADA feed, a non-zero price or
         the MarketState is missing among ``utxos``.
+
+        ``utxos`` must be the unspent outputs at :meth:`selectors`
+        (``historical=False``). Spent outputs are not detected: the freshest feed
+        and MarketState among ``utxos`` win, so a historical read that misses the
+        current outputs returns a past price with no signal.
         """
         active = self.deployment
         underlying = ref.extra.get("underlying")
