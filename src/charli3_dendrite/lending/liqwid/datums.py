@@ -327,8 +327,8 @@ def _decode(
     """Decode ``datum`` as a bare field list of an allowed length and build a record.
 
     Anything that is not such a list (a constructor, bytes that are not CBOR, a
-    truncated array) and any wrong-typed field raise ``ValueError``, whose message
-    starts with ``"liqwid <what>: "``.
+    truncated or too deeply nested array) and any wrong-typed field raise
+    ``ValueError``, whose message starts with ``"liqwid <what>: "``.
     """
     prefix = f"liqwid {what}: "
     try:
@@ -342,7 +342,18 @@ def _decode(
             msg = f"{prefix}unknown layout of {len(fields)} fields"
             raise ValueError(msg)
         return build(fields)
-    except (cbor2.CBORError, EOFError, IndexError, KeyError, TypeError) as exc:
+    except (
+        cbor2.CBORError,
+        EOFError,
+        IndexError,
+        KeyError,
+        OverflowError,
+        RecursionError,
+        TypeError,
+    ) as exc:
+        # ``OverflowError``: a general constructor tag whose alternative is an
+        # infinite float. ``RecursionError``: arrays nested past the interpreter's
+        # recursion limit.
         msg = f"{prefix}malformed datum"
         raise ValueError(msg) from exc
     except ValueError as exc:

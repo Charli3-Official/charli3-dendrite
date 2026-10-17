@@ -147,6 +147,13 @@ ADA_MARKET_STATE_NFT = "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c
 POLICY_WIDE_POLICY = "1f3dd1b685f0d87eaf92120aca3cf56da6ed91e2dbc32a95a26bce4a"
 UPDATER = "6fa6388ff21b8b8c76966d3e920f6ac8f0c9fb450d30eb51f85c660a"
 # Each decoder and the record name its error messages start with.
+# A general constructor (tag 102) whose alternative is an infinite float, as field 0
+# of a five-field list.
+INFINITE_TAG = cbor2.CBORTag(102, [float("inf"), []])
+INFINITE_ALTERNATIVE = cbor2.dumps([INFINITE_TAG, 1, 2, 3, 4]).hex()
+# A five-field list whose first field is 20,000 nested one-element arrays.
+DEEPLY_NESTED = (b"\x85" + b"\x81" * 20_000 + b"\x00" + b"\x01\x02\x03\x04").hex()
+
 DECODERS = {
     decode_market_state: "market state",
     decode_market_params: "market params",
@@ -444,12 +451,41 @@ def test_market_params_wrong_field_types_raise(position, value):
         "d87980",  # an empty constructor
         "01",  # an integer
         "581c" + "00" * 28,  # a bytestring
+        INFINITE_ALTERNATIVE,  # a general constructor with an infinite alternative
+        DEEPLY_NESTED,  # arrays nested past the recursion limit
     ],
+    ids=lambda datum: datum[:24],
 )
 def test_every_decoder_raises_value_error_on_malformed_input(decode, record, datum):
     with pytest.raises(ValueError, match=f"^liqwid {record}: ") as excinfo:
         decode(datum)
     assert str(excinfo.value).count("liqwid") == 1
+
+
+@pytest.mark.parametrize(
+    ("kind", "decode", "record"),
+    [
+        ("market_state", decode_market_state, "market state"),
+        ("market_params", decode_market_params, "market params"),
+        ("collateral_params", decode_collateral_params, "collateral params"),
+        ("loan", decode_loan, "loan"),
+        ("oracle", decode_oracle_feed, "oracle feed"),
+    ],
+)
+def test_an_infinite_constructor_alternative_in_any_field_raises_value_error(
+    kind,
+    decode,
+    record,
+):
+    fields = _fields(_genuine(kind)[0]["datum_cbor"])
+    for position in range(len(fields)):
+        variant = list(fields)
+        variant[position] = INFINITE_TAG
+        try:
+            decode(_encode(variant))
+        except ValueError as exc:
+            assert str(exc).startswith(f"liqwid {record}: ")
+            assert str(exc).count("liqwid") == 1
 
 
 def test_an_unknown_constructor_tag_is_reported_with_the_record_prefix():
