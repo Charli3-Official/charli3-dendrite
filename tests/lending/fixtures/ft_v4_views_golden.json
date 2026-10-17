@@ -1,0 +1,5917 @@
+{
+  "loans": [
+    {
+      "current_debt": 5003231965,
+      "health_factor": "3.432447956228229765876945504",
+      "interest_accrued": 3231965,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb688d025dd81601897b81020c7ad38a6ec26f7c5024592c27f29508a1",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 14000000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b688d025dd81601897b81020c7ad38a6ec26f7c5024592c27f29508a1",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789733101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7007971a2b94b72b001de9c2657591447c41fa89a09bf8143053ae9e295",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5688d025dd81601897b81020c7ad38a6ec26f7c5024592c27f29508a1",
+        "principal": 5000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 743,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 2000348173,
+      "health_factor": "4.202441744825189489649910061",
+      "interest_accrued": 348173,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb2ab36aea8c40ec2d1a8bb056c945610773d0cfd4e9ff216e3016db93",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 6853000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b2ab36aea8c40ec2d1a8bb056c945610773d0cfd4e9ff216e3016db93",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789913100000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c52ab36aea8c40ec2d1a8bb056c945610773d0cfd4e9ff216e3016db93",
+        "principal": 2000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 625,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 1000000000,
+      "health_factor": "1.2495198336",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbf81c11fc0a6bfe1222529d3f7f00c8e097f851ee478fa4acaa2a5ffc",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 999615867,
+            "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bf81c11fc0a6bfe1222529d3f7f00c8e097f851ee478fa4acaa2a5ffc",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790182500000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70025b1ccdc93db416b5c28d740c4cdbd29c4e859eb896bacc79c1bb3c5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5f81c11fc0a6bfe1222529d3f7f00c8e097f851ee478fa4acaa2a5ffc",
+        "principal": 1000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 450,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 2000360326,
+      "health_factor": "3.219419979638208441452562582",
+      "interest_accrued": 360326,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbf4a0a8976eb19868bc53228b962177704842a6874e3b712833fc45f2",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 5250000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bf4a0a8976eb19868bc53228b962177704842a6874e3b712833fc45f2",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789910100000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5f4a0a8976eb19868bc53228b962177704842a6874e3b712833fc45f2",
+        "principal": 2000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 625,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 14006081145,
+      "health_factor": "3.328078200477968171874389066",
+      "interest_accrued": 6081145,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcba51c684b2256fab4174ae75f4cef82cc997343f5ba57908be8e62c52",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 38000000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9ba51c684b2256fab4174ae75f4cef82cc997343f5ba57908be8e62c52",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789786501000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5a51c684b2256fab4174ae75f4cef82cc997343f5ba57908be8e62c52",
+        "principal": 14000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 625,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 9999800000,
+      "health_factor": "16.71258054801096021920438409",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb318a315c6a9eb293828f6e1a09294e81efa70a21f961164a73be9a60",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 170920700759,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b318a315c6a9eb293828f6e1a09294e81efa70a21f961164a73be9a60",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790018101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70063b31e52893d6da73f48e7d551aac6eaf4efb9dc5b85e3e1b92da614",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5318a315c6a9eb293828f6e1a09294e81efa70a21f961164a73be9a60",
+        "principal": 9999800000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 741,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 1100000000,
+      "health_factor": "16.71258054836363636363636364",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbbf353b87913bd50ba86a8830019967a928d0508b104f68b8c9f1e894",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 18801653117,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bbf353b87913bd50ba86a8830019967a928d0508b104f68b8c9f1e894",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790018101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700bdc8458455e62b1808c876bc75b22b077cc9cf8abf849ef07ab73e85",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5bf353b87913bd50ba86a8830019967a928d0508b104f68b8c9f1e894",
+        "principal": 1100000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 745,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 3000000000,
+      "health_factor": "16.71258054773333333333333333",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb3ab91ac7176c853079a169e87824f729d2ee36f02901410b94c3294f",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 51277235772,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b3ab91ac7176c853079a169e87824f729d2ee36f02901410b94c3294f",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790018101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70032d158d0163996039f126ffe5c2ec1784312edf9df41a5924745add1",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c53ab91ac7176c853079a169e87824f729d2ee36f02901410b94c3294f",
+        "principal": 3000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 459,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 660200000,
+      "health_factor": "16.71258054650106028476219327",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbe06086d806e072074cd48a3080c6a8182a35f52518d5a447111a7732",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 11284410352,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9be06086d806e072074cd48a3080c6a8182a35f52518d5a447111a7732",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790018101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700ea7a9992d9046873bfad7dc62e4aeadfcf9a3f4ea9fa64e1d27cb468",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5e06086d806e072074cd48a3080c6a8182a35f52518d5a447111a7732",
+        "principal": 660200000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 794,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 20010860,
+      "health_factor": "8.995115652200854935769876957",
+      "interest_accrued": 10860,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb03ab565dac6c827636091a4463a3ddcfb5041914140fbbe646833d60",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 200000000,
+            "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b03ab565dac6c827636091a4463a3ddcfb5041914140fbbe646833d60",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789643101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700a43f2f10b05272e80ac318b347dd54c1e900e324fa5ed31b17130a01",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c503ab565dac6c827636091a4463a3ddcfb5041914140fbbe646833d60",
+        "principal": 20000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 452,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 30016289,
+      "health_factor": "8.995115951875330091604595092",
+      "interest_accrued": 16289,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb9ff0289151078004f081ac2fcfea552e2abdd70ee1fb9dc340097b58",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 300000000,
+            "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b9ff0289151078004f081ac2fcfea552e2abdd70ee1fb9dc340097b58",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789643101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7006d90d12f3b4eba0ee0ccba26c86377b313472dde7cc6eedc94d49702",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c59ff0289151078004f081ac2fcfea552e2abdd70ee1fb9dc340097b58",
+        "principal": 30000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 452,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 339825224,
+      "health_factor": "2.512350289806621300130445879",
+      "interest_accrued": 25224,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbbc81b674011c1afd5ebfe1eb90dd8a1460962d57a74a01fedde3df61",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 696000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bbc81b674011c1afd5ebfe1eb90dd8a1460962d57a74a01fedde3df61",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789968300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700c20a6d964c99c56356d583cedd65c569a886bc6db3c358c498a97b4b",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5bc81b674011c1afd5ebfe1eb90dd8a1460962d57a74a01fedde3df61",
+        "principal": 339800000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 736,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 500000000,
+      "health_factor": "3.68",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb2b80e2ef5ba3876f867d13a9c03d1e39772cbaeeba4954a34fb2f19c",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 1500000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b2b80e2ef5ba3876f867d13a9c03d1e39772cbaeeba4954a34fb2f19c",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790105701000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70024af38e512c6371bc41137a90e21d1c82d78be79df0b756e50aeb8be",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c52b80e2ef5ba3876f867d13a9c03d1e39772cbaeeba4954a34fb2f19c",
+        "principal": 500000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 780,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 5000000000,
+      "health_factor": "1.125",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb76cc6824f2e4179dbad762a52554a5f79e3fbcfdae348f6a74f861bb",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 4500000000,
+            "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b76cc6824f2e4179dbad762a52554a5f79e3fbcfdae348f6a74f861bb",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790204101000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7005c91f022ef7a05462651a64cd80c9601c52ba595f0513afc58736290",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c576cc6824f2e4179dbad762a52554a5f79e3fbcfdae348f6a74f861bb",
+        "principal": 5000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 777,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 5402337595,
+      "health_factor": "3.292401919284350092526936943",
+      "interest_accrued": 2337595,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbb507d2db639eb3435aab82445d920b9483eb05415f4c5a48bc3dffb7",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 14500000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bb507d2db639eb3435aab82445d920b9483eb05415f4c5a48bc3dffb7",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789736700000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7009e62207fc44725f54fb8147c66c7184f95fc2b86375ccf62f09c82cf",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5b507d2db639eb3435aab82445d920b9483eb05415f4c5a48bc3dffb7",
+        "principal": 5400000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 498,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 565000000,
+      "health_factor": "2.970137206371681415929203540",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbcbe7f49c8f9c984de84daa3b803622a3433fa554183409310549896a",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 1368038741,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bcbe7f49c8f9c984de84daa3b803622a3433fa554183409310549896a",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790024700000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700921dcdaedc68986006bcf7ce8a4bf5907078f469e3901181a14e4217",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5cbe7f49c8f9c984de84daa3b803622a3433fa554183409310549896a",
+        "principal": 565000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 748,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 1500000000,
+      "health_factor": "2.970137206933333333333333333",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb5203a7c8547af21d9800d125bed15caf6b47193411bbd052d7814f92",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 3631961259,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b5203a7c8547af21d9800d125bed15caf6b47193411bbd052d7814f92",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790024700000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7000d877aec82445212803eb9312c60d62fa63474a1ba23180841983b6a",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c55203a7c8547af21d9800d125bed15caf6b47193411bbd052d7814f92",
+        "principal": 1500000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 746,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 3200463941,
+      "health_factor": "3.044375288213878364080590652",
+      "interest_accrued": 463941,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbd6e9ce084a9976abf9d05f5e9d6e70f2e48d5247c30616452b2c12a1",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 7943000000,
+            "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bd6e9ce084a9976abf9d05f5e9d6e70f2e48d5247c30616452b2c12a1",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789927500000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5d6e9ce084a9976abf9d05f5e9d6e70f2e48d5247c30616452b2c12a1",
+        "principal": 3200000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 625,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 10000000000,
+      "health_factor": "19.55555555552",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbf6fe0f86790dc5121d8ba4a8cbdaed8f0e15a4a5eba7d654526f3c66",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 200000000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bf6fe0f86790dc5121d8ba4a8cbdaed8f0e15a4a5eba7d654526f3c66",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790079300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7000ddbd32beb894cbb97b1365a4d5e0a1bd99650f2451df1bf973c3ffc",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5f6fe0f86790dc5121d8ba4a8cbdaed8f0e15a4a5eba7d654526f3c66",
+        "principal": 10000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 798,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 2200000000,
+      "health_factor": "0.9318181818181818181818181818",
+      "interest_accrued": 0,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb0494f0dd2514dca940e1ba069a22c4b5d54a4612704fd928c623cc55",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 1640000000,
+            "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b0494f0dd2514dca940e1ba069a22c4b5d54a4612704fd928c623cc55",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1790181900000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70025b1ccdc93db416b5c28d740c4cdbd29c4e859eb896bacc79c1bb3c5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c50494f0dd2514dca940e1ba069a22c4b5d54a4612704fd928c623cc55",
+        "principal": 2200000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 450,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 4800130550,
+      "health_factor": "19.55502369959500372338831493",
+      "interest_accrued": 130550,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb51ee4c3e59e2f861a5b2d92fecba13a6e0163c62ea5db876ec35e354",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 96000000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b51ee4c3e59e2f861a5b2d92fecba13a6e0163c62ea5db876ec35e354",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c551ee4c3e59e2f861a5b2d92fecba13a6e0163c62ea5db876ec35e354",
+        "principal": 4800000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 625,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 2600051174,
+      "health_factor": "19.55517066449862113367773276",
+      "interest_accrued": 51174,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb1f278bcace3313f2c6777653985209cdff861d533619f9c10a81c79d",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 52000000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b1f278bcace3313f2c6777653985209cdff861d533619f9c10a81c79d",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700cc8130b7a4d153b1f9520cf30ed5cdfe9aaeef47e258bcc67f2032a9",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c51f278bcace3313f2c6777653985209cdff861d533619f9c10a81c79d",
+        "principal": 2600000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 452,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 5960390846,
+      "health_factor": "19.55492940531235759836948115",
+      "interest_accrued": 190846,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcba14abcd893bb60eeee76985d74cd77d7b28359097f8018f4b541ac86",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 119204000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9ba14abcd893bb60eeee76985d74cd77d7b28359097f8018f4b541ac86",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700c20a6d964c99c56356d583cedd65c569a886bc6db3c358c498a97b4b",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5a14abcd893bb60eeee76985d74cd77d7b28359097f8018f4b541ac86",
+        "principal": 5960200000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 736,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 9340122593,
+      "health_factor": "19.55488013770656082864971449",
+      "interest_accrued": 322593,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb7613eb59fafcfc9a024dbf5105c47e90440c0aa24fb6a245ea9e8c7c",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 186796000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b7613eb59fafcfc9a024dbf5105c47e90440c0aa24fb6a245ea9e8c7c",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700ea7a9992d9046873bfad7dc62e4aeadfcf9a3f4ea9fa64e1d27cb468",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c57613eb59fafcfc9a024dbf5105c47e90440c0aa24fb6a245ea9e8c7c",
+        "principal": 9339800000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 794,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 4300074921,
+      "health_factor": "19.55521483547658401368583968",
+      "interest_accrued": 74921,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcb146f8a20f0de7bcad4153754fda81a6ef2d327305091d157333218ea",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 86000000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9b146f8a20f0de7bcad4153754fda81a6ef2d327305091d157333218ea",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700672f972357f0b2abb3655f7806a10219bf3ad41475cb632af9b4068f",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5146f8a20f0de7bcad4153754fda81a6ef2d327305091d157333218ea",
+        "principal": 4300000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 400,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    },
+    {
+      "current_debt": 3000052270,
+      "health_factor": "19.55521483844013157810747077",
+      "interest_accrued": 52270,
+      "view": {
+        "borrow_unit": "lovelace",
+        "borrower": {
+          "detail": null,
+          "identifier": "eadc69a5d2d1357acc9b9d49ec5390fcdf6e080c7a40139917223dcbfea3723af7a3901cc6867c960b0036d994b17a32c7ba0dcda6f214d7",
+          "kind": "token"
+        },
+        "collateral": [
+          {
+            "amount": 60000000000,
+            "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          }
+        ],
+        "installments_paid": 0,
+        "lender": {
+          "detail": null,
+          "identifier": "bcd713bb7858d4b08738bed90ee7068d8f9b38d02e0cae0b45ac7a9bfea3723af7a3901cc6867c960b0036d994b17a32c7ba0dcda6f214d7",
+          "kind": "token"
+        },
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "on_default": "price_liquidation",
+        "opened_ms": 1789986300000,
+        "origin": {
+          "identifier": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700a605ac16c4e4ba54a51d6bbc4707cf4e48fd566027c0725dfe9505e9",
+          "kind": "market"
+        },
+        "position_id": "20256f557cec14f61cc662468f7812a1e6531e628af257a5fc5dd0c5fea3723af7a3901cc6867c960b0036d994b17a32c7ba0dcda6f214d7",
+        "principal": 3000000000,
+        "protocol": "FluidTokensV4",
+        "rate_model": {
+          "kind": "perpetual",
+          "params": {
+            "apy_coef": 28,
+            "initial_grace_period": 0,
+            "installment_period": 0,
+            "interest_rate": 400,
+            "penalty_fee_for_late_repayment": 0,
+            "repayment_time_window": 0,
+            "total_installments": 0
+          },
+          "protocol": "FluidTokensV4"
+        }
+      }
+    }
+  ],
+  "pools": [
+    {
+      "available_liquidity": 1426970,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7007971a2b94b72b001de9c2657591447c41fa89a09bf8143053ae9e295",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 743,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 737444041,
+      "borrow_unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700ef5ae8eedcd711f778377d486b5da300e7e0e59408d792ccd9ddc7dc",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 757,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 6800172760,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70025b1ccdc93db416b5c28d740c4cdbd29c4e859eb896bacc79c1bb3c5",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 450,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2000177070,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65444a4544",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+          },
+          "unit": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700b72492b9fd24f0971cd5fa2b4562aa672501ac88966dac19b838c1cc",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 176026140,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7003feff5f0c868746ba1a8c214e3dd7e2a95e20fb8d83b6b1a10242d28",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 744,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 3000202930,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6555534441",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+          },
+          "unit": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65444a4544",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+          },
+          "unit": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70054d9a7157e6964bcea9e39de4598233086cc728abeb6676daace7fc2",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 21849350,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700537ebb7cceb8b8b2f1aaf513c5ad9747042bfafb95ab9a4032a847e9",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 455,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 166282114679,
+      "borrow_unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70066c0306369edb6ed7b285f6a36a5440c29caf5418b9a9d0cb4bce41b",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2083830,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70063b31e52893d6da73f48e7d551aac6eaf4efb9dc5b85e3e1b92da614",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 741,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 633930,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700bdc8458455e62b1808c876bc75b22b077cc9cf8abf849ef07ab73e85",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 745,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 207240,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70032d158d0163996039f126ffe5c2ec1784312edf9df41a5924745add1",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 459,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1883830,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700ea7a9992d9046873bfad7dc62e4aeadfcf9a3f4ea9fa64e1d27cb468",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 794,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 4400625310,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7002fcd8d9b5937b80123628e6104ca542f8528379c864341a76eccfd3f",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 454,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2000000000,
+      "borrow_unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7003e9aeb0a3fb5e44da01a222570866e2afcf034541093b634024a2f0f",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1001845040,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "liquidation_penalty": {
+            "den": 2,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 2,
+            "num": 1
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6541544c4153",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "9ff9a1b456f074e03be90631e1a5f9b6ed08eacabd0e7f95a11ffff10014df1041544c4153"
+          },
+          "unit": "9ff9a1b456f074e03be90631e1a5f9b6ed08eacabd0e7f95a11ffff10014df1041544c4153"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700304a40f5a058fe8b76f0293d60a2ac8feb0f08a995162392d3302fbf",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 475,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 616690,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7009e62207fc44725f54fb8147c66c7184f95fc2b86375ccf62f09c82cf",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 498,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 5921300327,
+      "borrow_unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700fe41943c19c27913d270acd3d4707805b27e77b2969070cd75ce2bda",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 402,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 188000000,
+      "borrow_unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7002af69f266be5ff81d5c986dbf1cc6308f122482562fb691ec4c17b54",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 768,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 6401857970,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7005c91f022ef7a05462651a64cd80c9601c52ba595f0513afc58736290",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 777,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 96996527367,
+      "borrow_unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70030ff591b61669afdf67309fad23d13e27e8ddcbafdd7de5443a73779",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2011021830,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700699b5c6ff4d507f4485ce1f435647821290e2d8f8246b218772a293d",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1600616690,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6555534441",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+          },
+          "unit": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65444a4544",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+          },
+          "unit": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70022bbd0259ebcc2c835bd182cefb5d6e755399dceb33db834682d4aa7",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 50000,
+      "borrow_unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6555534441",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+          },
+          "unit": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700c5e0c8b59fbd84c5316dc10eb2c6a22c7765033c95f4ad1550d4ad7a",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1426970,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700921dcdaedc68986006bcf7ce8a4bf5907078f469e3901181a14e4217",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 748,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1021830,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7000d877aec82445212803eb9312c60d62fa63474a1ba23180841983b6a",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 746,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2605308346,
+      "borrow_unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700f023040926baf4a08fcf8d324522d3403dd401bf84fe4d6f26625603",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 346116239,
+      "borrow_unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": null,
+          "unit": "lovelace"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6555534441",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+          },
+          "unit": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7003436dbbb717266f72cab8df8df882f2cf670cfc9f3b90e9379dc0d24",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1883830,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f7000ddbd32beb894cbb97b1365a4d5e0a1bd99650f2451df1bf973c3ffc",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 798,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 63001866590,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70033e4a1dcd9aae6543d4381606a17b48ddbb954f3dd13f785e32d9871",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 587,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 1200983040,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65574d5458",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+          },
+          "unit": "e5a42a1a1d3d1da71b0449663c32798725888d2eb0843c4dabeca05a576f726c644d6f62696c65546f6b656e58"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65444a4544",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+          },
+          "unit": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446a65644d6963726f555344"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f70080dc9ef83e6e50c47fbe86d5c5e29982c525c10c776ba10fe088a290",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 550,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 633930,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700c20a6d964c99c56356d583cedd65c569a886bc6db3c358c498a97b4b",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 736,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 246030,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444378",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+          },
+          "unit": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e345553444378"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c6555534441",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+          },
+          "unit": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae45655534441"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700672f972357f0b2abb3655f7806a10219bf3ad41475cb632af9b4068f",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 228790,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65484f534b59",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235484f534b59"
+          },
+          "unit": "a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235484f534b59"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700a605ac16c4e4ba54a51d6bbc4707cf4e48fd566027c0725dfe9505e9",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 633930,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65415343454e44",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+          },
+          "unit": "eb7a93ebc321647673490810f618b548d7c24aa64d30ae342dba70760014df10415343454e44"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700898f5d6e5015dfd9a05326c541014cdc4dd034a5c19abc9108bf11f5",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 625,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 642550,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65494147",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+          },
+          "unit": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c654e69676874",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+          },
+          "unit": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa4e49474854"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700cc8130b7a4d153b1f9520cf30ed5cdfe9aaeef47e258bcc67f2032a9",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 452,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 801013210,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c655553444d4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+          },
+          "unit": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65464c44544333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+          },
+          "unit": "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454"
+        },
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65535452494b45",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+          },
+          "unit": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275535452494b45"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700d05f838e1e4d027a5be34641ff39e36ea04862737e306cf37a848bc1",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 400,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    },
+    {
+      "available_liquidity": 2001866590,
+      "borrow_unit": "lovelace",
+      "collateral": [
+        {
+          "equity_to_borrower": true,
+          "fixed_ratio": null,
+          "liquidation_discount": null,
+          "liquidation_ltv": {
+            "den": 5,
+            "num": 4
+          },
+          "liquidation_penalty": {
+            "den": 10,
+            "num": 1
+          },
+          "max_ltv": {
+            "den": 3,
+            "num": 2
+          },
+          "policy_wide": false,
+          "price_source": {
+            "address": null,
+            "decimals": 0,
+            "extra": {},
+            "feed_id": null,
+            "feed_name": "6f7261636c65534e454b4333",
+            "feed_policy": "93794f9b7f3dc632cb889c7aec7d334f016f532e64f16141b6895f5b",
+            "quote": "lovelace",
+            "source": "fluid_aggregated",
+            "token": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+          },
+          "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+        }
+      ],
+      "lender": {
+        "detail": "withdraw_script",
+        "identifier": "1e0bf58a4ef7f8f7579b58e290ea9f9283239bb4f7932fe8f29df03a",
+        "kind": "script"
+      },
+      "market_id": "20f765d25da3a36644371f7619d97bdccf034f3067921921d9dce0f700c4a71203eda88189588ac6fe2ad4753dfdfc2e73b9556df2abc1dcc6",
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 794,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "receipt_unit": null,
+      "supply_rate": null,
+      "utilization": null
+    }
+  ],
+  "request": {
+    "principal_range": [
+      0,
+      35000000000
+    ],
+    "view": {
+      "borrow_unit": "lovelace",
+      "borrower": {
+        "detail": "signature",
+        "identifier": "6be3f007e10e2b6ff991ebebcb2bcdfc25dfb53c109d560ebf1b545b",
+        "kind": "key"
+      },
+      "collateral": {
+        "amount": 0,
+        "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+      },
+      "expires_ms": 1795275616492,
+      "expiry_penalty": 0,
+      "on_default": "price_liquidation",
+      "permissioned": false,
+      "principal_limit": {
+        "equity_to_borrower": true,
+        "fixed_ratio": {
+          "den": 875,
+          "num": 1
+        },
+        "liquidation_discount": null,
+        "liquidation_ltv": {
+          "den": 5,
+          "num": 4
+        },
+        "liquidation_penalty": {
+          "den": 10,
+          "num": 1
+        },
+        "max_ltv": null,
+        "policy_wide": false,
+        "price_source": null,
+        "unit": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b"
+      },
+      "principal_max": 35000000000,
+      "protocol": "FluidTokensV4",
+      "rate_model": {
+        "kind": "perpetual",
+        "params": {
+          "apy_coef": 28,
+          "initial_grace_period": 0,
+          "installment_period": 0,
+          "interest_rate": 743,
+          "penalty_fee_for_late_repayment": 0,
+          "repayment_time_window": 0,
+          "total_installments": 0
+        },
+        "protocol": "FluidTokensV4"
+      },
+      "request_id": "9b2e325cc15d14fa23101741e6cc17e8ba977a1563738439968356d2cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    }
+  }
+}
