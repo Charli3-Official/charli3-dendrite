@@ -18,11 +18,14 @@ from fractions import Fraction
 from typing import TYPE_CHECKING
 from typing import Final
 from typing import Protocol
+from typing import TypeVar
 from typing import runtime_checkable
 
+from charli3_dendrite.lending.normalized import LendingParseError
 from charli3_dendrite.lending.rates import MS_PER_HOUR
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Sequence
 
@@ -155,6 +158,28 @@ class MarketSource(Protocol):
     ) -> LendingSnapshot:
         """Everything live, from ``backend``."""
         ...
+
+
+_T = TypeVar("_T")
+_V = TypeVar("_V")
+
+
+def convertible_views(
+    convert: Callable[[_T], _V],
+    states: Iterable[_T],
+) -> tuple[_V, ...]:
+    """``convert`` over ``states`` in order, leaving out those that raise.
+
+    A state whose conversion raises LendingParseError is skipped; any other error
+    propagates. :meth:`MarketSource.load` implementations build their views with it.
+    """
+    out: list[_V] = []
+    for state in states:
+        try:
+            out.append(convert(state))
+        except LendingParseError:
+            continue
+    return tuple(out)
 
 
 _SOURCES: dict[str, MarketSource] = {}

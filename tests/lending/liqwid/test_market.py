@@ -1,17 +1,23 @@
 """Liqwid V2 market states and loans as common lending views (offline)."""
 
 import math
+from collections import Counter
 from dataclasses import replace
 from fractions import Fraction
 
 import cbor2
 import pytest
 
+from charli3_dendrite.lending.liqwid import market as liqwid_market
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.lifecycle import LiqwidLifecycle
+from charli3_dendrite.lending.liqwid.loader import snapshot
+from charli3_dendrite.lending.liqwid.market import LiqwidV2MarketSource
 from charli3_dendrite.lending.liqwid.market import collateral_terms
 from charli3_dendrite.lending.liqwid.market import loan_to_position
 from charli3_dendrite.lending.liqwid.market import market_parameters
@@ -20,7 +26,11 @@ from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
 from charli3_dendrite.lending.liqwid.rates import LiqwidVariableRate
+from charli3_dendrite.lending.markets import CONTEXT_ROLE
+from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import ParseContext
+from charli3_dendrite.lending.markets import PositionLifecycle
+from charli3_dendrite.lending.markets import WatchSpec
 from charli3_dendrite.lending.math import apportion
 from charli3_dendrite.lending.normalized import DefaultRule
 from charli3_dendrite.lending.normalized import LendingMarket
@@ -32,11 +42,13 @@ from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from charli3_dendrite.lending.rates import register_rate_model
+from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import context_at
 from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
+from tests.lending.liqwid.test_loader import FakeBackend
 
 # Views rebuilt from to_dict() need the Liqwid rate model registered.
 register_rate_model(LiqwidVariableRate)
@@ -528,3 +540,183 @@ def test_health_factor_matches_the_api(live_loans, book):
         if not math.isclose(got, expected, rel_tol=1e-6):
             mismatches.append((position.position_id, got, expected))
     assert mismatches == []
+
+
+SOURCE_NOW_MS = 1_790_000_000_000
+
+
+def _live_example(kind):
+    """The first captured live record ``parse_utxo`` classifies as ``kind``."""
+    for rec in records_of(kind.value, live=True):
+        record = parse_utxo(record_info(rec))
+        if record is not None and record.kind is kind:
+            return rec, record
+    raise AssertionError(f"no live {kind.value} record captured")
+
+
+def test_source_name_and_lifecycle():
+    source = LiqwidV2MarketSource()
+    assert source.name == PROTOCOL_NAME == "LiqwidV2"
+    assert isinstance(source.lifecycle, LiqwidLifecycle)
+    assert isinstance(source.lifecycle, PositionLifecycle)
+    assert (
+        source.lifecycle.loan_token_policies == default_deployment().loan_token_policies
+    )
+
+
+def test_selectors_hold_every_view_and_context_spec():
+    deployment = default_deployment()
+    specs = LiqwidV2MarketSource().selectors()
+    assert specs == [s.watch_spec() for s in liqwid_selectors()]
+    assert {s.role for s in specs} == {VIEW_ROLE, CONTEXT_ROLE}
+    first_context = next(i for i, s in enumerate(specs) if s.role == CONTEXT_ROLE)
+    assert all(s.role == VIEW_ROLE for s in specs[:first_context])
+    assert all(s.role == CONTEXT_ROLE for s in specs[first_context:])
+
+    params = deployment.param_credential
+    expected_context = (
+        {
+            WatchSpec(params, m.market_params_policy, CONTEXT_ROLE)
+            for m in deployment.markets
+        }
+        | {
+            WatchSpec(params, m.collateral_params_policy, CONTEXT_ROLE)
+            for m in deployment.markets
+        }
+        | {
+            WatchSpec(o.script_hash, deployment.oracle_token_policy, CONTEXT_ROLE)
+            for o in deployment.oracle_validators
+        }
+    )
+    assert {s for s in specs if s.role == CONTEXT_ROLE} == expected_context
+
+    views = [s for s in specs if s.role == VIEW_ROLE]
+    for market in deployment.markets:
+        state_credentials = {
+            s.payment_credential for s in views if s.identity_policy == market.market_id
+        }
+        assert set(market.market_state_validators) <= state_credentials
+        loan_credentials = {
+            s.payment_credential
+            for s in views
+            if s.identity_policy in market.loan_token_policies
+        }
+        assert set(market.loan_validators) <= loan_credentials
+    identities = {m.market_id for m in deployment.markets}
+    assert {s.identity_policy for s in views} <= (
+        identities | deployment.loan_token_policies
+    )
+
+
+def test_parse_turns_a_market_state_into_its_market():
+    rec, record = _live_example(LiqwidKind.MARKET_STATE)
+    context = live_context()
+    market = LiqwidV2MarketSource().parse(record_info(rec), context=context)
+    assert isinstance(market, LendingMarket)
+    assert market.market_id == record.market_id
+    assert market.to_dict() == market_to_view(record, context).to_dict()
+
+
+def test_parse_turns_a_loan_into_its_position_with_or_without_context():
+    rec, record = _live_example(LiqwidKind.LOAN)
+    source = LiqwidV2MarketSource()
+    bare = source.parse(record_info(rec))
+    assert isinstance(bare, LendingPosition)
+    assert bare.position_id == record.out_ref
+    assert bare.to_dict() == loan_to_position(record).to_dict()
+    context = live_context()
+    stamped = source.parse(record_info(rec), context=context)
+    assert isinstance(stamped, LendingPosition)
+    assert stamped.to_dict() == loan_to_position(record, context).to_dict()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [LiqwidKind.MARKET_PARAMS, LiqwidKind.COLLATERAL_PARAMS, LiqwidKind.ORACLE],
+)
+def test_parse_returns_none_for_a_context_record(kind):
+    rec, _ = _live_example(kind)
+    source = LiqwidV2MarketSource()
+    assert source.parse(record_info(rec)) is None
+    assert source.parse(record_info(rec), context=live_context()) is None
+
+
+def test_parse_returns_none_for_a_utxo_that_is_not_genuine():
+    source = LiqwidV2MarketSource()
+    for kind in (LiqwidKind.MARKET_STATE, LiqwidKind.LOAN):
+        rec, _ = _live_example(kind)
+        elsewhere = record_info(rec, address=script_payment_address("00" * 28))
+        assert source.parse(elsewhere, context=live_context()) is None
+        datumless = record_info(rec, datum_cbor="")
+        assert source.parse(datumless, context=live_context()) is None
+
+
+def test_parse_needs_market_parameters_for_a_market_state():
+    rec, _ = _live_example(LiqwidKind.MARKET_STATE)
+    source = LiqwidV2MarketSource()
+    with pytest.raises(LendingParseError):
+        source.parse(record_info(rec))
+    with pytest.raises(LendingParseError):
+        source.parse(record_info(rec), context=None)
+    with pytest.raises(LendingParseError):
+        source.parse(record_info(rec), context=ParseContext(slot=None))
+
+
+def test_load_gives_every_market_and_live_loan():
+    loaded = LiqwidV2MarketSource().load(FakeBackend(), now_ms=SOURCE_NOW_MS)
+    found = snapshot(FakeBackend(), SOURCE_NOW_MS)
+    market_ids = [m.market_id for m in loaded.markets]
+    assert len(market_ids) == len(set(market_ids)) == len(API["markets"]) == 35
+    assert set(market_ids) == set(API["markets"])
+    assert {m.protocol for m in loaded.markets} == {PROTOCOL_NAME}
+    assert [m.to_dict() for m in loaded.markets] == [
+        market_to_view(r, found.context).to_dict() for r in found.market_states
+    ]
+    assert loaded.positions
+    assert [p.position_id for p in loaded.positions] == [r.out_ref for r in found.loans]
+    assert [p.to_dict() for p in loaded.positions] == [
+        loan_to_position(r, found.context).to_dict() for r in found.loans
+    ]
+    assert loaded.requests == ()
+
+
+def test_load_leaves_out_markets_it_cannot_convert():
+    without_params = {
+        kind: records_of(kind, live=True)
+        for kind in ("market_state", "collateral_params", "oracle", "loan")
+    }
+    loaded = LiqwidV2MarketSource().load(
+        FakeBackend(without_params),
+        now_ms=SOURCE_NOW_MS,
+    )
+    assert loaded.markets == ()
+    found = snapshot(FakeBackend(), SOURCE_NOW_MS)
+    assert [p.position_id for p in loaded.positions] == [r.out_ref for r in found.loans]
+
+
+def test_load_builds_each_market_view_once(monkeypatch):
+    built = Counter()
+    build = liqwid_market._market_view
+
+    def counted(state, *args, **kwargs):
+        built[state.out_ref] += 1
+        return build(state, *args, **kwargs)
+
+    monkeypatch.setattr(liqwid_market, "_market_view", counted)
+    loaded = LiqwidV2MarketSource().load(FakeBackend(), now_ms=SOURCE_NOW_MS)
+    assert len(loaded.positions) > len(loaded.markets)
+    assert sorted(built) == [r.out_ref for r in snapshot(FakeBackend()).market_states]
+    assert set(built.values()) == {1}
+
+
+def test_loan_binds_to_given_market_views_as_to_its_context():
+    _, record = _live_example(LiqwidKind.LOAN)
+    context = live_context()
+    views = {
+        market.market_id: market
+        for market in LiqwidV2MarketSource().load(FakeBackend()).markets
+    }
+    bound = loan_to_position(record, context, markets=views)
+    assert bound.to_dict() == loan_to_position(record, context).to_dict()
+    unbound = loan_to_position(record, context, markets={})
+    assert unbound.to_dict() == loan_to_position(record).to_dict()

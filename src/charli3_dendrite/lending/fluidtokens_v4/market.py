@@ -37,6 +37,7 @@ from charli3_dendrite.lending.fluidtokens_v4.state import names_under
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import has_oracle
 from charli3_dendrite.lending.markets import LendingSnapshot
 from charli3_dendrite.lending.markets import WatchSpec
+from charli3_dendrite.lending.markets import convertible_views
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import CollateralTerms
@@ -408,20 +409,10 @@ class FluidTokensV4MarketSource:
         )
         managers = {manager.pool_id: manager for manager in found.pool_managers}
         return LendingSnapshot(
-            markets=_convertible(
+            markets=convertible_views(
                 lambda pool: pool_to_market(pool, managers.get(pool.pool_id)),
                 found.pools,
             ),
-            positions=_convertible(loan_to_position, found.loans),
-            requests=_convertible(request_to_borrow_request, found.requests),
+            positions=convertible_views(loan_to_position, found.loans),
+            requests=convertible_views(request_to_borrow_request, found.requests),
         )
-
-
-def _convertible(convert: Any, states: list[Any]) -> tuple[Any, ...]:  # noqa: ANN401
-    out = []
-    for state in states:
-        try:
-            out.append(convert(state))
-        except LendingParseError:
-            continue
-    return tuple(out)

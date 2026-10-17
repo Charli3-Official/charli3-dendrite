@@ -24,7 +24,10 @@ from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.deployment import _POLICY_HEX_LEN
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.lifecycle import LiqwidLifecycle
+from charli3_dendrite.lending.liqwid.loader import snapshot
 from charli3_dendrite.lending.liqwid.math import INTEREST_PERIOD_MS
 from charli3_dendrite.lending.liqwid.math import _fraction
 from charli3_dendrite.lending.liqwid.math import apy_fraction
@@ -32,6 +35,9 @@ from charli3_dendrite.lending.liqwid.math import supply_apy
 from charli3_dendrite.lending.liqwid.math import utilization
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
 from charli3_dendrite.lending.liqwid.rates import LiqwidVariableRate
+from charli3_dendrite.lending.markets import LendingSnapshot
+from charli3_dendrite.lending.markets import ParseContext
+from charli3_dendrite.lending.markets import convertible_views
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import CollateralTerms
 from charli3_dendrite.lending.normalized import DefaultRule
@@ -45,11 +51,14 @@ from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.dataclasses.models import PoolStateInfo
     from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
     from charli3_dendrite.lending.liqwid.deployment import MarketComponents
     from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
-    from charli3_dendrite.lending.markets import ParseContext
+    from charli3_dendrite.lending.markets import WatchSpec
 
 _MS_PER_SECOND = 1000
 # Errors a malformed record raises while it is converted.
@@ -298,6 +307,8 @@ def loan_to_position(
     loan: LiqwidRecord,
     context: ParseContext | None = None,
     deployment: LiqwidDeployment | None = None,
+    *,
+    markets: Mapping[str, LendingMarket] | None = None,
 ) -> LendingPosition:
     """A loan record as a position, identified by its out-ref.
 
@@ -309,6 +320,11 @@ def loan_to_position(
     and each holding's ``liquidation_ltv`` (``w * p[18]``) from the market's terms.
     ``opened_ms`` is this UTxO's block time; ``PoolStateInfo.block_time`` must be
     POSIX seconds.
+
+    ``markets``, when given with a context, maps market ids to their views as of
+    that context (each market's newest MarketState; a market whose state does not
+    convert is absent), so a caller converting many loans against one context
+    builds each market once.
 
     Raises:
         LendingParseError: if ``loan`` is not a loan record of a known market.
@@ -350,5 +366,103 @@ def loan_to_position(
         raise LendingParseError(f"loan {loan.out_ref}: {exc}") from exc
     if context is None:
         return position
-    bound = _context_market(market, context, deployment)
+    bound = (
+        _context_market(market, context, deployment)
+        if markets is None
+        else markets.get(market.market_id)
+    )
     return position if bound is None else position.at_market(bound)
+
+
+def _newest_views(
+    states: tuple[LiqwidRecord, ...],
+    views: Mapping[str, LendingMarket],
+) -> dict[str, LendingMarket]:
+    """Each market's view of its newest MarketState in ``states``, by market id.
+
+    ``views`` holds the converted states by out-ref; a market whose newest state did
+    not convert is absent, as :func:`loan_to_position` leaves such a loan unbound.
+    """
+    newest: dict[str, LiqwidRecord] = {}
+    for state in sorted(states, key=lambda s: _chain_order(s.info), reverse=True):
+        if state.market_id is not None:
+            newest.setdefault(state.market_id, state)
+    return {
+        market_id: views[state.out_ref]
+        for market_id, state in newest.items()
+        if state.out_ref in views
+    }
+
+
+class LiqwidV2MarketSource:
+    """Liqwid V2 markets and loans as common views.
+
+    A MarketState UTxO is a market and a loan UTxO a position. MarketParams,
+    CollateralParams and oracle feeds are context: they shape the views and are never
+    views themselves. A loan has no identity token, so :attr:`lifecycle` follows each
+    loan across the UTxOs that re-create it.
+    """
+
+    name = PROTOCOL_NAME
+    lifecycle: LiqwidLifecycle
+
+    def __init__(self, deployment: LiqwidDeployment | None = None) -> None:
+        """Watch every generation ``deployment`` names; mainnet by default."""
+        self._deployment = _resolved(deployment)
+        self._selectors = liqwid_selectors(self._deployment)
+        self.lifecycle = LiqwidLifecycle(self._deployment)
+
+    def selectors(self) -> list[WatchSpec]:
+        """MarketState and loan credentials (views), then the context ones."""
+        return [selector.watch_spec() for selector in self._selectors]
+
+    def parse(
+        self,
+        info: PoolStateInfo,
+        *,
+        context: ParseContext | None = None,
+    ) -> LendingMarket | LendingPosition | None:
+        """One UTxO as its view; None when it is not a Liqwid V2 MarketState or loan.
+
+        A MarketState needs its market's parameters from ``context`` and raises
+        LendingParseError without them (also when ``context`` is None). A loan parses
+        with or without ``context``; with it, the loan carries the market index and
+        collateral weights as of that point. MarketParams, CollateralParams and oracle
+        UTxOs return None.
+        """
+        record = parse_utxo(info, self._deployment)
+        if record is None:
+            return None
+        if record.kind is LiqwidKind.MARKET_STATE:
+            given = ParseContext(slot=None) if context is None else context
+            return market_to_view(record, given, self._deployment)
+        if record.kind is LiqwidKind.LOAN:
+            return loan_to_position(record, context, self._deployment)
+        return None
+
+    def load(
+        self,
+        backend: AbstractBackend,
+        now_ms: int | None = None,
+    ) -> LendingSnapshot:
+        """Every live Liqwid V2 market and loan, read against the live context.
+
+        Each market's view is built once and shared by its loans. UTxOs that raise
+        LendingParseError are left out.
+        """
+        deployment = self._deployment
+        found = snapshot(backend, now_ms, deployment)
+
+        def market(state: LiqwidRecord) -> tuple[str, LendingMarket]:
+            return state.out_ref, market_to_view(state, found.context, deployment)
+
+        views = dict(convertible_views(market, found.market_states))
+        bound = _newest_views(found.market_states, views)
+
+        def position(loan: LiqwidRecord) -> LendingPosition:
+            return loan_to_position(loan, found.context, deployment, markets=bound)
+
+        return LendingSnapshot(
+            markets=tuple(views.values()),
+            positions=convertible_views(position, found.loans),
+        )
