@@ -322,6 +322,7 @@ def classify_spend(
     3. its Liquidation policy minted: ``PARTIALLY_LIQUIDATED`` / ``LIQUIDATED``;
     4. its Borrow or NewBorrow policy burned, no successor: ``REPAID``;
     5. a loan-token flip (burned and minted again) with a successor: ``MODIFIED``;
+       the flip is read as a burned policy whose net mint is zero or more;
     6. none of the above, a successor at another generation or with another owner:
        ``MIGRATED``;
     7. none of the above, no successor (a parking output): ``PARKED``;
@@ -330,6 +331,14 @@ def classify_spend(
 
     Rules 7 and 8 cover every remaining case, so this never raises; a market id the
     deployment does not know skips rules 1-5.
+
+    The evidence is per transaction, not per loan. A transaction that fully repays
+    one loan (a burn) and flips another of the same market and policy nets that
+    policy below zero, so the flipped loan fails rule 5 and is labelled
+    ``MIGRATED`` by rule 8. ``LoanSpend`` keeps no positive-mint evidence to tell
+    that case from a successor whose loan token was only burned. The gated live
+    test (``tests/lending/liqwid/test_market_live.py``) checks that the chain's
+    history holds no such transaction.
 
     Args:
         spent: The spent loan.

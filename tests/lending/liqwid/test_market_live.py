@@ -209,8 +209,8 @@ def _classify_tx(
     created_infos: list[PoolStateInfo],
     spend: LoanSpend,
     deployment: LiqwidDeployment,
-) -> list[tuple[LoanKey, LoanTransition]]:
-    """Every loan output one transaction spent, with its transition.
+) -> list[tuple[LoanKey, LoanKey | None, LoanTransition]]:
+    """Every loan output one transaction spent, with its successor and transition.
 
     Raises AssertionError when a link does not run from a spent loan to a created
     output of the same market, or when one created output continues two loans.
@@ -232,8 +232,26 @@ def _classify_tx(
     outcomes = []
     for key in spent_keys.values():
         successor = created_keys.get(links.get(key.out_ref, ""))
-        outcomes.append((key, classify_spend(key, successor, spend, deployment)))
+        transition = classify_spend(key, successor, spend, deployment)
+        outcomes.append((key, successor, transition))
     return outcomes
+
+
+def _flip_migrated(
+    key: LoanKey,
+    successor: LoanKey | None,
+    transition: LoanTransition,
+    spend: LoanSpend,
+    deployment: LiqwidDeployment,
+) -> bool:
+    """A ``MIGRATED`` loan whose successor keeps owner and generation and whose
+    transaction burned its market's loan-token policy: a flip rule 5 missed."""
+    if transition is not LoanTransition.MIGRATED or successor is None:
+        return False
+    if (successor.owner, successor.generation) != (key.owner, key.generation):
+        return False
+    policies = deployment.market(key.market_id).loan_token_policies
+    return not spend.burned_any.isdisjoint(policies)
 
 
 @pytest.fixture(scope="module")
@@ -355,6 +373,7 @@ def test_every_historical_spend_classifies(backend, deployment):
     assert min(row["slot"] for row in spenders) >= FIRST_SLOT
     tally: Counter[tuple[str, str, str]] = Counter()
     failures: list[str] = []
+    flips_migrated: list[str] = []
     for start in range(0, len(spenders), SWEEP_CHUNK):
         chunk = spenders[start : start + SWEEP_CHUNK]
         ids = [row["tx_id"] for row in chunk]
@@ -364,23 +383,32 @@ def test_every_historical_spend_classifies(backend, deployment):
         withdrawals, mints = _evidence(backend, ids)
         for row in chunk:
             tx_id = row["tx_id"]
+            spend = loan_spend(withdrawals.get(tx_id, []), mints.get(tx_id, []))
             try:
                 outcomes = _classify_tx(
                     spent.get(tx_id, []),
                     created.get(tx_id, []),
-                    loan_spend(withdrawals.get(tx_id, []), mints.get(tx_id, [])),
+                    spend,
                     deployment,
                 )
             except Exception as exc:  # every failure is collected and reported
                 failures.append(f"{row['tx_hash']}: {exc!r}")
                 continue
-            for key, transition in outcomes:
+            for key, successor, transition in outcomes:
                 name = names.get(key.market_id, key.market_id)
                 tally[(name, key.generation, transition.value)] += 1
+                if _flip_migrated(key, successor, transition, spend, deployment):
+                    flips_migrated.append(f"{row['tx_hash']} {key.out_ref}")
 
     for (name, generation, transition), count in sorted(tally.items()):
         print(f"{name:>16} {generation:>7} {transition:>21} {count:>7}")
+    print(f"migrated after a loan-token burn: {len(flips_migrated)}")
     assert sum(tally.values()) > 0, "no loan spend was classified"
     assert not failures, f"{len(failures)} failed spends:\n" + "\n".join(
         failures[:50],
+    )
+    # classify_spend reads a flip from per-transaction evidence; a repay and a flip
+    # of one market's loans in one transaction would mislabel the flip MIGRATED.
+    assert not flips_migrated, "flips labelled migrated:\n" + "\n".join(
+        flips_migrated[:50],
     )

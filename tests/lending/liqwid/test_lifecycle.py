@@ -445,6 +445,25 @@ def test_classify_spend_rules(evidence, continued, expected):
     assert classify_spend(spent, successor, spend) is expected
 
 
+def test_flip_beside_a_repay_of_the_same_policy_migrates():
+    # Evidence is per transaction: repaying one loan (burn 00) and flipping another
+    # (burn 00, mint 01) nets the policy to -1, so the flipped loan fails rule 5.
+    market = _full_market()
+    spent = _key("s#0", market_id=market.market_id)
+    successor = _key("c#0", market_id=market.market_id)
+    spend = loan_spend(
+        [],
+        [
+            (market.borrow_policy + "00", -1),
+            (market.borrow_policy + "00", -1),
+            (market.borrow_policy + "01", 1),
+        ],
+    )
+    assert dict(spend.minted) == {market.borrow_policy: -1}
+    assert classify_spend(spent, successor, spend) is T.MIGRATED
+    assert classify_spend(spent, None, spend) is T.REPAID
+
+
 @pytest.mark.parametrize(
     "successor_overrides",
     [{"generation": "legacy"}, {"owner": OWNER_B}],
