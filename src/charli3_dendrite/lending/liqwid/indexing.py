@@ -283,14 +283,15 @@ def _decode(kind: LiqwidKind, datum_cbor: str) -> LiqwidDatum | None:
     The top-level field count is checked first, so a parked ``C0[]`` or a datum of
     another kind's shape is rejected by shape. A datum of the right shape whose
     fields do not decode (truncated, not CBOR, nested past the recursion limit, a
-    wrong-typed field) is rejected too.
+    decimal-fraction or bigfloat tag whose exponent overflows, a wrong-typed field)
+    is rejected too.
     """
     try:
         raw = bytes.fromhex(datum_cbor)
         if len(plutus_fields(cbor2.loads(raw))) not in _LENGTHS[kind]:
             return None
         return _DECODERS[kind](raw)
-    except (*DECODE_ERRORS, RecursionError):
+    except (*DECODE_ERRORS, RecursionError, ArithmeticError):
         return None
 
 

@@ -58,6 +58,8 @@ MANGLES = {
     "lone_break_byte": lambda datum: "ff",
     "reserved_header": lambda datum: "1c",
     "nested_past_the_recursion_limit": lambda datum: "81" * 100_000 + "00",
+    "decimal_fraction_exponent_overflow": lambda datum: "c4821bffffffffffffff0101",
+    "bigfloat_exponent_overflow": lambda datum: "c5821bffffffffffffff0101",
 }
 
 
