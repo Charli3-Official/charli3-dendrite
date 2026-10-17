@@ -9,20 +9,30 @@ from datetime import datetime
 from datetime import timezone
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import cbor2
 import pytest
 
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid import deployment
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
+from charli3_dendrite.lending.liqwid.deployment import MARKET_COMPONENT_ROLES
 from charli3_dendrite.lending.liqwid.deployment import MARKET_FAMILIES
+from charli3_dendrite.lending.liqwid.deployment import MARKET_ROLE_FIELDS
 from charli3_dendrite.lending.liqwid.deployment import ORACLE_TOKEN_POLICY
 from charli3_dendrite.lending.liqwid.deployment import POSIX_SLOT_OFFSET
+from charli3_dendrite.lending.liqwid.deployment import (
+    UNREGISTERED_MARKET_STATE_VALIDATORS,
+)
+from charli3_dendrite.lending.liqwid.deployment import DriftFinding
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import OracleValidator
+from charli3_dendrite.lending.liqwid.deployment import check_deployment
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
@@ -674,3 +684,310 @@ def test_every_captured_historical_state_has_its_parameters():
         held = {f"{info.tx_hash}#{info.tx_index}" for info in context.utxos}
         markets = {params[ref] for ref in held if ref in params}
         assert state["market_id"] in markets, state["out_ref"]
+
+
+# --- Deployment drift --------------------------------------------------------
+
+# STRIKE-ADA's MarketState NFT policy: the token that moved validators on 2026-08-07.
+STRIKE_ADA_STATE_NFT = "b44553158796da29abd7d74ebd61cfe64274d00b72962acc6b5befba"
+
+
+def _params_market(rec: dict[str, Any]) -> MarketComponents | None:
+    """The bundled market whose MarketParams NFT the captured output holds."""
+    for policy in _policies(rec):
+        market = default_deployment().market_of_params_policy(policy)
+        if market is not None:
+            return market
+    return None
+
+
+def _live_params() -> list[PoolStateInfo]:
+    return [record_info(rec) for rec in records_of("market_params", live=True)]
+
+
+def _live_layout36() -> tuple[dict[str, Any], list[Any], MarketComponents]:
+    """A captured live list36 MarketParams of a bundled market, its fields, market."""
+    for rec in records_of("market_params", live=True):
+        if rec["label"] is not None:  # param dust / parked outputs share the list
+            continue
+        fields = cbor2.loads(bytes.fromhex(rec["datum_cbor"]))
+        market = _params_market(rec)
+        if isinstance(fields, list) and len(fields) == 36 and market is not None:
+            return rec, fields, market
+    raise AssertionError("no captured live list36 MarketParams")
+
+
+def _observed_pairs() -> list[tuple[str, str]]:
+    """Every (payment credential, policy) pair held by a captured record."""
+    pairs: set[tuple[str, str]] = set()
+    for kind in UTXO_KINDS:
+        for rec in records_of(kind):
+            credential = script_credential(rec["address"])
+            if credential is not None:
+                pairs.update((credential, policy) for policy in _policies(rec))
+    return sorted(pairs)
+
+
+def _keys(findings: list[DriftFinding]) -> list[tuple[str, str | None, str, str]]:
+    return [(f.kind, f.market, f.component, f.script_hash) for f in findings]
+
+
+def test_market_component_roles_fill_every_tracked_field() -> None:
+    assert MARKET_COMPONENT_ROLES is MARKET_FAMILIES
+    assert set(MARKET_COMPONENT_ROLES.values()) == set(MARKET_ROLE_FIELDS)
+    for market in default_deployment().markets:
+        for name in MARKET_ROLE_FIELDS:
+            getattr(market, name)  # every role is a MarketComponents attribute
+
+
+def test_unregistered_validators_are_the_hand_kept_launch_validators() -> None:
+    hand_kept = _bundled()["handKept"]["launchMarketStateValidators"]
+    assert UNREGISTERED_MARKET_STATE_VALIDATORS == set(hand_kept.values())
+    assert UNREGISTERED_MARKET_STATE_VALIDATORS == set(LAUNCH.values())
+
+
+def test_observed_pairs_cover_every_identity_kind() -> None:
+    deployment = default_deployment()
+    policies = {policy for _, policy in _observed_pairs()}
+    assert deployment.oracle_token_policy in policies
+    assert policies & deployment.loan_token_policies
+    assert policies & {m.market_state_policy for m in deployment.markets}
+
+
+def test_no_drift_on_captured_data() -> None:
+    params = _live_params()
+    assert params
+    assert (
+        check_deployment(
+            params,
+            registry=_bundled(),
+            observed_credentials=_observed_pairs(),
+        )
+        == []
+    )
+
+
+def test_no_input_no_findings() -> None:
+    assert check_deployment() == []
+    assert check_deployment(deployment=default_deployment()) == []
+
+
+def test_unknown_p35_loan_validator_is_one_params_finding() -> None:
+    rec, fields, market = _live_layout36()
+    fields[35] = bytes.fromhex(UNKNOWN)
+    info = record_info(rec, datum_cbor=cbor2.dumps(fields).hex())
+    findings = check_deployment([info])
+    assert _keys(findings) == [("params", market.name, "loan_validators", UNKNOWN)]
+    assert rec["out_ref"] in findings[0].detail
+    assert "p[35]" in findings[0].detail
+
+
+def test_unknown_p34_staking_hash_is_one_params_finding() -> None:
+    rec, fields, market = _live_layout36()
+    pair = list(cbor2.loads(cbor2.dumps(fields[34])))
+    first = pair[0]
+    pair[0] = cbor2.CBORTag(first.tag, [bytes.fromhex(UNKNOWN)])
+    fields[34] = pair
+    info = record_info(rec, datum_cbor=cbor2.dumps(fields).hex())
+    assert _keys(check_deployment([info])) == [
+        ("params", market.name, "staking", UNKNOWN),
+    ]
+
+
+@pytest.mark.parametrize("length", [28, 37])
+def test_unknown_params_layout_is_one_params_finding(length: int) -> None:
+    rec, fields, market = _live_layout36()
+    resized = fields[:length] if length < len(fields) else [*fields, 0]
+    info = record_info(rec, datum_cbor=cbor2.dumps(resized).hex())
+    findings = check_deployment([info])
+    assert _keys(findings) == [
+        ("params", market.name, "layout", market.market_params_policy),
+    ]
+    assert f"{length} fields" in findings[0].detail
+
+
+@pytest.mark.parametrize("datum", ["", "00", "zz", "d87a80", "d8799f"])
+def test_unreadable_params_datum_is_one_params_finding(datum: str) -> None:
+    rec, _, market = _live_layout36()
+    findings = check_deployment([record_info(rec, datum_cbor=datum)])
+    assert _keys(findings) == [
+        ("params", market.name, "datum", market.market_params_policy),
+    ]
+
+
+def test_too_deeply_nested_params_datum_is_one_params_finding() -> None:
+    rec, _, market = _live_layout36()
+    nested = "81" * 100_000 + "00"
+    findings = check_deployment([record_info(rec, datum_cbor=nested)])
+    assert _keys(findings) == [
+        ("params", market.name, "datum", market.market_params_policy),
+    ]
+
+
+@pytest.mark.parametrize("parked", ["d87980", "d8799fff"])
+def test_parked_params_output_is_skipped(parked: str) -> None:
+    rec, _, _ = _live_layout36()
+    assert check_deployment([record_info(rec, datum_cbor=parked)]) == []
+
+
+def test_utxo_without_a_params_nft_is_skipped() -> None:
+    rec, _, _ = _live_layout36()
+    dust = record_info(
+        rec, datum_cbor="00", assets=Assets(root={"lovelace": 2_000_000})
+    )
+    assert check_deployment([dust]) == []
+
+
+def test_wrong_typed_params_field_is_one_params_finding() -> None:
+    rec, fields, market = _live_layout36()
+    fields[35] = 7  # an int where the loan validator hash belongs
+    info = record_info(rec, datum_cbor=cbor2.dumps(fields).hex())
+    assert _keys(check_deployment([info])) == [
+        ("params", market.name, "datum", market.market_params_policy),
+    ]
+
+
+def test_registry_extra_market_is_one_registry_finding() -> None:
+    registry = _bundled()
+    registry["scriptInfos"].append(
+        {
+            "tag": "liqwidMainnet",
+            "market": "NEWMKT",
+            "componentName": "MarketState",
+            "type": "MintingPolicy",
+            "scriptHash": "cd" * 28,
+        },
+    )
+    assert _keys(check_deployment(registry=registry)) == [
+        ("registry", "NEWMKT", "market", "cd" * 28),
+    ]
+
+
+def test_registry_changed_hash_reports_both_sides() -> None:
+    registry = _bundled()
+    entry = next(
+        e
+        for e in registry["scriptInfos"]
+        if e.get("market") == "Ada" and e.get("componentName") == "NewBorrow"
+    )
+    old = entry["scriptHash"]
+    entry["scriptHash"] = UNKNOWN
+    assert sorted(_keys(check_deployment(registry=registry))) == sorted(
+        [
+            ("registry", "Ada", "new_borrow_policy", old),
+            ("registry", "Ada", "new_borrow_policy", UNKNOWN),
+        ],
+    )
+
+
+def test_registry_untracked_component_is_one_registry_finding() -> None:
+    registry = _bundled()
+    registry["scriptInfos"].append(
+        {
+            "tag": "liqwidMainnet",
+            "market": "Ada",
+            "componentName": "New2Loan",
+            "type": "Validator",
+            "scriptHash": "ef" * 28,
+        },
+    )
+    assert _keys(check_deployment(registry=registry)) == [
+        ("registry", "Ada", "New2Loan", "ef" * 28),
+    ]
+
+
+def test_registry_without_a_bundled_market_is_a_registry_finding() -> None:
+    registry = _bundled()
+    registry["scriptInfos"] = [
+        e for e in registry["scriptInfos"] if e.get("market") != "Ada"
+    ]
+    ada = _by_name()["Ada"]
+    assert _keys(check_deployment(registry=registry)) == [
+        ("registry", "Ada", "market", ada.market_state_policy),
+    ]
+
+
+def test_empty_registry_reports_every_market_and_oracle_component() -> None:
+    deployment = default_deployment()
+    findings = check_deployment(registry={"scriptInfos": []})
+    markets = {f.market for f in findings if f.component == "market"}
+    assert markets == {m.name for m in deployment.markets}
+    oracle = {f.script_hash for f in findings if f.market is None}
+    assert oracle == {v.script_hash for v in deployment.oracle_validators} | {
+        deployment.oracle_token_policy,
+    }
+    assert not {f.script_hash for f in findings} & UNREGISTERED_MARKET_STATE_VALIDATORS
+
+
+def test_market_state_nft_at_unlisted_credential_is_identity_drift() -> None:
+    deployment = default_deployment()
+    market = deployment.market_of_state_policy(STRIKE_ADA_STATE_NFT)
+    assert market is not None
+    listed = [(cred, STRIKE_ADA_STATE_NFT) for cred in market.market_state_validators]
+    assert check_deployment(observed_credentials=listed) == []
+    findings = check_deployment(
+        observed_credentials=[*listed, (UNKNOWN, STRIKE_ADA_STATE_NFT)],
+    )
+    assert _keys(findings) == [
+        ("identity", market.name, "market_state_validators", UNKNOWN),
+    ]
+    assert STRIKE_ADA_STATE_NFT in findings[0].detail
+
+
+def test_loan_and_oracle_tokens_at_unlisted_credentials_are_identity_drift() -> None:
+    deployment = default_deployment()
+    market = _by_name()["Ada"]
+    observed = [(UNKNOWN, policy) for policy in sorted(market.loan_token_policies)]
+    observed.append((UNKNOWN, deployment.oracle_token_policy))
+    observed.extend(
+        (validator.script_hash, deployment.oracle_token_policy)
+        for validator in deployment.oracle_validators
+    )
+    observed.extend(
+        (credential, policy)
+        for credential in market.loan_validators
+        for policy in market.loan_token_policies
+    )
+    findings = check_deployment(observed_credentials=observed)
+    # A deployment-wide finding (market None) sorts before every market's.
+    assert _keys(findings) == [
+        ("identity", None, "oracle_validators", UNKNOWN),
+        *[("identity", "Ada", "loan_validators", UNKNOWN)]
+        * len(market.loan_token_policies),
+    ]
+    assert {f.detail for f in findings[1:]} == {
+        f"identity policy {policy} at an unlisted credential"
+        for policy in market.loan_token_policies
+    }
+
+
+def test_untracked_policy_is_not_identity_drift() -> None:
+    assert check_deployment(observed_credentials=[(UNKNOWN, "ff" * 28)]) == []
+
+
+def test_findings_are_sorted_and_deduplicated() -> None:
+    rec, fields, _ = _live_layout36()
+    fields[35] = bytes.fromhex(UNKNOWN)
+    bad = record_info(rec, datum_cbor=cbor2.dumps(fields).hex())
+    observed = [(UNKNOWN, STRIKE_ADA_STATE_NFT), ("cd" * 28, STRIKE_ADA_STATE_NFT)]
+    registry = _bundled()
+    registry["scriptInfos"].reverse()
+    first = check_deployment(
+        [bad, bad], registry=registry, observed_credentials=observed
+    )
+    second = check_deployment(
+        [bad],
+        registry=_bundled(),
+        observed_credentials=list(reversed(observed * 2)),
+    )
+    assert first == second
+    assert first == sorted(
+        first,
+        key=lambda f: (f.kind, f.market or "", f.component, f.script_hash, f.detail),
+    )
+    assert [f.kind for f in first] == ["identity", "identity", "params"]
+
+
+def test_unknown_finding_kind_is_rejected() -> None:
+    with pytest.raises(ValueError, match="unknown drift kind"):
+        DriftFinding("other", None, "market", "", "")
