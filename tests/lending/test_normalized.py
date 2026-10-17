@@ -284,3 +284,147 @@ def test_a_request_dict_names_its_rate_model():
         "params": {"rate": 700},
     }
     assert BorrowRequest.from_dict(record).rate_model == SimpleRate(700)
+
+
+# A market and a position exactly as `to_dict` wrote them before the optional
+# holding weight, term weight, receipt rate and borrow-cap fields existed.
+_PRE_CHANGE_MARKET = {
+    "protocol": "Test",
+    "market_id": "m1",
+    "borrow_unit": "lovelace",
+    "lender": {"kind": "key", "identifier": "aa" * 28, "detail": None},
+    "available_liquidity": 1_000_000_000,
+    "rate_model": {"protocol": "Test", "kind": "variable", "params": {"rate": 500}},
+    "supply_rate": None,
+    "receipt_unit": None,
+    "utilization": None,
+    "collateral": [
+        {
+            "unit": SNEK,
+            "policy_wide": False,
+            "max_ltv": {"num": 2, "den": 3},
+            "fixed_ratio": None,
+            "liquidation_ltv": {"num": 4, "den": 5},
+            "liquidation_penalty": {"num": 1, "den": 10},
+            "liquidation_discount": None,
+            "equity_to_borrower": True,
+            "price_source": None,
+        },
+    ],
+    "on_default": "price_liquidation",
+    "permissioned": False,
+}
+
+_PRE_CHANGE_POSITION = {
+    "protocol": "Test",
+    "position_id": "p1",
+    "origin": {"kind": "market", "identifier": "m1"},
+    "borrower": {"kind": "token", "identifier": "cc" * 28 + "01", "detail": None},
+    "lender": {"kind": "token", "identifier": "dd" * 28 + "01", "detail": None},
+    "borrow_unit": "lovelace",
+    "principal": 1_000_000_000,
+    "installments_paid": 0,
+    "collateral": [{"unit": SNEK, "amount": 3_000_000_000}],
+    "rate_model": {"protocol": "Test", "kind": "variable", "params": {"rate": 1000}},
+    "liquidation_ltv": {"num": 4, "den": 5},
+    "on_default": "price_liquidation",
+    "opened_ms": 1_000_000,
+}
+
+
+def test_a_market_stored_before_the_optional_fields_loads_and_reserialises():
+    loaded = LendingMarket.from_dict(_PRE_CHANGE_MARKET)
+    assert loaded == market()
+    assert loaded.receipt_rate is None
+    assert loaded.max_utilization is None
+    assert loaded.total_principal is None
+    assert loaded.collateral[0].weight is None
+    assert loaded.to_dict() == _PRE_CHANGE_MARKET
+
+
+def test_a_position_stored_before_holding_weights_loads_and_reserialises():
+    loaded = LendingPosition.from_dict(_PRE_CHANGE_POSITION)
+    assert loaded == _position()
+    assert loaded.collateral[0].liquidation_ltv is None
+    assert loaded.to_dict() == _PRE_CHANGE_POSITION
+
+
+def test_a_holding_emits_its_liquidation_ltv_only_when_set():
+    plain = CollateralHolding(SNEK, 5)
+    assert plain.to_dict() == {"unit": SNEK, "amount": 5}
+    weighted = CollateralHolding(SNEK, 5, Fraction(3, 4))
+    assert weighted.to_dict() == {
+        "unit": SNEK,
+        "amount": 5,
+        "liquidation_ltv": {"num": 3, "den": 4},
+    }
+    assert CollateralHolding.from_dict(weighted.to_dict()) == weighted
+    assert weighted != plain
+
+
+def test_terms_emit_their_weight_only_when_set():
+    assert "weight" not in terms().to_dict()
+    weighted = terms(weight=Fraction(81, 100_000_000))
+    assert weighted.to_dict()["weight"] == {"num": 81, "den": 100_000_000}
+    assert CollateralTerms.from_dict(weighted.to_dict()) == weighted
+    assert weighted != terms()
+
+
+def test_a_market_emits_receipt_rate_and_borrow_cap_only_when_set():
+    record = market().to_dict()
+    for key in ("receipt_rate", "max_utilization", "total_principal"):
+        assert key not in record
+    pooled = market(
+        lender=None,
+        receipt_unit="a3" * 28,
+        receipt_rate=Fraction(2_134, 100_000),
+        max_utilization=Fraction(7, 8),
+        total_principal=3_000_000,
+        collateral=(terms(weight=Fraction(9, 10)),),
+    )
+    record = pooled.to_dict()
+    assert record["receipt_rate"] == {"num": 1_067, "den": 50_000}
+    assert record["max_utilization"] == {"num": 7, "den": 8}
+    assert record["total_principal"] == 3_000_000
+    assert LendingMarket.from_dict(record) == pooled
+
+
+def test_without_a_borrow_cap_all_liquidity_is_borrowable():
+    assert market().borrowable_now() == 1_000_000_000
+    # a recorded principal alone does not cap anything
+    assert market(total_principal=5_000_000_000).borrowable_now() == 1_000_000_000
+
+
+@pytest.mark.parametrize(
+    ("available", "principal", "cap", "expected"),
+    [
+        # a zero cap disables borrowing
+        (1_000_000, 0, Fraction(0), 0),
+        # principal already above the cap
+        (1_000, 9_000, Fraction(7, 8), 0),
+        # headroom below the available liquidity
+        (1_000_000, 3_000_000, Fraction(4, 5), 200_000),
+        # headroom above the available liquidity: the liquidity bounds it
+        (1_000_000, 1_000_000, Fraction(3, 2), 1_000_000),
+        # no principal recorded counts as none lent
+        (1_000_000, None, Fraction(4, 5), 800_000),
+    ],
+)
+def test_a_borrow_cap_bounds_what_is_borrowable_now(
+    available, principal, cap, expected
+):
+    offer = market(
+        available_liquidity=available,
+        max_utilization=cap,
+        total_principal=principal,
+    )
+    assert offer.borrowable_now() == expected
+
+
+def test_a_zero_max_ltv_gives_no_required_collateral():
+    offer = market(collateral=(terms(max_ltv=Fraction(0)),))
+    book = prices((SNEK, "lovelace", 1, 500))
+    assert offer.required_collateral(SNEK, 1_000_000, book) is None
+    # the fixed-ratio path is unaffected
+    fixed = market(collateral=(terms(max_ltv=None, fixed_ratio=Fraction(2)),))
+    assert fixed.required_collateral(SNEK, 1_000_000) == 2_000_000
