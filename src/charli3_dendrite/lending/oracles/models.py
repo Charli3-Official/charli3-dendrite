@@ -32,12 +32,14 @@ class OracleSource(str, Enum):
     QTOKEN_RATE = "qtoken_rate"
     DEX_POOLED = "dex_pooled"
     DANOGO_AGGREGATOR = "danogo_aggregator"
+    LIQWID = "liqwid"
 
 
 # Oracle sources owned by the shared lending layer. Resolvers for these are
 # registered when `charli3_dendrite.lending` is imported. Protocol-specific
-# sources (e.g. DANOGO_AGGREGATOR) are registered by their own subpackage on
-# import, keeping the shared layer protocol-agnostic.
+# sources (e.g. DANOGO_AGGREGATOR, LIQWID) are members here so a persisted
+# `OracleRef` validates back, but their resolvers are registered by their own
+# subpackage on import, keeping the shared layer protocol-agnostic.
 CORE_ORACLE_SOURCES: frozenset[OracleSource] = frozenset(
     {
         OracleSource.CHARLI3,
