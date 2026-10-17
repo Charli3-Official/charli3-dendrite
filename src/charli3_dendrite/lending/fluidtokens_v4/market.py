@@ -58,6 +58,8 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.fluidtokens_v4.datums import CollateralAsset
     from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
     from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolManagerState
+    from charli3_dendrite.lending.markets import ParseContext
+    from charli3_dendrite.lending.markets import PositionLifecycle
     from charli3_dendrite.lending.rates import RateModel
 
 # Constructor alternatives of RepaymentMode, LiquidationMode and Option.
@@ -353,6 +355,8 @@ class FluidTokensV4MarketSource:
     """FluidTokens V4 pools, loans and requests as common views."""
 
     name = PROTOCOL_NAME
+    # Every V4 loan holds its own identity token, so positions need no chaining.
+    lifecycle: PositionLifecycle | None = None
 
     def __init__(self, config: ConfigDatum | None = None) -> None:
         """Watch the deployment ``config`` names; mainnet by default."""
@@ -369,8 +373,12 @@ class FluidTokensV4MarketSource:
     def parse(
         self,
         info: PoolStateInfo,
+        *,
+        context: ParseContext | None = None,
     ) -> LendingMarket | LendingPosition | BorrowRequest | None:
         """One UTxO as its view; None when it is not a V4 pool, loan or request.
+
+        A V4 view reads only its own UTxO, so ``context`` is ignored.
 
         Raises LendingParseError for a pool, loan or request it cannot convert.
         """
