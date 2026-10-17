@@ -21,10 +21,19 @@ from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.market import market_to_view
 from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
+from charli3_dendrite.lending.normalized import CollateralHolding
+from charli3_dendrite.lending.normalized import DefaultRule
+from charli3_dendrite.lending.normalized import LendingPosition
+from charli3_dendrite.lending.normalized import Origin
+from charli3_dendrite.lending.normalized import Party
+from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import PriceMap
+from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from tests.lending.liqwid.records import API
+from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.records import spend_of
@@ -554,3 +563,53 @@ def test_partial_liquidation_repays_the_close_factor_and_seizes_at_the_discount(
     seized_qtokens = old_assets[QEURC] - new_assets[QEURC]
     assert seized_qtokens == 1_222_321_951
     assert seized * USDC_USD / (QEURC_RATE * EURC_USD) // 1 == seized_qtokens
+
+
+def test_required_collateral_reaches_the_borrow_health_floor(prices):
+    """At the returned qTokens HF >= 1/p[12]; one base unit fewer is below it.
+
+    HF at borrow is sum(q * price * w) / debt and Liqwid's minimum is 1/p[12], so
+    with max_ltv = p[12] * w the floor is w / max_ltv.
+    """
+    context = live_context()
+    markets = []
+    for rec in records_of("market_state", live=True):
+        record = parse_utxo(record_info(rec), DEPLOYMENT)
+        if record is not None:
+            markets.append(market_to_view(record, context, DEPLOYMENT))
+    book = PriceMap(prices={**prices.prices, **receipt_prices(markets, prices).prices})
+
+    def health(market, terms, quantity, debt):
+        position = LendingPosition(
+            protocol=market.protocol,
+            position_id="00" * 32 + "#0",
+            origin=Origin("market", market.market_id),
+            borrower=Party(PartyKind.KEY, OWNER),
+            lender=None,
+            borrow_unit=market.borrow_unit,
+            principal=debt,
+            installments_paid=0,
+            collateral=(CollateralHolding(terms.unit, quantity, terms.weight),),
+            rate_model=market.rate_model,
+            liquidation_ltv=Fraction(1),
+            on_default=DefaultRule.PRICE_LIQUIDATION,
+            opened_ms=0,
+        )
+        (value,) = position.weighted_collateral(book)
+        return value / debt
+
+    checked = 0
+    for market in markets:
+        debt = 1_000 * 10 ** DEPLOYMENT.market(market.market_id).decimals
+        for terms in market.collateral:
+            if terms.max_ltv == 0:
+                assert market.required_collateral(terms.unit, debt, book) is None
+                continue
+            quantity = market.required_collateral(terms.unit, debt, book)
+            if quantity is None:  # collateral without a live price
+                continue
+            floor = terms.weight / terms.max_ltv
+            assert health(market, terms, quantity, debt) >= floor
+            assert health(market, terms, quantity - 1, debt) < floor
+            checked += 1
+    assert checked
