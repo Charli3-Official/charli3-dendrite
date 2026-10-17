@@ -3,6 +3,7 @@ from fractions import Fraction
 import pytest
 
 from charli3_dendrite.lending.math import BASIS
+from charli3_dendrite.lending.math import apportion
 from charli3_dendrite.lending.math import borrow_headroom
 from charli3_dendrite.lending.math import bps_mul_ceil
 from charli3_dendrite.lending.math import bps_mul_floor
@@ -63,3 +64,48 @@ def test_borrow_headroom_floors_and_never_goes_negative(
     available, principal, cap, expected
 ):
     assert borrow_headroom(available, principal, cap) == expected
+
+
+def test_apportion_gives_each_weight_its_share_and_sums_exactly():
+    # 10 * 1/7, 2/7, 4/7 = 1.43, 2.86, 5.71: floors 1, 2, 5 leave 2 units for
+    # the two largest remainders (indices 1 and 2).
+    assert apportion(10, [Fraction(1), Fraction(2), Fraction(4)]) == [1, 3, 6]
+
+
+def test_apportion_breaks_remainder_ties_toward_the_lower_index():
+    thirds = [Fraction(1, 3), Fraction(1, 3), Fraction(1, 3)]
+    assert apportion(100, thirds) == [34, 33, 33]
+    assert apportion(1, [Fraction(1, 2), Fraction(1, 2)]) == [1, 0]
+    assert apportion(3, [Fraction(1)] * 4) == [1, 1, 1, 0]
+
+
+def test_apportion_gives_a_zero_weight_nothing():
+    weights = [Fraction(0), Fraction(1), Fraction(0), Fraction(1)]
+    assert apportion(5, weights) == [0, 3, 0, 2]
+
+
+def test_apportion_of_nothing_is_all_zeros():
+    assert apportion(0, [Fraction(1), Fraction(2)]) == [0, 0]
+
+
+def test_apportion_parts_stay_within_one_unit_of_the_exact_share():
+    weights = [Fraction(1, 7), Fraction(2, 7), Fraction(0), Fraction(4, 7)]
+    for total in range(200):
+        parts = apportion(total, weights)
+        assert sum(parts) == total
+        for part, weight in zip(parts, weights):
+            assert abs(part - total * weight) < 1
+
+
+@pytest.mark.parametrize(
+    ("total", "weights", "message"),
+    [
+        (5, [], "at least one weight"),
+        (5, [Fraction(0), Fraction(0)], "not all be zero"),
+        (5, [Fraction(-1), Fraction(2)], "non-negative"),
+        (-1, [Fraction(1)], "negative total"),
+    ],
+)
+def test_apportion_refuses_a_split_it_cannot_make(total, weights, message):
+    with pytest.raises(ValueError, match=message):
+        apportion(total, weights)

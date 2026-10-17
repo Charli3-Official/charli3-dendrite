@@ -88,6 +88,34 @@ class RateModel(ABC):
     def from_params(cls, params: Mapping[str, Any]) -> RateModel:
         """Rebuild the model from :meth:`params`."""
 
+    def liquidation_debt(
+        self,
+        principal: int,
+        *,
+        opened_ms: int,
+        now_ms: int,
+        installments_paid: int,
+    ) -> int:
+        """The debt a loan's health is measured against at ``now_ms``.
+
+        The amount :meth:`outstanding` reports. A protocol that charges more to repay
+        than its liquidation check counts, such as a minimum interest, overrides this.
+        """
+        return self.outstanding(
+            principal,
+            opened_ms=opened_ms,
+            now_ms=now_ms,
+            installments_paid=installments_paid,
+        )
+
+    def rebind(self, market_model: RateModel) -> RateModel:
+        """The loan's model under ``market_model``, its market's current model.
+
+        The model itself: terms fixed when the loan opened do not follow the market.
+        A pooled protocol whose loans accrue at the market's rate overrides this.
+        """
+        return self
+
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe record that :func:`rate_model_from_dict` rebuilds."""
         return {

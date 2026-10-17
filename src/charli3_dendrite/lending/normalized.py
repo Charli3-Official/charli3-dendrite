@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
 from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
@@ -378,6 +379,20 @@ class LendingMarket:
         )
 
 
+def _holding_at(holding: CollateralHolding, market: LendingMarket) -> CollateralHolding:
+    """``holding`` with the liquidation LTV ``market`` currently gives its unit.
+
+    The terms' LTV when they state one; 0 when the market has no terms for the unit,
+    so the holding no longer backs the loan; unchanged when the terms state none.
+    """
+    terms = market.terms_for(holding.unit)
+    if terms is None:
+        return replace(holding, liquidation_ltv=Fraction(0))
+    if terms.liquidation_ltv is None:
+        return holding
+    return replace(holding, liquidation_ltv=terms.liquidation_ltv)
+
+
 @dataclass(frozen=True)
 class LendingPosition:
     """An open loan.
@@ -433,6 +448,57 @@ class LendingPosition:
             self.installments_paid,
         )
 
+    def liquidation_debt(self, now_ms: int) -> int:
+        """The debt the loan's health is measured against at ``now_ms``."""
+        return self.rate_model.liquidation_debt(
+            self.principal,
+            opened_ms=self.opened_ms,
+            now_ms=now_ms,
+            installments_paid=self.installments_paid,
+        )
+
+    def at_market(self, market: LendingMarket) -> LendingPosition:
+        """This loan evaluated against ``market``, the current state of its market.
+
+        The rate model is rebound to the market's, and each holding's liquidation LTV
+        is refreshed from the market's terms for its unit: the terms' LTV when they
+        state one, 0 when the market has no terms for the unit, otherwise unchanged.
+
+        Raises:
+            ValueError: the loan was not opened from ``market``.
+        """
+        if market.protocol != self.protocol or self.origin != Origin(
+            "market",
+            market.market_id,
+        ):
+            raise ValueError(
+                f"position {self.position_id} was not opened from market "
+                f"{market.protocol}/{market.market_id}",
+            )
+        return replace(
+            self,
+            rate_model=self.rate_model.rebind(market.rate_model),
+            collateral=tuple(_holding_at(h, market) for h in self.collateral),
+        )
+
+    def weighted_collateral(self, prices: PriceMap) -> tuple[Fraction | None, ...]:
+        """Each holding's exact value in the borrow unit times its liquidation LTV.
+
+        A holding without an LTV of its own counts at full value; an unpriced holding
+        gives None.
+        """
+        weighted: list[Fraction | None] = []
+        for holding in self.collateral:
+            price = _price_in(prices, holding.unit, self.borrow_unit)
+            if price is None:
+                weighted.append(None)
+                continue
+            ltv = holding.liquidation_ltv
+            if ltv is None:
+                ltv = Fraction(1)
+            weighted.append(holding.amount * price * ltv)
+        return tuple(weighted)
+
     def collateral_value(self, prices: PriceMap) -> int:
         """Collateral value in the borrow unit; an unpriced holding counts as 0."""
         total = 0
@@ -445,10 +511,16 @@ class LendingPosition:
     def health_factor(self, prices: PriceMap, now_ms: int) -> Decimal:
         """Collateral value times the liquidation LTV over the debt; <= 1 is at risk.
 
-        Infinite for a loan that cannot be liquidated on price, or that owes nothing.
+        When any holding carries its own liquidation LTV, each holding is weighted by
+        it (:meth:`weighted_collateral`, an unpriced holding counting 0), the sum is
+        measured against :meth:`liquidation_debt`, and the exact ratio is converted
+        to ``Decimal`` once. Infinite for a loan that cannot be liquidated on price,
+        or that owes nothing.
         """
         if self.liquidation_ltv is None:
             return Decimal("Infinity")
+        if any(holding.liquidation_ltv is not None for holding in self.collateral):
+            return self._weighted_health(self.liquidation_ltv, prices, now_ms)
         debt = self.current_debt(now_ms)
         if debt <= 0:
             return Decimal("Infinity")
@@ -456,6 +528,21 @@ class LendingPosition:
         return (Decimal(self.collateral_value(prices)) * Decimal(ltv.numerator)) / (
             Decimal(debt) * Decimal(ltv.denominator)
         )
+
+    def _weighted_health(
+        self,
+        ltv: Fraction,
+        prices: PriceMap,
+        now_ms: int,
+    ) -> Decimal:
+        """The health factor over per-holding liquidation LTVs, exact until the end."""
+        debt = self.liquidation_debt(now_ms)
+        if debt <= 0:
+            return Decimal("Infinity")
+        values = self.weighted_collateral(prices)
+        weighted = sum((value for value in values if value is not None), Fraction(0))
+        ratio = weighted * ltv / debt
+        return Decimal(ratio.numerator) / Decimal(ratio.denominator)
 
     def is_liquidatable(self, prices: PriceMap, now_ms: int) -> bool:
         """Liquidatable on price: every holding priced and the health factor <= 1."""

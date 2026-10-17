@@ -1,5 +1,7 @@
 """The common lending views: terms, cost, debt, health and storage (offline)."""
 
+from dataclasses import dataclass
+from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
 
@@ -428,3 +430,196 @@ def test_a_zero_max_ltv_gives_no_required_collateral():
     # the fixed-ratio path is unaffected
     fixed = market(collateral=(terms(max_ltv=None, fixed_ratio=Fraction(2)),))
     assert fixed.required_collateral(SNEK, 1_000_000) == 2_000_000
+
+
+@dataclass(frozen=True)
+class _PooledRate(SimpleRate):
+    """Simple interest whose repayment adds a fixed minimum the health check ignores.
+
+    Rebinding takes the market model's current rate, as a pooled market's loans do.
+    """
+
+    minimum: int = 0
+
+    def outstanding(
+        self,
+        principal: int,
+        *,
+        opened_ms: int,
+        now_ms: int,
+        installments_paid: int,
+    ) -> int:
+        unfloored = self.liquidation_debt(
+            principal,
+            opened_ms=opened_ms,
+            now_ms=now_ms,
+            installments_paid=installments_paid,
+        )
+        return unfloored + self.minimum
+
+    def liquidation_debt(
+        self,
+        principal: int,
+        *,
+        opened_ms: int,
+        now_ms: int,
+        installments_paid: int,
+    ) -> int:
+        return SimpleRate.outstanding(
+            self,
+            principal,
+            opened_ms=opened_ms,
+            now_ms=now_ms,
+            installments_paid=installments_paid,
+        )
+
+    def rebind(self, market_model):
+        return replace(self, rate=market_model.rate)
+
+
+def test_the_liquidation_debt_comes_from_the_rate_model():
+    position = _position(rate_model=_PooledRate(1000, minimum=500_000_000))
+    now = position.opened_ms + _YEAR_MS
+    assert position.current_debt(now) == 1_600_000_000
+    assert position.liquidation_debt(now) == 1_100_000_000
+    assert _position().liquidation_debt(now) == _position().current_debt(now)
+
+
+def test_weighted_collateral_values_each_holding_at_its_own_ltv():
+    unpriced = NFT_POLICY + "01"
+    position = _position(
+        collateral=(
+            CollateralHolding(SNEK, 3_000_000_000, Fraction(4, 5)),
+            CollateralHolding(MIN, 1_000_000_000),
+            CollateralHolding(unpriced, 7, Fraction(1, 2)),
+        ),
+    )
+    book = prices((SNEK, "lovelace", 1, 2), (MIN, "lovelace", 1, 3))
+    # SNEK: 3_000 ADA * 1/2 * 4/5; MIN has no LTV of its own, so counts in full.
+    assert position.weighted_collateral(book) == (
+        Fraction(1_200_000_000),
+        Fraction(1_000_000_000, 3),
+        None,
+    )
+
+
+def test_health_with_holding_ltvs_weighs_each_holding_exactly():
+    position = _position(
+        liquidation_ltv=Fraction(9, 10),
+        collateral=(
+            CollateralHolding(SNEK, 3_000_000_000, Fraction(4, 5)),
+            CollateralHolding(MIN, 1_000_000_000),
+            CollateralHolding(NFT_POLICY + "01", 7, Fraction(1, 2)),
+        ),
+    )
+    book = prices((SNEK, "lovelace", 1, 2), (MIN, "lovelace", 1, 3))
+    # (1_200 + 1_000/3) ADA * 9/10 over 1_000 ADA; the unpriced holding counts 0.
+    weighted = Fraction(1_200_000_000) + Fraction(1_000_000_000, 3)
+    assert weighted * Fraction(9, 10) / 1_000_000_000 == Fraction(69, 50)
+    assert position.health_factor(book, position.opened_ms) == Decimal("1.38")
+
+
+def test_health_with_holding_ltvs_is_measured_against_the_liquidation_debt():
+    position = _position(
+        rate_model=_PooledRate(1000, minimum=500_000_000),
+        liquidation_ltv=Fraction(1),
+        collateral=(CollateralHolding(SNEK, 3_000_000_000, Fraction(4, 5)),),
+    )
+    book = prices((SNEK, "lovelace", 1, 2))
+    # 1_200 ADA weighted over the 1_000 ADA liquidation debt, not the 1_500 ADA owed.
+    assert position.health_factor(book, position.opened_ms) == Decimal("1.2")
+
+
+def test_health_without_holding_ltvs_keeps_the_single_ltv_expression():
+    position = _position(rate_model=_PooledRate(1000, minimum=500_000_000))
+    book = prices((SNEK, "lovelace", 1, 2))
+    # 1_500 ADA * 4/5 over the 1_500 ADA owed: the floored debt, as before.
+    assert position.health_factor(book, position.opened_ms) == Decimal("0.8")
+
+
+def test_health_with_holding_ltvs_is_infinite_without_debt_or_a_position_ltv():
+    weighted = (CollateralHolding(SNEK, 3_000_000_000, Fraction(4, 5)),)
+    book = prices((SNEK, "lovelace", 1, 2))
+    no_debt = _position(principal=0, collateral=weighted)
+    assert no_debt.health_factor(book, no_debt.opened_ms) == Decimal("Infinity")
+    no_ltv = _position(liquidation_ltv=None, collateral=weighted)
+    assert no_ltv.health_factor(book, no_ltv.opened_ms) == Decimal("Infinity")
+
+
+@pytest.mark.parametrize(
+    "elsewhere",
+    [
+        market(protocol="Other"),
+        market("m2"),
+    ],
+)
+def test_at_market_refuses_a_market_the_loan_is_not_from(elsewhere):
+    with pytest.raises(ValueError, match="not opened from market"):
+        _position().at_market(elsewhere)
+
+
+@pytest.mark.parametrize("origin", [None, Origin("request", "m1")])
+def test_at_market_refuses_a_loan_not_opened_from_a_market(origin):
+    with pytest.raises(ValueError, match="not opened from market"):
+        _position(origin=origin).at_market(market())
+
+
+def test_at_market_rebinds_the_rate_model_to_the_market():
+    position = _position(rate_model=_PooledRate(1000, minimum=7))
+    rebound = position.at_market(market(rate_model=_PooledRate(2500)))
+    assert rebound.rate_model == _PooledRate(2500, minimum=7)
+    assert position.rate_model == _PooledRate(1000, minimum=7)
+    plain = _position()
+    assert plain.at_market(market()).rate_model is plain.rate_model
+
+
+def test_at_market_refreshes_each_holding_ltv_from_the_market_terms():
+    fixed = terms(MIN, max_ltv=None, fixed_ratio=Fraction(2), liquidation_ltv=None)
+    pooled = market(collateral=(terms(liquidation_ltv=Fraction(3, 4)), fixed))
+    position = _position(
+        collateral=(
+            CollateralHolding(SNEK, 3_000_000_000, Fraction(1, 2)),
+            CollateralHolding(MIN, 1_000_000_000, Fraction(1, 3)),
+        ),
+    )
+    rebound = position.at_market(pooled)
+    assert rebound.collateral == (
+        CollateralHolding(SNEK, 3_000_000_000, Fraction(3, 4)),
+        CollateralHolding(MIN, 1_000_000_000, Fraction(1, 3)),
+    )
+    assert rebound == replace(position, collateral=rebound.collateral)
+
+
+def test_a_holding_its_market_has_no_terms_for_counts_for_nothing():
+    dropped = NFT_POLICY + "01"  # no terms in the market, and no price
+    position = _position(
+        liquidation_ltv=Fraction(1),
+        collateral=(
+            CollateralHolding(SNEK, 3_000_000_000, Fraction(4, 5)),
+            CollateralHolding(MIN, 1_000_000_000, Fraction(1, 2)),
+            CollateralHolding(dropped, 5),
+        ),
+    )
+    rebound = position.at_market(market())  # accepts SNEK only
+    assert [holding.liquidation_ltv for holding in rebound.collateral] == [
+        Fraction(4, 5),
+        Fraction(0),
+        Fraction(0),
+    ]
+    book = prices((SNEK, "lovelace", 1, 2), (MIN, "lovelace", 1, 3))
+    assert rebound.weighted_collateral(book) == (
+        Fraction(1_200_000_000),
+        Fraction(0),
+        None,
+    )
+    health = rebound.health_factor(book, rebound.opened_ms)
+    assert health == Decimal("1.2")
+    assert health.is_finite()
+    assert rebound.is_liquidatable(book, rebound.opened_ms) is False
+    assert LendingPosition.from_dict(rebound.to_dict()) == rebound
+    stranded = _position(
+        liquidation_ltv=Fraction(1),
+        collateral=(CollateralHolding(dropped, 5),),
+    ).at_market(market())
+    assert stranded.weighted_collateral(book) == (None,)
+    assert stranded.health_factor(book, stranded.opened_ms) == Decimal(0)
