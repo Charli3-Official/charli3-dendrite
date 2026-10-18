@@ -27,6 +27,7 @@ from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.lifecycle import LiqwidLifecycle
+from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
 from charli3_dendrite.lending.liqwid.loader import snapshot
 from charli3_dendrite.lending.liqwid.math import INTEREST_PERIOD_MS
 from charli3_dendrite.lending.liqwid.math import _fraction
@@ -52,7 +53,6 @@ from charli3_dendrite.lending.normalized import as_parse_error
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import canonical_unit_key
-from charli3_dendrite.lending.units import policy_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -269,21 +269,11 @@ def _holdings(
     info: PoolStateInfo,
     deployment: LiqwidDeployment,
 ) -> tuple[CollateralHolding, ...]:
-    """Every unit a loan UTxO holds except ADA and loan tokens, in canonical order.
-
-    A qToken holding is its bare 56-hex policy with the literal amount; a holding of
-    a whole-policy collateral keeps its full policy and asset name.
-    """
-    loan_tokens = deployment.loan_token_policies
-    units = sorted(
-        (
-            unit
-            for unit in info.assets
-            if unit != "lovelace" and policy_of(unit) not in loan_tokens
-        ),
-        key=canonical_unit_key,
+    """A loan UTxO's :func:`collateral_units` as holdings, in canonical order."""
+    return tuple(
+        CollateralHolding(unit, int(quantity))
+        for unit, quantity in collateral_units(info, deployment.loan_token_policies)
     )
-    return tuple(CollateralHolding(unit, int(info.assets[unit])) for unit in units)
 
 
 def _context_market(

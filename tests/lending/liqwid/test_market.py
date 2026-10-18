@@ -16,6 +16,7 @@ from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.lifecycle import LiqwidLifecycle
+from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
 from charli3_dendrite.lending.liqwid.loader import snapshot
 from charli3_dendrite.lending.liqwid.market import LiqwidV2MarketSource
 from charli3_dendrite.lending.liqwid.market import collateral_terms
@@ -761,3 +762,11 @@ def test_a_loan_parse_error_passes_through_unprefixed(monkeypatch):
     with pytest.raises(LendingParseError) as raised:
         loan_to_position(record, None, DEPLOYMENT)
     assert raised.value is error
+
+
+def test_loan_holdings_are_the_shared_collateral_units(live_loans):
+    for _, record, bound in live_loans:
+        units = collateral_units(record.info, DEPLOYMENT.loan_token_policies)
+        bare = loan_to_position(record, deployment=DEPLOYMENT)
+        for position in (bare, bound):
+            assert [(h.unit, h.amount) for h in position.collateral] == list(units)

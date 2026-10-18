@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.units import canonical_unit_key
 from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import policy_of
 from charli3_dendrite.lending.units import script_credential
@@ -91,21 +92,27 @@ class LoanTransition(str, Enum):
     PARKED = "parked"  # spent with no successor and no close evidence (parking)
 
 
-_LOVELACE = "lovelace"
-
 _State = tuple[int, int, int, int, tuple[tuple[str, int], ...]]
 
 
-def _collateral(
+def collateral_units(
     info: PoolStateInfo,
     loan_token_policies: frozenset[str],
 ) -> tuple[tuple[str, int], ...]:
-    """Held units other than lovelace and loan tokens, as ``(unit, qty)`` by unit."""
+    """A loan UTxO's collateral: ``(unit, qty)`` of every held unit, in unit order.
+
+    Lovelace and units under ``loan_token_policies`` (the loan tokens, whose ``00`` /
+    ``01`` name flips on a modification) are not collateral. A qToken holding is its
+    bare 56-hex policy; a whole-policy collateral keeps its full policy and name.
+    """
     return tuple(
         sorted(
-            (unit, quantity)
-            for unit, quantity in info.assets.items()
-            if unit != _LOVELACE and policy_of(unit) not in loan_token_policies
+            (
+                (unit, quantity)
+                for unit, quantity in info.assets.items()
+                if unit != "lovelace" and policy_of(unit) not in loan_token_policies
+            ),
+            key=lambda held: canonical_unit_key(held[0]),
         ),
     )
 
@@ -149,7 +156,7 @@ def loan_key(
         interest=loan.interest if loan is not None else 0,
         min_interest=loan.min_interest if loan is not None else 0,
         loan_index=loan.index if loan is not None else 0,
-        collateral=_collateral(info, active.loan_token_policies),
+        collateral=collateral_units(info, active.loan_token_policies),
         generation=generation,
     )
 

@@ -8,6 +8,7 @@ from collections import Counter
 
 import pytest
 
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
@@ -17,6 +18,7 @@ from charli3_dendrite.lending.liqwid.lifecycle import LoanKey
 from charli3_dendrite.lending.liqwid.lifecycle import LoanSpend
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
 from charli3_dendrite.lending.liqwid.lifecycle import classify_spend
+from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
 from charli3_dendrite.lending.liqwid.lifecycle import loan_key
 from charli3_dendrite.lending.liqwid.lifecycle import loan_spend
 from charli3_dendrite.lending.liqwid.lifecycle import match_successors
@@ -570,3 +572,43 @@ def test_lifecycle_methods_match_the_functions():
 def test_lifecycle_imports_in_either_order(modules):
     code = "; ".join(f"import {name}" for name in modules)
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_collateral_units_drop_lovelace_and_loan_tokens_sorted_by_unit():
+    deployment = default_deployment()
+    market = deployment.markets[0]
+    rec = _genuine_loan()
+    assets = Assets(
+        root={
+            "lovelace": 2_000_000,
+            "ff" * 28 + "01": 3,
+            market.borrow_policy + "00": 1,
+            "aa" * 28 + "02": 9,
+            "aa" * 28: 7,
+        },
+    )
+    info = record_info(rec, assets=assets)
+    assert collateral_units(info, deployment.loan_token_policies) == (
+        ("aa" * 28, 7),
+        ("aa" * 28 + "02", 9),
+        ("ff" * 28 + "01", 3),
+    )
+    assert collateral_units(info, frozenset()) == (
+        ("aa" * 28, 7),
+        ("aa" * 28 + "02", 9),
+        (market.borrow_policy + "00", 1),
+        ("ff" * 28 + "01", 3),
+    )
+
+
+def test_loan_key_collateral_is_the_shared_collateral_units():
+    deployment = default_deployment()
+    for rec in records_of("loan"):
+        info = record_info(rec)
+        key = loan_key(info, deployment)
+        if key is None:
+            continue
+        assert key.collateral == collateral_units(
+            info,
+            deployment.loan_token_policies,
+        )

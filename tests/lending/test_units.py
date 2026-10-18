@@ -157,9 +157,12 @@ def test_old_homes_reexport_the_shared_helpers():
     ("module", "names"),
     [
         ("indexing", ("script_credential", "sole_token_name")),
-        ("lifecycle", ("script_credential", "policy_of", "out_ref")),
+        (
+            "lifecycle",
+            ("script_credential", "policy_of", "out_ref", "canonical_unit_key"),
+        ),
         ("deployment", ("policy_of", "out_ref")),
-        ("market", ("canonical_unit_key", "policy_of")),
+        ("market", ("canonical_unit_key",)),
         ("oracles", ("out_ref_key",)),
     ],
 )
