@@ -1,5 +1,6 @@
 """The bundled Liqwid V2 deployment snapshot (``registry_v6.json``)."""
 
+import decimal
 import importlib.util
 import json
 import subprocess
@@ -1010,3 +1011,50 @@ def test_findings_are_sorted_and_deduplicated() -> None:
 def test_unknown_finding_kind_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown drift kind"):
         DriftFinding("other", None, "market", "", "")
+
+
+@pytest.mark.parametrize(
+    "datum",
+    ["c4821bffffffffffffff0101", "c5821bffffffffffffff0101"],
+    ids=["decimal_fraction", "bigfloat"],
+)
+def test_overflowing_number_tag_params_datum_is_one_params_finding(
+    datum: str,
+) -> None:
+    rec, _, market = _live_layout36()
+    findings = check_deployment([record_info(rec, datum_cbor=datum)])
+    assert _keys(findings) == [
+        ("params", market.name, "datum", market.market_params_policy),
+    ]
+
+
+def test_params_drift_reads_the_shape_through_the_shared_field_count(
+    monkeypatch,
+) -> None:
+    rec, fields, market = _live_layout36()
+    seen = []
+
+    def spy(datum):
+        seen.append(datum)
+        return 28
+
+    monkeypatch.setattr(deployment, "field_count", spy)
+    findings = check_deployment([record_info(rec)])
+    assert seen == [rec["datum_cbor"]]
+    assert _keys(findings) == [
+        ("params", market.name, "layout", market.market_params_policy),
+    ]
+
+
+def test_an_arithmetic_error_while_decoding_params_is_one_params_finding(
+    monkeypatch,
+) -> None:
+    rec, _, market = _live_layout36()
+
+    def overflow(_datum):
+        raise decimal.Overflow
+
+    monkeypatch.setattr(deployment, "decode_market_params", overflow)
+    assert _keys(check_deployment([record_info(rec)])) == [
+        ("params", market.name, "datum", market.market_params_policy),
+    ]

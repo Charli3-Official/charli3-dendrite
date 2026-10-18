@@ -36,12 +36,11 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Final
 
-import cbor2  # type: ignore[import-not-found]
-
+from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import decode_market_params
-from charli3_dendrite.lending.units import DECODE_ERRORS
+from charli3_dendrite.lending.liqwid.datums import field_count
 from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import policy_of
 
@@ -478,10 +477,6 @@ UNREGISTERED_MARKET_STATE_VALIDATORS: Final[frozenset[str]] = frozenset(
     },
 )
 
-_PARKED_CONSTR_TAG: Final[int] = 121
-# A datum nested past the interpreter's recursion limit raises RecursionError.
-_PARAMS_DECODE_ERRORS: Final = (*DECODE_ERRORS, RecursionError)
-
 
 @dataclass(frozen=True)
 class DriftFinding:
@@ -578,28 +573,6 @@ def _params_market(
     return None
 
 
-def _datum_length(datum_cbor: str) -> int | None:
-    """Field count of a MarketParams datum; None for a parked ``Constr0 []``.
-
-    Raises ValueError when there is no inline datum or the datum is not a bare
-    field list; ``cbor2.CBORDecodeError`` when it is not CBOR; RecursionError when
-    it nests past the interpreter's recursion limit.
-    """
-    if not datum_cbor:
-        msg = "no inline datum"
-        raise ValueError(msg)
-    obj = cbor2.loads(bytes.fromhex(datum_cbor))
-    if isinstance(obj, cbor2.CBORTag):
-        if obj.tag == _PARKED_CONSTR_TAG and not obj.value:
-            return None
-        msg = f"constructor tag {obj.tag} is not a field list"
-        raise ValueError(msg)
-    if not isinstance(obj, list):
-        msg = f"{type(obj).__name__} is not a field list"
-        raise ValueError(msg)
-    return len(obj)
-
-
 def _params_scripts(
     record: MarketParamsDatum,
     market: MarketComponents,
@@ -641,7 +614,7 @@ def _params_drift(
         return []
     where = f"MarketParams {out_ref(info)}"
     try:
-        length = _datum_length(info.datum_cbor)
+        length = field_count(info.datum_cbor)
         if length is None:
             return []
         if length not in MARKET_PARAMS_LENGTHS:
@@ -656,7 +629,7 @@ def _params_drift(
                 ),
             ]
         record = decode_market_params(info.datum_cbor)
-    except _PARAMS_DECODE_ERRORS as exc:
+    except LIQWID_DECODE_ERRORS as exc:
         return [
             DriftFinding(
                 "params",

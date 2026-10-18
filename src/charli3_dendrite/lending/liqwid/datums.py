@@ -23,6 +23,7 @@ from typing import TypeVar
 
 import cbor2  # type: ignore[import-not-found]
 
+from charli3_dendrite.lending.units import DECODE_ERRORS
 from charli3_dendrite.lending.units import asset_unit
 from charli3_dendrite.lending.units import constr
 from charli3_dendrite.lending.units import plutus_fields
@@ -149,6 +150,24 @@ LOAN_LENGTHS: Final[frozenset[int]] = frozenset({5})
 ORACLE_FEED_LENGTHS: Final[frozenset[int]] = frozenset({5, 6})
 """A list5 feed, or a list6 feed that adds field 5 (``OracleFeedDatum.caps``)."""
 ACTION_LENGTHS: Final[frozenset[int]] = frozenset({2})
+
+LIQWID_DECODE_ERRORS: Final = (
+    *DECODE_ERRORS,
+    cbor2.CBORError,
+    EOFError,
+    RecursionError,
+    ArithmeticError,
+)
+"""Every error a malformed Liqwid datum can raise while it is decoded.
+
+The record decoders and :func:`field_count` turn each of them into a ``ValueError``,
+so a caller that catches this tuple also catches anything a decoder raises.
+``RecursionError``: arrays nested past the interpreter's recursion limit.
+``ArithmeticError``: a constructor alternative or a decimal-fraction / bigfloat
+exponent that overflows, however the cbor2 build reports it.
+"""
+# A parked output carries its NFT on an empty ``Constr0 []`` instead of a record.
+_PARKED_CONSTR_TAG = 121
 
 _PAIR = 2
 _INCOME_RATIO_PARTS = 4
@@ -318,6 +337,25 @@ class ActionDatum:
     nonce: object = field(hash=False, compare=False)
 
 
+def _malformed(exc: BaseException, prefix: str) -> ValueError:
+    """The ``ValueError`` a decode failure ``exc`` becomes, its message prefixed.
+
+    A ``ValueError`` from outside this module (``bytes.fromhex``, a constructor tag
+    that ``constr`` rejects) keeps its message behind the record prefix; any other
+    failure (bytes that are not CBOR, a truncated or too deeply nested array, an
+    overflowing number, a wrong-typed field) is a malformed datum.
+    """
+    if isinstance(exc, ValueError) and not isinstance(exc, cbor2.CBORError):
+        return ValueError(f"{prefix}{exc}")
+    return ValueError(f"{prefix}malformed datum")
+
+
+def _load(datum: str | bytes) -> object:
+    """``datum`` (CBOR hex or raw bytes) decoded by cbor2."""
+    raw = bytes.fromhex(datum) if isinstance(datum, str) else bytes(datum)
+    return cbor2.loads(raw)
+
+
 def _decode(
     datum: str | bytes,
     lengths: frozenset[int],
@@ -332,8 +370,7 @@ def _decode(
     """
     prefix = f"liqwid {what}: "
     try:
-        raw = bytes.fromhex(datum) if isinstance(datum, str) else bytes(datum)
-        decoded = cbor2.loads(raw)
+        decoded = _load(datum)
         if not isinstance(decoded, list):
             msg = f"{prefix}datum is not a field list"
             raise ValueError(msg)
@@ -342,28 +379,44 @@ def _decode(
             msg = f"{prefix}unknown layout of {len(fields)} fields"
             raise ValueError(msg)
         return build(fields)
-    except (
-        cbor2.CBORError,
-        EOFError,
-        IndexError,
-        KeyError,
-        OverflowError,
-        RecursionError,
-        TypeError,
-    ) as exc:
-        # ``OverflowError``: a general constructor tag whose alternative is an
-        # infinite float. ``RecursionError``: arrays nested past the interpreter's
-        # recursion limit.
-        msg = f"{prefix}malformed datum"
-        raise ValueError(msg) from exc
-    except ValueError as exc:
-        # A ValueError from outside this module (``bytes.fromhex``, a constructor
-        # tag that ``constr`` rejects) gains the record prefix; this module's own
-        # messages already carry it.
-        if str(exc).startswith(prefix):
+    except LIQWID_DECODE_ERRORS as exc:
+        # This module's own messages already carry the prefix.
+        if isinstance(exc, ValueError) and str(exc).startswith(prefix):
             raise
-        msg = f"{prefix}{exc}"
-        raise ValueError(msg) from exc
+        raise _malformed(exc, prefix) from exc
+
+
+def field_count(datum: str | bytes) -> int | None:
+    """Top-level field count of a Liqwid record datum; None for a parked output.
+
+    A parked output holds its NFT on an empty ``Constr0 []``. The count is taken
+    before any layout check, so a caller can tell an unknown layout from a datum
+    that is no record at all.
+
+    Raises:
+        ValueError: The datum is empty, not CBOR, nested past the recursion limit,
+            or anything but a bare field list or a parked constructor. The message
+            starts with ``"liqwid record: "``.
+    """
+    prefix = "liqwid record: "
+    try:
+        if not datum:
+            msg = f"{prefix}no inline datum"
+            raise ValueError(msg)
+        decoded = _load(datum)
+        if isinstance(decoded, cbor2.CBORTag):
+            if decoded.tag == _PARKED_CONSTR_TAG and not decoded.value:
+                return None
+            msg = f"{prefix}constructor tag {decoded.tag} is not a field list"
+            raise ValueError(msg)
+        if not isinstance(decoded, list):
+            msg = f"{prefix}{type(decoded).__name__} is not a field list"
+            raise ValueError(msg)
+        return len(decoded)
+    except LIQWID_DECODE_ERRORS as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith(prefix):
+            raise
+        raise _malformed(exc, prefix) from exc
 
 
 def _int(value: object, what: str) -> int:

@@ -6,6 +6,7 @@ of every kind and historical layout.
 """
 
 import dataclasses
+import decimal
 import json
 from fractions import Fraction
 from pathlib import Path
@@ -15,6 +16,7 @@ import pytest
 
 from charli3_dendrite.lending.liqwid.datums import ACTION_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import COLLATERAL_PARAMS_LENGTHS
+from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import LOAN_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MARKET_STATE_LENGTHS
@@ -31,11 +33,13 @@ from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.datums import decode_market_params
 from charli3_dendrite.lending.liqwid.datums import decode_market_state
 from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
+from charli3_dendrite.lending.liqwid.datums import field_count
 from charli3_dendrite.lending.liqwid.datums import liqwid_oracle_feed_id
 from charli3_dendrite.lending.liqwid.datums import liqwid_qtoken_rate
 from charli3_dendrite.lending.liqwid.datums import parse_liqwid_market_param
 from charli3_dendrite.lending.liqwid.datums import parse_liqwid_market_state
 from charli3_dendrite.lending.liqwid.datums import parse_liqwid_oracle_v2
+from charli3_dendrite.lending.units import DECODE_ERRORS
 from tests.lending.liqwid.records import records_of
 
 FIX = json.loads(
@@ -814,3 +818,90 @@ def test_existing_readers_keep_their_outputs_on_mainnet_datums():
         360073866973321,
         12033383669199582,
     )
+
+
+# --- One decode path: field_count and LIQWID_DECODE_ERRORS -------------------
+
+OVERFLOW_TAGS = [
+    "c4821bffffffffffffff0101",  # decimal fraction, exponent overflows
+    "c5821bffffffffffffff0101",  # bigfloat, exponent overflows
+]
+
+
+def test_liqwid_decode_errors_cover_every_decode_failure():
+    for error in (*DECODE_ERRORS, cbor2.CBORError, EOFError, RecursionError):
+        assert issubclass(error, LIQWID_DECODE_ERRORS), error
+    assert issubclass(ArithmeticError, LIQWID_DECODE_ERRORS)
+    assert issubclass(decimal.Overflow, LIQWID_DECODE_ERRORS)
+
+
+@pytest.mark.parametrize(
+    ("decode", "record"),
+    list(DECODERS.items()),
+    ids=list(DECODERS.values()),
+)
+@pytest.mark.parametrize("datum", OVERFLOW_TAGS)
+def test_every_decoder_rejects_an_overflowing_number_tag(decode, record, datum):
+    with pytest.raises(ValueError, match=f"^liqwid {record}: "):
+        decode(datum)
+
+
+@pytest.mark.parametrize(
+    ("decode", "record"),
+    list(DECODERS.items()),
+    ids=list(DECODERS.values()),
+)
+def test_an_arithmetic_error_while_decoding_is_a_value_error(
+    monkeypatch,
+    decode,
+    record,
+):
+    """The rejection does not depend on how the cbor2 build reports an overflow."""
+
+    def overflow(_raw: bytes) -> object:
+        raise decimal.Overflow
+
+    monkeypatch.setattr(cbor2, "loads", overflow)
+    with pytest.raises(ValueError, match=f"^liqwid {record}: malformed datum$"):
+        decode("80")
+
+
+@pytest.mark.parametrize("kind", ["market_state", "market_params", "loan", "oracle"])
+def test_field_count_of_a_record_in_both_encodings(kind):
+    for rec in _genuine(kind):
+        length = len(_fields(rec["datum_cbor"]))
+        assert field_count(rec["datum_cbor"]) == length
+        assert field_count(_definite(rec["datum_cbor"])) == length
+        assert field_count(_indefinite(rec["datum_cbor"])) == length
+        assert field_count(bytes.fromhex(rec["datum_cbor"])) == length
+
+
+@pytest.mark.parametrize("length", [0, 1, 26, 37])
+def test_field_count_reads_lengths_outside_the_layouts(length):
+    assert field_count(_encode(list(range(length)))) == length
+
+
+@pytest.mark.parametrize("parked", ["d87980", "d8799fff"])
+def test_field_count_of_a_parked_constructor_is_none(parked):
+    assert field_count(parked) is None
+    assert field_count(bytes.fromhex(parked)) is None
+
+
+@pytest.mark.parametrize(
+    "datum",
+    [
+        "",  # no inline datum
+        "zz",  # not hex
+        "9f0001",  # truncated indefinite array
+        "d87a80",  # an empty Constr1
+        "d8798100",  # a Constr0 that is not empty
+        "01",  # an integer
+        "581c" + "00" * 28,  # a bytestring
+        DEEPLY_NESTED,  # arrays nested past the recursion limit
+        *OVERFLOW_TAGS,
+    ],
+    ids=lambda datum: datum[:24],
+)
+def test_field_count_raises_value_error_on_anything_else(datum):
+    with pytest.raises(ValueError, match="^liqwid record: "):
+        field_count(datum)

@@ -9,6 +9,8 @@ from pycardano import Address
 from pycardano import Network
 from pycardano import VerificationKeyHash
 
+from charli3_dendrite.lending.liqwid import indexing
+from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
@@ -367,3 +369,36 @@ def test_parse_follows_the_given_deployment():
     )
     assert parse_utxo(record_info(rec), without) is None
     assert all(s.market_id != rec["market_id"] for s in liqwid_selectors(without))
+
+
+def test_the_kind_decoder_alone_judges_the_datum(monkeypatch):
+    """No shape pre-check runs before the decoder: it sees every inline datum."""
+    rec = _genuine(LiqwidKind.MARKET_STATE.value, live=True)[0]
+    genuine = parse_utxo(record_info(rec))
+    seen = []
+
+    def decoder(datum):
+        seen.append(datum)
+        return genuine.datum
+
+    monkeypatch.setitem(indexing._DECODERS, LiqwidKind.MARKET_STATE, decoder)
+    for datum in ("d87980", cbor2.dumps([0, 1, 2]).hex()):
+        record = parse_utxo(record_info({**rec, "datum_cbor": datum}))
+        assert record is not None
+        assert record.datum == genuine.datum
+    assert seen == ["d87980", cbor2.dumps([0, 1, 2]).hex()]
+
+
+@pytest.mark.parametrize("error", [ValueError, ArithmeticError, RecursionError])
+def test_a_decoder_failure_in_the_shared_error_set_is_not_a_record(
+    monkeypatch,
+    error,
+):
+    rec = _genuine(LiqwidKind.LOAN.value, live=True)[0]
+
+    def decoder(_datum):
+        raise error
+
+    monkeypatch.setitem(indexing._DECODERS, LiqwidKind.LOAN, decoder)
+    assert issubclass(error, LIQWID_DECODE_ERRORS)
+    assert parse_utxo(record_info(rec)) is None

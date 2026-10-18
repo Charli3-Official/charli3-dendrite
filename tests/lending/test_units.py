@@ -156,9 +156,9 @@ def test_old_homes_reexport_the_shared_helpers():
 @pytest.mark.parametrize(
     ("module", "names"),
     [
-        ("indexing", ("DECODE_ERRORS", "script_credential", "sole_token_name")),
+        ("indexing", ("script_credential", "sole_token_name")),
         ("lifecycle", ("script_credential", "policy_of", "out_ref")),
-        ("deployment", ("DECODE_ERRORS", "policy_of", "out_ref")),
+        ("deployment", ("policy_of", "out_ref")),
         ("market", ("canonical_unit_key", "policy_of")),
         ("oracles", ("out_ref_key",)),
     ],
@@ -169,6 +169,17 @@ def test_liqwid_modules_use_the_shared_helpers(module, names):
     mod = importlib.import_module(f"charli3_dendrite.lending.liqwid.{module}")
     for name in names:
         assert getattr(mod, name) is getattr(units, name), (module, name)
+
+
+@pytest.mark.parametrize("module", ["indexing", "deployment"])
+def test_liqwid_readers_catch_the_one_liqwid_decode_error_set(module):
+    import importlib
+
+    from charli3_dendrite.lending.liqwid import datums
+
+    mod = importlib.import_module(f"charli3_dendrite.lending.liqwid.{module}")
+    assert mod.LIQWID_DECODE_ERRORS is datums.LIQWID_DECODE_ERRORS
+    assert set(units.DECODE_ERRORS) <= set(datums.LIQWID_DECODE_ERRORS)
 
 
 @pytest.mark.parametrize(

@@ -20,14 +20,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Union
 
-import cbor2  # type: ignore[import-not-found]
-
 from charli3_dendrite.dataclasses.models import PoolStateInfo
-from charli3_dendrite.lending.liqwid.datums import COLLATERAL_PARAMS_LENGTHS
-from charli3_dendrite.lending.liqwid.datums import LOAN_LENGTHS
-from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
-from charli3_dendrite.lending.liqwid.datums import MARKET_STATE_LENGTHS
-from charli3_dendrite.lending.liqwid.datums import ORACLE_FEED_LENGTHS
+from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
@@ -46,9 +40,7 @@ from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
-from charli3_dendrite.lending.units import DECODE_ERRORS
 from charli3_dendrite.lending.units import out_ref
-from charli3_dendrite.lending.units import plutus_fields
 from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
 from charli3_dendrite.lending.units import sole_token_name
@@ -72,18 +64,9 @@ class LiqwidKind(str, Enum):
     ORACLE = "oracle"
 
 
-# Top-level field counts of each kind's records. Anything else that holds a genuine
-# identity token (a parked ``C0[]``, an emptied or foreign-shaped state) is not a
-# record.
-_LENGTHS: dict[LiqwidKind, frozenset[int]] = {
-    LiqwidKind.MARKET_STATE: MARKET_STATE_LENGTHS,
-    LiqwidKind.LOAN: LOAN_LENGTHS,
-    LiqwidKind.MARKET_PARAMS: MARKET_PARAMS_LENGTHS,
-    LiqwidKind.COLLATERAL_PARAMS: COLLATERAL_PARAMS_LENGTHS,
-    LiqwidKind.ORACLE: ORACLE_FEED_LENGTHS,
-}
-
-_DECODERS: dict[LiqwidKind, Callable[[bytes], LiqwidDatum]] = {
+# Each decoder owns its kind's shape: a parked ``C0[]``, an emptied or foreign-shaped
+# datum and a malformed one all raise ``ValueError``.
+_DECODERS: dict[LiqwidKind, Callable[[str], LiqwidDatum]] = {
     LiqwidKind.MARKET_STATE: decode_market_state,
     LiqwidKind.LOAN: decode_loan,
     LiqwidKind.MARKET_PARAMS: decode_market_params,
@@ -277,18 +260,14 @@ def _holds_identity(info: PoolStateInfo, selector: LiqwidSelector) -> bool:
 def _decode(kind: LiqwidKind, datum_cbor: str) -> LiqwidDatum | None:
     """``kind``'s record from an inline datum, or None when it is not one.
 
-    The top-level field count is checked first, so a parked ``C0[]`` or a datum of
-    another kind's shape is rejected by shape. A datum of the right shape whose
-    fields do not decode (truncated, not CBOR, nested past the recursion limit, a
-    decimal-fraction or bigfloat tag whose exponent overflows, a wrong-typed field)
-    is rejected too.
+    The kind's decoder judges the datum alone: a parked ``C0[]``, a datum of
+    another kind's shape, and one whose fields do not decode (truncated, not CBOR,
+    nested past the recursion limit, an overflowing number, a wrong-typed field)
+    are all rejected.
     """
     try:
-        raw = bytes.fromhex(datum_cbor)
-        if len(plutus_fields(cbor2.loads(raw))) not in _LENGTHS[kind]:
-            return None
-        return _DECODERS[kind](raw)
-    except (*DECODE_ERRORS, RecursionError, ArithmeticError):
+        return _DECODERS[kind](datum_cbor)
+    except LIQWID_DECODE_ERRORS:
         return None
 
 
