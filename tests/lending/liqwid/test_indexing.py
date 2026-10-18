@@ -20,6 +20,7 @@ from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
 from charli3_dendrite.lending.liqwid.indexing import LiqwidSelector
+from charli3_dendrite.lending.liqwid.indexing import is_oracle_feed_output
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
@@ -473,3 +474,83 @@ def test_newest_record_is_the_latest_of_the_kind_and_market_by_chain_position():
     assert indexing.newest_record(reversed(records), kind, market_id) == new
     assert indexing.newest_record(records, kind, "12" * 28) is None
     assert indexing.newest_record([], kind, market_id) is None
+
+
+def _oracle_token_variants(rec):
+    """``rec``'s assets with the oracle token kept, dropped, doubled or renamed."""
+    policy = default_deployment().oracle_token_policy
+    others = {u: q for u, q in rec["assets"].items() if not u.startswith(policy)}
+    return {
+        "one_token": {**others, policy: 1},
+        "no_token": others,
+        "two_tokens": {**others, policy: 2},
+        "extra_named_token": {**others, policy: 1, policy + "4142": 1},
+        "named_token_only": {**others, policy + "4142": 1},
+    }
+
+
+def test_is_oracle_feed_output_is_the_oracle_identity_rule():
+    rec = _genuine(LiqwidKind.ORACLE.value, live=True)[0]
+    verdicts = {
+        name: is_oracle_feed_output(_with_assets(rec, assets).assets)
+        for name, assets in _oracle_token_variants(rec).items()
+    }
+    assert verdicts == {
+        "one_token": True,
+        "no_token": False,
+        "two_tokens": False,
+        "extra_named_token": False,
+        "named_token_only": False,
+    }
+
+
+def test_is_oracle_feed_output_agrees_with_parse_utxo():
+    recs = records_of(LiqwidKind.ORACLE.value)
+    assert any(rec["label"] == "oracle_decoy" for rec in recs)
+    for rec in recs:
+        info = record_info(rec)
+        assert is_oracle_feed_output(info.assets) == (parse_utxo(info) is not None)
+        for assets in _oracle_token_variants(rec).values():
+            varied = _with_assets(rec, assets)
+            genuine = parse_utxo(varied) is not None
+            assert is_oracle_feed_output(varied.assets) == genuine, rec["out_ref"]
+
+
+def test_is_oracle_feed_output_follows_the_given_deployment():
+    rec = _genuine(LiqwidKind.ORACLE.value, live=True)[0]
+    assets = record_info(rec).assets
+    moved = dataclasses.replace(default_deployment(), oracle_token_policy="ab" * 28)
+    assert is_oracle_feed_output(assets)
+    assert is_oracle_feed_output(assets, default_deployment())
+    assert not is_oracle_feed_output(assets, moved)
+    rehomed = {
+        u: q
+        for u, q in rec["assets"].items()
+        if not u.startswith(
+            default_deployment().oracle_token_policy,
+        )
+    }
+    rehomed["ab" * 28] = 1
+    assert is_oracle_feed_output(_with_assets(rec, rehomed).assets, moved)
+
+
+def test_parse_utxo_and_is_oracle_feed_output_share_one_identity_rule(monkeypatch):
+    calls = []
+    real = indexing._holds_identity_token
+
+    def spy(assets, policy, *, named):
+        calls.append((policy, named))
+        return real(assets, policy, named=named)
+
+    monkeypatch.setattr(indexing, "_holds_identity_token", spy)
+    info = record_info(_genuine(LiqwidKind.ORACLE.value, live=True)[0])
+    policy = default_deployment().oracle_token_policy
+    assert is_oracle_feed_output(info.assets)
+    assert calls == [(policy, False)]
+    calls.clear()
+    assert parse_utxo(info) is not None
+    assert (policy, False) in calls
+    loan = record_info(_genuine(LiqwidKind.LOAN.value, live=True)[0])
+    calls.clear()
+    assert parse_utxo(loan) is not None
+    assert any(named for _, named in calls)

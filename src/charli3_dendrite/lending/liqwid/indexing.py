@@ -21,6 +21,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Union
 
+from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
@@ -280,13 +281,37 @@ def liqwid_selectors(
     return tuple(selector for selector, _ in _routes(active))
 
 
-def _holds_identity(info: PoolStateInfo, selector: LiqwidSelector) -> bool:
-    """Whether ``info`` holds exactly one token under the selector's identity policy.
+def _holds_identity_token(assets: Assets, policy: str, *, named: bool) -> bool:
+    """Whether ``assets`` hold exactly one token under ``policy``, with quantity 1.
 
-    The token must have quantity 1, and an empty name unless it is a loan token.
+    The token's name must be empty unless ``named`` (a loan token).
     """
-    name = sole_token_name(info.assets, selector.identity_policy)
-    return name is not None and (selector.kind in _NAMED_IDENTITY or name == "")
+    name = sole_token_name(assets, policy)
+    return name is not None and (named or name == "")
+
+
+def _holds_identity(info: PoolStateInfo, selector: LiqwidSelector) -> bool:
+    """Whether ``info`` holds the identity token of ``selector``'s kind."""
+    return _holds_identity_token(
+        info.assets,
+        selector.identity_policy,
+        named=selector.kind in _NAMED_IDENTITY,
+    )
+
+
+def is_oracle_feed_output(
+    assets: Assets,
+    deployment: LiqwidDeployment | None = None,
+) -> bool:
+    """Whether an output's ``assets`` make it a genuine oracle feed, by its token.
+
+    The rule is :func:`parse_utxo`'s for the oracle kind: exactly one token under the
+    deployment's oracle token policy, with quantity 1 and an empty name, and nothing
+    else under that policy. It judges the value alone; :func:`parse_utxo` also needs
+    the output at one of the oracle validators and a decodable feed datum.
+    """
+    policy = resolve_deployment(deployment).oracle_token_policy
+    return _holds_identity_token(assets, policy, named=False)
 
 
 def _decode(kind: LiqwidKind, datum_cbor: str) -> LiqwidDatum | None:
