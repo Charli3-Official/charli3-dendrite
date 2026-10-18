@@ -10,8 +10,8 @@ digits.
 Symbols follow the record layouts: ``s0`` cash, ``s2`` qTokens in circulation,
 ``s3`` principal, ``s4`` interest, ``s5`` market index, ``s6`` borrow rate per
 period and ``s9`` qToken rate of a MarketState; ``p[2]`` income ratio, ``p[10]``
-interest period, ``p[11]`` rate model, ``p[15]`` minimum interest rate and ``p[16]``
-close factor of a MarketParams record.
+interest period, ``p[11]`` rate model, ``p[15]`` minimum interest rate, ``p[16]``
+close factor and ``p[18]`` liquidation threshold of a MarketParams record.
 """
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ __all__ = [
     "health",
     "liquidation_debt",
     "liquidation_repay",
+    "liquidation_weight",
     "ltv",
     "min_interest_at_borrow",
     "payoff",
@@ -265,6 +266,20 @@ def payoff(loan: LoanDatum, market_index: int) -> int:
     )
 
 
+def liquidation_weight(weight: Rational, liquidation_threshold: Rational) -> Fraction:
+    """A collateral's weight in the health factor, ``w * p[18]``.
+
+    Args:
+        weight: The collateral's CollateralParams weight ``w``.
+        liquidation_threshold: The borrow market's liquidation threshold ``p[18]``
+            (1 on every live market).
+
+    Returns:
+        The exact weight a holding's value counts with toward health.
+    """
+    return _fraction(weight) * _fraction(liquidation_threshold)
+
+
 @dataclass(frozen=True)
 class WeightedHolding:
     """One collateral of a loan, valued for health and LTV.
@@ -274,8 +289,8 @@ class WeightedHolding:
         rate: Underlying per receipt token (the collateral market's ``s9``).
         price: The underlying's price per base unit, in the numeraire the borrowed
             asset's price is given in.
-        weight: The collateral's liquidation weight (its CollateralParams weight,
-            times ``p[18]`` where the caller applies one).
+        weight: The collateral's liquidation weight (``liquidation_weight``: its
+            CollateralParams weight times ``p[18]``).
     """
 
     amount: int

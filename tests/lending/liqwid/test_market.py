@@ -23,6 +23,7 @@ from charli3_dendrite.lending.liqwid.market import collateral_terms
 from charli3_dendrite.lending.liqwid.market import loan_to_position
 from charli3_dendrite.lending.liqwid.market import market_parameters
 from charli3_dendrite.lending.liqwid.market import market_to_view
+from charli3_dendrite.lending.liqwid.math import liquidation_weight
 from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
@@ -188,6 +189,10 @@ def test_terms_follow_the_market_parameters(live_ctx, live_markets):
             assert terms.liquidation_ltv == weight * Fraction(
                 *params.liquidation_threshold
             )
+            assert terms.liquidation_ltv == liquidation_weight(
+                record.weight,
+                params.liquidation_threshold,
+            )
             assert terms.liquidation_penalty is None
             assert terms.liquidation_discount == 1 - Fraction(
                 *record.liquidation_discount
@@ -199,6 +204,26 @@ def test_terms_follow_the_market_parameters(live_ctx, live_markets):
                 "underlying": record.underlying,
                 "market_state": record.collateral_market_state,
             }
+
+
+def test_terms_weigh_health_through_liquidation_weight(live_ctx, monkeypatch):
+    calls = []
+
+    def spy(weight, threshold):
+        calls.append((weight, threshold))
+        return Fraction(7, 9)
+
+    monkeypatch.setattr(liqwid_market, "liquidation_weight", spy)
+    market_id = next(iter(_parsed("market_state", live=True)))[1].market_id
+    params, records = market_parameters(
+        DEPLOYMENT.market(market_id), live_ctx, DEPLOYMENT
+    )
+    assert records
+    for record in records:
+        terms = collateral_terms(params, record, DEPLOYMENT)
+        assert terms.liquidation_ltv == Fraction(7, 9)
+        assert calls[-1] == (record.weight, params.liquidation_threshold)
+    assert len(calls) == len(records)
 
 
 def test_market_views_round_trip(live_markets):

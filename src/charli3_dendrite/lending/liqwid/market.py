@@ -33,6 +33,7 @@ from charli3_dendrite.lending.liqwid.loader import snapshot
 from charli3_dendrite.lending.liqwid.math import INTEREST_PERIOD_MS
 from charli3_dendrite.lending.liqwid.math import _fraction
 from charli3_dendrite.lending.liqwid.math import apy_fraction
+from charli3_dendrite.lending.liqwid.math import liquidation_weight
 from charli3_dendrite.lending.liqwid.math import supply_apy
 from charli3_dendrite.lending.liqwid.math import utilization
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
@@ -137,12 +138,13 @@ def collateral_terms(
     """One CollateralParams record of a market as collateral terms.
 
     With weight ``w``: ``max_ltv`` is the max LTV p[12] times ``w`` and
-    ``liquidation_ltv`` is ``w`` times the liquidation threshold p[18] (1 on every
-    live market, where health is the weighted collateral value over the debt);
-    ``weight`` keeps ``w`` itself. A whole-policy record (``C0[policy]``) gives
-    policy-wide terms. The price source names the collateral's underlying and the
-    MarketState NFT policy of its market, from the deployment snapshot when it knows
-    the qToken and from the record's own link otherwise.
+    ``liquidation_ltv`` is ``liquidation_weight``, ``w`` times the liquidation
+    threshold p[18] (1 on every live market, where health is the weighted collateral
+    value over the debt); ``weight`` keeps ``w`` itself. A whole-policy record
+    (``C0[policy]``) gives policy-wide terms. The price source names the
+    collateral's underlying and the MarketState NFT policy of its market, from the
+    deployment snapshot when it knows the qToken and from the record's own link
+    otherwise.
     """
     deployment = resolve_deployment(deployment)
     weight = _fraction(record.weight)
@@ -158,7 +160,7 @@ def collateral_terms(
         policy_wide=record.policy_wide,
         max_ltv=_fraction(params.max_ltv) * weight,
         fixed_ratio=None,
-        liquidation_ltv=weight * _fraction(params.liquidation_threshold),
+        liquidation_ltv=liquidation_weight(record.weight, params.liquidation_threshold),
         liquidation_penalty=None,
         liquidation_discount=1 - _fraction(record.liquidation_discount),
         equity_to_borrower=True,

@@ -21,6 +21,7 @@ from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.market import loan_to_position
 from charli3_dendrite.lending.liqwid.market import market_to_view
 from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
@@ -43,6 +44,7 @@ from tests.lending.liqwid.records import spend_of
 DEPLOYMENT = default_deployment()
 POLICY_HEX_LEN = 56
 OWNER = "00" * 28
+NOW_MS = 1_790_000_000_000
 
 
 def _state(**fields: Any) -> MarketStateDatum:
@@ -320,6 +322,43 @@ def _qtoken_holdings(assets: dict[str, int]) -> list[tuple[str, int]]:
     )
 
 
+def _weighted_holdings(
+    market_id: str,
+    held: list[tuple[str, int]],
+    states: dict[str, MarketStateDatum],
+    params: dict[str, MarketParamsDatum],
+    weights: dict[tuple[str, str], CollateralParamsDatum],
+    prices: PriceMap,
+) -> list[lqm.WeightedHolding]:
+    """A loan's qTokens in ``market_id`` as holdings priced in lovelace.
+
+    A qToken without CollateralParams in the market weighs 0.
+    """
+    holdings = []
+    for unit, amount in held:
+        collateral = DEPLOYMENT.market_of_qtoken(unit)
+        price = _lovelace_price(prices, collateral.underlying)
+        assert price is not None, unit
+        terms = weights.get((market_id, unit))
+        weight = (
+            Fraction(0)
+            if terms is None
+            else lqm.liquidation_weight(
+                terms.weight,
+                params[market_id].liquidation_threshold,
+            )
+        )
+        holdings.append(
+            lqm.WeightedHolding(
+                amount=amount,
+                rate=Fraction(*states[collateral.market_id].qtoken_rate),
+                price=price,
+                weight=weight,
+            ),
+        )
+    return holdings
+
+
 def _market_named(name: str) -> MarketComponents:
     matches = [market for market in DEPLOYMENT.markets if market.name == name]
     assert len(matches) == 1, name
@@ -355,22 +394,7 @@ def test_health_and_ltv_match_the_api_on_every_servable_loan(
         held = _qtoken_holdings(assets)
         if loan.principal == 0 or not held:
             continue
-        threshold = Fraction(*params[market_id].liquidation_threshold)
-        holdings = []
-        for unit, amount in held:
-            collateral = DEPLOYMENT.market_of_qtoken(unit)
-            price = _lovelace_price(prices, collateral.underlying)
-            assert price is not None, (out_ref, unit)
-            terms = weights.get((market_id, unit))
-            weight = Fraction(0) if terms is None else Fraction(*terms.weight)
-            holdings.append(
-                lqm.WeightedHolding(
-                    amount=amount,
-                    rate=Fraction(*states[collateral.market_id].qtoken_rate),
-                    price=price,
-                    weight=weight * threshold,
-                ),
-            )
+        holdings = _weighted_holdings(market_id, held, states, params, weights, prices)
         borrow_price = _lovelace_price(prices, DEPLOYMENT.market(market_id).underlying)
         assert borrow_price is not None, out_ref
         debt = lqm.liquidation_debt(loan, states[market_id].index)
@@ -385,6 +409,57 @@ def test_health_and_ltv_match_the_api_on_every_servable_loan(
         ), out_ref
         scored += 1
     assert scored == 565
+
+
+def test_liquidation_weight_is_the_weight_times_the_threshold():
+    assert lqm.liquidation_weight((4, 5), (1, 1)) == Fraction(4, 5)
+    assert lqm.liquidation_weight((4, 5), (9, 10)) == Fraction(18, 25)
+    assert lqm.liquidation_weight((0, 1), (9, 10)) == 0
+
+
+def test_health_is_the_exact_ratio_behind_the_position_health_factor(
+    loans,
+    states,
+    params,
+    weights,
+    prices,
+):
+    """``health`` over a loan's datum equals the exact ratio ``health_factor`` rounds.
+
+    The position side weighs each holding by its terms' liquidation LTV and prices
+    the qToken through its receipt price; ``health`` weighs by
+    ``liquidation_weight`` and multiplies the rate and the underlying's price.
+    """
+    context = live_context()
+    markets = []
+    for rec in records_of("market_state", live=True):
+        record = parse_utxo(record_info(rec), DEPLOYMENT)
+        if record is not None:
+            markets.append(market_to_view(record, context, DEPLOYMENT))
+    book = PriceMap(prices={**prices.prices, **receipt_prices(markets, prices).prices})
+    compared = 0
+    for rec, record in _parsed("loan"):
+        market_id, loan, assets = loans[rec["out_ref"]]
+        held = _qtoken_holdings(assets)
+        if loan.principal == 0 or not held:
+            continue
+        holdings = _weighted_holdings(market_id, held, states, params, weights, prices)
+        borrow_price = _lovelace_price(prices, DEPLOYMENT.market(market_id).underlying)
+        assert borrow_price is not None
+        debt = lqm.liquidation_debt(loan, states[market_id].index)
+        expected = lqm.health(holdings, debt, borrow_price)
+
+        position = loan_to_position(record, context, DEPLOYMENT)
+        assert position.liquidation_debt(NOW_MS) == debt
+        weighted = position.weighted_collateral(book)
+        assert None not in weighted
+        ratio = sum(weighted, Fraction(0)) * position.liquidation_ltv / debt
+        assert ratio == expected, rec["out_ref"]
+        assert position.health_factor(book, NOW_MS) == (
+            Decimal(expected.numerator) / Decimal(expected.denominator)
+        )
+        compared += 1
+    assert compared == 565
 
 
 def test_market_rates_and_supply_side_match_the_api(states, params):
