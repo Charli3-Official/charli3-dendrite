@@ -34,6 +34,7 @@ from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.models import PriceMap
 from charli3_dendrite.lending.oracles.models import register_resolver
+from charli3_dendrite.lending.units import out_ref_key
 from charli3_dendrite.lending.units import script_payment_address
 
 ADA_UNIT: Final[str] = "lovelace"
@@ -68,14 +69,8 @@ class LiqwidFeed:
         return self.asset_unit
 
 
-def _out_ref_key(out_ref: str) -> tuple[str, int]:
-    """``(tx_hash, index)`` of an out-ref, the index compared as an integer."""
-    tx_hash, _, index = out_ref.partition("#")
-    return (tx_hash, int(index) if index.isdigit() else -1)
-
-
 def _rank(feed: LiqwidFeed) -> tuple[int, str, int]:
-    return (feed.ts_ms, *_out_ref_key(feed.out_ref))
+    return (feed.ts_ms, *out_ref_key(feed.out_ref))
 
 
 def _priced(feed: LiqwidFeed) -> bool:
@@ -194,7 +189,7 @@ def _market_state(
         rank = (
             state.last_batch_ms,
             state.last_interest_ms,
-            *_out_ref_key(record.out_ref),
+            *out_ref_key(record.out_ref),
         )
         if best_rank is None or rank > best_rank:
             best, best_rank = state, rank

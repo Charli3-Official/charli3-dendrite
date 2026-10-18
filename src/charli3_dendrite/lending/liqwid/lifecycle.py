@@ -23,10 +23,12 @@ from enum import Enum
 from operator import attrgetter
 from typing import TYPE_CHECKING
 
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.units import out_ref
+from charli3_dendrite.lending.units import policy_of
+from charli3_dendrite.lending.units import script_credential
 
 if TYPE_CHECKING:
     from charli3_dendrite.dataclasses.models import PoolStateInfo
@@ -90,7 +92,6 @@ class LoanTransition(str, Enum):
 
 
 _LOVELACE = "lovelace"
-_POLICY_HEX = 56
 
 _State = tuple[int, int, int, int, tuple[tuple[str, int], ...]]
 
@@ -104,7 +105,7 @@ def _collateral(
         sorted(
             (unit, quantity)
             for unit, quantity in info.assets.items()
-            if unit != _LOVELACE and unit[:_POLICY_HEX] not in loan_token_policies
+            if unit != _LOVELACE and policy_of(unit) not in loan_token_policies
         ),
     )
 
@@ -141,7 +142,7 @@ def loan_key(
     datum = record.datum if record is not None else None
     loan = datum if isinstance(datum, LoanDatum) else None
     return LoanKey(
-        out_ref=f"{info.tx_hash}#{info.tx_index}",
+        out_ref=out_ref(info),
         market_id=market.market_id,
         owner=loan.owner if loan is not None else None,
         principal=loan.principal if loan is not None else 0,
@@ -253,7 +254,7 @@ def loan_spend(
     net: dict[str, int] = {}
     burned: set[str] = set()
     for unit, quantity in mints:
-        policy = unit[:_POLICY_HEX]
+        policy = policy_of(unit)
         net[policy] = net.get(policy, 0) + quantity
         if quantity < 0:
             burned.add(policy)

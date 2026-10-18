@@ -16,7 +16,6 @@ import pytest
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid import deployment
 from charli3_dendrite.lending.liqwid.deployment import BURN_CREDENTIAL
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
@@ -37,6 +36,7 @@ from charli3_dendrite.lending.liqwid.deployment import check_deployment
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
+from charli3_dendrite.lending.units import script_credential
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import CONTEXT_KINDS
 from tests.lending.liqwid.records import RECORDS

@@ -9,7 +9,6 @@ from pycardano import Address
 from pycardano import Network
 from pycardano import VerificationKeyHash
 
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
@@ -25,6 +24,7 @@ from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
 from charli3_dendrite.lending.units import plutus_fields
+from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of

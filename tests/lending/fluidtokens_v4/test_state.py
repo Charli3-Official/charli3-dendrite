@@ -200,6 +200,7 @@ def test_from_record_raises_on_a_foreign_datum():
         ({"lovelace": 1, c.POOL_POLICY + "ab": 1}, "ab"),
         ({"lovelace": 1}, None),
         ({"lovelace": 1, c.POOL_POLICY + "ab": 2}, None),
+        ({"lovelace": 1, c.POOL_POLICY: 1}, None),
         ({"lovelace": 1, c.POOL_POLICY + "ab": 1, c.POOL_POLICY + "cd": 1}, None),
     ],
 )

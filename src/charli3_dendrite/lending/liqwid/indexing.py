@@ -23,9 +23,6 @@ from typing import Union
 import cbor2  # type: ignore[import-not-found]
 
 from charli3_dendrite.dataclasses.models import PoolStateInfo
-from charli3_dendrite.lending.fluidtokens_v4.indexing import DECODE_ERRORS
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
-from charli3_dendrite.lending.fluidtokens_v4.state import names_under
 from charli3_dendrite.lending.liqwid.datums import COLLATERAL_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import LOAN_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
@@ -49,8 +46,12 @@ from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
+from charli3_dendrite.lending.units import DECODE_ERRORS
+from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import plutus_fields
+from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
+from charli3_dendrite.lending.units import sole_token_name
 
 LiqwidDatum = Union[
     MarketStateDatum,
@@ -269,12 +270,8 @@ def _holds_identity(info: PoolStateInfo, selector: LiqwidSelector) -> bool:
 
     The token must have quantity 1, and an empty name unless it is a loan token.
     """
-    names = names_under(info.assets, selector.identity_policy)
-    if len(names) != 1:
-        return False
-    if info.assets.root[selector.identity_policy + names[0]] != 1:
-        return False
-    return selector.kind in _NAMED_IDENTITY or names[0] == ""
+    name = sole_token_name(info.assets, selector.identity_policy)
+    return name is not None and (selector.kind in _NAMED_IDENTITY or name == "")
 
 
 def _decode(kind: LiqwidKind, datum_cbor: str) -> LiqwidDatum | None:
@@ -322,7 +319,7 @@ def parse_utxo(
         return None
     return LiqwidRecord(
         kind=selector.kind,
-        out_ref=f"{info.tx_hash}#{info.tx_index}",
+        out_ref=out_ref(info),
         market_id=selector.market_id,
         generation=generation,
         datum=datum,

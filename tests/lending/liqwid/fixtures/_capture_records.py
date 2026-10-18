@@ -53,11 +53,11 @@ import psycopg
 import requests
 from dotenv import load_dotenv
 
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.units import plutus_fields
+from charli3_dendrite.lending.units import script_credential
 
 load_dotenv()
 

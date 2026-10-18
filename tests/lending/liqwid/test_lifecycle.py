@@ -8,7 +8,6 @@ from collections import Counter
 
 import pytest
 
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
@@ -22,6 +21,7 @@ from charli3_dendrite.lending.liqwid.lifecycle import loan_key
 from charli3_dendrite.lending.liqwid.lifecycle import loan_spend
 from charli3_dendrite.lending.liqwid.lifecycle import match_successors
 from charli3_dendrite.lending.markets import PositionLifecycle
+from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of

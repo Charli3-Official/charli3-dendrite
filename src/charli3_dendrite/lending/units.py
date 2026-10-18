@@ -1,11 +1,35 @@
-"""Shared asset-unit and Plutus-constructor helpers for the lending protocols."""
+"""Shared unit, credential and Plutus-constructor helpers for lending protocols."""
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from typing import Protocol
 
 import cbor2  # type: ignore[import-not-found]
 from pycardano import Address
 from pycardano import Network
 from pycardano import RawPlutusData
 from pycardano import ScriptHash
+from pycardano.exception import DecodingException
+from pycardano.exception import DeserializeException
+from pycardano.exception import InvalidAddressInputException
+
+if TYPE_CHECKING:
+    from charli3_dendrite.dataclasses.models import Assets
+
+# Hex length of a policy id (a 28-byte script hash): the policy prefix of a unit.
+POLICY_HEX_LEN = 56
+
+# Everything a malformed record can raise while its datum is decoded. Truncated CBOR
+# raises cbor2's end-of-stream error, which is not a ValueError.
+DECODE_ERRORS = (
+    cbor2.CBORDecodeError,
+    DeserializeException,
+    ValueError,
+    TypeError,
+    KeyError,
+    IndexError,
+    AttributeError,
+)
 
 # CBOR constructor tags map to Plutus alternative indices: tags 121..127 cover
 # alts 0..6; tags 1280+ cover alts 7+ (alt = tag - 1280 + 7). The general form
@@ -23,6 +47,58 @@ def asset_unit(policy: bytes, name: bytes) -> str:
     if not policy and not name:
         return "lovelace"
     return policy.hex() + name.hex()
+
+
+def policy_of(unit: str) -> str:
+    """Policy id (hex) of a dendrite unit; ``""`` for lovelace."""
+    return "" if unit == "lovelace" else unit[:POLICY_HEX_LEN]
+
+
+def canonical_unit_key(unit: str) -> str:
+    """Sort key of the canonical unit order: lovelace first, then policy id + name."""
+    return "" if unit == "lovelace" else unit
+
+
+def names_under(assets: Assets, policy: str) -> list[str]:
+    """Asset names (hex, sorted) held under ``policy``."""
+    return sorted(
+        unit[POLICY_HEX_LEN:]
+        for unit in assets.root
+        if unit != "lovelace" and unit[:POLICY_HEX_LEN] == policy
+    )
+
+
+def sole_token_name(assets: Assets, policy: str) -> str | None:
+    """Asset name (hex) of the one token held under ``policy``, if there is one.
+
+    ``assets`` must hold exactly one token under ``policy``, with quantity 1; its name
+    may be empty. Anything else returns None.
+    """
+    names = names_under(assets, policy)
+    if len(names) != 1 or assets.root[policy + names[0]] != 1:
+        return None
+    return names[0]
+
+
+class OutRefSource(Protocol):
+    """Anything that names a UTxO by transaction hash and output index."""
+
+    tx_hash: str
+    tx_index: int
+
+
+def out_ref(info: OutRefSource) -> str:
+    """``tx_hash#tx_index`` of a UTxO."""
+    return f"{info.tx_hash}#{info.tx_index}"
+
+
+def out_ref_key(ref: str) -> tuple[str, int]:
+    """``(tx_hash, index)`` of an out-ref, the index compared as an integer.
+
+    An index that is not a non-negative integer reads as -1.
+    """
+    tx_hash, _, index = ref.partition("#")
+    return (tx_hash, int(index) if index.isdigit() else -1)
 
 
 def plutus_fields(obj: object) -> list:
@@ -55,6 +131,29 @@ def script_payment_address(script_hash_hex: str) -> str:
         payment_part=ScriptHash(bytes.fromhex(script_hash_hex)),
         network=Network.MAINNET,
     ).encode()
+
+
+def script_credential(address: str) -> str | None:
+    """Payment script hash (hex) of a bech32 address; None for any other address.
+
+    Protocol entities sit at script credentials, so a key-hash payment part (even one
+    whose bytes equal a protocol script hash) returns None, as does an unparseable
+    address. pycardano asserts key-hash sizes and decodes a bech32 Byron header as
+    CBOR, so a malformed address can also raise ``AssertionError`` or
+    ``DeserializeException``; both read as None.
+    """
+    try:
+        part = Address.decode(address).payment_part
+    except (
+        AssertionError,
+        DecodingException,
+        DeserializeException,
+        InvalidAddressInputException,
+        TypeError,
+        ValueError,
+    ):
+        return None
+    return part.payload.hex() if isinstance(part, ScriptHash) else None
 
 
 def constr_alt(tag: int) -> int:

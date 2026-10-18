@@ -14,7 +14,6 @@ from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.dataclasses.models import PoolStateList
-from charli3_dendrite.lending.fluidtokens_v4.indexing import script_credential
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.deployment import ORACLE_TOKEN_POLICY
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
@@ -31,6 +30,7 @@ from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.models import get_resolver
 from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from charli3_dendrite.lending.units import plutus_fields
+from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info

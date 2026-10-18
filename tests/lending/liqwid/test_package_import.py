@@ -69,3 +69,15 @@ def test_loading_the_builtins_registers_the_liqwid_resolver():
         "assert got == ['fluidtokensv4', 'liqwidv2'], got; "
         "assert OracleSource.LIQWID in resolver_sources()",
     )
+
+
+def test_liqwid_modules_load_no_other_protocol_package():
+    _run(
+        "import sys; "
+        "import charli3_dendrite.lending.liqwid.market; "
+        "import charli3_dendrite.lending.liqwid.lifecycle; "
+        "loaded = sorted(m for m in sys.modules "
+        "if m.startswith(('charli3_dendrite.lending.fluidtokens', "
+        "'charli3_dendrite.lending.danogo'))); "
+        "assert not loaded, loaded",
+    )

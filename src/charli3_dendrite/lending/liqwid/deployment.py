@@ -38,10 +38,12 @@ from typing import Final
 
 import cbor2  # type: ignore[import-not-found]
 
-from charli3_dendrite.lending.fluidtokens_v4.indexing import DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import decode_market_params
+from charli3_dendrite.lending.units import DECODE_ERRORS
+from charli3_dendrite.lending.units import out_ref
+from charli3_dendrite.lending.units import policy_of
 
 if TYPE_CHECKING:
     from charli3_dendrite.dataclasses.models import PoolStateInfo
@@ -476,7 +478,6 @@ UNREGISTERED_MARKET_STATE_VALIDATORS: Final[frozenset[str]] = frozenset(
     },
 )
 
-_POLICY_HEX_LEN: Final[int] = 56
 _PARKED_CONSTR_TAG: Final[int] = 121
 # A datum nested past the interpreter's recursion limit raises RecursionError.
 _PARAMS_DECODE_ERRORS: Final = (*DECODE_ERRORS, RecursionError)
@@ -571,7 +572,7 @@ def _params_market(
     for unit in info.assets.root:
         if unit == "lovelace":
             continue
-        market = deployment.market_of_params_policy(unit[:_POLICY_HEX_LEN])
+        market = deployment.market_of_params_policy(policy_of(unit))
         if market is not None:
             return market
     return None
@@ -638,7 +639,7 @@ def _params_drift(
     market = _params_market(info, deployment)
     if market is None:
         return []
-    where = f"MarketParams {info.tx_hash}#{info.tx_index}"
+    where = f"MarketParams {out_ref(info)}"
     try:
         length = _datum_length(info.datum_cbor)
         if length is None:

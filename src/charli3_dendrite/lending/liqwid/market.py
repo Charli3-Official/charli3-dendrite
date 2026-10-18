@@ -22,7 +22,6 @@ from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
-from charli3_dendrite.lending.liqwid.deployment import _POLICY_HEX_LEN
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
@@ -51,6 +50,8 @@ from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
+from charli3_dendrite.lending.units import canonical_unit_key
+from charli3_dendrite.lending.units import policy_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -74,11 +75,6 @@ def _resolved(deployment: LiqwidDeployment | None) -> LiqwidDeployment:
 def _chain_order(info: PoolStateInfo) -> tuple[int, int, str, int]:
     """Where a UTxO sits in the chain: block time, transaction in block, out-ref."""
     return (info.block_time, info.block_index, info.tx_hash, info.tx_index)
-
-
-def _unit_order(unit: str) -> str:
-    """Canonical unit order: lovelace first, then by policy id and asset name."""
-    return "" if unit == "lovelace" else unit
 
 
 def _market_records(
@@ -118,7 +114,7 @@ def _parameters(
         datum = record.datum
         if isinstance(datum, CollateralParamsDatum):
             collateral.setdefault((datum.collateral, datum.policy_wide), datum)
-    keys = sorted(collateral, key=lambda key: (_unit_order(key[0]), key[1]))
+    keys = sorted(collateral, key=lambda key: (canonical_unit_key(key[0]), key[1]))
     return newest, tuple(collateral[key] for key in keys)
 
 
@@ -282,9 +278,9 @@ def _holdings(
         (
             unit
             for unit in info.assets
-            if unit != "lovelace" and unit[:_POLICY_HEX_LEN] not in loan_tokens
+            if unit != "lovelace" and policy_of(unit) not in loan_tokens
         ),
-        key=_unit_order,
+        key=canonical_unit_key,
     )
     return tuple(CollateralHolding(unit, int(info.assets[unit])) for unit in units)
 

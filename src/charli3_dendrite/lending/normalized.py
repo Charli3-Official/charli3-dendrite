@@ -25,13 +25,13 @@ from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.rates import MS_PER_HOUR
 from charli3_dendrite.lending.rates import RateModel
 from charli3_dendrite.lending.rates import rate_model_from_dict
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
+from charli3_dendrite.lending.units import policy_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from charli3_dendrite.lending.oracles.models import PriceMap
-
-_POLICY_HEX_LEN = 56
 
 
 class LendingParseError(ValueError):
@@ -175,7 +175,7 @@ class CollateralTerms:
     def accepts(self, unit: str) -> bool:
         """Whether ``unit`` is this collateral (or of its policy, if policy-wide)."""
         if self.policy_wide:
-            return unit[:_POLICY_HEX_LEN] == self.unit and unit != "lovelace"
+            return policy_of(unit) == self.unit and unit != "lovelace"
         return unit == self.unit
 
     def to_dict(self) -> dict[str, Any]:
@@ -237,8 +237,8 @@ def _price_in(prices: PriceMap | None, unit: str, quote: str) -> Fraction | None
     if prices is None:
         return None
     candidates = [unit]
-    if unit != "lovelace" and len(unit) > _POLICY_HEX_LEN:
-        candidates.append(unit[:_POLICY_HEX_LEN])
+    if unit != "lovelace" and len(unit) > POLICY_HEX_LEN:
+        candidates.append(policy_of(unit))
     for token in candidates:
         direct = _positive(prices, token, quote)
         if direct is not None:
