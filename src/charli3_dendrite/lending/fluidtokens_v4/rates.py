@@ -12,12 +12,9 @@ headline rate annualizes it over the term.
 
 from __future__ import annotations
 
-import dataclasses
 from abc import abstractmethod
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import TYPE_CHECKING
-from typing import Any
 from typing import ClassVar
 
 from charli3_dendrite.lending.fluidtokens.math import amortization_installment
@@ -28,11 +25,9 @@ from charli3_dendrite.lending.fluidtokens.math import perpetual_debt
 from charli3_dendrite.lending.fluidtokens.math import perpetual_outstanding_debt
 from charli3_dendrite.lending.normalized import LendingParseError
 from charli3_dendrite.lending.rates import HOURS_PER_YEAR
+from charli3_dendrite.lending.rates import DataclassIntParams
 from charli3_dendrite.lending.rates import RateKind
 from charli3_dendrite.lending.rates import RateModel
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 PROTOCOL_NAME = "FluidTokensV4"
 
@@ -40,7 +35,7 @@ _RATE_BASIS = 10_000
 
 
 @dataclass(frozen=True)
-class _FluidRate(RateModel):
+class _FluidRate(DataclassIntParams):
     """Terms every FluidTokens repayment mode carries."""
 
     interest_rate: int
@@ -68,16 +63,6 @@ class _FluidRate(RateModel):
             installment_period=self.installment_period,
             repayment_time_window=self.repayment_time_window,
         )
-
-    def params(self) -> dict[str, int]:
-        """The datum integers, by field name."""
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_params(cls, params: Mapping[str, Any]) -> RateModel:
-        """Rebuild from :meth:`params`."""
-        names = [field.name for field in dataclasses.fields(cls)]
-        return cls(**{name: int(params[name]) for name in names})
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ kind)``, so a stored ``{"protocol", "kind", "params"}`` record rebuilds its mode
 
 from __future__ import annotations
 
+import dataclasses
 from abc import ABC
 from abc import abstractmethod
 from enum import Enum
@@ -17,6 +18,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import ClassVar
+from typing import TypeVar
 
 from charli3_dendrite.lending.builtins import BUILTIN_PROTOCOL_PACKAGES
 
@@ -26,6 +28,8 @@ if TYPE_CHECKING:
 
 HOURS_PER_YEAR = 8760
 MS_PER_HOUR = 3_600_000
+
+_IntParams = TypeVar("_IntParams", bound="DataclassIntParams")
 
 
 class RateKind(str, Enum):
@@ -126,6 +130,28 @@ class RateModel(ABC):
             "kind": self.kind.value,
             "params": self.params(),
         }
+
+
+class DataclassIntParams(RateModel):
+    """A rate model that is a dataclass of int fields only.
+
+    Supplies :meth:`RateModel.params` and :meth:`RateModel.from_params`: the params
+    are the fields by name, and rebuilding takes ``int()`` of every field, defaulted
+    ones included.
+    """
+
+    def params(self) -> dict[str, int]:
+        """Every field, by name."""
+        return dataclasses.asdict(self)  # type: ignore[call-overload]
+
+    @classmethod
+    def from_params(
+        cls: type[_IntParams],
+        params: Mapping[str, Any],
+    ) -> _IntParams:  # noqa: PYI019
+        """Rebuild from :meth:`params`; every field is required."""
+        names = [field.name for field in dataclasses.fields(cls)]  # type: ignore[arg-type]
+        return cls(**{name: int(params[name]) for name in names})
 
 
 _REGISTRY: dict[tuple[str, RateKind], type[RateModel]] = {}

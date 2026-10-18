@@ -19,8 +19,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from decimal import localcontext
 from fractions import Fraction
-from typing import TYPE_CHECKING
-from typing import Any
 from typing import ClassVar
 from typing import Final
 
@@ -32,17 +30,15 @@ from charli3_dendrite.lending.liqwid.math import liquidation_debt as unfloored_d
 from charli3_dendrite.lending.liqwid.math import min_interest_at_borrow
 from charli3_dendrite.lending.liqwid.math import payoff
 from charli3_dendrite.lending.normalized import LendingParseError
+from charli3_dendrite.lending.rates import DataclassIntParams
 from charli3_dendrite.lending.rates import RateKind
 from charli3_dendrite.lending.rates import RateModel
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 PROTOCOL_NAME: Final[str] = "LiqwidV2"
 
 
 @dataclass(frozen=True)
-class LiqwidVariableRate(RateModel):
+class LiqwidVariableRate(DataclassIntParams):
     """A Liqwid V2 borrow: the market's variable rate and the loan's index terms.
 
     ``rate_num / rate_den`` is the borrow rate per ``period_ms``, and ``market_index``
@@ -158,16 +154,6 @@ class LiqwidVariableRate(RateModel):
     def grace_hours(self) -> int:
         """0: no grace period."""
         return 0
-
-    def params(self) -> dict[str, int]:
-        """Every term, by field name."""
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_params(cls, params: Mapping[str, Any]) -> LiqwidVariableRate:
-        """Rebuild from :meth:`params`."""
-        names = [field.name for field in dataclasses.fields(cls)]
-        return cls(**{name: int(params[name]) for name in names})
 
     def rebind(self, market_model: RateModel) -> LiqwidVariableRate:
         """These loan terms at the rate, period and index of ``market_model``.
