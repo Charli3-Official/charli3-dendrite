@@ -31,20 +31,18 @@ from charli3_dendrite.lending.units import plutus_fields
 
 
 def parse_liqwid_oracle_v2(datum: str | bytes) -> tuple[str, tuple[int, int]]:
-    """Liqwid Oracle V2 datum -> (priced_asset_unit, (num, denom)).
+    """Liqwid Oracle V2 datum -> (priced_asset_key, (num, denom)).
 
-    The priced asset and price of :func:`decode_oracle_feed`; the rate is the priced
+    The ``asset_key`` and price of :func:`decode_oracle_feed`; the rate is the priced
     asset in the feed's configured quote. ADA (the empty TupleAsset) is
-    ``"lovelace"``.
-
-    A policy-wide feed (``Constr0[policy]``) also comes back as ``"lovelace"`` here,
-    which is wrong; ``decode_oracle_feed`` reports it as its policy.
+    ``"lovelace"``, an exact asset its unit, and a policy-wide feed
+    (``Constr0[policy]``) ``"policy:<policy>"`` (:func:`feed_asset_key`).
 
     Raises ValueError on anything ``decode_oracle_feed`` rejects, a non-positive
     denominator included.
     """
     feed = decode_oracle_feed(datum)
-    return ("lovelace" if feed.policy_wide else feed.asset), feed.price
+    return feed.asset_key, feed.price
 
 
 def liqwid_oracle_feed_id(datum: str | bytes) -> str:

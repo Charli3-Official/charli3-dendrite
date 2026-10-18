@@ -702,8 +702,11 @@ def test_policy_wide_oracle_feed_is_its_policy_never_lovelace():
     assert feed.policy_wide is True
     assert feed.asset == POLICY_WIDE_POLICY
     assert feed.price == (10000, 1)
-    # The exact-asset reader keeps its old answer for this shape (see its docstring).
-    assert parse_liqwid_oracle_v2(_policy_wide_feed()) == ("lovelace", (10000, 1))
+    # The asset reader keys it by its policy, as the feed's ``asset_key``.
+    assert parse_liqwid_oracle_v2(_policy_wide_feed()) == (
+        POLICY_KEY_PREFIX + POLICY_WIDE_POLICY,
+        (10000, 1),
+    )
 
 
 def test_empty_asset_class_is_lovelace():
@@ -870,19 +873,21 @@ def test_market_readers_reject_captured_non_records(kind):
 
 
 def test_oracle_readers_keep_their_outputs_on_every_captured_feed():
-    # Every captured feed, decoys included. A policy-wide feed still reads as
-    # "lovelace" here; ``decode_oracle_feed`` reports its policy.
+    # Every captured feed, decoys included. The pinned outputs predate the policy
+    # key: a policy-wide feed was read as "lovelace" and now reads as its
+    # ``asset_key``; every other output is unchanged.
     policy_wide = 0
     for rec, expected in _reader_outputs("oracle"):
         datum = rec["datum_cbor"]
-        assert parse_liqwid_oracle_v2(datum) == (
-            expected["asset"],
-            tuple(expected["price"]),
-        )
-        assert liqwid_oracle_feed_id(datum) == expected["updater"]
-        if decode_oracle_feed(datum).policy_wide:
-            assert expected["asset"] == "lovelace"
+        feed = decode_oracle_feed(datum)
+        asset = expected["asset"]
+        if feed.policy_wide:
+            assert asset == "lovelace"
+            asset = POLICY_KEY_PREFIX + feed.asset
             policy_wide += 1
+        assert parse_liqwid_oracle_v2(datum) == (asset, tuple(expected["price"]))
+        assert parse_liqwid_oracle_v2(datum)[0] == feed.asset_key
+        assert liqwid_oracle_feed_id(datum) == expected["updater"]
     assert policy_wide
 
 
