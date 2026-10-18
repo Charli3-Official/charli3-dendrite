@@ -7,7 +7,6 @@ number comes from the datum and the contract-exact maths.
 
 from __future__ import annotations
 
-import time
 from fractions import Fraction
 from typing import TYPE_CHECKING
 from typing import Any
@@ -404,10 +403,7 @@ class FluidTokensV4MarketSource:
         """
         from charli3_dendrite.lending.fluidtokens_v4.loader import snapshot
 
-        found = snapshot(
-            backend,
-            now_ms=int(time.time() * 1000) if now_ms is None else now_ms,
-        )
+        found = snapshot(backend, now_ms=now_ms)
         managers = {manager.pool_id: manager for manager in found.pool_managers}
         return LendingSnapshot(
             markets=convertible_views(

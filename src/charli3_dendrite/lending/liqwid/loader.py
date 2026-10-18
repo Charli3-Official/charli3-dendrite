@@ -12,11 +12,12 @@ that matches exact addresses the snapshot comes back empty.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from typing import Final
 
+from charli3_dendrite.lending.fetch import PAGE_SIZE
+from charli3_dendrite.lending.fetch import resolve_now_ms
+from charli3_dendrite.lending.fetch import unspent_utxos
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
@@ -26,43 +27,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from charli3_dendrite.backend.backend_base import AbstractBackend
-    from charli3_dendrite.dataclasses.models import PoolStateInfo
     from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
     from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
     from charli3_dendrite.lending.liqwid.indexing import LiqwidSelector
-
-PAGE_SIZE: Final[int] = 1000
-
-
-def _unspent(
-    backend: AbstractBackend,
-    address: str,
-    page_size: int,
-) -> list[PoolStateInfo]:
-    """Every unspent UTxO the backend returns for ``address``, once per out-ref.
-
-    Pages through ``get_pool_utxos`` and terminates on a short page or on a page that
-    adds no new out-ref, so a backend that ignores ``page`` and returns the same rows
-    again ends the loop. Rows are de-duplicated by out-ref, since the backend pages
-    with LIMIT / OFFSET.
-    """
-    rows_by_ref: dict[tuple[str, int], PoolStateInfo] = {}
-    page = 0
-    while True:
-        rows = list(
-            backend.get_pool_utxos(
-                addresses=[address],
-                limit=page_size,
-                page=page,
-                historical=False,
-            ),
-        )
-        before = len(rows_by_ref)
-        for info in rows:
-            rows_by_ref.setdefault((info.tx_hash, info.tx_index), info)
-        if len(rows) < page_size or len(rows_by_ref) == before:
-            return list(rows_by_ref.values())
-        page += 1
 
 
 def fetch_records(
@@ -84,7 +51,7 @@ def fetch_records(
     wanted = {(selector.kind, selector.market_id) for selector in selectors}
     found: dict[str, LiqwidRecord] = {}
     for address in sorted({selector.address for selector in selectors}):
-        for info in _unspent(backend, address, page_size):
+        for info in unspent_utxos(backend, address, page_size=page_size):
             record = parse_utxo(info, deployment)
             if record is not None and (record.kind, record.market_id) in wanted:
                 found.setdefault(record.out_ref, record)
@@ -116,8 +83,7 @@ def snapshot(
     ``now_ms`` (POSIX ms) is the evaluation time; it defaults to now. ``deployment`` is
     the bundled mainnet one by default.
     """
-    if now_ms is None:
-        now_ms = int(time.time() * 1000)
+    now_ms = resolve_now_ms(now_ms)
     records = fetch_records(
         backend,
         liqwid_selectors(deployment),
