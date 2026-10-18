@@ -23,22 +23,21 @@ from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.market import loan_to_position
 from charli3_dendrite.lending.liqwid.market import market_to_view
-from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
-from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import DefaultRule
+from charli3_dendrite.lending.normalized import LendingMarket
 from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import PriceMap
-from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from charli3_dendrite.lending.rates import HOURS_PER_YEAR
 from charli3_dendrite.lending.rates import MS_PER_HOUR
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import live_context
+from tests.lending.liqwid.records import live_price_map
+from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.records import record_info
-from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.records import spend_of
 
 DEPLOYMENT = default_deployment()
@@ -241,20 +240,10 @@ def test_borrow_headroom_is_the_shared_implementation():
 # ------------------------------------------------- captured snapshot against the API
 
 
-def _parsed(kind: str) -> list[tuple[dict[str, Any], Any]]:
-    """Live records of ``kind`` that parse as genuine, with their fixture entry."""
-    out = []
-    for rec in records_of(kind, live=True):
-        parsed = parse_utxo(record_info(rec), DEPLOYMENT)
-        if parsed is not None:
-            out.append((rec, parsed))
-    return out
-
-
 @pytest.fixture(scope="module")
 def states() -> dict[str, MarketStateDatum]:
     found: dict[str, MarketStateDatum] = {}
-    for _, parsed in _parsed("market_state"):
+    for _, parsed in parsed_records("market_state", live=True):
         assert parsed.kind is LiqwidKind.MARKET_STATE
         assert parsed.market_id not in found, parsed.market_id
         found[parsed.market_id] = parsed.datum
@@ -265,7 +254,7 @@ def states() -> dict[str, MarketStateDatum]:
 def params() -> dict[str, MarketParamsDatum]:
     """The newest live MarketParams of each market."""
     newest: dict[str, tuple[int, MarketParamsDatum]] = {}
-    for rec, parsed in _parsed("market_params"):
+    for rec, parsed in parsed_records("market_params", live=True):
         assert parsed.kind is LiqwidKind.MARKET_PARAMS
         seen = newest.get(parsed.market_id)
         if seen is None or rec["slot"] > seen[0]:
@@ -277,7 +266,7 @@ def params() -> dict[str, MarketParamsDatum]:
 def weights() -> dict[tuple[str, str], CollateralParamsDatum]:
     """The newest live CollateralParams per (borrow market, collateral unit)."""
     newest: dict[tuple[str, str], tuple[int, CollateralParamsDatum]] = {}
-    for rec, parsed in _parsed("collateral_params"):
+    for rec, parsed in parsed_records("collateral_params", live=True):
         assert parsed.kind is LiqwidKind.COLLATERAL_PARAMS
         key = (parsed.market_id, parsed.datum.collateral)
         seen = newest.get(key)
@@ -288,18 +277,30 @@ def weights() -> dict[tuple[str, str], CollateralParamsDatum]:
 
 @pytest.fixture(scope="module")
 def prices() -> PriceMap:
-    feeds = [
-        parse_feed(record_info(rec), DEPLOYMENT)
-        for rec in records_of("oracle", live=True)
+    return live_price_map()
+
+
+@pytest.fixture(scope="module")
+def markets() -> list[LendingMarket]:
+    """Every live market as a view bound by the live context."""
+    context = live_context()
+    return [
+        market_to_view(record, context, DEPLOYMENT)
+        for _, record in parsed_records("market_state", live=True)
     ]
-    return liqwid_price_map(feed for feed in feeds if feed is not None)
+
+
+@pytest.fixture(scope="module")
+def book(markets: list[LendingMarket]) -> PriceMap:
+    """``prices`` plus every live market's qToken through its receipt rate."""
+    return live_price_map(markets)
 
 
 @pytest.fixture(scope="module")
 def loans() -> dict[str, tuple[str, LoanDatum, dict[str, int]]]:
     """out_ref -> (market_id, loan datum, assets) for every live genuine loan."""
     found = {}
-    for rec, parsed in _parsed("loan"):
+    for rec, parsed in parsed_records("loan", live=True):
         assert parsed.kind is LiqwidKind.LOAN
         found[rec["out_ref"]] = (parsed.market_id, parsed.datum, dict(rec["assets"]))
     return found
@@ -423,6 +424,7 @@ def test_health_is_the_exact_ratio_behind_the_position_health_factor(
     params,
     weights,
     prices,
+    book,
 ):
     """``health`` over a loan's datum equals the exact ratio ``health_factor`` rounds.
 
@@ -431,14 +433,8 @@ def test_health_is_the_exact_ratio_behind_the_position_health_factor(
     ``liquidation_weight`` and multiplies the rate and the underlying's price.
     """
     context = live_context()
-    markets = []
-    for rec in records_of("market_state", live=True):
-        record = parse_utxo(record_info(rec), DEPLOYMENT)
-        if record is not None:
-            markets.append(market_to_view(record, context, DEPLOYMENT))
-    book = PriceMap(prices={**prices.prices, **receipt_prices(markets, prices).prices})
     compared = 0
-    for rec, record in _parsed("loan"):
+    for rec, record in parsed_records("loan", live=True):
         market_id, loan, assets = loans[rec["out_ref"]]
         held = _qtoken_holdings(assets)
         if loan.principal == 0 or not held:
@@ -642,19 +638,12 @@ def test_partial_liquidation_repays_the_close_factor_and_seizes_at_the_discount(
     assert seized * USDC_USD / (QEURC_RATE * EURC_USD) // 1 == seized_qtokens
 
 
-def test_required_collateral_reaches_the_borrow_health_floor(prices):
+def test_required_collateral_reaches_the_borrow_health_floor(markets, book):
     """At the returned qTokens HF >= 1/p[12]; one base unit fewer is below it.
 
     HF at borrow is sum(q * price * w) / debt and Liqwid's minimum is 1/p[12], so
     with max_ltv = p[12] * w the floor is w / max_ltv.
     """
-    context = live_context()
-    markets = []
-    for rec in records_of("market_state", live=True):
-        record = parse_utxo(record_info(rec), DEPLOYMENT)
-        if record is not None:
-            markets.append(market_to_view(record, context, DEPLOYMENT))
-    book = PriceMap(prices={**prices.prices, **receipt_prices(markets, prices).prices})
 
     def health(market, terms, quantity, debt):
         position = LendingPosition(

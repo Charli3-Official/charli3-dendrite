@@ -24,8 +24,6 @@ from charli3_dendrite.lending.liqwid.market import loan_to_position
 from charli3_dendrite.lending.liqwid.market import market_parameters
 from charli3_dendrite.lending.liqwid.market import market_to_view
 from charli3_dendrite.lending.liqwid.math import liquidation_weight
-from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
-from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
 from charli3_dendrite.lending.liqwid.rates import LiqwidVariableRate
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
@@ -42,12 +40,13 @@ from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleSource
-from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from charli3_dendrite.lending.rates import register_rate_model
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import context_at
 from tests.lending.liqwid.records import live_context
+from tests.lending.liqwid.records import live_price_map
+from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.test_loader import FakeBackend
@@ -65,16 +64,6 @@ GENESIS_ADA_PARAMS = (
 )
 # A MarketParams output whose NFT sits on an empty constructor (C0[]).
 PARKED_DATUM = "d87980"
-
-
-def _parsed(kind, *, live=None):
-    """(fixture entry, record) for every captured entry of ``kind`` that parses."""
-    pairs = []
-    for rec in records_of(kind, live=live):
-        record = parse_utxo(record_info(rec), DEPLOYMENT)
-        if record is not None:
-            pairs.append((rec, record))
-    return pairs
 
 
 def _without_market(context, kind, market_id):
@@ -96,7 +85,7 @@ def live_ctx():
 def live_states():
     """Market id -> (fixture entry, record) of each market's live MarketState."""
     states = {}
-    for rec, record in _parsed("market_state", live=True):
+    for rec, record in parsed_records("market_state", live=True):
         assert record.market_id not in states
         states[record.market_id] = (rec, record)
     return states
@@ -113,15 +102,7 @@ def live_markets(live_ctx, live_states):
 @pytest.fixture(scope="module")
 def book(live_markets):
     """Liqwid's own oracle prices in lovelace, plus every qToken through its s9."""
-    feeds = []
-    for rec in records_of("oracle", live=True):
-        feed = parse_feed(record_info(rec), DEPLOYMENT)
-        if feed is not None:
-            feeds.append(feed)
-    prices = liqwid_price_map(feeds)
-    for price in receipt_prices(live_markets.values(), prices).prices.values():
-        prices.add(price)
-    return prices
+    return live_price_map(live_markets.values())
 
 
 @pytest.fixture(scope="module")
@@ -129,7 +110,7 @@ def live_loans(live_ctx):
     """(fixture entry, record, position bound by the live context) per live loan."""
     return [
         (rec, record, loan_to_position(record, live_ctx, DEPLOYMENT))
-        for rec, record in _parsed("loan", live=True)
+        for rec, record in parsed_records("loan", live=True)
     ]
 
 
@@ -214,7 +195,7 @@ def test_terms_weigh_health_through_liquidation_weight(live_ctx, monkeypatch):
         return Fraction(7, 9)
 
     monkeypatch.setattr(liqwid_market, "liquidation_weight", spy)
-    market_id = next(iter(_parsed("market_state", live=True)))[1].market_id
+    market_id = next(iter(parsed_records("market_state", live=True)))[1].market_id
     params, records = market_parameters(
         DEPLOYMENT.market(market_id), live_ctx, DEPLOYMENT
     )
@@ -261,7 +242,7 @@ def test_market_without_collateral_params_has_empty_collateral(live_ctx, live_ma
 
 
 def _live_params_entry(market_id):
-    for rec, record in _parsed("market_params", live=True):
+    for rec, record in parsed_records("market_params", live=True):
         if record.market_id == market_id:
             return rec
     raise AssertionError(f"no live MarketParams captured for {market_id}")
@@ -345,7 +326,7 @@ def test_the_newest_decodable_market_params_win(live_ctx, live_states, live_mark
 def test_genesis_ada_state_is_a_view():
     entries = [
         (rec, record)
-        for rec, record in _parsed("market_state")
+        for rec, record in parsed_records("market_state")
         if record.market_id == ADA_MARKET
     ]
     rec, record = min(entries, key=lambda pair: pair[0]["slot"])
@@ -416,7 +397,9 @@ def test_terms_do_not_change_within_a_parameter_epoch(
 
 def test_script_class_record_gives_policy_wide_terms(live_ctx, live_markets):
     record = next(
-        record for _, record in _parsed("collateral_params") if record.datum.policy_wide
+        record
+        for _, record in parsed_records("collateral_params")
+        if record.datum.policy_wide
     )
     datum = record.datum
     assert isinstance(datum, CollateralParamsDatum)
@@ -437,7 +420,7 @@ def test_script_class_record_gives_policy_wide_terms(live_ctx, live_markets):
     # A loan holding the policy keeps the full unit and matches the policy-wide terms.
     holders = [
         record
-        for _, record in _parsed("loan")
+        for _, record in parsed_records("loan")
         if any(unit[:POLICY_HEX_LEN] == datum.collateral for unit in record.info.assets)
     ]
     assert holders

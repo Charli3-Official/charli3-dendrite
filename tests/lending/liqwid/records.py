@@ -9,10 +9,20 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
+from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
+from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
+from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.markets import ParseContext
+from charli3_dendrite.lending.normalized import LendingMarket
+from charli3_dendrite.lending.oracles.models import PriceMap
+from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from tests.lending.records_common import record_info
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -68,6 +78,43 @@ def records_of(kind: str, *, live: bool | None = None) -> list[dict[str, Any]]:
     if live is None:
         return entries
     return [rec for rec in entries if rec["live"] is live]
+
+
+def parsed_records(
+    kind: str,
+    *,
+    live: bool | None = None,
+) -> list[tuple[dict[str, Any], LiqwidRecord]]:
+    """(entry, record) for every captured entry of ``kind`` that parses as genuine."""
+    deployment = default_deployment()
+    pairs = []
+    for rec in records_of(kind, live=live):
+        record = parse_utxo(record_info(rec), deployment)
+        if record is not None:
+            pairs.append((rec, record))
+    return pairs
+
+
+def live_feeds() -> list[LiqwidFeed]:
+    """Every oracle output live at the snapshot that parses as a feed."""
+    deployment = default_deployment()
+    feeds = []
+    for rec in records_of("oracle", live=True):
+        feed = parse_feed(record_info(rec), deployment)
+        if feed is not None:
+            feeds.append(feed)
+    return feeds
+
+
+def live_price_map(markets: Iterable[LendingMarket] = ()) -> PriceMap:
+    """Liqwid's lovelace prices at the snapshot, plus the qTokens of ``markets``.
+
+    Each market's qToken is priced through its receipt rate (``receipt_prices``).
+    """
+    prices = liqwid_price_map(live_feeds())
+    for price in receipt_prices(markets, prices).prices.values():
+        prices.add(price)
+    return prices
 
 
 def live_context() -> ParseContext:
