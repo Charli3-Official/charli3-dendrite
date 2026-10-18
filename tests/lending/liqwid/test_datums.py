@@ -822,6 +822,70 @@ def test_existing_readers_keep_their_outputs_on_mainnet_datums():
     )
 
 
+# What the field readers returned for every captured record when they read their
+# fields by position (``None``: the reader raised).
+READER_OUTPUTS = json.loads(
+    (Path(__file__).parent / "fixtures" / "legacy_reader_outputs.json").read_text(),
+)
+
+
+def _reader_outputs(kind: str) -> list[tuple[dict, object]]:
+    """(captured entry, recorded reader output) for every captured entry of ``kind``."""
+    entries = records_of(kind)
+    assert {rec["out_ref"] for rec in entries} == set(READER_OUTPUTS[kind])
+    return [(rec, READER_OUTPUTS[kind][rec["out_ref"]]) for rec in entries]
+
+
+def test_market_readers_keep_their_outputs_on_every_captured_record():
+    genuine = 0
+    for rec, expected in _reader_outputs("market_state"):
+        if rec["label"] is None:
+            assert parse_liqwid_market_state(rec["datum_cbor"]) == tuple(expected)
+            genuine += 1
+    for rec, expected in _reader_outputs("market_params"):
+        if rec["label"] is None:
+            initial, max_ltv = expected
+            assert parse_liqwid_market_param(rec["datum_cbor"]) == (
+                tuple(initial),
+                tuple(max_ltv),
+            )
+            genuine += 1
+    assert genuine == len(_genuine("market_state")) + len(_genuine("market_params"))
+
+
+@pytest.mark.parametrize("kind", ["market_state", "market_params"])
+def test_market_readers_reject_captured_non_records(kind):
+    # Outputs that once held a market NFT on something other than its record: an
+    # empty list, a 27-field list at the MarketState credential, a parked C0[] and a
+    # dust output. None of them is a record of the reader's kind.
+    reader = {
+        "market_state": parse_liqwid_market_state,
+        "market_params": parse_liqwid_market_param,
+    }[kind]
+    labelled = [rec for rec, _ in _reader_outputs(kind) if rec["label"] is not None]
+    assert labelled
+    for rec in labelled:
+        with pytest.raises(ValueError, match=f"liqwid {kind.replace('_', ' ')}: "):
+            reader(rec["datum_cbor"])
+
+
+def test_oracle_readers_keep_their_outputs_on_every_captured_feed():
+    # Every captured feed, decoys included. A policy-wide feed still reads as
+    # "lovelace" here; ``decode_oracle_feed`` reports its policy.
+    policy_wide = 0
+    for rec, expected in _reader_outputs("oracle"):
+        datum = rec["datum_cbor"]
+        assert parse_liqwid_oracle_v2(datum) == (
+            expected["asset"],
+            tuple(expected["price"]),
+        )
+        assert liqwid_oracle_feed_id(datum) == expected["updater"]
+        if decode_oracle_feed(datum).policy_wide:
+            assert expected["asset"] == "lovelace"
+            policy_wide += 1
+    assert policy_wide
+
+
 # --- One decode path: field_count and LIQWID_DECODE_ERRORS -------------------
 
 OVERFLOW_TAGS = [

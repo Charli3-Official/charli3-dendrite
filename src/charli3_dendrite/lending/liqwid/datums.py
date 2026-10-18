@@ -2,10 +2,11 @@
 
 Pure decoders for the Liqwid V2 on-chain records. The first five functions read
 single values for price and rate lookups: the Oracle V2 price feed, the market state
-(qToken exchange rate), and the market parameters (risk configuration). The
-``decode_*`` functions decode whole records into frozen dataclasses: market state,
-market parameters (every historical layout), collateral parameters, loan, oracle
-feed and action. Each parser takes the datum as CBOR hex or raw bytes.
+(qToken exchange rate), and the market parameters (risk configuration); each reads
+its value through the matching record decoder. The ``decode_*`` functions decode
+whole records into frozen dataclasses: market state, market parameters (every
+historical layout), collateral parameters, loan, oracle feed and action. Each parser
+takes the datum as CBOR hex or raw bytes.
 
 Liqwid records are positional field lists, written both as definite and as
 indefinite CBOR arrays; the record decoders read either encoding identically. A
@@ -27,43 +28,23 @@ from charli3_dendrite.lending.units import DECODE_ERRORS
 from charli3_dendrite.lending.units import asset_unit
 from charli3_dendrite.lending.units import constr
 from charli3_dendrite.lending.units import plutus_fields
-from charli3_dendrite.lending.units import tuple_asset_unit
-
-# Liqwid Oracle V2 datum field order: [updater_key, Constr1[[asset]], [num, denom],
-# timestamp_ms, validity_ms, config].
-_LIQWID_ASSET_FIELD = 1
-_LIQWID_PRICE_FIELD = 2
-# Liqwid market-state datum: the qToken<->underlying exchange rate is the rational at
-# index 9 of the 11-field state record.
-_LIQWID_MARKET_RATE_FIELD = 9
-# Liqwid market-parameter (config) datum: the initial qToken exchange rate at field 0
-# and the maximum loan-to-value on weighted collateral at field 12.
-_LIQWID_PARAM_INITIAL_QTOKEN_RATE_FIELD = 0
-_LIQWID_PARAM_MAX_LTV_FIELD = 12
 
 
 def parse_liqwid_oracle_v2(datum: str | bytes) -> tuple[str, tuple[int, int]]:
     """Liqwid Oracle V2 datum -> (priced_asset_unit, (num, denom)).
 
-    Datum is a 6-field record ``[updater_key, Constr1[[asset]], [num, denom], ts,
-    validity, config]``; the rate is the priced asset (field 1) in the feed's
-    configured quote. ADA (the empty TupleAsset) is ``"lovelace"``.
+    The priced asset and price of :func:`decode_oracle_feed`; the rate is the priced
+    asset in the feed's configured quote. ADA (the empty TupleAsset) is
+    ``"lovelace"``.
 
-    Exact assets only: field 1 is read as ``Constr1[[policy, name]]``. A policy-wide
-    feed (``Constr0[policy]``) also comes back as ``"lovelace"`` here, which is
-    wrong; ``decode_oracle_feed`` reads both asset shapes and reports a policy-wide
-    feed as its policy.
+    A policy-wide feed (``Constr0[policy]``) also comes back as ``"lovelace"`` here,
+    which is wrong; ``decode_oracle_feed`` reports it as its policy.
 
-    Raises ValueError on a non-positive denominator.
+    Raises ValueError on anything ``decode_oracle_feed`` rejects, a non-positive
+    denominator included.
     """
-    raw = bytes.fromhex(datum) if isinstance(datum, str) else datum
-    fields = plutus_fields(cbor2.loads(raw))
-    asset_unit_str = tuple_asset_unit(plutus_fields(fields[_LIQWID_ASSET_FIELD])[0])
-    price = plutus_fields(fields[_LIQWID_PRICE_FIELD])
-    num, denom = int(price[0]), int(price[1])
-    if denom <= 0:
-        raise ValueError("non-positive liqwid oracle denom")
-    return asset_unit_str, (num, denom)
+    feed = decode_oracle_feed(datum)
+    return ("lovelace" if feed.policy_wide else feed.asset), feed.price
 
 
 def liqwid_oracle_feed_id(datum: str | bytes) -> str:
@@ -72,28 +53,24 @@ def liqwid_oracle_feed_id(datum: str | bytes) -> str:
     The updater key is data, not a feed identity: one key signs the feeds of many
     assets, and the key rotates over time. At every slot each priced asset has
     exactly one unspent feed that carries the oracle token, so the priced asset
-    (field 1, see ``decode_oracle_feed``) identifies a feed. A field 0 that is not a
-    bytestring is returned as its ``str``.
+    (field 1, see ``decode_oracle_feed``) identifies a feed.
+
+    Raises ValueError on anything ``decode_oracle_feed`` rejects.
     """
-    raw = bytes.fromhex(datum) if isinstance(datum, str) else datum
-    feed = plutus_fields(cbor2.loads(raw))[0]
-    if isinstance(feed, (bytes, bytearray)):
-        return feed.hex()
-    return str(feed)
+    return decode_oracle_feed(datum).updater
 
 
 def parse_liqwid_market_state(datum: str | bytes) -> tuple[int, int]:
     """Liqwid market-state datum -> qToken exchange rate (state field 9).
 
-    Field 9 of the 11-field state record is the qToken exchange rate (underlying per
-    qToken), a rational. Returns (num, denom).
+    The ``qtoken_rate`` of :func:`decode_market_state` (underlying per qToken), as
+    (num, denom).
 
-    Raises ValueError on a non-positive rate.
+    Raises ValueError on a non-positive rate and on anything ``decode_market_state``
+    rejects.
     """
-    raw = bytes.fromhex(datum) if isinstance(datum, str) else datum
-    rate = plutus_fields(cbor2.loads(raw))[_LIQWID_MARKET_RATE_FIELD]
-    num, denom = int(rate[0]), int(rate[1])
-    if num <= 0 or denom <= 0:
+    num, denom = decode_market_state(datum).qtoken_rate
+    if num <= 0:
         raise ValueError("non-positive liqwid market exchange rate")
     return (num, denom)
 
@@ -105,20 +82,18 @@ def parse_liqwid_market_param(
 
     This datum is the market's interest-model and risk configuration, not a price
     source (the live qToken exchange rate is read from the market-state datum, see
-    ``parse_liqwid_market_state``). Two rationals are surfaced, both as (num, denom):
+    ``parse_liqwid_market_state``). Two rationals of :func:`decode_market_params`
+    are surfaced, both as (num, denom):
 
     * field 0, the initial qToken exchange rate (underlying per qToken) a new market
       starts from, e.g. 1/50;
     * field 12, the maximum loan-to-value on weighted collateral; the protocol's
       minimum health factor is its reciprocal.
 
-    The remaining fields are left raw.
+    Raises ValueError on anything ``decode_market_params`` rejects.
     """
-    raw = bytes.fromhex(datum) if isinstance(datum, str) else datum
-    fields = plutus_fields(cbor2.loads(raw))
-    initial = fields[_LIQWID_PARAM_INITIAL_QTOKEN_RATE_FIELD]
-    max_ltv = fields[_LIQWID_PARAM_MAX_LTV_FIELD]
-    return ((int(initial[0]), int(initial[1])), (int(max_ltv[0]), int(max_ltv[1])))
+    params = decode_market_params(datum)
+    return (params.initial_qtoken_rate, params.max_ltv)
 
 
 def liqwid_qtoken_rate(
