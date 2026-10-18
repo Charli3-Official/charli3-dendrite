@@ -233,6 +233,29 @@ def compose_cross_quote(
     return collat_price, intermediate_to_quote
 
 
+def _leaf_addresses(handle: LeafHandle) -> list[str]:
+    """The addresses a handle's leaf is read from.
+
+    A Liqwid oracle leaf is read from every Liqwid oracle validator: Liqwid binds a
+    feed by oracle token and asset, whatever its validator, so the address captured
+    in the handle is not part of its identity. Every other kind is read at
+    ``handle.address``.
+    """
+    if handle.otype != OracleUtxoType.TLIQWID_ORACLE_V2.name:
+        return [handle.address]
+    # Imported here so that importing this module loads no Liqwid deployment.
+    from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+    from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
+
+    return list(
+        dict.fromkeys(
+            selector.address
+            for selector in liqwid_selectors()
+            if selector.kind is LiqwidKind.ORACLE
+        ),
+    )
+
+
 def resolve_leaf_info(
     backend: AbstractBackend,
     handle: LeafHandle,
@@ -242,7 +265,8 @@ def resolve_leaf_info(
     A unique identifying NFT yields a single match; kinds that share a marker token
     across many feeds at one address (e.g. Liqwid V2 oracles) are narrowed by
     `handle.datum_key` -- the stable asset-identity parsed from each candidate's datum
-    (`leaf_matches_handle`).
+    (`leaf_matches_handle`). A Liqwid oracle leaf is looked up at every Liqwid oracle
+    validator rather than at ``handle.address`` (`_leaf_addresses`).
     Returns None unless exactly one UTxO matches, so the caller never reads the wrong
     feed. This is the shared resolution both `read_live_leaf` (forward pricing) and the
     create-loan snapshot (full-UTxO assembly) rely on.
@@ -250,7 +274,7 @@ def resolve_leaf_info(
     want = (handle.nft_policy + handle.nft_name) if handle.nft_policy else None
     rows = list(
         backend.get_pool_utxos(
-            addresses=[handle.address],
+            addresses=_leaf_addresses(handle),
             assets=[want] if want else None,
             historical=False,
         ),

@@ -22,6 +22,8 @@ from charli3_dendrite.lending.danogo.transactions._common import _leaf_for_handl
 from charli3_dendrite.lending.danogo.transactions.context import _utxo_from_info
 from charli3_dendrite.lending.liqwid.datums import POLICY_KEY_PREFIX
 from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
+from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from tests.lending.liqwid.records import records_of
 from tests.lending.records_common import record_info
 
@@ -172,3 +174,38 @@ def test_the_snapshot_leaf_matcher_refuses_two_matches(handles):
     ada_leaf = _leaf_for_handle(leaves, ada)
     assert ada_leaf is not None
     assert _leaf_for_handle([*leaves, dataclasses.replace(ada_leaf)], ada) is None
+
+
+def test_every_live_liqwid_feed_resolves_whatever_its_validator(handles):
+    # A handle pins the oracle token and the asset; the recipe's address is not a
+    # filter, so the pegs feeds at the other oracle validator resolve too.
+    pinned = handles[0].address
+    feeds = _live_feeds(_token(handles[0]))
+    assert {info.address for info in feeds} - {pinned}
+    backend = _AddressBackend(_live_infos())
+    for feed in feeds:
+        handle = dataclasses.replace(handles[0], datum_key=_asset_key(feed))
+        info = resolve_leaf_info(backend, handle)
+        assert info is not None, handle.datum_key
+        assert (info.tx_hash, info.tx_index) == (feed.tx_hash, feed.tx_index)
+
+
+def test_a_liqwid_handle_reads_every_oracle_validator(handles):
+    backend = _AddressBackend([])
+    assert resolve_leaf_info(backend, handles[0]) is None
+    oracle_addresses = {
+        selector.address
+        for selector in liqwid_selectors()
+        if selector.kind is LiqwidKind.ORACLE
+    }
+    assert set(backend.queried) == oracle_addresses
+    assert handles[0].address in oracle_addresses
+
+
+def test_other_kinds_read_their_pinned_address():
+    backend = _AddressBackend([])
+    handle = LeafHandle(
+        otype="TMINSWAP_LP", address="addr", nft_policy="p", nft_name=""
+    )
+    assert resolve_leaf_info(backend, handle) is None
+    assert backend.queried == ["addr"]
