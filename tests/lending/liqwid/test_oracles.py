@@ -36,6 +36,8 @@ from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
+from tests.lending.records_common import BLOCK_INDEX
+from tests.lending.records_common import BLOCK_TIME
 from tests.lending.views import market
 
 DEPLOYMENT = default_deployment()
@@ -85,8 +87,8 @@ def feed_info(
         address=script_payment_address(VALIDATORS[role]),
         tx_hash=tx_hash,
         tx_index=int(index),
-        block_time=1_790_000_000,
-        block_index=0,
+        block_time=BLOCK_TIME,
+        block_index=BLOCK_INDEX,
         block_hash="",
         datum_hash="",
         datum_cbor=datum_cbor,

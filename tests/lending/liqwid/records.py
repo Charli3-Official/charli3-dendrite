@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import gzip
 import json
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.markets import ParseContext
+from tests.lending.records_common import record_info
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RECORDS: dict[str, Any] = json.loads(
@@ -52,25 +50,6 @@ SPEND_RULES: dict[str, int | None] = {
     "same_generation_rewrite": 8,
     "multi_loan": None,
 }
-
-
-def record_info(rec: Mapping[str, Any], **overrides: Any) -> PoolStateInfo:
-    """A backend-shaped UTxO record for a captured entry (fields overridable)."""
-    tx_hash, index = rec["out_ref"].split("#")
-    values = {
-        "address": rec["address"],
-        "tx_hash": tx_hash,
-        "tx_index": int(index),
-        "block_time": rec["block_time"],
-        "block_index": rec["block_index"],
-        "block_hash": "",
-        "datum_hash": "",
-        "datum_cbor": rec["datum_cbor"],
-        "assets": Assets(root=dict(rec["assets"])),
-        "plutus_v2": False,
-    }
-    values.update(overrides)
-    return PoolStateInfo(**values)
 
 
 def records_of(kind: str, *, live: bool | None = None) -> list[dict[str, Any]]:
