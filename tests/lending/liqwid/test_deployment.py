@@ -1134,3 +1134,58 @@ def test_every_reader_resolves_a_missing_deployment_through_one_helper(
     monkeypatch.setattr(target, "resolve_deployment", spy)
     call()
     assert None in seen
+
+
+def test_identity_policies_are_the_oracle_token_state_nfts_and_loan_tokens() -> None:
+    dep = default_deployment()
+    expected = {dep.oracle_token_policy}
+    for market in dep.markets:
+        expected.add(market.market_state_policy)
+        expected |= market.loan_token_policies
+    assert dep.identity_policies == frozenset(expected)
+    params = {m.market_params_policy for m in dep.markets}
+    params |= {m.collateral_params_policy for m in dep.markets}
+    assert not dep.identity_policies & params
+    ada = _by_name()["Ada"]
+    small = LiqwidDeployment((ada,), "aa" * 28, (), ORACLE_TOKEN_POLICY)
+    assert small.identity_policies == frozenset(
+        {ORACLE_TOKEN_POLICY, ada.market_state_policy, *ada.loan_token_policies},
+    )
+
+
+def test_identity_drift_checks_exactly_the_identity_policies() -> None:
+    dep = default_deployment()
+    assert set(deployment._identity_homes(dep)) == dep.identity_policies
+    flagged = {
+        finding.detail.split()[2]
+        for finding in check_deployment(
+            observed_credentials=[
+                (UNKNOWN, policy) for policy in [*dep.identity_policies, "ff" * 28]
+            ],
+        )
+    }
+    assert flagged == dep.identity_policies
+
+
+def test_payment_credentials_are_every_listed_validator() -> None:
+    dep = default_deployment()
+    expected = {dep.param_credential}
+    expected |= {validator.script_hash for validator in dep.oracle_validators}
+    for market in dep.markets:
+        expected.update(
+            market.market_state_validators,
+            market.loan_validators,
+            market.actions,
+            market.batches,
+            market.batch_finals,
+        )
+    assert dep.payment_credentials == frozenset(expected)
+    selectors = {s.payment_credential for s in indexing.liqwid_selectors(dep)}
+    assert selectors <= dep.payment_credentials
+    staking = {
+        script
+        for market in dep.markets
+        for script in (*market.borrow_staking, *market.liquidation_staking)
+    }
+    assert staking
+    assert not staking & dep.payment_credentials

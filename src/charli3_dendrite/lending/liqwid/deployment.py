@@ -286,6 +286,39 @@ class LiqwidDeployment:
             *(market.loan_token_policies for market in self.markets),
         )
 
+    @property
+    def identity_policies(self) -> frozenset[str]:
+        """Every identity-token policy: the oracle token, MarketState NFTs, loan tokens.
+
+        These are the tokens whose credential :func:`check_deployment` checks for
+        identity drift. The MarketParams and CollateralParams NFTs are not among
+        them: both live at the one ``param_credential``.
+        """
+        return frozenset(_identity_homes(self))
+
+    @property
+    def payment_credentials(self) -> frozenset[str]:
+        """Every payment credential the deployment lists, any market or role.
+
+        The parameter credential, every oracle validator, and each market's
+        MarketState, loan, action, batch and batch-final validators. The borrow and
+        liquidation staking scripts are stake validators, not payment credentials,
+        and are left out.
+        """
+        listed = {
+            self.param_credential,
+            *(validator.script_hash for validator in self.oracle_validators),
+        }
+        for market in self.markets:
+            listed.update(
+                market.market_state_validators,
+                market.loan_validators,
+                market.actions,
+                market.batches,
+                market.batch_finals,
+            )
+        return frozenset(listed)
+
 
 def _underlying_unit(underlying_class: Mapping[str, Any]) -> str:
     policy = underlying_class["symbol"]["unCurrencySymbol"]
@@ -840,7 +873,11 @@ def _registry_drift(
 def _identity_homes(
     deployment: LiqwidDeployment,
 ) -> dict[str, tuple[str | None, str, frozenset[str]]]:
-    """Identity policy -> (market, component, credentials the token may sit at)."""
+    """Identity policy -> (market, component, credentials the token may sit at).
+
+    The one table of identity homes: its keys are
+    :attr:`LiqwidDeployment.identity_policies`.
+    """
     homes: dict[str, tuple[str | None, str, frozenset[str]]] = {
         deployment.oracle_token_policy: (
             None,
