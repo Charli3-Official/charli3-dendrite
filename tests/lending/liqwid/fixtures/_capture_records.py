@@ -33,7 +33,7 @@ LTV}}, markets: {market_id: {borrowAPR, supplyAPR, utilization, exchangeRate,
 liquidity, borrowCap}}}`` from the public GraphQL API; ``supplyAPR`` is the API's
 ``supplyAPY`` field and ``borrowCap`` its ``parameters.borrowCap``.
 
-Run: PYTHONPATH=src python tests/lending/liqwid/fixtures/_capture_records.py
+Run: PYTHONPATH=src:. python tests/lending/liqwid/fixtures/_capture_records.py
 Requires dbsync env (DBSYNC_*) and network access. Not run in CI.
 """
 from __future__ import annotations
@@ -58,6 +58,8 @@ from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.units import plutus_fields
 from charli3_dendrite.lending.units import script_credential
+from tests.lending._capture_dbsync import record_entry
+from tests.lending._capture_dbsync import record_sql
 
 load_dotenv()
 
@@ -151,23 +153,11 @@ CONN = dict(
 )
 
 
-_RECORD_SQL = """
-    select encode(t.hash, 'hex'), o.index, a.address, o.value,
-           encode(d.bytes, 'hex'), o.id, b.slot_no, t.block_index,
-           extract(epoch from b.time)::bigint, sb.slot_no
-    from tx_out o
-    join tx t on t.id = o.tx_id
-    join block b on b.id = t.block_id
-    join address a on a.id = o.address_id
-    left join datum d on d.id = o.inline_datum_id
-    left join tx st on st.id = o.consumed_by_tx_id
-    left join block sb on sb.id = st.block_id
-"""
 # Policy and credential filters resolve their ids first (``= any(array(...))``): as
 # a join or ``in`` subquery the planner reads ma_tx_out or tx_out whole.
 POLICY_IDENTS = "array(select ma.id from multi_asset ma where ma.policy = any(%s))"
 ADDRESSES = "array(select ad.id from address ad where ad.payment_cred = any(%s))"
-# Fragments over _RECORD_SQL's aliases. Arguments are noted per fragment.
+# Fragments over record_sql(chain=True)'s aliases. Arguments are noted per fragment.
 HOLDS_POLICY = f"""o.id = any(array(
     select mto.tx_out_id from ma_tx_out mto
     where mto.ident = any({POLICY_IDENTS})))"""  # [policy bytes]
@@ -180,34 +170,15 @@ def _b(hexes) -> list[bytes]:
     return [bytes.fromhex(h) for h in hexes]
 
 
-def _assets(cur, tx_out_id: int, lovelace: int) -> dict[str, int]:
-    assets: dict[str, int] = {"lovelace": int(lovelace)}
-    cur.execute(
-        """select encode(ma.policy, 'hex') || encode(ma.name, 'hex'), mto.quantity
-           from ma_tx_out mto
-           join multi_asset ma on ma.id = mto.ident
-           where mto.tx_out_id = %s
-           order by 1""",
-        (tx_out_id,),
-    )
-    for unit, quantity in cur.fetchall():
-        assets[unit] = int(quantity)
-    return assets
-
-
 def _records(cur, where: str, args: tuple, tip: int) -> list[dict[str, Any]]:
     """UTxO entries for every output matching ``where``, oldest first."""
-    cur.execute(_RECORD_SQL + " where " + where + " order by o.id", args)
+    cur.execute(record_sql(chain=True) + " where " + where + " order by o.id", args)
     out = []
     for row in cur.fetchall():
-        tx_hash, ix, address, lovelace, datum_hex, tx_out_id = row[:6]
         slot, block_index, block_time, spent_slot = row[6:]
         out.append(
             {
-                "out_ref": f"{tx_hash}#{ix}",
-                "address": address,
-                "datum_cbor": datum_hex or "",
-                "assets": _assets(cur, tx_out_id, lovelace),
+                **record_entry(cur, row),
                 "slot": int(slot),
                 "block_index": int(block_index),
                 "block_time": int(block_time),
