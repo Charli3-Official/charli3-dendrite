@@ -22,7 +22,7 @@ from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
-from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
@@ -67,10 +67,6 @@ if TYPE_CHECKING:
 _MS_PER_SECOND = 1000
 # Errors a malformed record raises while it is converted.
 _CONVERSION_ERRORS = (ArithmeticError, KeyError, TypeError, ValueError)
-
-
-def _resolved(deployment: LiqwidDeployment | None) -> LiqwidDeployment:
-    return default_deployment() if deployment is None else deployment
 
 
 def _chain_order(info: PoolStateInfo) -> tuple[int, int, str, int]:
@@ -134,7 +130,7 @@ def market_parameters(
         LendingParseError: if ``context`` holds no decodable MarketParams record of
             the market.
     """
-    deployment = _resolved(deployment)
+    deployment = resolve_deployment(deployment)
     by_kind = _market_records(context, market.market_id, deployment)
     return _parameters(market, by_kind, context.slot)
 
@@ -154,7 +150,7 @@ def collateral_terms(
     MarketState NFT policy of its market, from the deployment snapshot when it knows
     the qToken and from the record's own link otherwise.
     """
-    deployment = _resolved(deployment)
+    deployment = resolve_deployment(deployment)
     weight = _fraction(record.weight)
     linked = (
         None if record.policy_wide else deployment.market_of_qtoken(record.collateral)
@@ -193,7 +189,7 @@ def market_to_view(
             holds no decodable MarketParams record of its market, or a value cannot
             be converted.
     """
-    return _market_view(state, context, _resolved(deployment))
+    return _market_view(state, context, resolve_deployment(deployment))
 
 
 def _market_view(
@@ -318,7 +314,7 @@ def loan_to_position(
     Raises:
         LendingParseError: if ``loan`` is not a loan record of a known market.
     """
-    deployment = _resolved(deployment)
+    deployment = resolve_deployment(deployment)
     datum = loan.datum
     if (
         loan.kind is not LiqwidKind.LOAN
@@ -397,7 +393,7 @@ class LiqwidV2MarketSource:
 
     def __init__(self, deployment: LiqwidDeployment | None = None) -> None:
         """Watch every generation ``deployment`` names; mainnet by default."""
-        self._deployment = _resolved(deployment)
+        self._deployment = resolve_deployment(deployment)
         self._selectors = liqwid_selectors(self._deployment)
         self.lifecycle = LiqwidLifecycle(self._deployment)
 

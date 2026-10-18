@@ -37,6 +37,7 @@ from charli3_dendrite.lending.liqwid.deployment import NEW_GENERATION
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
@@ -244,7 +245,7 @@ def liqwid_selectors(
     NFT policy and once per CollateralParams NFT policy, then each oracle validator
     with the oracle token policy. The order is deterministic.
     """
-    active = deployment if deployment is not None else default_deployment()
+    active = resolve_deployment(deployment)
     return tuple(selector for selector, _ in _routes(active))
 
 

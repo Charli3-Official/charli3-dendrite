@@ -427,6 +427,11 @@ def default_deployment() -> LiqwidDeployment:
     return load_deployment(_bundled_registry())
 
 
+def resolve_deployment(deployment: LiqwidDeployment | None = None) -> LiqwidDeployment:
+    """``deployment``, or the bundled :func:`default_deployment` when it is None."""
+    return default_deployment() if deployment is None else deployment
+
+
 # --- Deployment drift --------------------------------------------------------
 
 DRIFT_KINDS: Final[frozenset[str]] = frozenset({"registry", "params", "identity"})
@@ -538,7 +543,7 @@ def check_deployment(
         The findings, de-duplicated and sorted by (kind, market, component,
         script_hash, detail); empty when nothing drifted.
     """
-    active = deployment if deployment is not None else default_deployment()
+    active = resolve_deployment(deployment)
     found: set[DriftFinding] = set()
     for info in params:
         found.update(_params_drift(info, active))

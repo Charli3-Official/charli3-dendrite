@@ -18,6 +18,10 @@ import pytest
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.liqwid import deployment
+from charli3_dendrite.lending.liqwid import indexing
+from charli3_dendrite.lending.liqwid import lifecycle
+from charli3_dendrite.lending.liqwid import market as liqwid_market
+from charli3_dendrite.lending.liqwid import oracles
 from charli3_dendrite.lending.liqwid.deployment import BURN_CREDENTIAL
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
@@ -36,6 +40,8 @@ from charli3_dendrite.lending.liqwid.deployment import OracleValidator
 from charli3_dendrite.lending.liqwid.deployment import check_deployment
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.lifecycle import LoanKey
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
 from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.utility import slot_to_posix_ms
@@ -1065,3 +1071,66 @@ def test_an_arithmetic_error_while_decoding_params_is_one_params_finding(
     assert _keys(check_deployment([record_info(rec)])) == [
         ("params", market.name, "datum", market.market_params_policy),
     ]
+
+
+def test_resolve_deployment_defaults_to_the_bundled_snapshot() -> None:
+    assert resolve_deployment() is default_deployment()
+    assert resolve_deployment(None) is default_deployment()
+    custom = load_deployment(_bundled())
+    assert resolve_deployment(custom) is custom
+
+
+def _loan_info() -> PoolStateInfo:
+    return record_info(records_of("loan")[0])
+
+
+def _spent_loan_key() -> LoanKey:
+    key = lifecycle.loan_key(_loan_info())
+    assert key is not None
+    return key
+
+
+@pytest.mark.parametrize(
+    ("module", "call"),
+    [
+        ("indexing", lambda: indexing.liqwid_selectors()),
+        ("deployment", lambda: check_deployment([])),
+        ("lifecycle", lambda: lifecycle.loan_key(_loan_info())),
+        (
+            "lifecycle",
+            lambda: lifecycle.classify_spend(
+                _spent_loan_key(),
+                None,
+                lifecycle.loan_spend([], []),
+            ),
+        ),
+        ("lifecycle", lambda: lifecycle.LiqwidLifecycle()),
+        ("oracles", lambda: oracles.LiqwidOracleResolver().deployment),
+        ("market", lambda: liqwid_market.LiqwidV2MarketSource()),
+    ],
+    ids=[
+        "liqwid_selectors",
+        "check_deployment",
+        "loan_key",
+        "classify_spend",
+        "LiqwidLifecycle",
+        "LiqwidOracleResolver",
+        "LiqwidV2MarketSource",
+    ],
+)
+def test_every_reader_resolves_a_missing_deployment_through_one_helper(
+    monkeypatch,
+    module,
+    call,
+) -> None:
+    seen = []
+
+    def spy(active=None):
+        seen.append(active)
+        return default_deployment()
+
+    target = importlib.import_module(f"charli3_dendrite.lending.liqwid.{module}")
+    assert target.resolve_deployment is resolve_deployment
+    monkeypatch.setattr(target, "resolve_deployment", spy)
+    call()
+    assert None in seen

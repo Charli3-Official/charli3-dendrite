@@ -25,7 +25,7 @@ from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.datums import OracleFeedDatum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
-from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
@@ -234,9 +234,7 @@ class LiqwidOracleResolver:
     @property
     def deployment(self) -> LiqwidDeployment:
         """The bound deployment, or the bundled default."""
-        if self._deployment is not None:
-            return self._deployment
-        return default_deployment()
+        return resolve_deployment(self._deployment)
 
     def selectors(self, refs: list[OracleRef]) -> list[PoolSelector]:
         """Every oracle validator filtered by the oracle token, then the MarketStates.

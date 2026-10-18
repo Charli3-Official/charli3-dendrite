@@ -24,7 +24,7 @@ from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
-from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.units import canonical_unit_key
 from charli3_dendrite.lending.units import out_ref
@@ -137,7 +137,7 @@ def loan_key(
     Returns:
         The key, or None when the payment credential is not a Liqwid loan validator.
     """
-    active = deployment if deployment is not None else default_deployment()
+    active = resolve_deployment(deployment)
     credential = script_credential(info.address)
     if credential is None:
         return None
@@ -357,7 +357,7 @@ def classify_spend(
     Returns:
         The transition.
     """
-    active = deployment if deployment is not None else default_deployment()
+    active = resolve_deployment(deployment)
     market = _market(active, spent.market_id)
     continued = successor is not None
     if market is not None:
@@ -380,9 +380,7 @@ class LiqwidLifecycle:
 
     def __init__(self, deployment: LiqwidDeployment | None = None) -> None:
         """Bind ``deployment``, or the bundled deployment when None."""
-        self.deployment: LiqwidDeployment = (
-            deployment if deployment is not None else default_deployment()
-        )
+        self.deployment: LiqwidDeployment = resolve_deployment(deployment)
         self.loan_token_policies: frozenset[str] = self.deployment.loan_token_policies
 
     def loan_key(self, info: PoolStateInfo) -> LoanKey | None:
