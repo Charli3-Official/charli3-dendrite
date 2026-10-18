@@ -3,9 +3,10 @@
 `QTokenResolver` turns a rate supplied per-call via OracleRef.extra (`num`/`denom`),
 sourced from the pool/market datum by the concrete protocol class, into a price.
 
-`receipt_prices` prices the receipt tokens of pooled markets in lovelace: a receipt
-token is worth its market's exchange rate in the market's borrow unit, so its lovelace
-price is that rate times the borrow unit's lovelace price.
+`receipt_price` prices one receipt token in lovelace: a receipt token is worth its
+market's exchange rate in the market's borrow unit, so its lovelace price is that rate
+times the borrow unit's lovelace price. `receipt_prices` applies it to the receipt
+tokens of pooled markets.
 """
 
 from __future__ import annotations
@@ -75,13 +76,55 @@ def _lovelace_price(prices: PriceMap, unit: str) -> tuple[int, int] | None:
     return price.num, price.denom
 
 
+def receipt_price(
+    token: str,
+    rate: tuple[int, int],
+    underlying_unit: str,
+    prices: PriceMap,
+    *,
+    source: OracleSource = OracleSource.QTOKEN_RATE,
+    valid_from: int | None = None,
+) -> OraclePrice | None:
+    """Lovelace price of receipt token ``token``: ``rate`` times its underlying's.
+
+    ``rate`` is the exchange rate as ``(num, denom)``, underlying base units per
+    receipt base unit; the price is the exact, unreduced product of that rational and
+    ``underlying_unit``'s lovelace price in ``prices`` (lovelace is worth one
+    lovelace without an entry). None when either part is not positive or the
+    underlying has no price.
+
+    Args:
+        token: The receipt-token unit to price.
+        rate: The exchange rate as ``(num, denom)``.
+        underlying_unit: The unit the receipt token redeems for.
+        prices: Lovelace prices of underlying units. It is not modified.
+        source: The source tag of the returned price.
+        valid_from: The start of the returned price's validity, if known.
+    """
+    rate_num, rate_denom = rate
+    if rate_num <= 0 or rate_denom <= 0:
+        return None
+    underlying = _lovelace_price(prices, underlying_unit)
+    if underlying is None:
+        return None
+    num, denom = underlying
+    return OraclePrice(
+        token=token,
+        quote="lovelace",
+        num=rate_num * num,
+        denom=rate_denom * denom,
+        source=source,
+        valid_from=valid_from,
+    )
+
+
 def receipt_prices(markets: Iterable[LendingMarket], prices: PriceMap) -> PriceMap:
     """Lovelace prices for the receipt tokens of ``markets``.
 
     Each market with a ``receipt_unit`` and a positive ``receipt_rate`` gets the price
-    ``receipt_rate`` times its borrow unit's lovelace price, as the exact product of
-    the two rationals. Markets whose borrow unit has no positive lovelace price in
-    ``prices`` are left out.
+    ``receipt_rate`` times its borrow unit's lovelace price (:func:`receipt_price`).
+    Markets whose borrow unit has no positive lovelace price in ``prices`` are left
+    out.
 
     Args:
         markets: Market views; those without a receipt token are skipped.
@@ -94,19 +137,14 @@ def receipt_prices(markets: Iterable[LendingMarket], prices: PriceMap) -> PriceM
     receipts = PriceMap()
     for market in markets:
         rate = market.receipt_rate
-        if market.receipt_unit is None or rate is None or rate <= 0:
+        if market.receipt_unit is None or rate is None:
             continue
-        underlying = _lovelace_price(prices, market.borrow_unit)
-        if underlying is None:
-            continue
-        num, denom = underlying
-        receipts.add(
-            OraclePrice(
-                token=market.receipt_unit,
-                quote="lovelace",
-                num=rate.numerator * num,
-                denom=rate.denominator * denom,
-                source=OracleSource.QTOKEN_RATE,
-            ),
+        price = receipt_price(
+            market.receipt_unit,
+            (rate.numerator, rate.denominator),
+            market.borrow_unit,
+            prices,
         )
+        if price is not None:
+            receipts.add(price)
     return receipts

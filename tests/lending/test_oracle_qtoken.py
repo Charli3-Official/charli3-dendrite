@@ -9,6 +9,7 @@ from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.models import PriceMap
 from charli3_dendrite.lending.oracles.qtoken import QTokenResolver
+from charli3_dendrite.lending.oracles.qtoken import receipt_price
 from charli3_dendrite.lending.oracles.qtoken import receipt_prices
 from tests.lending.views import MIN
 from tests.lending.views import SNEK
@@ -166,4 +167,60 @@ def test_a_receipt_price_crosses_into_another_borrow_unit_through_lovelace():
     assert djed_market.required_collateral(QSNEK, 100_000_000, book) is None
     assert djed_market.required_collateral(QSNEK, 100_000_000, merged) == ceil(
         Fraction(100_000_000) / (Fraction(2, 3) * expected),
+    )
+
+
+def test_receipt_price_is_the_exact_unreduced_product_of_rate_and_underlying():
+    book = prices((SNEK, "lovelace", 3_217, 1_000_000))
+    price = receipt_price(QSNEK, (40, 20), SNEK, book)
+    assert price is not None
+    assert (price.token, price.quote) == (QSNEK, "lovelace")
+    assert (price.num, price.denom) == (40 * 3_217, 20 * 1_000_000)
+    assert price.source is OracleSource.QTOKEN_RATE
+    assert (price.valid_from, price.valid_to) == (None, None)
+    stamped = receipt_price(
+        QSNEK,
+        (40, 20),
+        SNEK,
+        book,
+        source=OracleSource.LIQWID,
+        valid_from=1_234,
+    )
+    assert stamped is not None
+    assert stamped.source is OracleSource.LIQWID
+    assert stamped.valid_from == 1_234
+    assert (stamped.num, stamped.denom) == (price.num, price.denom)
+
+
+def test_receipt_price_prices_lovelace_at_one_without_an_entry():
+    price = receipt_price(QADA, (7, 3), "lovelace", PriceMap())
+    assert price is not None
+    assert (price.num, price.denom) == (7, 3)
+
+
+def test_receipt_price_refuses_a_non_positive_rate_or_underlying():
+    book = prices((SNEK, "lovelace", 3_217, 1_000_000), (MIN, "lovelace", 0, 1))
+    for rate in ((0, 1), (1, 0), (-1, 2), (1, -2), (-1, -2)):
+        assert receipt_price(QSNEK, rate, SNEK, book) is None
+    assert receipt_price(QMIN, (1, 1), MIN, book) is None
+    assert receipt_price(QADA, (1, 1), DJED, book) is None
+
+
+def test_receipt_prices_price_every_market_through_receipt_price(monkeypatch):
+    import charli3_dendrite.lending.oracles.qtoken as qtoken
+
+    calls = []
+    real = qtoken.receipt_price
+
+    def spy(*args, **kwargs):
+        calls.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(qtoken, "receipt_price", spy)
+    book = prices((SNEK, "lovelace", 3_217, 1_000_000))
+    qsnek = market("qsnek", borrow_unit=SNEK, receipt_unit=QSNEK, receipt_rate=S9)
+    receipts = qtoken.receipt_prices([qsnek], book)
+    assert calls == [(QSNEK, (S9.numerator, S9.denominator), SNEK, book)]
+    assert receipts.get(QSNEK) == real(
+        QSNEK, (S9.numerator, S9.denominator), SNEK, book
     )
