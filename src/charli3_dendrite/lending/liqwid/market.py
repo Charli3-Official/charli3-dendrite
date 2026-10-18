@@ -48,6 +48,7 @@ from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
+from charli3_dendrite.lending.normalized import as_parse_error
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import canonical_unit_key
@@ -261,7 +262,7 @@ def _market_view(
             total_principal=datum.principal,
         )
     except _CONVERSION_ERRORS as exc:
-        raise LendingParseError(f"market state {state.out_ref}: {exc}") from exc
+        raise as_parse_error(f"market state {state.out_ref}", exc) from exc
 
 
 def _holdings(
@@ -361,7 +362,7 @@ def loan_to_position(
             opened_ms=loan.info.block_time * _MS_PER_SECOND,
         )
     except _CONVERSION_ERRORS as exc:
-        raise LendingParseError(f"loan {loan.out_ref}: {exc}") from exc
+        raise as_parse_error(f"loan {loan.out_ref}", exc) from exc
     if context is None:
         return position
     bound = (

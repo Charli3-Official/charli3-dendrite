@@ -7,6 +7,8 @@ from fractions import Fraction
 
 import pytest
 
+from charli3_dendrite.lending.fluidtokens_v4 import market as ft_market
+from charli3_dendrite.lending.liqwid import market as liqwid_market
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import CollateralTerms
@@ -15,6 +17,7 @@ from charli3_dendrite.lending.normalized import LendingMarket
 from charli3_dendrite.lending.normalized import LendingParseError
 from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
+from charli3_dendrite.lending.normalized import as_parse_error
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleRef
@@ -623,3 +626,21 @@ def test_a_holding_its_market_has_no_terms_for_counts_for_nothing():
     ).at_market(market())
     assert stranded.weighted_collateral(book) == (None,)
     assert stranded.health_factor(book, stranded.opened_ms) == Decimal(0)
+
+
+def test_as_parse_error_prefixes_a_foreign_error():
+    cause = ZeroDivisionError("division by zero")
+    error = as_parse_error("pool abc#0", cause)
+    assert type(error) is LendingParseError
+    assert str(error) == "pool abc#0: division by zero"
+
+
+def test_as_parse_error_passes_a_parse_error_through():
+    cause = LendingParseError("a rate needs a positive denominator")
+    assert as_parse_error("pool abc#0", cause) is cause
+
+
+def test_both_protocols_wrap_through_the_shared_helper():
+    assert ft_market.as_parse_error is as_parse_error
+    assert liqwid_market.as_parse_error is as_parse_error
+    assert not hasattr(ft_market, "_converted")

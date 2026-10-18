@@ -48,6 +48,7 @@ from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
+from charli3_dendrite.lending.normalized import as_parse_error
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import constr
@@ -215,12 +216,6 @@ def lendable_principal(pool: FluidV4PoolState) -> int:
     return max(pool.assets["lovelace"] - floor, 0)
 
 
-def _converted(what: str, exc: Exception) -> LendingParseError:
-    if isinstance(exc, LendingParseError):
-        return exc
-    return LendingParseError(f"{what}: {exc}")
-
-
 def pool_to_market(
     pool: FluidV4PoolState,
     pool_manager: FluidV4PoolManagerState | None = None,
@@ -270,7 +265,7 @@ def pool_to_market(
             permissioned=pool.is_permissioned,
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"pool {pool.out_ref}", exc) from exc
+        raise as_parse_error(f"pool {pool.out_ref}", exc) from exc
 
 
 def _origin(loan: FluidV4LoanState) -> Origin | None:
@@ -306,7 +301,7 @@ def loan_to_position(loan: FluidV4LoanState) -> LendingPosition:
             opened_ms=int(datum.lend_date),  # type: ignore[attr-defined]
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"loan {loan.out_ref}", exc) from exc
+        raise as_parse_error(f"loan {loan.out_ref}", exc) from exc
 
 
 def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
@@ -346,7 +341,7 @@ def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
             != PERMISSIONLESS_MARKER,
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"request {request.out_ref}", exc) from exc
+        raise as_parse_error(f"request {request.out_ref}", exc) from exc
 
 
 _VIEW_KINDS = (EntityKind.POOL, EntityKind.LOAN, EntityKind.REQUEST)

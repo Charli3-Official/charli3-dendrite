@@ -43,6 +43,17 @@ class LendingParseError(ValueError):
         self.reason = reason
 
 
+def as_parse_error(what: str, exc: Exception) -> LendingParseError:
+    """``exc`` as a LendingParseError about ``what``.
+
+    A LendingParseError passes through as it is; any other error becomes a
+    LendingParseError whose message is ``"{what}: {exc}"``.
+    """
+    if isinstance(exc, LendingParseError):
+        return exc
+    return LendingParseError(f"{what}: {exc}")
+
+
 class PartyKind(str, Enum):
     """How a party is identified."""
 

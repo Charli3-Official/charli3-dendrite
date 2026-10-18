@@ -720,3 +720,44 @@ def test_loan_binds_to_given_market_views_as_to_its_context():
     assert bound.to_dict() == loan_to_position(record, context).to_dict()
     unbound = loan_to_position(record, context, markets={})
     assert unbound.to_dict() == loan_to_position(record).to_dict()
+
+
+def _raising(error):
+    def build(*args, **kwargs):
+        raise error
+
+    return build
+
+
+def test_a_market_state_conversion_error_names_the_market_state(monkeypatch):
+    _, record = _live_example(LiqwidKind.MARKET_STATE)
+    monkeypatch.setattr(liqwid_market, "utilization", _raising(ZeroDivisionError("x")))
+    with pytest.raises(LendingParseError) as raised:
+        market_to_view(record, live_context(), DEPLOYMENT)
+    assert str(raised.value) == f"market state {record.out_ref}: x"
+
+
+def test_a_market_state_parse_error_passes_through_unprefixed(monkeypatch):
+    _, record = _live_example(LiqwidKind.MARKET_STATE)
+    error = LendingParseError("a Liqwid rate needs a positive denominator")
+    monkeypatch.setattr(liqwid_market, "LiqwidVariableRate", _raising(error))
+    with pytest.raises(LendingParseError) as raised:
+        market_to_view(record, live_context(), DEPLOYMENT)
+    assert raised.value is error
+
+
+def test_a_loan_conversion_error_names_the_loan(monkeypatch):
+    _, record = _live_example(LiqwidKind.LOAN)
+    monkeypatch.setattr(liqwid_market, "_holdings", _raising(KeyError("x")))
+    with pytest.raises(LendingParseError) as raised:
+        loan_to_position(record, None, DEPLOYMENT)
+    assert str(raised.value) == f"loan {record.out_ref}: 'x'"
+
+
+def test_a_loan_parse_error_passes_through_unprefixed(monkeypatch):
+    _, record = _live_example(LiqwidKind.LOAN)
+    error = LendingParseError("a Liqwid interest index must not be negative")
+    monkeypatch.setattr(liqwid_market, "LiqwidVariableRate", _raising(error))
+    with pytest.raises(LendingParseError) as raised:
+        loan_to_position(record, None, DEPLOYMENT)
+    assert raised.value is error
