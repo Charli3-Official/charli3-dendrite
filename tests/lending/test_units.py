@@ -194,6 +194,9 @@ def test_liqwid_readers_catch_the_one_liqwid_decode_error_set(module):
         ("charli3_dendrite.lending.liqwid.lifecycle", "_POLICY_HEX"),
         ("charli3_dendrite.lending.liqwid.market", "_unit_order"),
         ("charli3_dendrite.lending.liqwid.oracles", "_out_ref_key"),
+        ("charli3_dendrite.lending.liqwid.oracles", "_append_unique"),
+        ("charli3_dendrite.lending.liqwid.oracles", "_priced"),
+        ("charli3_dendrite.lending.liqwid.market", "_chain_order"),
     ],
 )
 def test_no_local_copy_of_a_shared_helper_remains(module, private):

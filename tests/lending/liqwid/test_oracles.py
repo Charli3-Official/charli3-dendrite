@@ -23,6 +23,7 @@ from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
 from charli3_dendrite.lending.liqwid.oracles import LiqwidOracleResolver
 from charli3_dendrite.lending.liqwid.oracles import liqwid_price_map
+from charli3_dendrite.lending.liqwid.oracles import lovelace_rational
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.oracles import select_feeds
 from charli3_dendrite.lending.oracles.models import OracleRef
@@ -507,3 +508,225 @@ def test_resolver_returns_none_when_an_input_is_missing():
         update={"extra": {**ref.extra, "underlying": "lovelace"}},
     )
     assert resolver.resolve(wrong_underlying, full) is None
+
+
+def at_block(info: PoolStateInfo, block_time: int, block_index: int = 0):
+    """``info`` moved to another block position."""
+    return info.model_copy(
+        update={"block_time": block_time, "block_index": block_index},
+    )
+
+
+def with_state(
+    info: PoolStateInfo,
+    out_ref: str,
+    *,
+    last_batch_ms: int,
+    s9: tuple[int, int],
+) -> PoolStateInfo:
+    """``info`` re-created at ``out_ref`` with another batch time and s9."""
+    fields = cbor2.loads(bytes.fromhex(info.datum_cbor))
+    fields[8] = last_batch_ms
+    fields[9] = list(s9)
+    tx_hash, index = out_ref.split("#")
+    return info.model_copy(
+        update={
+            "datum_cbor": cbor2.dumps(fields).hex(),
+            "tx_hash": tx_hash,
+            "tx_index": int(index),
+        },
+    )
+
+
+def test_lovelace_rational_is_the_unreduced_usd_over_ada_quotient():
+    assert lovelace_rational((3, 7), (189, 500)) == (3 * 500, 7 * 189)
+    assert lovelace_rational((2, 4), (2, 4)) == (8, 8)
+    for usd, ada in (((0, 1), (1, 1)), ((1, 0), (1, 1)), ((1, 1), (0, 1))):
+        assert lovelace_rational(usd, ada) is None
+    assert lovelace_rational((1, 1), (1, -1)) is None
+
+
+def test_price_map_converts_each_feed_through_lovelace_rational(monkeypatch):
+    import charli3_dendrite.lending.liqwid.oracles as oracles
+
+    calls = []
+
+    def spy(usd, ada):
+        calls.append((usd, ada))
+        return (11, 13)
+
+    monkeypatch.setattr(oracles, "lovelace_rational", spy)
+    ada = make_feed("01" * 32 + "#0", "lovelace", (189, 500), ts_ms=7)
+    peg = make_feed("02" * 32 + "#0", TOKEN_UNIT, (3, 7), ts_ms=9)
+    prices = liqwid_price_map([ada, peg])
+    assert sorted(calls) == [((3, 7), (189, 500)), ((189, 500), (189, 500))]
+    assert (prices.require(TOKEN_UNIT).num, prices.require(TOKEN_UNIT).denom) == (
+        11,
+        13,
+    )
+
+
+def test_equal_timestamps_go_to_the_later_chain_position():
+    later_block = parse_feed(
+        at_block(feed_info("01" * 32 + "#0", feed_datum(TOKEN_UNIT, (1, 2), 500)), 2),
+    )
+    earlier_block = parse_feed(
+        at_block(feed_info("ff" * 32 + "#9", feed_datum(TOKEN_UNIT, (1, 3), 500)), 1),
+    )
+    same_block_later_tx = parse_feed(
+        at_block(
+            feed_info("00" * 32 + "#0", feed_datum(TOKEN_UNIT, (1, 4), 500)),
+            2,
+            1,
+        ),
+    )
+    fresher = parse_feed(
+        at_block(feed_info("02" * 32 + "#0", feed_datum(TOKEN_UNIT, (1, 5), 501)), 0),
+    )
+    assert later_block and earlier_block and same_block_later_tx and fresher
+    assert later_block.info is not None
+    for order in permutations((later_block, earlier_block)):
+        assert select_feeds(order)[TOKEN_UNIT] == later_block
+    trio = (later_block, earlier_block, same_block_later_tx)
+    for order in permutations(trio):
+        assert select_feeds(order)[TOKEN_UNIT] == same_block_later_tx
+    for order in permutations((*trio, fresher)):
+        assert select_feeds(order)[TOKEN_UNIT] == fresher
+
+
+def test_resolver_and_market_view_bind_the_same_newest_state():
+    from charli3_dendrite.lending.liqwid.market import _newest_views
+
+    component = token_market()
+    state_info, _state = live_states()[component.market_state_policy]
+    # The chain's older state carries the later batch time, so the datum order and
+    # the chain order disagree; the chain order wins in both readers.
+    older = with_state(
+        at_block(state_info, 1_000),
+        "0a" * 32 + "#0",
+        last_batch_ms=9_000_000,
+        s9=(5, 1),
+    )
+    newer = with_state(
+        at_block(state_info, 2_000),
+        "0b" * 32 + "#0",
+        last_batch_ms=1_000,
+        s9=(3, 1),
+    )
+    ada = feed_info("01" * 32 + "#0", feed_datum("lovelace", (189, 500), 5))
+    token = feed_info("02" * 32 + "#0", feed_datum(component.underlying, (3, 7), 5))
+    for order in permutations((older, newer)):
+        got = LiqwidOracleResolver().resolve(
+            ref_for(component),
+            PoolStateList(root=[*order, ada, token]),
+        )
+        assert got is not None
+        assert (got.num, got.denom) == (3 * 3 * 500, 1 * 7 * 189)
+        states = tuple(parse_utxo(info) for info in order)
+        assert all(states)
+        bound = _newest_views(
+            states, {"0a" * 32 + "#0": "old", "0b" * 32 + "#0": "new"}
+        )
+        assert bound == {component.market_id: "new"}
+
+
+def test_resolver_stamps_the_underlying_feed_time():
+    component = token_market()
+    state_info, _state = live_states()[component.market_state_policy]
+    ada = feed_info("01" * 32 + "#0", feed_datum("lovelace", (189, 500), 5))
+    token = feed_info("02" * 32 + "#0", feed_datum(component.underlying, (3, 7), 42))
+    got = LiqwidOracleResolver().resolve(
+        ref_for(component),
+        PoolStateList(root=[state_info, ada, token]),
+    )
+    assert got is not None
+    assert (got.valid_from, got.valid_to) == (42, None)
+
+
+def ada_market() -> MarketComponents:
+    """A live market whose underlying is ADA."""
+    states = live_states()
+    return next(
+        m
+        for m in DEPLOYMENT.markets
+        if m.underlying == "lovelace" and m.market_state_policy in states
+    )
+
+
+def test_a_qada_price_is_s9_whether_or_not_an_ada_feed_is_present():
+    component = ada_market()
+    state_info, state = live_states()[component.market_state_policy]
+    s9_num, s9_den = state.qtoken_rate
+    ada = feed_info("01" * 32 + "#0", feed_datum("lovelace", (189, 500), 5))
+    resolver = LiqwidOracleResolver()
+    with_ada = resolver.resolve(
+        ref_for(component), PoolStateList(root=[state_info, ada])
+    )
+    alone = resolver.resolve(ref_for(component), PoolStateList(root=[state_info]))
+    assert with_ada is not None and alone is not None
+    assert (with_ada.num, with_ada.denom) == (s9_num, s9_den)
+    assert with_ada.valid_from == 5
+    assert (alone.num, alone.denom) == (s9_num, s9_den)
+    assert alone.valid_from is None
+    hop = receipt_prices(
+        [
+            market(
+                component.market_id,
+                borrow_unit="lovelace",
+                receipt_unit=component.qtoken_policy,
+                receipt_rate=Fraction(s9_num, s9_den),
+            ),
+        ],
+        liqwid_price_map([]),
+    ).require(component.qtoken_policy)
+    assert Fraction(hop.num, hop.denom) == Fraction(alone.num, alone.denom)
+
+
+def test_resolver_prices_through_the_price_map_and_receipt_price(monkeypatch):
+    import charli3_dendrite.lending.liqwid.oracles as oracles
+
+    maps, receipts = [], []
+    real_map, real_receipt = oracles.liqwid_price_map, oracles.receipt_price
+
+    def map_spy(feeds):
+        result = real_map(feeds)
+        maps.append(result)
+        return result
+
+    def receipt_spy(*args, **kwargs):
+        receipts.append((args, kwargs))
+        return real_receipt(*args, **kwargs)
+
+    monkeypatch.setattr(oracles, "liqwid_price_map", map_spy)
+    monkeypatch.setattr(oracles, "receipt_price", receipt_spy)
+    component = token_market()
+    state_info, state = live_states()[component.market_state_policy]
+    ada = feed_info("01" * 32 + "#0", feed_datum("lovelace", (189, 500), 5))
+    token = feed_info("02" * 32 + "#0", feed_datum(component.underlying, (3, 7), 6))
+    got = LiqwidOracleResolver().resolve(
+        ref_for(component),
+        PoolStateList(root=[state_info, ada, token]),
+    )
+    assert got is not None
+    assert len(maps) == 1
+    assert receipts == [
+        (
+            (component.qtoken_policy, state.qtoken_rate, component.underlying, maps[0]),
+            {"source": OracleSource.LIQWID, "valid_from": 6},
+        ),
+    ]
+
+
+def test_resolver_selectors_derive_from_liqwid_selectors(monkeypatch):
+    import charli3_dendrite.lending.liqwid.oracles as oracles
+
+    calls = []
+    real = oracles.liqwid_selectors
+
+    def spy(deployment=None):
+        calls.append(deployment)
+        return real(deployment)
+
+    monkeypatch.setattr(oracles, "liqwid_selectors", spy)
+    LiqwidOracleResolver(DEPLOYMENT).selectors([ref_for(DEPLOYMENT.markets[0])])
+    assert calls == [DEPLOYMENT]

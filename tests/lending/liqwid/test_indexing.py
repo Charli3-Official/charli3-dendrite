@@ -402,3 +402,74 @@ def test_a_decoder_failure_in_the_shared_error_set_is_not_a_record(
     monkeypatch.setitem(indexing._DECODERS, LiqwidKind.LOAN, decoder)
     assert issubclass(error, LIQWID_DECODE_ERRORS)
     assert parse_utxo(record_info(rec)) is None
+
+
+def _placed(record, *, block_time, block_index, tx_hash, tx_index):
+    """``record`` moved to another chain position."""
+    info = record.info.model_copy(
+        update={
+            "block_time": block_time,
+            "block_index": block_index,
+            "tx_hash": tx_hash,
+            "tx_index": tx_index,
+        },
+    )
+    return dataclasses.replace(record, info=info, out_ref=f"{tx_hash}#{tx_index}")
+
+
+def test_chain_position_is_block_time_then_tx_in_block_then_out_ref():
+    rec = _genuine(LiqwidKind.MARKET_STATE.value, live=True)[0]
+    info = record_info(rec, block_time=7, block_index=3, tx_hash="ab" * 32, tx_index=2)
+    assert indexing.chain_position(info) == (7, 3, "ab" * 32, 2)
+
+
+def test_newest_first_orders_by_chain_position_in_any_input_order():
+    from itertools import permutations
+
+    base = parse_utxo(record_info(_genuine(LiqwidKind.MARKET_STATE.value)[0]))
+    assert base is not None
+    early = _placed(base, block_time=1, block_index=9, tx_hash="ff" * 32, tx_index=9)
+    later_tx = _placed(base, block_time=2, block_index=0, tx_hash="00" * 32, tx_index=0)
+    same_block = _placed(
+        base,
+        block_time=2,
+        block_index=1,
+        tx_hash="00" * 32,
+        tx_index=0,
+    )
+    higher_output = _placed(
+        base,
+        block_time=2,
+        block_index=1,
+        tx_hash="00" * 32,
+        tx_index=10,
+    )
+    expected = [higher_output, same_block, later_tx, early]
+    for order in permutations(expected):
+        assert indexing.newest_first(order) == expected
+
+
+def test_newest_record_is_the_latest_of_the_kind_and_market_by_chain_position():
+    state = parse_utxo(record_info(_genuine(LiqwidKind.MARKET_STATE.value)[0]))
+    loan = parse_utxo(record_info(_genuine(LiqwidKind.LOAN.value)[0]))
+    assert state is not None and loan is not None
+    market_id = state.market_id
+    old = _placed(state, block_time=1, block_index=0, tx_hash="aa" * 32, tx_index=0)
+    new = _placed(state, block_time=2, block_index=0, tx_hash="00" * 32, tx_index=0)
+    other = dataclasses.replace(
+        _placed(state, block_time=9, block_index=0, tx_hash="bb" * 32, tx_index=0),
+        market_id="ef" * 28,
+    )
+    newer_loan = _placed(
+        dataclasses.replace(loan, market_id=market_id),
+        block_time=9,
+        block_index=0,
+        tx_hash="cc" * 32,
+        tx_index=0,
+    )
+    records = [old, other, newer_loan, new]
+    kind = LiqwidKind.MARKET_STATE
+    assert indexing.newest_record(records, kind, market_id) == new
+    assert indexing.newest_record(reversed(records), kind, market_id) == new
+    assert indexing.newest_record(records, kind, "12" * 28) is None
+    assert indexing.newest_record([], kind, market_id) is None

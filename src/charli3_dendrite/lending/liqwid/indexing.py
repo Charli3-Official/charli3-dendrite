@@ -13,6 +13,7 @@ view reads, so they are not selectors.
 from __future__ import annotations
 
 from collections.abc import Callable
+from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
@@ -125,6 +126,36 @@ class LiqwidRecord:
     generation: str | None
     datum: LiqwidDatum
     info: PoolStateInfo = field(hash=False, compare=False)
+
+
+def chain_position(info: PoolStateInfo) -> tuple[int, int, str, int]:
+    """Where a UTxO sits in the chain: block time, transaction in block, out-ref.
+
+    A greater position is a later output: a later block, a later transaction in the
+    same block, or a later output of the same transaction.
+    """
+    return (info.block_time, info.block_index, info.tx_hash, info.tx_index)
+
+
+def newest_first(records: Iterable[LiqwidRecord]) -> list[LiqwidRecord]:
+    """``records`` from the latest chain position to the earliest."""
+    return sorted(records, key=lambda record: chain_position(record.info), reverse=True)
+
+
+def newest_record(
+    records: Iterable[LiqwidRecord],
+    kind: LiqwidKind,
+    market_id: str,
+) -> LiqwidRecord | None:
+    """The record of ``kind`` and ``market_id`` at the latest chain position.
+
+    None when ``records`` holds no such record. The order is the chain's, never the
+    datum's timestamps, so every reader of one set of records binds the same one.
+    """
+    for record in newest_first(records):
+        if record.kind is kind and record.market_id == market_id:
+            return record
+    return None
 
 
 def _param_selector(

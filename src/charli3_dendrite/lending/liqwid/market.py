@@ -25,6 +25,7 @@ from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
+from charli3_dendrite.lending.liqwid.indexing import newest_first
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.lifecycle import LiqwidLifecycle
 from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
@@ -69,11 +70,6 @@ _MS_PER_SECOND = 1000
 _CONVERSION_ERRORS = (ArithmeticError, KeyError, TypeError, ValueError)
 
 
-def _chain_order(info: PoolStateInfo) -> tuple[int, int, str, int]:
-    """Where a UTxO sits in the chain: block time, transaction in block, out-ref."""
-    return (info.block_time, info.block_index, info.tx_hash, info.tx_index)
-
-
 def _market_records(
     context: ParseContext,
     market_id: str,
@@ -89,9 +85,7 @@ def _market_records(
         record = parse_utxo(info, deployment)
         if record is not None and record.market_id == market_id:
             by_kind.setdefault(record.kind, []).append(record)
-    for records in by_kind.values():
-        records.sort(key=lambda record: _chain_order(record.info), reverse=True)
-    return by_kind
+    return {kind: newest_first(records) for kind, records in by_kind.items()}
 
 
 def _parameters(
@@ -369,7 +363,7 @@ def _newest_views(
     not convert is absent, as :func:`loan_to_position` leaves such a loan unbound.
     """
     newest: dict[str, LiqwidRecord] = {}
-    for state in sorted(states, key=lambda s: _chain_order(s.info), reverse=True):
+    for state in newest_first(states):
         if state.market_id is not None:
             newest.setdefault(state.market_id, state)
     return {
