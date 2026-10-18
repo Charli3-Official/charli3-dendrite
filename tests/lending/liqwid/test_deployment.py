@@ -394,6 +394,13 @@ def test_refresh_script_trim_is_idempotent_on_the_snapshot():
     assert all(set(entry) <= allowed for entry in bundled["scriptInfos"])
 
 
+def test_live_drift_check_fetches_the_module_registry_url():
+    """The gated live check follows ``deployment.REGISTRY_URL``, not its own copy."""
+    from tests.lending.liqwid import test_market_live
+
+    assert test_market_live.REGISTRY_URL is deployment.REGISTRY_URL
+
+
 # --- captured mainnet records (fixtures/records.json.gz, fixtures/api_snapshot.json)
 
 # One MarketParams output per datum layout, keyed by the list length.

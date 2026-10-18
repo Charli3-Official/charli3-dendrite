@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 from charli3_dendrite.backend.dbsync.models import PoolSelector
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
+from charli3_dendrite.lending.liqwid.deployment import REGISTRY_URL
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import check_deployment
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
@@ -48,7 +49,6 @@ pytestmark = pytest.mark.skipif(
     reason="requires live dbsync (LIQWID_E2E=1)",
 )
 
-REGISTRY_URL = "https://public.liqwid.finance/v6/registry.json"
 LIVE_MARKETS = 35
 LOAN_FIELDS = 5
 POLICY_HEX_LEN = 56
