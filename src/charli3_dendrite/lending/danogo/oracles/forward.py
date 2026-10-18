@@ -236,10 +236,11 @@ def compose_cross_quote(
 def _leaf_addresses(handle: LeafHandle) -> list[str]:
     """The addresses a handle's leaf is read from.
 
-    A Liqwid oracle leaf is read from every Liqwid oracle validator: Liqwid binds a
-    feed by oracle token and asset, whatever its validator, so the address captured
-    in the handle is not part of its identity. Every other kind is read at
-    ``handle.address``.
+    A Liqwid oracle leaf is read at ``handle.address`` and at every Liqwid oracle
+    validator of the bundled deployment, captured address first, each address once:
+    Liqwid binds a feed by oracle token and asset, whatever its validator, and the
+    captured address stays read when the deployment no longer lists it. Every other
+    kind is read at ``handle.address`` only.
     """
     if handle.otype != OracleUtxoType.TLIQWID_ORACLE_V2.name:
         return [handle.address]
@@ -249,9 +250,14 @@ def _leaf_addresses(handle: LeafHandle) -> list[str]:
 
     return list(
         dict.fromkeys(
-            selector.address
-            for selector in liqwid_selectors()
-            if selector.kind is LiqwidKind.ORACLE
+            [
+                handle.address,
+                *(
+                    selector.address
+                    for selector in liqwid_selectors()
+                    if selector.kind is LiqwidKind.ORACLE
+                ),
+            ],
         ),
     )
 
@@ -265,8 +271,8 @@ def resolve_leaf_info(
     A unique identifying NFT yields a single match; kinds that share a marker token
     across many feeds at one address (e.g. Liqwid V2 oracles) are narrowed by
     `handle.datum_key` -- the stable asset-identity parsed from each candidate's datum
-    (`leaf_matches_handle`). A Liqwid oracle leaf is looked up at every Liqwid oracle
-    validator rather than at ``handle.address`` (`_leaf_addresses`).
+    (`leaf_matches_handle`). A Liqwid oracle leaf is looked up at ``handle.address``
+    and at every Liqwid oracle validator (`_leaf_addresses`).
     Returns None unless exactly one UTxO matches, so the caller never reads the wrong
     feed. This is the shared resolution both `read_live_leaf` (forward pricing) and the
     create-loan snapshot (full-UTxO assembly) rely on.

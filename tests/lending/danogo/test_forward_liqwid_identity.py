@@ -198,8 +198,24 @@ def test_a_liqwid_handle_reads_every_oracle_validator(handles):
         for selector in liqwid_selectors()
         if selector.kind is LiqwidKind.ORACLE
     }
-    assert set(backend.queried) == oracle_addresses
-    assert handles[0].address in oracle_addresses
+    assert set(backend.queried) == oracle_addresses | {handles[0].address}
+    assert len(backend.queried) == len(set(backend.queried))
+
+
+def test_a_liqwid_handle_always_reads_its_captured_validator(handles):
+    oracle_addresses = {
+        selector.address
+        for selector in liqwid_selectors()
+        if selector.kind is LiqwidKind.ORACLE
+    }
+    captured = "addr_test_captured_oracle_validator"
+    assert captured not in oracle_addresses
+    backend = _AddressBackend([])
+    handle = dataclasses.replace(handles[0], address=captured)
+    assert resolve_leaf_info(backend, handle) is None
+    assert captured in backend.queried
+    assert set(backend.queried) == oracle_addresses | {captured}
+    assert len(backend.queried) == len(set(backend.queried))
 
 
 def test_other_kinds_read_their_pinned_address():
