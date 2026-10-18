@@ -32,6 +32,8 @@ from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import PriceMap
 from charli3_dendrite.lending.oracles.qtoken import receipt_prices
+from charli3_dendrite.lending.rates import HOURS_PER_YEAR
+from charli3_dendrite.lending.rates import MS_PER_HOUR
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info
@@ -613,3 +615,7 @@ def test_required_collateral_reaches_the_borrow_health_floor(prices):
             assert health(market, terms, quantity - 1, debt) < floor
             checked += 1
     assert checked
+
+
+def test_year_is_the_shared_hours_per_year():
+    assert lqm.YEAR_MS == HOURS_PER_YEAR * MS_PER_HOUR == 31_536_000_000

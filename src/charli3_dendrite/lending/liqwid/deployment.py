@@ -43,6 +43,8 @@ from charli3_dendrite.lending.liqwid.datums import decode_market_params
 from charli3_dendrite.lending.liqwid.datums import field_count
 from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import policy_of
+from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR
+from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR_MS
 
 if TYPE_CHECKING:
     from charli3_dendrite.dataclasses.models import PoolStateInfo
@@ -58,8 +60,9 @@ FIRST_ORACLE_SLOT: Final[int] = 83_732_351
 ORACLE_TOKEN_POLICY: Final[
     str
 ] = "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d"
-# Mainnet POSIX seconds of a slot: slot + POSIX_SLOT_OFFSET.
-POSIX_SLOT_OFFSET: Final[int] = 1_591_566_291
+# Mainnet POSIX seconds of a slot: slot + POSIX_SLOT_OFFSET (the shared mainnet
+# slot anchor of :func:`charli3_dendrite.utility.slot_to_posix_ms`, in seconds).
+POSIX_SLOT_OFFSET: Final[int] = MAINNET_SLOT_ANCHOR_MS // 1000 - MAINNET_SLOT_ANCHOR
 
 LEGACY_GENERATION: Final[str] = "legacy"
 NEW_GENERATION: Final[str] = "new"

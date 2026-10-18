@@ -29,6 +29,8 @@ from charli3_dendrite.lending.liqwid.datums import Rational
 from charli3_dendrite.lending.math import borrow_headroom
 from charli3_dendrite.lending.math import ceil_div
 from charli3_dendrite.lending.math import floor_div
+from charli3_dendrite.lending.rates import HOURS_PER_YEAR
+from charli3_dendrite.lending.rates import MS_PER_HOUR
 
 __all__ = [
     "APY_PRECISION",
@@ -53,7 +55,7 @@ __all__ = [
 ]
 
 INTEREST_PERIOD_MS: Final[int] = 2_000_000  # p[10] on every market
-YEAR_MS: Final[int] = 31_536_000_000  # 365 days
+YEAR_MS: Final[int] = HOURS_PER_YEAR * MS_PER_HOUR  # 365 days
 APY_PRECISION: Final[int] = 60  # significant digits of a yearly rate
 _RATE_MODEL_TERMS: Final[int] = 4  # p[11] = [base, multiplier, jump, kink]
 _INCOME_RATIO_TERMS: Final[int] = 2  # p[2] starts [total, supplier share, ...]

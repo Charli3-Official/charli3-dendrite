@@ -38,6 +38,7 @@ from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
 from charli3_dendrite.lending.units import script_credential
+from charli3_dendrite.utility import slot_to_posix_ms
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import CONTEXT_KINDS
 from tests.lending.liqwid.records import RECORDS
@@ -286,7 +287,12 @@ def test_deployment_wide_scripts():
 
 def test_floors_and_slot_offset():
     def utc(slot: int) -> datetime:
-        return datetime.fromtimestamp(slot + POSIX_SLOT_OFFSET, tz=timezone.utc)
+        return datetime.fromtimestamp(slot_to_posix_ms(slot) // 1000, tz=timezone.utc)
+
+    # The offset is the shared mainnet slot anchor, in seconds.
+    for slot in (FIRST_ORACLE_SLOT, FIRST_SLOT, 0):
+        assert slot + POSIX_SLOT_OFFSET == slot_to_posix_ms(slot) // 1000
+    assert POSIX_SLOT_OFFSET == 1_591_566_291
 
     assert utc(FIRST_SLOT).date() == date(2023, 2, 2)
     assert utc(FIRST_ORACLE_SLOT).strftime("%Y-%m-%d %H:%M") == "2023-02-02 00:44"
@@ -444,7 +450,8 @@ def test_captured_entries_carry_consistent_chain_points():
         out_refs = [rec["out_ref"] for rec in entries]
         assert out_refs == sorted(set(out_refs)), kind
         for rec in entries:
-            assert rec["block_time"] == rec["slot"] + POSIX_SLOT_OFFSET, rec["out_ref"]
+            posix_s = slot_to_posix_ms(rec["slot"]) // 1000
+            assert rec["block_time"] == posix_s, rec["out_ref"]
             spent = rec["spent_slot"]
             assert spent is None or spent >= rec["slot"], rec["out_ref"]
             alive = rec["slot"] <= API["slot"] and (
