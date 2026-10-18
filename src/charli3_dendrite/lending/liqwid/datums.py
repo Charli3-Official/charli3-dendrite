@@ -150,6 +150,8 @@ LOAN_LENGTHS: Final[frozenset[int]] = frozenset({5})
 ORACLE_FEED_LENGTHS: Final[frozenset[int]] = frozenset({5, 6})
 """A list5 feed, or a list6 feed that adds field 5 (``OracleFeedDatum.caps``)."""
 ACTION_LENGTHS: Final[frozenset[int]] = frozenset({2})
+POLICY_KEY_PREFIX: Final[str] = "policy:"
+"""Prefix of a policy-wide feed's asset key (see :func:`feed_asset_key`)."""
 
 LIQWID_DECODE_ERRORS: Final = (
     *DECODE_ERRORS,
@@ -319,6 +321,21 @@ class OracleFeedDatum:
     ts_ms: int
     validity_ms: int
     caps: object | None = field(hash=False, compare=False)
+
+    @property
+    def asset_key(self) -> str:
+        """Identity of the priced asset (:func:`feed_asset_key`)."""
+        return feed_asset_key(self.asset, policy_wide=self.policy_wide)
+
+
+def feed_asset_key(asset: str, *, policy_wide: bool) -> str:
+    """Identity of a feed's priced asset; a policy-wide feed never reads as a unit.
+
+    An exact feed's key is its unit (``"lovelace"`` for Ada). A policy-wide feed's
+    is :data:`POLICY_KEY_PREFIX` + the 56-hex policy, so it never reads as a unit
+    or as a bare policy.
+    """
+    return POLICY_KEY_PREFIX + asset if policy_wide else asset
 
 
 @dataclass(frozen=True)

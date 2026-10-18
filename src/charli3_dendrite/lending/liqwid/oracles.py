@@ -21,8 +21,10 @@ from typing import Final
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.dataclasses.models import PoolStateList
+from charli3_dendrite.lending.liqwid.datums import POLICY_KEY_PREFIX  # noqa: F401
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.datums import OracleFeedDatum
+from charli3_dendrite.lending.liqwid.datums import feed_asset_key
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
@@ -41,7 +43,6 @@ from charli3_dendrite.lending.oracles.qtoken import receipt_price
 from charli3_dendrite.lending.units import out_ref_key
 
 ADA_UNIT: Final[str] = "lovelace"
-POLICY_KEY_PREFIX: Final[str] = "policy:"
 
 
 @dataclass(frozen=True)
@@ -74,10 +75,8 @@ class LiqwidFeed:
 
     @property
     def asset_key(self) -> str:
-        """Identity of the priced asset; a policy-wide feed never reads as a unit."""
-        if self.policy_wide:
-            return POLICY_KEY_PREFIX + self.asset_unit
-        return self.asset_unit
+        """Identity of the priced asset (:func:`feed_asset_key`)."""
+        return feed_asset_key(self.asset_unit, policy_wide=self.policy_wide)
 
 
 def _rank(feed: LiqwidFeed) -> tuple[int, int, int, str, int]:

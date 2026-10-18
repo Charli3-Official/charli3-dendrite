@@ -730,3 +730,30 @@ def test_resolver_selectors_derive_from_liqwid_selectors(monkeypatch):
     monkeypatch.setattr(oracles, "liqwid_selectors", spy)
     LiqwidOracleResolver(DEPLOYMENT).selectors([ref_for(DEPLOYMENT.markets[0])])
     assert calls == [DEPLOYMENT]
+
+
+def test_feed_asset_key_is_the_datum_rule():
+    from charli3_dendrite.lending.liqwid import datums
+    from charli3_dendrite.lending.liqwid import oracles
+
+    assert oracles.POLICY_KEY_PREFIX is datums.POLICY_KEY_PREFIX
+    for rec in genuine_records():
+        feed = parse_feed(record_info(rec))
+        assert feed is not None
+        assert feed.asset_key == datums.decode_oracle_feed(rec["datum_cbor"]).asset_key
+
+
+def test_liqwid_feed_asset_key_delegates_to_feed_asset_key(monkeypatch):
+    import charli3_dendrite.lending.liqwid.oracles as oracles
+
+    calls = []
+
+    def spy(asset, *, policy_wide):
+        calls.append((asset, policy_wide))
+        return "key"
+
+    monkeypatch.setattr(oracles, "feed_asset_key", spy)
+    policy = "dd" * 28
+    assert make_feed("ab" * 32 + "#0", policy, policy_wide=True).asset_key == "key"
+    assert make_feed("ab" * 32 + "#1").asset_key == "key"
+    assert calls == [(policy, True), ("lovelace", False)]

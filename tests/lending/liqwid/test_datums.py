@@ -21,6 +21,7 @@ from charli3_dendrite.lending.liqwid.datums import LOAN_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MARKET_STATE_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import ORACLE_FEED_LENGTHS
+from charli3_dendrite.lending.liqwid.datums import POLICY_KEY_PREFIX
 from charli3_dendrite.lending.liqwid.datums import ActionDatum
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
@@ -33,6 +34,7 @@ from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.datums import decode_market_params
 from charli3_dendrite.lending.liqwid.datums import decode_market_state
 from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
+from charli3_dendrite.lending.liqwid.datums import feed_asset_key
 from charli3_dendrite.lending.liqwid.datums import field_count
 from charli3_dendrite.lending.liqwid.datums import liqwid_oracle_feed_id
 from charli3_dendrite.lending.liqwid.datums import liqwid_qtoken_rate
@@ -905,3 +907,25 @@ def test_field_count_of_a_parked_constructor_is_none(parked):
 def test_field_count_raises_value_error_on_anything_else(datum):
     with pytest.raises(ValueError, match="^liqwid record: "):
         field_count(datum)
+
+
+def test_feed_asset_key_is_the_unit_or_the_prefixed_policy():
+    assert POLICY_KEY_PREFIX == "policy:"
+    assert feed_asset_key("lovelace", policy_wide=False) == "lovelace"
+    unit = "cc" * 28 + "4142"
+    assert feed_asset_key(unit, policy_wide=False) == unit
+    wide = feed_asset_key(POLICY_WIDE_POLICY, policy_wide=True)
+    assert wide == "policy:" + POLICY_WIDE_POLICY
+
+
+def test_oracle_feed_datum_asset_key_follows_feed_asset_key():
+    exact = decode_oracle_feed(FIRST_ADA_FEED)
+    assert exact.asset_key == "lovelace"
+    wide = decode_oracle_feed(_policy_wide_feed())
+    assert wide.asset_key == POLICY_KEY_PREFIX + POLICY_WIDE_POLICY
+    for rec in _genuine("oracle"):
+        feed = decode_oracle_feed(rec["datum_cbor"])
+        assert feed.asset_key == feed_asset_key(
+            feed.asset,
+            policy_wide=feed.policy_wide,
+        )
