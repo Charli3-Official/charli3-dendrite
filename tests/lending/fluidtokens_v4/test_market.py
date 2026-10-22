@@ -28,6 +28,7 @@ from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4LoanState
 from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolManagerState
 from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolState
 from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4RequestState
+from charli3_dendrite.lending.markets import ParseContext
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import DefaultRule
@@ -546,3 +547,43 @@ def test_installment_interest_is_the_debt_less_the_principal_still_owed(mode):
     still_owed = position.rate_model.remaining_principal(position.principal, 2)
     assert interest == position.current_debt(NOW_MS) - still_owed
     assert interest >= 0
+
+
+def _every_captured_record():
+    """Every fixture record of every kind, plus the V4 request record."""
+    for kind, records in FIX.items():
+        if isinstance(records, list):
+            for rec in records:
+                yield kind, rec
+    yield "request", v4_request_record()
+
+
+def _parsed(source, info, **kwargs):
+    """``source.parse`` as a comparable value: the view, None, or the parse error."""
+    try:
+        return source.parse(info, **kwargs)
+    except LendingParseError as exc:
+        return ("raised", str(exc))
+
+
+def test_a_parse_context_changes_no_v4_view():
+    source = FluidTokensV4MarketSource()
+    infos = [(rec["out_ref"], record_info(rec)) for _, rec in _every_captured_record()]
+    neighbours = tuple(info for _, info in infos[:3])
+    contexts = (
+        ParseContext(slot=1, utxos=neighbours),
+        ParseContext(slot=None),
+    )
+    views = []
+    for out_ref, info in infos:
+        alone = _parsed(source, info)
+        for context in contexts:
+            assert _parsed(source, info, context=context) == alone, out_ref
+        views.append(alone)
+    assert sum(isinstance(v, LendingMarket) for v in views) == len(FIX["pool"])
+    assert sum(isinstance(v, LendingPosition) for v in views) == len(FIX["loan"])
+    assert sum(isinstance(v, BorrowRequest) for v in views) == 1
+
+
+def test_the_v4_source_follows_positions_by_their_token():
+    assert FluidTokensV4MarketSource().lifecycle is None

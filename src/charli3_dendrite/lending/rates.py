@@ -10,12 +10,17 @@ kind)``, so a stored ``{"protocol", "kind", "params"}`` record rebuilds its mode
 
 from __future__ import annotations
 
+import dataclasses
 from abc import ABC
 from abc import abstractmethod
 from enum import Enum
+from importlib import import_module
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import ClassVar
+from typing import TypeVar
+
+from charli3_dendrite.lending.builtins import BUILTIN_PROTOCOL_PACKAGES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -23,6 +28,8 @@ if TYPE_CHECKING:
 
 HOURS_PER_YEAR = 8760
 MS_PER_HOUR = 3_600_000
+
+_IntParams = TypeVar("_IntParams", bound="DataclassIntParams")
 
 
 class RateKind(str, Enum):
@@ -88,6 +95,34 @@ class RateModel(ABC):
     def from_params(cls, params: Mapping[str, Any]) -> RateModel:
         """Rebuild the model from :meth:`params`."""
 
+    def liquidation_debt(
+        self,
+        principal: int,
+        *,
+        opened_ms: int,
+        now_ms: int,
+        installments_paid: int,
+    ) -> int:
+        """The debt a loan's health is measured against at ``now_ms``.
+
+        The amount :meth:`outstanding` reports. A protocol that charges more to repay
+        than its liquidation check counts, such as a minimum interest, overrides this.
+        """
+        return self.outstanding(
+            principal,
+            opened_ms=opened_ms,
+            now_ms=now_ms,
+            installments_paid=installments_paid,
+        )
+
+    def rebind(self, market_model: RateModel) -> RateModel:
+        """The loan's model under ``market_model``, its market's current model.
+
+        The model itself: terms fixed when the loan opened do not follow the market.
+        A pooled protocol whose loans accrue at the market's rate overrides this.
+        """
+        return self
+
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe record that :func:`rate_model_from_dict` rebuilds."""
         return {
@@ -95,6 +130,28 @@ class RateModel(ABC):
             "kind": self.kind.value,
             "params": self.params(),
         }
+
+
+class DataclassIntParams(RateModel):
+    """A rate model that is a dataclass of int fields only.
+
+    Supplies :meth:`RateModel.params` and :meth:`RateModel.from_params`: the params
+    are the fields by name, and rebuilding takes ``int()`` of every field, defaulted
+    ones included.
+    """
+
+    def params(self) -> dict[str, int]:
+        """Every field, by name."""
+        return dataclasses.asdict(self)  # type: ignore[call-overload]
+
+    @classmethod
+    def from_params(
+        cls: type[_IntParams],
+        params: Mapping[str, Any],
+    ) -> _IntParams:  # noqa: PYI019
+        """Rebuild from :meth:`params`; every field is required."""
+        names = [field.name for field in dataclasses.fields(cls)]  # type: ignore[arg-type]
+        return cls(**{name: int(params[name]) for name in names})
 
 
 _REGISTRY: dict[tuple[str, RateKind], type[RateModel]] = {}
@@ -126,13 +183,13 @@ def rate_model_from_dict(data: Mapping[str, Any]) -> RateModel:
 
 
 def _load_builtins() -> None:
-    """Import the protocol packages that register models, once, on first lookup."""
+    """Register every built-in protocol's rate models, once, on first lookup."""
     global _BUILTINS_LOADED  # noqa: PLW0603
     if _BUILTINS_LOADED:
         return
     _BUILTINS_LOADED = True
-    from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS
-
-    for model in RATE_MODELS:
-        # A caller's own registration under the same key is kept.
-        _REGISTRY.setdefault((model.protocol, model.kind), model)
+    for module_name in BUILTIN_PROTOCOL_PACKAGES:
+        models: tuple[type[RateModel], ...] = import_module(module_name).RATE_MODELS
+        for model in models:
+            # A caller's own registration under the same key is kept.
+            _REGISTRY.setdefault((model.protocol, model.kind), model)

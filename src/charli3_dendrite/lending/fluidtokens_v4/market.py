@@ -7,7 +7,6 @@ number comes from the datum and the contract-exact maths.
 
 from __future__ import annotations
 
-import time
 from fractions import Fraction
 from typing import TYPE_CHECKING
 from typing import Any
@@ -22,6 +21,7 @@ from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
 from charli3_dendrite.lending.fluidtokens_v4.indexing import entity_selectors
 from charli3_dendrite.lending.fluidtokens_v4.indexing import parse_utxo
 from charli3_dendrite.lending.fluidtokens_v4.rates import PROTOCOL_NAME
+from charli3_dendrite.lending.fluidtokens_v4.rates import RATE_MODELS  # noqa: F401
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidAmortizedRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidFlatTermRate
 from charli3_dendrite.lending.fluidtokens_v4.rates import FluidPerpetualRate
@@ -37,6 +37,7 @@ from charli3_dendrite.lending.fluidtokens_v4.state import names_under
 from charli3_dendrite.lending.fluidtokens_v4.transactions.oracle import has_oracle
 from charli3_dendrite.lending.markets import LendingSnapshot
 from charli3_dendrite.lending.markets import WatchSpec
+from charli3_dendrite.lending.markets import convertible_views
 from charli3_dendrite.lending.normalized import BorrowRequest
 from charli3_dendrite.lending.normalized import CollateralHolding
 from charli3_dendrite.lending.normalized import CollateralTerms
@@ -47,6 +48,7 @@ from charli3_dendrite.lending.normalized import LendingPosition
 from charli3_dendrite.lending.normalized import Origin
 from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
+from charli3_dendrite.lending.normalized import as_parse_error
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import constr
@@ -58,6 +60,8 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.fluidtokens_v4.datums import CollateralAsset
     from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
     from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolManagerState
+    from charli3_dendrite.lending.markets import ParseContext
+    from charli3_dendrite.lending.markets import PositionLifecycle
     from charli3_dendrite.lending.rates import RateModel
 
 # Constructor alternatives of RepaymentMode, LiquidationMode and Option.
@@ -212,12 +216,6 @@ def lendable_principal(pool: FluidV4PoolState) -> int:
     return max(pool.assets["lovelace"] - floor, 0)
 
 
-def _converted(what: str, exc: Exception) -> LendingParseError:
-    if isinstance(exc, LendingParseError):
-        return exc
-    return LendingParseError(f"{what}: {exc}")
-
-
 def pool_to_market(
     pool: FluidV4PoolState,
     pool_manager: FluidV4PoolManagerState | None = None,
@@ -267,7 +265,7 @@ def pool_to_market(
             permissioned=pool.is_permissioned,
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"pool {pool.out_ref}", exc) from exc
+        raise as_parse_error(f"pool {pool.out_ref}", exc) from exc
 
 
 def _origin(loan: FluidV4LoanState) -> Origin | None:
@@ -303,7 +301,7 @@ def loan_to_position(loan: FluidV4LoanState) -> LendingPosition:
             opened_ms=int(datum.lend_date),  # type: ignore[attr-defined]
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"loan {loan.out_ref}", exc) from exc
+        raise as_parse_error(f"loan {loan.out_ref}", exc) from exc
 
 
 def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
@@ -343,7 +341,7 @@ def request_to_borrow_request(request: FluidV4RequestState) -> BorrowRequest:
             != PERMISSIONLESS_MARKER,
         )
     except _CONVERSION_ERRORS as exc:
-        raise _converted(f"request {request.out_ref}", exc) from exc
+        raise as_parse_error(f"request {request.out_ref}", exc) from exc
 
 
 _VIEW_KINDS = (EntityKind.POOL, EntityKind.LOAN, EntityKind.REQUEST)
@@ -353,6 +351,8 @@ class FluidTokensV4MarketSource:
     """FluidTokens V4 pools, loans and requests as common views."""
 
     name = PROTOCOL_NAME
+    # Every V4 loan holds its own identity token, so positions need no chaining.
+    lifecycle: PositionLifecycle | None = None
 
     def __init__(self, config: ConfigDatum | None = None) -> None:
         """Watch the deployment ``config`` names; mainnet by default."""
@@ -369,8 +369,12 @@ class FluidTokensV4MarketSource:
     def parse(
         self,
         info: PoolStateInfo,
+        *,
+        context: ParseContext | None = None,
     ) -> LendingMarket | LendingPosition | BorrowRequest | None:
         """One UTxO as its view; None when it is not a V4 pool, loan or request.
+
+        A V4 view reads only its own UTxO, so ``context`` is ignored.
 
         Raises LendingParseError for a pool, loan or request it cannot convert.
         """
@@ -394,26 +398,18 @@ class FluidTokensV4MarketSource:
         """
         from charli3_dendrite.lending.fluidtokens_v4.loader import snapshot
 
-        found = snapshot(
-            backend,
-            now_ms=int(time.time() * 1000) if now_ms is None else now_ms,
-        )
+        found = snapshot(backend, now_ms=now_ms)
         managers = {manager.pool_id: manager for manager in found.pool_managers}
         return LendingSnapshot(
-            markets=_convertible(
+            markets=convertible_views(
                 lambda pool: pool_to_market(pool, managers.get(pool.pool_id)),
                 found.pools,
             ),
-            positions=_convertible(loan_to_position, found.loans),
-            requests=_convertible(request_to_borrow_request, found.requests),
+            positions=convertible_views(loan_to_position, found.loans),
+            requests=convertible_views(request_to_borrow_request, found.requests),
         )
 
 
-def _convertible(convert: Any, states: list[Any]) -> tuple[Any, ...]:  # noqa: ANN401
-    out = []
-    for state in states:
-        try:
-            out.append(convert(state))
-        except LendingParseError:
-            continue
-    return tuple(out)
+def market_source() -> FluidTokensV4MarketSource:
+    """The mainnet FluidTokens V4 source, as ``lending.builtins`` registers it."""
+    return FluidTokensV4MarketSource()

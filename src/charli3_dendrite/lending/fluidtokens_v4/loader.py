@@ -12,12 +12,14 @@ that matches exact addresses the snapshot comes back empty.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import TypeVar
 
 from charli3_dendrite.lending.base import LendingBook
+from charli3_dendrite.lending.fetch import PAGE_SIZE
+from charli3_dendrite.lending.fetch import resolve_now_ms
+from charli3_dendrite.lending.fetch import unspent_utxos
 from charli3_dendrite.lending.fluidtokens_v4.constants import resolve_config
 from charli3_dendrite.lending.fluidtokens_v4.indexing import EntityKind
 from charli3_dendrite.lending.fluidtokens_v4.indexing import EntitySelector
@@ -37,8 +39,6 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
     from charli3_dendrite.lending.oracles.models import PriceMap
 
-PAGE_SIZE = 1000
-
 _T = TypeVar("_T")
 
 
@@ -50,33 +50,16 @@ def fetch_entities(
 ) -> list[FluidV4State]:
     """Every unspent UTxO at ``selector``'s credential that parses as its kind.
 
-    Pages through ``get_pool_utxos`` and terminates on a short page or on a page that
-    adds no new out-ref, so a backend that ignores ``page`` and returns the same rows
-    again ends the loop. Pages are de-duplicated by out-ref, since the backend pages
-    with LIMIT / OFFSET. Sorted by out-ref.
+    The rows are those of :func:`~charli3_dendrite.lending.fetch.unspent_utxos`: every
+    page, once per out-ref. Sorted by out-ref.
     """
     only = {selector.kind: selector}
     found: dict[str, FluidV4State] = {}
-    seen: set[tuple[str, int]] = set()
-    page = 0
-    while True:
-        rows = list(
-            backend.get_pool_utxos(
-                addresses=[selector.address],
-                limit=page_size,
-                page=page,
-                historical=False,
-            ),
-        )
-        before = len(seen)
-        for info in rows:
-            seen.add((info.tx_hash, info.tx_index))
-            state = parse_utxo(info, only)
-            if state is not None:
-                found.setdefault(state.out_ref, state)
-        if len(rows) < page_size or len(seen) == before:
-            return [found[ref] for ref in sorted(found)]
-        page += 1
+    for info in unspent_utxos(backend, selector.address, page_size=page_size):
+        state = parse_utxo(info, only)
+        if state is not None:
+            found.setdefault(state.out_ref, state)
+    return [found[ref] for ref in sorted(found)]
 
 
 def link_loans(
@@ -134,8 +117,7 @@ def snapshot(
 
     ``now_ms`` (POSIX ms) is the loans' evaluation time; it defaults to now.
     """
-    if now_ms is None:
-        now_ms = int(time.time() * 1000)
+    now_ms = resolve_now_ms(now_ms)
     config = resolve_config(backend)
     fetched = {
         kind: fetch_entities(backend, selector)

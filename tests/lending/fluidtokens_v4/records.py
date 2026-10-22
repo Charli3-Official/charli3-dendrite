@@ -3,9 +3,8 @@
 import json
 from pathlib import Path
 
-from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens.datums import Asset
+from tests.lending.records_common import record_info as record_info
 
 FIX = json.loads((Path(__file__).parent / "fixtures" / "entities.json").read_text())
 
@@ -17,25 +16,6 @@ NO_ORACLE_TOKENS = {
     "empty-policy": Asset(b"", b"oracle"),
     "marker-policy": Asset(b"NONE", b"oracle"),
 }
-
-
-def record_info(rec: dict, **overrides) -> PoolStateInfo:
-    """A backend-shaped UTxO record for a captured fixture entry."""
-    tx_hash, index = rec["out_ref"].split("#")
-    values = {
-        "address": rec["address"],
-        "tx_hash": tx_hash,
-        "tx_index": int(index),
-        "block_time": 1_790_000_000,
-        "block_index": 0,
-        "block_hash": "",
-        "datum_hash": "",
-        "datum_cbor": rec["datum_cbor"],
-        "assets": Assets(root=dict(rec["assets"])),
-        "plutus_v2": False,
-    }
-    values.update(overrides)
-    return PoolStateInfo(**values)
 
 
 def v4_request_record() -> dict:

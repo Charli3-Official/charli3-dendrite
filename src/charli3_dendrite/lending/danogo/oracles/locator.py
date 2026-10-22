@@ -50,6 +50,8 @@ class LeafHandle:
     `datum_key` is a further discriminator for kinds that share one marker token across
     many feeds (e.g. Liqwid V2 oracles): the stable asset-identity parsed from the leaf
     datum (see `forward.leaf_discriminator`). Empty when the NFT alone pins the UTxO.
+    A Liqwid oracle leaf is identified by its token and `datum_key` alone and is read
+    at every Liqwid oracle validator; its `address` is where it was captured.
     """
 
     otype: str

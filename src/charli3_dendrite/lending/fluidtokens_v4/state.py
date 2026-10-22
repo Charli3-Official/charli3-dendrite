@@ -52,7 +52,10 @@ from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.units import asset_unit
 from charli3_dendrite.lending.units import constr
+from charli3_dendrite.lending.units import names_under
+from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import script_payment_address
+from charli3_dendrite.lending.units import sole_token_name
 
 if TYPE_CHECKING:
     from charli3_dendrite.lending.normalized import BorrowRequest
@@ -66,8 +69,6 @@ PERMISSIONLESS_MARKER = b"NONE"
 
 # AuthorizationMethod constructor alternatives, in declaration order.
 AUTH_KINDS = ("signature", "spend_script", "withdraw_script", "mint_script")
-
-_POLICY_HEX_LEN = 56
 
 # RepaymentMode constructor alternative -> number of integer fields it carries.
 _REPAYMENT_ARITY = {0: 1, 1: 0, 2: 2}
@@ -132,27 +133,13 @@ def out_ref_str(ref: TxOutRef) -> str:
     return f"{ref.tx_id.hex()}#{ref.index}"
 
 
-def names_under(assets: Assets, policy: str) -> list[str]:
-    """Asset names (hex, sorted) held under ``policy``."""
-    return sorted(
-        unit[_POLICY_HEX_LEN:]
-        for unit in assets.root
-        if unit != "lovelace" and unit[:_POLICY_HEX_LEN] == policy
-    )
-
-
 def identity_name(assets: Assets, policy: str) -> str | None:
     """Asset name (hex) of the one identity token held under ``policy``.
 
     A genuine protocol UTxO holds exactly one token under its identity policy, with
     quantity 1 and a non-empty name. Anything else returns None.
     """
-    names = names_under(assets, policy)
-    if len(names) != 1 or not names[0]:
-        return None
-    if assets.root[policy + names[0]] != 1:
-        return None
-    return names[0]
+    return sole_token_name(assets, policy) or None
 
 
 class FluidV4Record:
@@ -169,7 +156,7 @@ class FluidV4Record:
     @property
     def out_ref(self) -> str:
         """``tx_hash#tx_index`` of this UTxO."""
-        return f"{self.tx_hash}#{self.tx_index}"  # type: ignore[attr-defined]
+        return out_ref(self)  # type: ignore[arg-type]
 
     @classmethod
     def from_record(cls: type[_S], info: PoolStateInfo) -> _S:  # noqa: PYI019

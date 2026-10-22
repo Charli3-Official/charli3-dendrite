@@ -214,7 +214,9 @@ AND txo.consumed_by_tx_id IS NULL"""
             datum_selector += """
 AND ma.policy = ANY(%(policies)b) AND ma.name = ANY(%(names)b)"""
 
+        # A stable order, so LIMIT / OFFSET pages neither skip nor repeat a row.
         datum_selector += """
+ORDER BY txo.id
 LIMIT %(limit)s
 OFFSET %(offset)s"""
 
