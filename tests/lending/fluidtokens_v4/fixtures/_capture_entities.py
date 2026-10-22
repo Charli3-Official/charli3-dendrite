@@ -17,7 +17,7 @@ The captured CBOR is the source of truth for the byte-exact datum tests.
 existing file and keeps every entity record: the transaction fixtures and their tests
 are coupled to the captured entities, so a config update need not re-capture them.
 
-Run: PYTHONPATH=src python tests/lending/fluidtokens_v4/fixtures/_capture_entities.py
+Run: PYTHONPATH=src:. python tests/lending/fluidtokens_v4/fixtures/_capture_entities.py
 [--config-only]
 Requires dbsync env (DBSYNC_*). Not run in CI.
 """
@@ -30,6 +30,9 @@ from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
+
+from tests.lending._capture_dbsync import record_entry
+from tests.lending._capture_dbsync import record_sql
 
 load_dotenv()
 
@@ -62,31 +65,6 @@ CONN = dict(
     connect_timeout=30,
 )
 
-_RECORD_SQL = """
-    select encode(t.hash, 'hex'), o.index, a.address, o.value,
-           encode(d.bytes, 'hex'), o.id
-    from tx_out o
-    join tx t on t.id = o.tx_id
-    join address a on a.id = o.address_id
-    left join datum d on d.id = o.inline_datum_id
-"""
-
-
-def _assets(cur, tx_out_id: int, lovelace: int) -> dict[str, int]:
-    assets: dict[str, int] = {"lovelace": int(lovelace)}
-    cur.execute(
-        """select encode(ma.policy, 'hex') || encode(ma.name, 'hex'), mto.quantity
-           from ma_tx_out mto
-           join multi_asset ma on ma.id = mto.ident
-           where mto.tx_out_id = %s
-           order by 1""",
-        (tx_out_id,),
-    )
-    for unit, quantity in cur.fetchall():
-        assets[unit] = int(quantity)
-    return assets
-
-
 _HOLDS_ASSET = """o.id in (
     select mto.tx_out_id from ma_tx_out mto
     join multi_asset ma on ma.id = mto.ident
@@ -94,17 +72,8 @@ _HOLDS_ASSET = """o.id in (
 
 
 def _records(cur, where: str, args: tuple, *, by_out_ref: bool = True) -> list[dict]:
-    cur.execute(_RECORD_SQL + " where " + where + " order by o.id", args)
-    out = []
-    for tx_hash, ix, address, lovelace, datum_hex, tx_out_id in cur.fetchall():
-        out.append(
-            dict(
-                out_ref=f"{tx_hash}#{ix}",
-                address=address,
-                datum_cbor=datum_hex or "",
-                assets=_assets(cur, tx_out_id, lovelace),
-            ),
-        )
+    cur.execute(record_sql() + " where " + where + " order by o.id", args)
+    out = [record_entry(cur, row) for row in cur.fetchall()]
     return sorted(out, key=lambda r: r["out_ref"]) if by_out_ref else out
 
 

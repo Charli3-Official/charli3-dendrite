@@ -47,7 +47,7 @@ from charli3_dendrite.lending.danogo.oracles.deployments import (
 from charli3_dendrite.lending.danogo.oracles.forward import INTERMEDIATE_QUOTE
 from charli3_dendrite.lending.danogo.oracles.forward import LiveLeaf
 from charli3_dendrite.lending.danogo.oracles.forward import compose_cross_quote
-from charli3_dendrite.lending.danogo.oracles.forward import leaf_discriminator
+from charli3_dendrite.lending.danogo.oracles.forward import leaf_matches_handle
 from charli3_dendrite.lending.danogo.oracles.forward import replay_recipe
 from charli3_dendrite.lending.danogo.oracles.leaves import parse_orcfax_fs
 from charli3_dendrite.lending.danogo.oracles.locator import Recipe
@@ -145,18 +145,17 @@ def _leaf_for_handle(leaves: list[Utxo], handle: LeafHandle) -> Utxo | None:
     """Find the resolved source leaf a recipe step's handle points at.
 
     Matches by the handle's identifying NFT (policy + name) and, when present, the
-    datum discriminator that pins kinds sharing one marker token across many feeds.
+    datum discriminator that pins kinds sharing one marker token across many feeds
+    (`leaf_matches_handle`, as `resolve_leaf_info`). None unless exactly one leaf
+    matches.
     """
-    for u in leaves:
-        if handle.nft_policy and not u.holds(handle.nft_policy, handle.nft_name):
-            continue
-        if (
-            handle.datum_key
-            and leaf_discriminator(handle.otype, u.datum) != handle.datum_key
-        ):
-            continue
-        return u
-    return None
+    matches = [
+        u
+        for u in leaves
+        if (not handle.nft_policy or u.holds(handle.nft_policy, handle.nft_name))
+        and leaf_matches_handle(handle, u.datum)
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _resolve_recipe(

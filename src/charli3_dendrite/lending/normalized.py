@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
 from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
@@ -19,17 +20,18 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Literal
 
+from charli3_dendrite.lending.math import borrow_headroom
 from charli3_dendrite.lending.oracles.models import OracleRef
 from charli3_dendrite.lending.rates import MS_PER_HOUR
 from charli3_dendrite.lending.rates import RateModel
 from charli3_dendrite.lending.rates import rate_model_from_dict
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
+from charli3_dendrite.lending.units import policy_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from charli3_dendrite.lending.oracles.models import PriceMap
-
-_POLICY_HEX_LEN = 56
 
 
 class LendingParseError(ValueError):
@@ -39,6 +41,17 @@ class LendingParseError(ValueError):
         """Keep ``reason`` for callers that record why a UTxO was not converted."""
         super().__init__(reason)
         self.reason = reason
+
+
+def as_parse_error(what: str, exc: Exception) -> LendingParseError:
+    """``exc`` as a LendingParseError about ``what``.
+
+    A LendingParseError passes through as it is; any other error becomes a
+    LendingParseError whose message is ``"{what}: {exc}"``.
+    """
+    if isinstance(exc, LendingParseError):
+        return exc
+    return LendingParseError(f"{what}: {exc}")
 
 
 class PartyKind(str, Enum):
@@ -95,19 +108,32 @@ class Party:
 
 @dataclass(frozen=True)
 class CollateralHolding:
-    """An amount of one collateral unit."""
+    """An amount of one collateral unit.
+
+    ``liquidation_ltv`` is set by protocols that weight each collateral separately:
+    the share of this holding's value that counts toward the loan's health. None
+    means the position's own ``liquidation_ltv`` applies to every holding.
+    """
 
     unit: str
     amount: int
+    liquidation_ltv: Fraction | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON-safe form."""
-        return {"unit": self.unit, "amount": self.amount}
+        """JSON-safe form; ``liquidation_ltv`` only when set."""
+        record: dict[str, Any] = {"unit": self.unit, "amount": self.amount}
+        if self.liquidation_ltv is not None:
+            record["liquidation_ltv"] = fraction_to_dict(self.liquidation_ltv)
+        return record
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> CollateralHolding:
         """Rebuild from :meth:`to_dict`."""
-        return cls(data["unit"], int(data["amount"]))
+        return cls(
+            data["unit"],
+            int(data["amount"]),
+            fraction_from_dict(data.get("liquidation_ltv")),
+        )
 
 
 @dataclass(frozen=True)
@@ -148,6 +174,9 @@ class CollateralTerms:
     equity_to_borrower: bool
     # The feed is a pydantic model, which does not hash; equal terms share it anyway.
     price_source: OracleRef | None = field(hash=False)
+    # The protocol's own per-collateral weight, already folded into max_ltv and
+    # liquidation_ltv; kept for protocols that publish it. None when not tracked.
+    weight: Fraction | None = None
 
     def __post_init__(self) -> None:
         """Refuse terms with no borrowing limit, or with both."""
@@ -157,12 +186,12 @@ class CollateralTerms:
     def accepts(self, unit: str) -> bool:
         """Whether ``unit`` is this collateral (or of its policy, if policy-wide)."""
         if self.policy_wide:
-            return unit[:_POLICY_HEX_LEN] == self.unit and unit != "lovelace"
+            return policy_of(unit) == self.unit and unit != "lovelace"
         return unit == self.unit
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON-safe form."""
-        return {
+        """JSON-safe form; ``weight`` only when set."""
+        record: dict[str, Any] = {
             "unit": self.unit,
             "policy_wide": self.policy_wide,
             "max_ltv": fraction_to_dict(self.max_ltv),
@@ -177,6 +206,9 @@ class CollateralTerms:
                 else self.price_source.model_dump(mode="json")
             ),
         }
+        if self.weight is not None:
+            record["weight"] = fraction_to_dict(self.weight)
+        return record
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> CollateralTerms:
@@ -192,6 +224,7 @@ class CollateralTerms:
             liquidation_discount=fraction_from_dict(data.get("liquidation_discount")),
             equity_to_borrower=bool(data["equity_to_borrower"]),
             price_source=None if source is None else OracleRef.model_validate(source),
+            weight=fraction_from_dict(data.get("weight")),
         )
 
 
@@ -215,8 +248,8 @@ def _price_in(prices: PriceMap | None, unit: str, quote: str) -> Fraction | None
     if prices is None:
         return None
     candidates = [unit]
-    if unit != "lovelace" and len(unit) > _POLICY_HEX_LEN:
-        candidates.append(unit[:_POLICY_HEX_LEN])
+    if unit != "lovelace" and len(unit) > POLICY_HEX_LEN:
+        candidates.append(policy_of(unit))
     for token in candidates:
         direct = _positive(prices, token, quote)
         if direct is not None:
@@ -230,7 +263,13 @@ def _price_in(prices: PriceMap | None, unit: str, quote: str) -> Fraction | None
 
 @dataclass(frozen=True)
 class LendingMarket:
-    """Somewhere to borrow ``borrow_unit``: a lender's pool or a pooled market."""
+    """Somewhere to borrow ``borrow_unit``: a lender's pool or a pooled market.
+
+    A pooled market may also describe its supply side and a borrow cap:
+    ``receipt_rate`` is how many ``borrow_unit`` one ``receipt_unit`` redeems for,
+    ``max_utilization`` is the share of supplied funds that may be lent out, and
+    ``total_principal`` is the principal already lent, which the cap counts against.
+    """
 
     protocol: str
     market_id: str
@@ -244,11 +283,30 @@ class LendingMarket:
     collateral: tuple[CollateralTerms, ...]
     on_default: DefaultRule
     permissioned: bool
+    receipt_rate: Fraction | None = None
+    max_utilization: Fraction | None = None
+    total_principal: int | None = None
 
     @property
     def borrow_rate(self) -> Fraction:
         """The rate model's annualized headline rate."""
         return self.rate_model.headline_rate()
+
+    def borrowable_now(self) -> int:
+        """Most that one borrow can take now: the liquidity, within any borrow cap.
+
+        Without a ``max_utilization`` this is ``available_liquidity``. With one, it is
+        also bounded by :func:`~charli3_dendrite.lending.math.borrow_headroom` over
+        ``total_principal`` (none recorded counts as 0); a cap of 0 gives 0.
+        """
+        if self.max_utilization is None:
+            return self.available_liquidity
+        headroom = borrow_headroom(
+            self.available_liquidity,
+            self.total_principal or 0,
+            self.max_utilization,
+        )
+        return max(0, min(self.available_liquidity, headroom))
 
     def terms_for(self, collateral_unit: str) -> CollateralTerms | None:
         """Terms for ``collateral_unit``: an exact match, else a policy-wide one."""
@@ -268,22 +326,25 @@ class LendingMarket:
     ) -> int | None:
         """Least ``collateral_unit`` that backs borrowing ``amount``.
 
-        None when the collateral is not accepted, or when an oracle-priced market has
-        no usable price for it in the borrow unit.
+        None when the collateral is not accepted, when its ``max_ltv`` is 0 (it backs
+        no borrowing), or when an oracle-priced market has no usable price for it in
+        the borrow unit.
         """
         terms = self.terms_for(collateral_unit)
         if terms is None:
             return None
         if terms.fixed_ratio is not None:
             return ceil(amount * terms.fixed_ratio)
+        if terms.max_ltv is None or terms.max_ltv == 0:
+            return None
         price = _price_in(prices, collateral_unit, self.borrow_unit)
-        if price is None or terms.max_ltv is None:
+        if price is None:
             return None
         return ceil(Fraction(amount) / (terms.max_ltv * price))
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON-safe form."""
-        return {
+        """JSON-safe form; the supply-side and borrow-cap fields only when set."""
+        record: dict[str, Any] = {
             "protocol": self.protocol,
             "market_id": self.market_id,
             "borrow_unit": self.borrow_unit,
@@ -297,11 +358,19 @@ class LendingMarket:
             "on_default": self.on_default.value,
             "permissioned": self.permissioned,
         }
+        if self.receipt_rate is not None:
+            record["receipt_rate"] = fraction_to_dict(self.receipt_rate)
+        if self.max_utilization is not None:
+            record["max_utilization"] = fraction_to_dict(self.max_utilization)
+        if self.total_principal is not None:
+            record["total_principal"] = self.total_principal
+        return record
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> LendingMarket:
         """Rebuild from :meth:`to_dict`."""
         lender = data.get("lender")
+        principal = data.get("total_principal")
         return cls(
             protocol=data["protocol"],
             market_id=data["market_id"],
@@ -315,7 +384,24 @@ class LendingMarket:
             collateral=tuple(CollateralTerms.from_dict(t) for t in data["collateral"]),
             on_default=DefaultRule(data["on_default"]),
             permissioned=bool(data["permissioned"]),
+            receipt_rate=fraction_from_dict(data.get("receipt_rate")),
+            max_utilization=fraction_from_dict(data.get("max_utilization")),
+            total_principal=None if principal is None else int(principal),
         )
+
+
+def _holding_at(holding: CollateralHolding, market: LendingMarket) -> CollateralHolding:
+    """``holding`` with the liquidation LTV ``market`` currently gives its unit.
+
+    The terms' LTV when they state one; 0 when the market has no terms for the unit,
+    so the holding no longer backs the loan; unchanged when the terms state none.
+    """
+    terms = market.terms_for(holding.unit)
+    if terms is None:
+        return replace(holding, liquidation_ltv=Fraction(0))
+    if terms.liquidation_ltv is None:
+        return holding
+    return replace(holding, liquidation_ltv=terms.liquidation_ltv)
 
 
 @dataclass(frozen=True)
@@ -373,6 +459,57 @@ class LendingPosition:
             self.installments_paid,
         )
 
+    def liquidation_debt(self, now_ms: int) -> int:
+        """The debt the loan's health is measured against at ``now_ms``."""
+        return self.rate_model.liquidation_debt(
+            self.principal,
+            opened_ms=self.opened_ms,
+            now_ms=now_ms,
+            installments_paid=self.installments_paid,
+        )
+
+    def at_market(self, market: LendingMarket) -> LendingPosition:
+        """This loan evaluated against ``market``, the current state of its market.
+
+        The rate model is rebound to the market's, and each holding's liquidation LTV
+        is refreshed from the market's terms for its unit: the terms' LTV when they
+        state one, 0 when the market has no terms for the unit, otherwise unchanged.
+
+        Raises:
+            ValueError: the loan was not opened from ``market``.
+        """
+        if market.protocol != self.protocol or self.origin != Origin(
+            "market",
+            market.market_id,
+        ):
+            raise ValueError(
+                f"position {self.position_id} was not opened from market "
+                f"{market.protocol}/{market.market_id}",
+            )
+        return replace(
+            self,
+            rate_model=self.rate_model.rebind(market.rate_model),
+            collateral=tuple(_holding_at(h, market) for h in self.collateral),
+        )
+
+    def weighted_collateral(self, prices: PriceMap) -> tuple[Fraction | None, ...]:
+        """Each holding's exact value in the borrow unit times its liquidation LTV.
+
+        A holding without an LTV of its own counts at full value; an unpriced holding
+        gives None.
+        """
+        weighted: list[Fraction | None] = []
+        for holding in self.collateral:
+            price = _price_in(prices, holding.unit, self.borrow_unit)
+            if price is None:
+                weighted.append(None)
+                continue
+            ltv = holding.liquidation_ltv
+            if ltv is None:
+                ltv = Fraction(1)
+            weighted.append(holding.amount * price * ltv)
+        return tuple(weighted)
+
     def collateral_value(self, prices: PriceMap) -> int:
         """Collateral value in the borrow unit; an unpriced holding counts as 0."""
         total = 0
@@ -385,10 +522,16 @@ class LendingPosition:
     def health_factor(self, prices: PriceMap, now_ms: int) -> Decimal:
         """Collateral value times the liquidation LTV over the debt; <= 1 is at risk.
 
-        Infinite for a loan that cannot be liquidated on price, or that owes nothing.
+        When any holding carries its own liquidation LTV, each holding is weighted by
+        it (:meth:`weighted_collateral`, an unpriced holding counting 0), the sum is
+        measured against :meth:`liquidation_debt`, and the exact ratio is converted
+        to ``Decimal`` once. Infinite for a loan that cannot be liquidated on price,
+        or that owes nothing.
         """
         if self.liquidation_ltv is None:
             return Decimal("Infinity")
+        if any(holding.liquidation_ltv is not None for holding in self.collateral):
+            return self._weighted_health(self.liquidation_ltv, prices, now_ms)
         debt = self.current_debt(now_ms)
         if debt <= 0:
             return Decimal("Infinity")
@@ -396,6 +539,21 @@ class LendingPosition:
         return (Decimal(self.collateral_value(prices)) * Decimal(ltv.numerator)) / (
             Decimal(debt) * Decimal(ltv.denominator)
         )
+
+    def _weighted_health(
+        self,
+        ltv: Fraction,
+        prices: PriceMap,
+        now_ms: int,
+    ) -> Decimal:
+        """The health factor over per-holding liquidation LTVs, exact until the end."""
+        debt = self.liquidation_debt(now_ms)
+        if debt <= 0:
+            return Decimal("Infinity")
+        values = self.weighted_collateral(prices)
+        weighted = sum((value for value in values if value is not None), Fraction(0))
+        ratio = weighted * ltv / debt
+        return Decimal(ratio.numerator) / Decimal(ratio.denominator)
 
     def is_liquidatable(self, prices: PriceMap, now_ms: int) -> bool:
         """Liquidatable on price: every holding priced and the health factor <= 1."""

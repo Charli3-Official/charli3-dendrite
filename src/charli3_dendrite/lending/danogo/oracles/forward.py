@@ -17,8 +17,8 @@ from charli3_dendrite.lending.danogo.oracles.redeemer import OracleUtxoType
 from charli3_dendrite.lending.danogo.oracles.reproduce import OracleLeaf
 from charli3_dendrite.lending.danogo.oracles.reproduce import leaf_forward_rates
 from charli3_dendrite.lending.danogo.oracles.reproduce import splash_lp_candidate
-from charli3_dendrite.lending.liqwid.datums import liqwid_oracle_feed_id
-from charli3_dendrite.lending.liqwid.datums import parse_liqwid_oracle_v2
+from charli3_dendrite.lending.liqwid.datums import POLICY_KEY_PREFIX
+from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
 from charli3_dendrite.lending.oracles.models import OraclePrice
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.oracles.models import PriceMap
@@ -57,9 +57,10 @@ def leaf_discriminator(otype: str, datum: str | None) -> str:
     Some source kinds live many-to-one behind a shared marker token at a common
     address, so the value alone cannot pin a UTxO; a stable datum field can:
 
-    * Liqwid V2 oracles -> ``updater_key:priced_asset``. Neither part is unique on
-      its own (one updater key spans many assets; one asset, e.g. ADA, can have
-      several feeds), but together they pin the UTxO.
+    * Liqwid V2 oracles -> the priced asset's key (``OracleFeedDatum.asset_key``:
+      the asset unit, or ``policy:<policy>`` for a policy-wide feed). Each priced
+      asset has exactly one unspent feed carrying the oracle token; the updater key
+      rotates and is not part of the identity.
     * Minswap pools -> the ``asset_a|asset_b`` pair (all pools carry one MSP token).
 
     Returns "" for kinds already pinned by a unique NFT (no datum disambiguation
@@ -69,13 +70,39 @@ def leaf_discriminator(otype: str, datum: str | None) -> str:
         return ""
     try:
         if otype == OracleUtxoType.TLIQWID_ORACLE_V2.name:
-            return f"{liqwid_oracle_feed_id(datum)}:{parse_liqwid_oracle_v2(datum)[0]}"
+            return decode_oracle_feed(datum).asset_key
         if otype == OracleUtxoType.TMINSWAP_LP.name:
             asset_a, _, asset_b, _ = parse_minswap_lp(datum)
             return f"{asset_a}|{asset_b}"
     except (ValueError, KeyError, IndexError, TypeError):
         return ""
     return ""
+
+
+def _handle_key(handle: LeafHandle) -> str:
+    """The identity ``handle.datum_key`` pins, in `leaf_discriminator`'s form.
+
+    A Liqwid oracle key in the earlier ``<updater>:<asset>`` form pins its asset
+    part; a ``policy:<policy>`` key is already in the current form.
+    """
+    key = handle.datum_key
+    if handle.otype == OracleUtxoType.TLIQWID_ORACLE_V2.name and not key.startswith(
+        POLICY_KEY_PREFIX,
+    ):
+        return key.rpartition(":")[2]
+    return key
+
+
+def leaf_matches_handle(handle: LeafHandle, datum: str | None) -> bool:
+    """Whether a leaf's datum carries the identity ``handle.datum_key`` pins.
+
+    True for every datum when the handle has no ``datum_key`` (its NFT alone pins
+    the UTxO). Otherwise the leaf's `leaf_discriminator` must equal the handle's key;
+    a Liqwid oracle key captured as ``<updater>:<asset>`` is compared by its asset.
+    """
+    if not handle.datum_key:
+        return True
+    return leaf_discriminator(handle.otype, datum) == _handle_key(handle)
 
 
 @dataclass(frozen=True)
@@ -206,6 +233,35 @@ def compose_cross_quote(
     return collat_price, intermediate_to_quote
 
 
+def _leaf_addresses(handle: LeafHandle) -> list[str]:
+    """The addresses a handle's leaf is read from.
+
+    A Liqwid oracle leaf is read at ``handle.address`` and at every Liqwid oracle
+    validator of the bundled deployment, captured address first, each address once:
+    Liqwid binds a feed by oracle token and asset, whatever its validator, and the
+    captured address stays read when the deployment no longer lists it. Every other
+    kind is read at ``handle.address`` only.
+    """
+    if handle.otype != OracleUtxoType.TLIQWID_ORACLE_V2.name:
+        return [handle.address]
+    # Imported here so that importing this module loads no Liqwid deployment.
+    from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+    from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
+
+    return list(
+        dict.fromkeys(
+            [
+                handle.address,
+                *(
+                    selector.address
+                    for selector in liqwid_selectors()
+                    if selector.kind is LiqwidKind.ORACLE
+                ),
+            ],
+        ),
+    )
+
+
 def resolve_leaf_info(
     backend: AbstractBackend,
     handle: LeafHandle,
@@ -214,7 +270,9 @@ def resolve_leaf_info(
 
     A unique identifying NFT yields a single match; kinds that share a marker token
     across many feeds at one address (e.g. Liqwid V2 oracles) are narrowed by
-    `handle.datum_key` -- the stable asset-identity parsed from each candidate's datum.
+    `handle.datum_key` -- the stable asset-identity parsed from each candidate's datum
+    (`leaf_matches_handle`). A Liqwid oracle leaf is looked up at ``handle.address``
+    and at every Liqwid oracle validator (`_leaf_addresses`).
     Returns None unless exactly one UTxO matches, so the caller never reads the wrong
     feed. This is the shared resolution both `read_live_leaf` (forward pricing) and the
     create-loan snapshot (full-UTxO assembly) rely on.
@@ -222,18 +280,17 @@ def resolve_leaf_info(
     want = (handle.nft_policy + handle.nft_name) if handle.nft_policy else None
     rows = list(
         backend.get_pool_utxos(
-            addresses=[handle.address],
+            addresses=_leaf_addresses(handle),
             assets=[want] if want else None,
             historical=False,
         ),
     )
-    matches = [info for info in rows if want is None or want in info.assets.root]
-    if handle.datum_key:
-        matches = [
-            info
-            for info in matches
-            if leaf_discriminator(handle.otype, info.datum_cbor) == handle.datum_key
-        ]
+    matches = [
+        info
+        for info in rows
+        if (want is None or want in info.assets.root)
+        and leaf_matches_handle(handle, info.datum_cbor)
+    ]
     if len(matches) != 1:
         return None
     return matches[0]

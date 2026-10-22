@@ -1,0 +1,5739 @@
+{
+  "_comment": "Trimmed mainnet snapshot of https://public.liqwid.finance/v6/registry.json, written by tests/lending/liqwid/fixtures/_refresh_registry.py; handKept holds facts the registry does not list.",
+  "_sourceSha256": "a4ffed520c5e14a47a9156341217b5eb2eee3b0d1a9d66e520c54dca5620e524",
+  "scriptInfos": [
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Action",
+      "name": "LiqwidAGIXAction",
+      "type": "Validator",
+      "scriptHash": "384d2b4b6279a10e1a3bc7168295ec98bbf43de17949065286f27597"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Action",
+      "name": "LiqwidAGIXNewAction",
+      "type": "Validator",
+      "scriptHash": "cb1446fd72eeef16e49d089c381faa189cd941d318430008b4af843a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidAGIXAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "d8cb444657005a73d08c7e460c38e7a68b8e3317b1c73b941f6372bf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidAGIXAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "b944124427aa6aa5f14a4c4aa4b492155f4697f9cd78dd53e4c1ac5f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Batch",
+      "name": "LiqwidAGIXBatch",
+      "type": "Validator",
+      "scriptHash": "28dbd999eca72c7de7cbb75452fb613c56723da89e3591b821a0b52e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "BatchFinal",
+      "name": "LiqwidAGIXBatchFinal",
+      "type": "Validator",
+      "scriptHash": "bc3de5c5af5513959c205dbefbdcf81505a4c59d16ec2471c5e856c0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Borrow",
+      "name": "LiqwidAGIXBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f73843062a63e9b882bfda8dd87360c588ce664510c22fd52bb49c4a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "CollateralParams",
+      "name": "LiqwidAGIXCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5d9f0a4e39acc894741c7bb6758be16f2673a5765af2e7d5d0b91bdc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Liquidation",
+      "name": "LiqwidAGIXLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "9b0f13213e40bcf25850871a7cf8cfb359dd1f954b49f90cda3a5f16"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Loan",
+      "name": "LiqwidAGIXLoan",
+      "type": "Validator",
+      "scriptHash": "fa0a70c3944ffefda77daf6e0660f07ef477f07a705fa162cd36f7c0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "Loan",
+      "name": "LiqwidAGIXNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "4aec19da5def7ea9dc028d5370aa8568f94248ef837a18400cf8a9fe"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "MarketParams",
+      "name": "LiqwidAGIXMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0edb1425a060584703f4edeee36301bf27764a8757c81d63b9d60af9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "MarketState",
+      "name": "LiqwidAGIXMarketState",
+      "type": "Validator",
+      "scriptHash": "80a185e239a191ecd715c93cebefdf0babcf8b9b051dd861936975df"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "MarketState",
+      "name": "LiqwidAGIXMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f4d8fa6f00d83af913345576f06f28c5ea188366f1636a0b4521d1c0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "NewBorrow",
+      "name": "LiqwidAGIXNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "fecdf1286f0b87c5aac6d8ee9b34f759d0ef7cde41010d56b2c1d743"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidAGIXLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "cb8fdd5180998e3c6a84887b602ed59b6f0980b82fe0a2e5145d81b1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidAGIXLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "86f5c7390693a36e5d72d4e47168e80434774152f394ffafea434d27"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "AGIX",
+      "componentName": "QToken",
+      "name": "LiqwidAGIXQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d753e0d193680fe32710379d3a1ec48087ce94f3831505b922c2894b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "31415bb210164cf6b84d1b12537f0792d2912d156e0f1ed1d91c83ce"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaNewAction",
+      "type": "Validator",
+      "scriptHash": "1a32c7c15a753e12bd58f29977720d209c0701c95b1bbb6d5c31af20"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidAdaAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "278825f2fbb67f3b2418fc239315f8911e4ddf1ddbb14f1f7c9e0393"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidAdaAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "f10726d3903431a729948deaad3fae70c9b63707978ebcc1297e6428"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidAdaAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "588bff228f6290f6c8308b909bac77adb82b7f6738c185008714b3b9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Batch",
+      "name": "LiqwidAdaBatch",
+      "type": "Validator",
+      "scriptHash": "a3e56ea9d2db008038ce6fb32e500faef1523dcb042e5a637d633fc8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Batch",
+      "name": "LiqwidAdaNewBatch",
+      "type": "Validator",
+      "scriptHash": "a4a93eaf0d3c6baf032eded84caefd8d850aad633a3920f7d858dfeb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "BatchFinal",
+      "name": "LiqwidAdaBatchFinal",
+      "type": "Validator",
+      "scriptHash": "1313058e934ea72e7d31d6e3f296d0e844ddf0177dab7b11244280cb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Borrow",
+      "name": "LiqwidAdaBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ee944b56bab503197bdfb929509a177c3ef9e5083ca7e65ffa1469c8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "CollateralParams",
+      "name": "LiqwidAdaCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "1d571de72e964aea48d278475c48e2a6fded81014bf621413b04b6c1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Liquidation",
+      "name": "LiqwidAdaLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "3c9ee71d8f14b386df802f4121d82746df5508e29198744bea7552ef"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Loan",
+      "name": "LiqwidAdaLoan",
+      "type": "Validator",
+      "scriptHash": "71391f18fb131f28a230fa7f3b6c6099e447602b2bd2df5d046c5e99"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "Loan",
+      "name": "LiqwidAdaNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "74115afb757a8a349fcb8f04bb9fc39f91b6ae5784bdbe4e56140a43"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "MarketParams",
+      "name": "LiqwidAdaMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "24f51a8308b4e47b9d1438ec1e91da4ee063c38c704b530cba4adc5b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "MarketState",
+      "name": "LiqwidAdaMarketState",
+      "type": "Validator",
+      "scriptHash": "8d258b9d08dcab73f3165a11751d464b46056264091c1789da588726"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "MarketState",
+      "name": "LiqwidAdaMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "NewBorrow",
+      "name": "LiqwidAdaNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "63d7e1501efb7dfda4915597658552e1c3e35e6f34cdc74817fad1dc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidAdaLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "152fbda57f4858d36f1253c1c9bf771c3423d7d8928870b190b93804"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidAdaLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "57e705c2d54ff76549ad291ea6d8dfe1d61265889b601bd260f942ca"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "Ada",
+      "componentName": "QToken",
+      "name": "LiqwidAdaQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Action",
+      "name": "LiqwidBTCAction",
+      "type": "Validator",
+      "scriptHash": "7a254b687a2605b3f725a42d5ab74f49aac26ce677bac2d80e995cee"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Action",
+      "name": "LiqwidBTCNewAction",
+      "type": "Validator",
+      "scriptHash": "26e3c76a5f251e29084b078c1914a32ec136fd1ce98fe3c0354a5d17"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidBTCAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "8a853c83e4e2c84c7a6c707f75e3bdc8242a6c40422fb4ee5d53ccba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidBTCAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "6e9bf092b70f58156cfd16858ef11c056f169ffee93df5e59477831c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidBTCAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "79c0ca171048fb27db0a71c8cc5dc97b039e2cb7461df74001ced317"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Batch",
+      "name": "LiqwidBTCBatch",
+      "type": "Validator",
+      "scriptHash": "0f4b3c952d093e40448124665efb7e8c1a35b4130f97fbb012bb74ed"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "BatchFinal",
+      "name": "LiqwidBTCBatchFinal",
+      "type": "Validator",
+      "scriptHash": "eb256d514ba7aba381cb3c39983f38df63eeee2adbb0f22b6b6b8cac"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Borrow",
+      "name": "LiqwidBTCBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9deee90a57d4b099139fb8574596217cc147f3654ecf92e9aded9c16"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "CollateralParams",
+      "name": "LiqwidBTCCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a11b17be15f1f09356715e36dfeb7e01cea8db7756ff738ad89b7803"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Liquidation",
+      "name": "LiqwidBTCLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "524509608c7599dd8a21008be761b542618bcd46b42a5fe5b08b8fe8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Loan",
+      "name": "LiqwidBTCLoan",
+      "type": "Validator",
+      "scriptHash": "3c48f941040c4fc638a89c5a89d331700cd6d620fc174c9b03e8301d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "Loan",
+      "name": "LiqwidBTCNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "2951f620e90eeae663df2795815a909a8d8e75cc903c17f87db4074b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "MarketParams",
+      "name": "LiqwidBTCMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b0b7aebc1e98c7bbd82b65cbf8c43d21758ba63b6e086c8cf5a010c5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "MarketState",
+      "name": "LiqwidBTCMarketState",
+      "type": "Validator",
+      "scriptHash": "2516bd5a957c6caf068bd5fd67bf020dfed938fbb50242dff2529c49"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "MarketState",
+      "name": "LiqwidBTCMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "aecc77dce9fb0959a8e544d4319fe2a6afa28f12709e1ac71fab0d41"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "NewBorrow",
+      "name": "LiqwidBTCNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "7c1cf65c3e7ac33141e3583f6878797e3d1bf52b36db8db079caa1f8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidBTCLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "1e9938f031bdc5b28be61c76ed7534e21ded7ea404fcdcbe8d765b7f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidBTCLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "0908bbf59f3e710815ba7ff3fc807042de14ff5a3bdbc8800dea07aa"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "BTC",
+      "componentName": "QToken",
+      "name": "LiqwidBTCQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f72166e9fac8297aeb553c19ffab14f51ae271c2cb26783ba289a3a5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Action",
+      "name": "LiqwidCOPIAction",
+      "type": "Validator",
+      "scriptHash": "811d734044ce469d6a1aa94a0b4c6babd41f50b4ae220efd4fc0378c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Action",
+      "name": "LiqwidCOPINewAction",
+      "type": "Validator",
+      "scriptHash": "386fc0f8ba73f1618798e3b81441aa29c562a5ca71bbc26ec1506c21"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Batch",
+      "name": "LiqwidCOPIBatch",
+      "type": "Validator",
+      "scriptHash": "5156adb712df7d278bfd28ae366b8af91803e32e000170d6a08c42b5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "BatchFinal",
+      "name": "LiqwidCOPIBatchFinal",
+      "type": "Validator",
+      "scriptHash": "ad7278a84f30bca99ef12bfbea83935b6bd24534c4e15a5e8b99562a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Borrow",
+      "name": "LiqwidCOPIBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "edd1d1b788259e13f037e955062c9c3b4b9bfff8b8426520ab8ec7e4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "CollateralParams",
+      "name": "LiqwidCOPICollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b4f71b99be1366f790dbc43676455d2433cbd43a94ea01d1f8cc6182"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Liquidation",
+      "name": "LiqwidCOPILiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "0092de35cf2ea8303d0d36301f4741d8d23237ebd37666810f792811"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Loan",
+      "name": "LiqwidCOPILoan",
+      "type": "Validator",
+      "scriptHash": "cf5a23e5e3cd7db56440b421bc80a6c88f04257e5d589a159501c980"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "Loan",
+      "name": "LiqwidCOPINewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "e535ac1343974238d8b231f7f617fb643ae32a6fa2434af5785894cd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "MarketParams",
+      "name": "LiqwidCOPIMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f90ad7d68d6c56a555fd9b346939ffb0bbcbf5edb3514902fb6fe71b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "MarketState",
+      "name": "LiqwidCOPIMarketState",
+      "type": "Validator",
+      "scriptHash": "287d89b5fe9b0a39627ce19ae0426de1a229b8692b3fdd7d9b4daa62"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "MarketState",
+      "name": "LiqwidCOPIMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b8d421c5fee7a0f6bfcf40c1d175ab6eacd77beccbab57272c18a1bf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "NewBorrow",
+      "name": "LiqwidCOPINewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "cee76273b2af48760541d393468156963be54852213dcba696dd73ad"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidCOPILoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "090c518f74f74d32aa828b6925a4802037a02fecef1df3dd48d10d4b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidCOPILoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3306f286348a53d8ccde7dafc8adc5fc71df81543e812639a529cff2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "COPI",
+      "componentName": "QToken",
+      "name": "LiqwidCOPIQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "dd55119962ca550cdd4219999b9e6d25fc9128f96c7dcb5e485286eb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Action",
+      "name": "LiqwidDAIAction",
+      "type": "Validator",
+      "scriptHash": "f42059f8bafc3cceec94eb5d09c656b5685ef179b13b55baeec765e2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Action",
+      "name": "LiqwidDAINewAction",
+      "type": "Validator",
+      "scriptHash": "363f8c17fe665ea69c91dae94bf967404e15720f8613a37dc7d35983"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidDAIAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "2cd1bbc992e8cd6581bc8201907dc3249cf2bef6773434662072ac92"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidDAIAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "46c973abc0217004ee349de0d58f5f131f60b0e57e92af21df24c606"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidDAIAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "0e338e00b1d640fea8dffe1f4aea1a6a79c6633e200fae67aef93b7d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Batch",
+      "name": "LiqwidDAIBatch",
+      "type": "Validator",
+      "scriptHash": "d1967e6d23962150fb25168829002049feb9133740fa738ed4ca5bd7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "BatchFinal",
+      "name": "LiqwidDAIBatchFinal",
+      "type": "Validator",
+      "scriptHash": "a54bc78ce92e48ca736034bebeae9dc1565d639b6225f0f5fb6cc297"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Borrow",
+      "name": "LiqwidDAIBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f7c838d95288aaa94fbf59211eebab72805e5980aa23c3bfb19ecff9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "CollateralParams",
+      "name": "LiqwidDAICollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "fb016cf7260435508066d9ac5551fdc979f56d0ad35e6f782a1e3e73"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Liquidation",
+      "name": "LiqwidDAILiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "48cd6201316d65ce895d6d9f255881a27986e71aba4d0af015825f19"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Loan",
+      "name": "LiqwidDAILoan",
+      "type": "Validator",
+      "scriptHash": "103231ad9f190abec0d7cb7cba383cea4278eb4cbb737bbc3e9bd8bf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "Loan",
+      "name": "LiqwidDAINewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "b72d66458e3eec99942862a2ea67f844072d62058a0648ac33de57a3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "MarketParams",
+      "name": "LiqwidDAIMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0c5f3646b69f7001d007c98debd48689d4c1bdfe0eefc070de350c7e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "MarketState",
+      "name": "LiqwidDAIMarketState",
+      "type": "Validator",
+      "scriptHash": "8e941c939dd9d78715db1d88c9b7f4b18d9af12b288e3f8f84314525"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "MarketState",
+      "name": "LiqwidDAIMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "4d79e8ef7e91551617b2dcc87261b7e119ae95c58f32642ff5101688"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "NewBorrow",
+      "name": "LiqwidDAINewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "7b0a035daf64224fdac1c8b71ab86334bd5e8c1c23c2f9f39e26fac1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidDAILoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "c04f541789d537fb70c297c740cc0129a7df5ec5e995962c65b5459e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidDAILoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "002633b4cd293e726c7d2b76e2544e1717f837d8e18d688e7c015aee"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DAI",
+      "componentName": "QToken",
+      "name": "LiqwidDAIQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "8996bb07509defe0be6f0c39845a736b266c85a70d87ebfb66454a78"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Action",
+      "name": "LiqwidDJEDAction",
+      "type": "Validator",
+      "scriptHash": "7bd80451bde142f4e9d9af436de303fb4c0aaf51d96b14a41e2e07de"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Action",
+      "name": "LiqwidDJEDNewAction",
+      "type": "Validator",
+      "scriptHash": "cf2a9c510b67faee312a0e17aafd3e0917582071c79ffe658373e86b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidDJEDAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "c3c8363fedab9199d6b6020cb12ed939e872eaf316416427269dfc58"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidDJEDAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "145654898d7429c6a1f6003f6dc303cf7b6ef2d8b36ca3c6060dfc01"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidDJEDAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "279d91a45e494de463bc3701bbd7eba04a13882cfbe2f8d72b2a3ed6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Batch",
+      "name": "LiqwidDJEDBatch",
+      "type": "Validator",
+      "scriptHash": "acee18e799d5b4e30046e2eaad1f75fc95997dd6ec37995f02670ccd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "BatchFinal",
+      "name": "LiqwidDJEDBatchFinal",
+      "type": "Validator",
+      "scriptHash": "a904455f964515aa9290ca443efe93fe8d654c1ebc22b1562af07c39"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Borrow",
+      "name": "LiqwidDJEDBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5409708a3eff94524d978ca12f97c318bd011308f71eee232575eb9e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "CollateralParams",
+      "name": "LiqwidDJEDCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "576ab56fdbf3cad439a8f1cfefb712ddb5b2864515e0e001139d96cc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Liquidation",
+      "name": "LiqwidDJEDLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "1ee678e1031bd8cdea9357b2bb953bd086ffc868d9e3ffb74e3c3e7b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Loan",
+      "name": "LiqwidDJEDLoan",
+      "type": "Validator",
+      "scriptHash": "7bf8d17b4ea7a5abb5ed56f70cea83f2c6055180dd5dbae86a458595"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "Loan",
+      "name": "LiqwidDJEDNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "c67d02a7f8c73da3c0acaa996019bf891a28dd441b12f8cdc0d53222"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "MarketParams",
+      "name": "LiqwidDJEDMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9f61f4563c3037017d768c34c392976e6f7c5fd080d9a0b315cc9b8d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "MarketState",
+      "name": "LiqwidDJEDMarketState",
+      "type": "Validator",
+      "scriptHash": "e88f72f6b4673db78efe148b1cd90c689115ddb3d7e356a0003148cf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "MarketState",
+      "name": "LiqwidDJEDMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "43c4bdac04537dbd338935d00a8a0746a078d4f03d7ac302a4bf5d3d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "NewBorrow",
+      "name": "LiqwidDJEDNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "24af1a829b2a56457dbeb02e854a0f0af1e7d0af4233aaa0c0d7b1e1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidDJEDLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "bf88fecc0e5de72cb187d89e16ff4362766f0fc3d738ac18e69a9aab"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidDJEDLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ffecca10a468c16aa33e6d33112e8f197bea9d9a997791772e067979"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "DJED",
+      "componentName": "QToken",
+      "name": "LiqwidDJEDQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6df63e2fdde8b2c3b3396265b0cc824aa4fb999396b1c154280f6b0c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Action",
+      "name": "LiqwidERGAction",
+      "type": "Validator",
+      "scriptHash": "5818c3a124b3685c5a1bb916b79c0ef23fd0a0c6076ec588a51a4ab8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Action",
+      "name": "LiqwidERGNewAction",
+      "type": "Validator",
+      "scriptHash": "9ffc6891995041ad8f39c237f093ddbe5be268eeffde695a69e9e3e6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidERGAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "136ccf52f02512ce84a2c6e88afc4235d3fdea4bf869848f5b82f416"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidERGAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "1206aaaf9d1d296cfc2642fe67e310112d7f83e366e1ed80c22a5438"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidERGAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "17d921e3ab93665d62f7fc923d46b92c1631a1db24b02da04d6e1acd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Batch",
+      "name": "LiqwidERGBatch",
+      "type": "Validator",
+      "scriptHash": "19b9908183fc7180d82cb5e15bf9434f4eb644019b63dfd4ae4dbb0b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "BatchFinal",
+      "name": "LiqwidERGBatchFinal",
+      "type": "Validator",
+      "scriptHash": "622338cdf5a7f0925a1218683acbefdd4dcfcef09bacada7e7482d30"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Borrow",
+      "name": "LiqwidERGBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "928c3f51985ccf5bcb68e9624ef6175381e2c67ae41ae789f8076c86"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "CollateralParams",
+      "name": "LiqwidERGCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "4e221868a81c801bd881fff52da42fae8cb90b996d93a6db1fa94f1c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Liquidation",
+      "name": "LiqwidERGLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "248c9ae2d1d60dd0e8e9c0a3f6255beb0a42e292394d89aa32fb0b44"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Loan",
+      "name": "LiqwidERGLoan",
+      "type": "Validator",
+      "scriptHash": "932d2c4132dfdc1673ef6f1cce7a2741e0ed86f9f854cd76fbd1b029"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "Loan",
+      "name": "LiqwidERGNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "89073c3a8511aa41cdc6ffabe7ff59d8cedab6177c621f0ed80e2155"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "MarketParams",
+      "name": "LiqwidERGMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "723cdc18b68c7760f494f82b2e03caa97eb03433357f671b44963a56"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "MarketState",
+      "name": "LiqwidERGMarketState",
+      "type": "Validator",
+      "scriptHash": "c467e4a9fa45ce830819645f72db86c7e46e647f9cf46b3b9671284a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "MarketState",
+      "name": "LiqwidERGMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a520004164acf96cd2c0bc34ba2ec2454ceaab4fbd364a32c26ddc65"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "NewBorrow",
+      "name": "LiqwidERGNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "32a7eadc6fa0023b4d639da63ba949b691d274c755c53618db2e0180"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidERGLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "888eefde2d70c4b630876701c82b16dd895d50ed0d948bb24ee82798"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidERGLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "592c5135eee7e0d04951120816d2284e0d80f9ad01f77d5b86e7c115"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ERG",
+      "componentName": "QToken",
+      "name": "LiqwidERGQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b122b2fc62557df9c3fd0b5c62a4b2c970a0d711560e0a8dd7b264f3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Action",
+      "name": "LiqwidETHAction",
+      "type": "Validator",
+      "scriptHash": "d72eaa2420d1de0dddde811260e4683f70df7ec6bfd6c51eea52deb2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Action",
+      "name": "LiqwidETHNewAction",
+      "type": "Validator",
+      "scriptHash": "7dcdd4c4efd422ad7913e0a446c92587dbe76b602e8498a5487255fd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidETHAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "10663eae553e601598920a9f0dbd20124c018dc40cb321ef27b94076"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidETHAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d83f2ac9ebb6e8c7eac02e534ad3425a4f333792960605678b5ca788"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidETHAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "a1c36d24c965f213b21b06bf111549de9b05c261faa78e08efdfdafe"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Batch",
+      "name": "LiqwidETHBatch",
+      "type": "Validator",
+      "scriptHash": "90eed7d7fef0b25bbe67cf858926de9ea00eac28bb24974ad86f0d99"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "BatchFinal",
+      "name": "LiqwidETHBatchFinal",
+      "type": "Validator",
+      "scriptHash": "92dbc081b63db36cde10188101bd489569a78cefe584dd948b9fcc05"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Borrow",
+      "name": "LiqwidETHBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "19fecb7afbc6b92a3c78ad1be2025d8309d2c0cd47f0f8f720b52bce"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "CollateralParams",
+      "name": "LiqwidETHCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9967941d502232f933426c803cd0dc5bb3c1d1d30675cbc0115a8320"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Liquidation",
+      "name": "LiqwidETHLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "36088d63cf12e1e23d163c8be5c7fcfa2871623dc650c915e89c6f03"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Loan",
+      "name": "LiqwidETHLoan",
+      "type": "Validator",
+      "scriptHash": "83b7535f0b27152f76f33756c199f3370ed638149272a4b1f1006bf2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "Loan",
+      "name": "LiqwidETHNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "7065e70bacc76ac43353a2e5b1214509861cae57329cb19fb44a922f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "MarketParams",
+      "name": "LiqwidETHMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0b75999a419e7036fd703cdf34223dbad3a02affc82d7a9ab83b548c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "MarketState",
+      "name": "LiqwidETHMarketState",
+      "type": "Validator",
+      "scriptHash": "adc98419692104e565144f8e2b3e5e80c73e785a752625373ee63467"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "MarketState",
+      "name": "LiqwidETHMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ef654dcff3df94784b088e9ed61e68a17dd2249cd51c410ffea24199"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "NewBorrow",
+      "name": "LiqwidETHNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "d8f8238cbecd59a61071132e89216848ce8d037e51946eee65cb9663"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidETHLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "eeef7d12d88030e78414c35e77ec60f8c4610b40ad248c2d7937108e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidETHLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "c0c97e878cebfe8b3ec7640843dd7495e303acdcaf10c41abc0ef6ed"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "ETH",
+      "componentName": "QToken",
+      "name": "LiqwidETHQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5f42994532b04f9f5bd4141c69364c5b7d33c85036146ee321799702"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Action",
+      "name": "LiqwidEURCAction",
+      "type": "Validator",
+      "scriptHash": "13b9b36ca3853f83d3eccdb9974371d0df6e7822e66ef6f5a1ac23b5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Action",
+      "name": "LiqwidEURCNewAction",
+      "type": "Validator",
+      "scriptHash": "25af0cf44d171f9c183d412caed7072d0313cf27ae4afc36700e1491"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidEURCAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "db47635a4b595dd685c77b627ea89fd1d88dc8ab8be1ff5c71e755b2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidEURCAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "69e8ae67095e2a5bef92ab39dff69774972cd3ee63f4f5b3f861fa2b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidEURCAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "6632c05b87aac261c95793ce8b662cafa75d8f08bd9da92f18320f4a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Batch",
+      "name": "LiqwidEURCBatch",
+      "type": "Validator",
+      "scriptHash": "6767ef67c6e79742114a144f4dfdce7fd935be07b6e3102b1dbdb55b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "BatchFinal",
+      "name": "LiqwidEURCBatchFinal",
+      "type": "Validator",
+      "scriptHash": "078facd406708042cfaf9ce02144e4c9b440ee4b9a6bf086d41e92eb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Borrow",
+      "name": "LiqwidEURCBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "1ac67ce67b1a65b78a5aa661dae69e888f9f0ea65d784be1a6f22c84"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "CollateralParams",
+      "name": "LiqwidEURCCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3dcbf5c41e795de1d563300ec2ac399f8df55eea5e0fdd2293f32701"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Liquidation",
+      "name": "LiqwidEURCLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "eaad9f7a1ce7e705ddded88d3a0f869dd21f533bc00381dcb9c70370"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Loan",
+      "name": "LiqwidEURCLoan",
+      "type": "Validator",
+      "scriptHash": "f19f8ff41e3db4ab90e44599b3145906cc7af9fb2409c72519aa40bf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "Loan",
+      "name": "LiqwidEURCNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "598d0233b402d4d39bb7a2ddc8ad1265fdc026d3ef2c3d3176d0193f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "MarketParams",
+      "name": "LiqwidEURCMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "70aba58ee259e5094b100ff5134477f8fcbdc57005cfa799318241a0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "MarketState",
+      "name": "LiqwidEURCMarketState",
+      "type": "Validator",
+      "scriptHash": "9ad16f7a207b36ca4073d9505203bc113adb8c06918993207501f0de"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "MarketState",
+      "name": "LiqwidEURCMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "16c3b3f091a7c1b5f85aeb80384aa53d54262e55ef068cc6413a3227"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "NewBorrow",
+      "name": "LiqwidEURCNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "3d8a9d0b1db9fd5ccc7b792860cbaa9d24caed39f4ca0d35e84632f8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidEURCLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "8bf660e15a23b7e2f4638601670366c0e490e164558c220621867ddc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidEURCLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3238a741daab2fe022839a138c8860269c1476e4950648a97383ccd1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "EURC",
+      "componentName": "QToken",
+      "name": "LiqwidEURCQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "85fa65407b5321fa0e2ef9a3ec98e12a00c35871d7a620be3132003c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Action",
+      "name": "LiqwidIAGAction",
+      "type": "Validator",
+      "scriptHash": "67e69cc3798186e3c7a8dd7cd1dc496b586e27a5bf93f46e852e95a9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Action",
+      "name": "LiqwidIAGNewAction",
+      "type": "Validator",
+      "scriptHash": "0c5aac39417cfdf901f2339823ab6455d8ee2ddfae0eba61090b88a1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidIAGAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "d1b4f27531b0b5338035b4bce7a4a12ba803591ec833fe43db370502"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidIAGAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "decd7455419ae5286ca650acfe110dfeee103d1ed0dafe85d7fa551a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidIAGAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ac994becdd28248c47dee511cadf60def8a71050bf1fa1216833534b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Batch",
+      "name": "LiqwidIAGBatch",
+      "type": "Validator",
+      "scriptHash": "c82ed39ea34b04c159c544a956efa8e6395dbf9d703c1b4c17deaa78"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "BatchFinal",
+      "name": "LiqwidIAGBatchFinal",
+      "type": "Validator",
+      "scriptHash": "0fa1c9282f06a499d9762a03f9551a754d0ba2e1cad2b3295fea1b5a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Borrow",
+      "name": "LiqwidIAGBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "66d21320cc98ef676ebc1b5dd2eeb369d01e5ce11e07338028a4014a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "CollateralParams",
+      "name": "LiqwidIAGCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6166d5507000856374abf9784225f50f618f2b05e29958bbc10b5d85"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Liquidation",
+      "name": "LiqwidIAGLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "3425821b400395a081b4250d960af5af0e1fca75ef8c573e3b8324b9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Loan",
+      "name": "LiqwidIAGLoan",
+      "type": "Validator",
+      "scriptHash": "9b9993802ac423dc799ede2b988d9a903250200a22f66b9e5c337f87"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "Loan",
+      "name": "LiqwidIAGNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "1b307d44f99929dec0cdb664e99ae841d2355593b21f0d9641a00520"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "MarketParams",
+      "name": "LiqwidIAGMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "18d41a7bde29ee1dd86b7478534e9dedc258fcbe7e940dd6ff8e1d27"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "MarketState",
+      "name": "LiqwidIAGMarketState",
+      "type": "Validator",
+      "scriptHash": "2628bcd5fb3b55c1661cf0b6bb9331a0bb59e31ce3c903b41ae45e75"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "MarketState",
+      "name": "LiqwidIAGMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "bcfc336181739c48126522d462a39114c80673556a37bd4805fa50b1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "NewBorrow",
+      "name": "LiqwidIAGNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "fc7766e8d1fbd521c9fecc6b1cc7d2d08ece2cb1968160659d9f9b42"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidIAGLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "5c43acdea86ed1d72fc2d3ac27345f8f50dad2a51752b9c0d465b975"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidIAGLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "7ec2f66c8520c4b9b0f9317551f4ec1efa7f9f7f8f1a820707bc5e3a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IAG",
+      "componentName": "QToken",
+      "name": "LiqwidIAGQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f60b7232837203d335cd77494d25c1cc0b218b9a8f3459730c521d13"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Action",
+      "name": "LiqwidIUSDAction",
+      "type": "Validator",
+      "scriptHash": "14386d24c827f3ce74bdf6c875e548d928e12036c145ebec14f04df5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Action",
+      "name": "LiqwidIUSDNewAction",
+      "type": "Validator",
+      "scriptHash": "b46f9c86e051aa134216afb7f5fb90055a2209e445da773be7958701"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidIUSDAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "ca751ac2696c1d4d2e4e24343d126150be9c68bad53be6a156328bdb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidIUSDAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "78a1ec37d8072b8ff92ca591ca362be083df4001f10f81a5e73f5dad"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidIUSDAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "7845f8733855e17eb57ceec769581c4cdb8b78ae4e58753c0fb7ef0a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Batch",
+      "name": "LiqwidIUSDBatch",
+      "type": "Validator",
+      "scriptHash": "9392bfc154f465f6788192c0176feca44c4b43318585b246712629db"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "BatchFinal",
+      "name": "LiqwidIUSDBatchFinal",
+      "type": "Validator",
+      "scriptHash": "071bd7f4b5e059ea90e763467cf559167b21c82ef1cb5fe34fb7a9e5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Borrow",
+      "name": "LiqwidIUSDBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "19312587e1c18ba062038d2f87d04da9021d247fda2a7f0d76496ad1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "CollateralParams",
+      "name": "LiqwidIUSDCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6237228939cb4c1b4c212bfcaecdf2188ca9d8f8de5632c2acec010e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Liquidation",
+      "name": "LiqwidIUSDLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "9a4b3374510d413193c606dc6ffc3ceb001acfe96e4827602771817b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Loan",
+      "name": "LiqwidIUSDLoan",
+      "type": "Validator",
+      "scriptHash": "854c7b463dca50b52be7448e586387200557a3feae51676aa855e77a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "Loan",
+      "name": "LiqwidIUSDNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "71c4efea13088aa751a8505c361e241763ad3f48ec97ca5f6b2e7e8a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "MarketParams",
+      "name": "LiqwidIUSDMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f967b3a86a9880c876851fa64b352a4d3887d6436904190b698f232e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "MarketState",
+      "name": "LiqwidIUSDMarketState",
+      "type": "Validator",
+      "scriptHash": "6a836e8bb408ef5110a7477039a9f5fc41e55be9fc7eb5464def826b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "MarketState",
+      "name": "LiqwidIUSDMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "416109f322b43051b80e83075b4baa8c5af14c88acaca47d5c251820"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "NewBorrow",
+      "name": "LiqwidIUSDNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "1ffc1d2cc7afe2405e39b908bddb2cd842749fd3a755810fa8b980d3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidIUSDLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "27a1b01291bae480557b9df1149eddc7b2d754ccffa69d183314bb1a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidIUSDLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "66231205ae8af2111e064bba090e656612a71aa0c9b277937ca378dc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "IUSD",
+      "componentName": "QToken",
+      "name": "LiqwidIUSDQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d15c36d6dec655677acb3318294f116ce01d8d9def3cc54cdd78909b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Action",
+      "name": "LiqwidLQAction",
+      "type": "Validator",
+      "scriptHash": "4e893c9375f959e5c5051aa70c18583510bf64e3464d5838005403f3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Action",
+      "name": "LiqwidLQNewAction",
+      "type": "Validator",
+      "scriptHash": "b9cca2300e29b95cec67560f782198ef0073454f7d6d013baddaa498"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Batch",
+      "name": "LiqwidLQBatch",
+      "type": "Validator",
+      "scriptHash": "126cd5c5524cf34d5b158ad9c9c7a59e2e2040a56f9ae72aaeb61ee4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Batch",
+      "name": "LiqwidLQNewBatch",
+      "type": "Validator",
+      "scriptHash": "ff7e6418e095ec9c264610b57843e37435303e42265490bf4fd5ec17"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "BatchFinal",
+      "name": "LiqwidLQBatchFinal",
+      "type": "Validator",
+      "scriptHash": "532bcea07569204c39ec2ca7211fe78f072d802e47ccadf8d03b3e36"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Borrow",
+      "name": "LiqwidLQBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3f0adaa27a6626c5f5d4e0128a7050cbc34effbad68fabc6369dfb31"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "CollateralParams",
+      "name": "LiqwidLQCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9f25a65a3c2a10e865eae1a35bff6204872899a5a8df1e9596ad4fa3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Liquidation",
+      "name": "LiqwidLQLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "7cb1149addb60a3be7b11a1591c0999283de87151bd7f80b61d11bb7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Loan",
+      "name": "LiqwidLQLoan",
+      "type": "Validator",
+      "scriptHash": "1d50293eff59a740a8b9faac5ac7e4487260f344cb727526729cf87b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "Loan",
+      "name": "LiqwidLQNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "6a5e4bd7868ddd63225819cd9628b5f56ddb48c8c1be2980e23be561"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "MarketParams",
+      "name": "LiqwidLQMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0891e4c0dfb6875b75ad128c9cd0a2fc449d87201ea82b9e5d3a3345"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "MarketState",
+      "name": "LiqwidLQMarketState",
+      "type": "Validator",
+      "scriptHash": "0cd585246a46ce0229669b55461079227a4ccbe5f3b8d86e27b31f09"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "MarketState",
+      "name": "LiqwidLQMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "aca430e2ba97649cbf5c21d1a0825d2c123b96a69d359ebddaafa787"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "NewBorrow",
+      "name": "LiqwidLQNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "d82ac61b92b4e5ac9b30e383c220ce9d4fa571b1266c56355ea59d7d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidLQLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "5dfbd96d2c506d7d9a70824d10b5b7383d88fd1deb92d3ba0a3c49ba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidLQLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "1599b77aa55dcf257f4648f3ba7d37e6c824309ad6e1661a37595391"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "LQ",
+      "componentName": "QToken",
+      "name": "LiqwidLQQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3883e3e6a24e092d4c14e757fa8ef5c887853060def087d6cf5603f5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Action",
+      "name": "LiqwidMINAction",
+      "type": "Validator",
+      "scriptHash": "02652a93b8327ba64b6c0bb8dfb11a76cbb333a3fbb4243ddc0859ac"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Action",
+      "name": "LiqwidMINNewAction",
+      "type": "Validator",
+      "scriptHash": "ca8e8918065328f1a4e23cc916be82f0c7ae6f4fe9633b91dd91a272"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidMINAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "33d8e9efc12fc99a8636bdb68d9daff862e4a334f8f071e17f425c3f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidMINAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "88e236a98dfca04e145ad8f0f520157af33995dd0cde7fa113372c83"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidMINAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "2f8e979bf1ac5fc932562302d44fbcd9d738e611761c9b16181529b4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Batch",
+      "name": "LiqwidMINBatch",
+      "type": "Validator",
+      "scriptHash": "c79b4145d351812445def14c3dddd04e5591e78020a7e976e805952b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "BatchFinal",
+      "name": "LiqwidMINBatchFinal",
+      "type": "Validator",
+      "scriptHash": "452650490499ff68be41287e08662039deb04e723d0f33c8591cde7a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Borrow",
+      "name": "LiqwidMINBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9d7fbb38fe90a58ebac1c91f37c008bd6acedab4fae76f2201072df9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "CollateralParams",
+      "name": "LiqwidMINCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "85ea2eeddade13b28a6588c4c723b1363e3e9dcd5e43c4d49e2986f9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Liquidation",
+      "name": "LiqwidMINLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "f0fe71a68a750305915a43ac8efffa5f65e4b54d0bf1bcc45ca7b3e3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Loan",
+      "name": "LiqwidMINLoan",
+      "type": "Validator",
+      "scriptHash": "eb1c62309586ed7282eb37c4ff72cd30f0cf55349b781e26df16e101"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "Loan",
+      "name": "LiqwidMINNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "c19132a434f2272730e9867aa06353c838f10d63fd4790cec1b4182a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "MarketParams",
+      "name": "LiqwidMINMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "413b0737013724910078491505fbd391d04b8d11f35e98c02f41ba0d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "MarketState",
+      "name": "LiqwidMINMarketState",
+      "type": "Validator",
+      "scriptHash": "959d9b08113e0edbc48ce2c23bb293e4e47590bf574fa4f811fb736b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "MarketState",
+      "name": "LiqwidMINMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7211aebe5303f1a8c7905198f637099f194a3b23e841b1dcbc064017"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "NewBorrow",
+      "name": "LiqwidMINNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "fe3007a849b2cf6b3ba436f0223305fdbaa63215207a6a1b09036344"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidMINLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "99cefb51b90045d9f58e2bf62d4024543fa194e5f92206f1017e0492"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidMINLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "06ef9da4a9ad074b1655c97b2f99f3ca3c955d7406609ed3a8f0fa19"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "MIN",
+      "componentName": "QToken",
+      "name": "LiqwidMINQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a4430a085f45bca6399bec6bd7514eb8c2fce1ed75c7554739cfc32b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Action",
+      "name": "LiqwidNIGHTAction",
+      "type": "Validator",
+      "scriptHash": "262535d0a325905f387222df30a0f2462720f8cc1f5574e6797e55bd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidNIGHTAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "913d6a45262ae487640fac57d672efa6787c6be36a0659fec808b167"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidNIGHTAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "52630854693cac06d7fb06aa45e339b24676c369aa995d888768c260"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidNIGHTAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d16756ba0957d07e756087efbe38af7cd6ed6e38a6b74e4b9c0879e8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Batch",
+      "name": "LiqwidNIGHTBatch",
+      "type": "Validator",
+      "scriptHash": "45337d367c572a634bc0a616b4c85c9ef7f41aa1bbb20738f2c8a266"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "BatchFinal",
+      "name": "LiqwidNIGHTBatchFinal",
+      "type": "Validator",
+      "scriptHash": "b4f7a70f758c05cdbf5498917ecdaee1fadef4cdff140a8435df81eb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Borrow",
+      "name": "LiqwidNIGHTBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ff7eccf5e7db571ac2721c232636699eec80ecb4d04123a63fccbd69"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "CollateralParams",
+      "name": "LiqwidNIGHTCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3eb5af1e152704ffcdf43eac727b5fee4e6c78230f287e9054b07fdb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Liquidation",
+      "name": "LiqwidNIGHTLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "f12a27b2a980070ffe1bdd8d1ae7572e4574febf72e4959b85e7e18f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Loan",
+      "name": "LiqwidNIGHTLoan",
+      "type": "Validator",
+      "scriptHash": "1bfa4606dcc9e6ef3353b73dc91685ec320d2e010efdf79747dc04c5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "Loan",
+      "name": "LiqwidNIGHTNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "aa2a1452fd21b0eb6527c4dffe71eb4293f1bf521696cf238d6540c4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "MarketParams",
+      "name": "LiqwidNIGHTMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "18a993d90f3fb05990170d29fd41a263ab71b0cb9fc2217f3e524546"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "MarketState",
+      "name": "LiqwidNIGHTMarketState",
+      "type": "Validator",
+      "scriptHash": "0fec6084b9329a16410e0e679d689c30e77051cd3197edae4557e27e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "MarketState",
+      "name": "LiqwidNIGHTMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "efc5a8764f5d7978d794dac3a6edce820828072ec10594590137b71c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "NewBorrow",
+      "name": "LiqwidNIGHTNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "50ed8de918b0d944215e69688536cbe2d7484c744c4e11b9d8b9fc07"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidNIGHTLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "bbf9a9005ce9a69f6c52ae27badb2dd79a97bf67a0ca9f9206e649a1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidNIGHTLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3ae5ae085a26f24bc47e668ba057489d0c8e4d76df9a87bbe258de76"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "NIGHT",
+      "componentName": "QToken",
+      "name": "LiqwidNIGHTQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c45fa8aefc662c003a32be67f6a4652d8ce56bd9e54d7696efd40c86"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "Action",
+      "name": "LiqwidPOLAction",
+      "type": "Validator",
+      "scriptHash": "b9c9cb3d2e1b1479819e88794828804245c47988fef6aa7ae1da4806"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "Batch",
+      "name": "LiqwidPOLBatch",
+      "type": "Validator",
+      "scriptHash": "d8cf22bbfa3900e3cce2e5f4e4996a2a061738129e4c21681f1734a4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "BatchFinal",
+      "name": "LiqwidPOLBatchFinal",
+      "type": "Validator",
+      "scriptHash": "ba1ae41a8d08221d8249e5b9ea819ebe1547b244d098b679c5540b4f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "Borrow",
+      "name": "LiqwidPOLBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5950ced7d5af4c1e2db37e478da03b99f2704537ebea50147240a9c9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "CollateralParams",
+      "name": "LiqwidPOLCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ac17750fc65fa191152067e4f7c474a2b327f4bd64d7faf821a2a361"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "Liquidation",
+      "name": "LiqwidPOLLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "84fcf917fdf0533dc1ec7aab25038bb1e632963035d14b9469deecf4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "Loan",
+      "name": "LiqwidPOLLoan",
+      "type": "Validator",
+      "scriptHash": "9549315ff8fe480a9aea651101c0b80ae245743dedc6fa8f0e3eefe5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "MarketParams",
+      "name": "LiqwidPOLMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6894f5a84d5e4d79a262e1c66102a628096a315e2875562180d986f3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "MarketState",
+      "name": "LiqwidPOLMarketState",
+      "type": "Validator",
+      "scriptHash": "cc7a25f7306a820719895b4e63736d986a248b063a91d8ce68d329cb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "MarketState",
+      "name": "LiqwidPOLMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3e46fe218fa7030e9f0bfc4b99141b49acd7f4d0efee389125c34dd4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "POL",
+      "componentName": "QToken",
+      "name": "LiqwidPOLQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6f7d8e31d9256ec27f35d25659dd053cfec098032a5669b2b56798d0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Action",
+      "name": "LiqwidPYUSDAction",
+      "type": "Validator",
+      "scriptHash": "4937a60b5f1065fdab6294ff6ad67664a1280a81897d2427a8b5ea0c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Action",
+      "name": "LiqwidPYUSDNewAction",
+      "type": "Validator",
+      "scriptHash": "0c9a41e544de396b7c397f8f097b323b81206aba0088540c40276620"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidPYUSDAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "31a7e386bc0629c62eb66e85024c99c7fdc37e0ba18cce0cad02bb99"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidPYUSDAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "779ed8a12c5fde334825ea0a29ff8b31452f0cd1f8e41d21c68d2ef7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidPYUSDAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "f11f658be159cf1cc8b22042b0899d91631a71ae1f1fe085baf2a6fc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Batch",
+      "name": "LiqwidPYUSDBatch",
+      "type": "Validator",
+      "scriptHash": "c2df3dad523a9d981dc11ae6beb1ecc2174c07c1267bccf13a475bad"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "BatchFinal",
+      "name": "LiqwidPYUSDBatchFinal",
+      "type": "Validator",
+      "scriptHash": "524de865c4a83bd7431083575b27f46bb56d2a0c000ea425753181fd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Borrow",
+      "name": "LiqwidPYUSDBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "962ebfe54f1d57da941ad317c98304fd81e3abb3f4e89348c1c512c5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "CollateralParams",
+      "name": "LiqwidPYUSDCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "8ce0f9f27cf9089108aedb4e4725a19fa8d25c4373f73ddeb5006c2e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Liquidation",
+      "name": "LiqwidPYUSDLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "3cd5b8efd7e67cc57d9a1649f8a43638fca7dfb5d83def29ae6fa483"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Loan",
+      "name": "LiqwidPYUSDLoan",
+      "type": "Validator",
+      "scriptHash": "c9ad41354572d5938536b49fa8b35ca703ae528281006d4e7c750e15"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "Loan",
+      "name": "LiqwidPYUSDNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "988788f8d72abbe1d74d8d285256298535b44816d26cc862189934e2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "MarketParams",
+      "name": "LiqwidPYUSDMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ffe1c5948ebece09bae85b500f94c9789029501d1d24b9729658709a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "MarketState",
+      "name": "LiqwidPYUSDMarketState",
+      "type": "Validator",
+      "scriptHash": "51ded1374aa111991a755ee426baab8fed0de6831e7c757b269ebee9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "MarketState",
+      "name": "LiqwidPYUSDMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f15b5f281f9b8be3276dd9466a3bbf57272d04db962e63b312bdebf2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "NewBorrow",
+      "name": "LiqwidPYUSDNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "6a7fafcd132a0e9774facb1365a8cd1f9a87883bd5391c66844b591d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidPYUSDLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "dac68674a218a403aa8096ee1250d9d5ab1315b9b440819b13d15d12"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidPYUSDLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ed3684d781f6809ca1cc69a8768a23e99d227e72b9928692880eb3bd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "PYUSD",
+      "componentName": "QToken",
+      "name": "LiqwidPYUSDQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b8a327951d579d3537ea175078256bdf9f9899b5387b099d0b58f066"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Action",
+      "name": "LiqwidSHENAction",
+      "type": "Validator",
+      "scriptHash": "948711b192d0703ff4a1bc0d565e681f64b3027b0cae562765b0c584"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Action",
+      "name": "LiqwidSHENNewAction",
+      "type": "Validator",
+      "scriptHash": "e4942d551fab7c859636c2519d0c7247c2f346892a0b3d01a4ab2bdb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Batch",
+      "name": "LiqwidSHENBatch",
+      "type": "Validator",
+      "scriptHash": "6a0e34af4d51828a50c6f3d4b1610381de87f95d199a143efdcb8123"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSHENBatchFinal",
+      "type": "Validator",
+      "scriptHash": "ca925263da4c59bf675f3cc485c894575cfe9b2b50ae5c3a360a62cd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Borrow",
+      "name": "LiqwidSHENBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "98cccc642a74eeb1fe7a22f43a814068b54f9f9afa583a73b74e36ba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSHENCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "8bb4c1ccb51cd38e0d1da266112eda5b40957f43221d47962d62aaa3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Liquidation",
+      "name": "LiqwidSHENLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "8de8be82b11e143d6f9d654325d099ca2f2f4c85c709c3bedee8fbf3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Loan",
+      "name": "LiqwidSHENLoan",
+      "type": "Validator",
+      "scriptHash": "359ae06da4dbdd92c63743803f6be1bf1d24477645cddea07a5efb1b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "Loan",
+      "name": "LiqwidSHENNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "10dc91bee4b5d2a8648d201881daad1c57e31505cae11429cee98535"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "MarketParams",
+      "name": "LiqwidSHENMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "45b67f59d98ba5af58aadcbdcc641fa480a39e7dca68c0af2174b0ea"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "MarketState",
+      "name": "LiqwidSHENMarketState",
+      "type": "Validator",
+      "scriptHash": "5917ad9f27bb40482eac40027f9dd69898215ef4843a525c4355193b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "MarketState",
+      "name": "LiqwidSHENMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7bff651a687fd87f2f6ffe705f7a36c39941248e80ecf8b0b10a4949"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSHENNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "7a6d7bb85a5c34ca965da8711f19ed643e19a3946cd4d383f5e849a4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSHENLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "0bce749219a5ac3f998cf800ed31f2ca2ff83f3a4c6e0909ab76d33c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSHENLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "93d466324b7306c0513812f0ac5baef15d1d99880afad323c15eb4c3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SHEN",
+      "componentName": "QToken",
+      "name": "LiqwidSHENQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "e1ff3557106fe13042ba0f772af6a2e43903ccfaaf03295048882c93"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Action",
+      "name": "LiqwidSNEKAction",
+      "type": "Validator",
+      "scriptHash": "a28c4a421a395cf3096152f35bfd5c2a5b6492dce4456ebdd34a84e5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Action",
+      "name": "LiqwidSNEKNewAction",
+      "type": "Validator",
+      "scriptHash": "3815b7f5155ce4767e6674bf6d2a9b8dba06e988fd6944929ce89b04"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSNEKAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "da73e4b601084f0119cae467dea296a760cfb6ee2fe6c564573d888f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSNEKAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "53a4c6348d873633f3bd1950e70e582eec61fe5a8a102a3181e99ffc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSNEKAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "5bc2a26881856f661c9da52dda121a82ecb137e9167b808f20952974"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Batch",
+      "name": "LiqwidSNEKBatch",
+      "type": "Validator",
+      "scriptHash": "9add60e4f677f4de1d5ab98ea8dd4957df8b165a3e294f51962b5092"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSNEKBatchFinal",
+      "type": "Validator",
+      "scriptHash": "399e13b0b594a03b63be8e54c7216d0e2e38818e7bb669175aebd49f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Borrow",
+      "name": "LiqwidSNEKBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5d692315363de12c739d046abc10f7c02386437d0f73a577f7c1c6d0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSNEKCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "13863cfad5881ec5ea46fb2e8b78393d073aba2fb2086704084b9bdb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Liquidation",
+      "name": "LiqwidSNEKLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "562528941027f8d6af7d9c8a7cf1f7b0077a09b81ec019283ffba7da"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Loan",
+      "name": "LiqwidSNEKLoan",
+      "type": "Validator",
+      "scriptHash": "49d6927423d3a1d7268a2edf6d47ca84c7d2587540174428350edc6f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "Loan",
+      "name": "LiqwidSNEKNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "d0c380d495076318d58ed0fec80f382379130a80b3f2b3b5b48c4656"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "MarketParams",
+      "name": "LiqwidSNEKMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b6ad0fb58504876a767d4701e6ee812abfe548057f99f75283755f9b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEKMarketState",
+      "type": "Validator",
+      "scriptHash": "b0b99c50b9ec9c997086cb2222bb9e4fa2841d77b2e7580b94d6e0c6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEKMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c6f7898a261056bef6c9b52ed63aa3cd1e9b9051b0d9190e998259db"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSNEKNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "b0be0f5e0a71457acd02d41ea90dfedbc5e96bb470d95c59fb7e7d75"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSNEKLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d531c451c6e2e8a32513a1b99651c6d39b0d624bf0be9582746c2b26"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSNEKLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "26fa5b123c5567d0b6c0ace10a7935b36707a95b0a492d8de6f9b8fc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK",
+      "componentName": "QToken",
+      "name": "LiqwidSNEKQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "4e8c49d610335d139ad7711e0f50315006e29b5221da531e365b4ef8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Action",
+      "name": "LiqwidSNEK2Action",
+      "type": "Validator",
+      "scriptHash": "3e24bbe7f87fcea42c4a3328f5fa83317e4f88c6e35fa4252474a411"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSNEK2AnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "dc1e7b310851fa0056e3f08a4e0529c5b410d84a62ba0a6ac53d2318"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSNEK2AnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "4e44fc38c0a9564444ea1240e476cce82248fb565621a9ccbfc213cc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSNEK2AnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "180bf65bc7e7a87afba4d33ecaed1c5a65fde7960350f2586c846c6a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Batch",
+      "name": "LiqwidSNEK2Batch",
+      "type": "Validator",
+      "scriptHash": "fe935ad0f423e42deb5d23b43a1439fb7bbbbb411404c1cf7115af52"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSNEK2BatchFinal",
+      "type": "Validator",
+      "scriptHash": "2a8bb67d603c14ff199022b583c60f3d35ec64f33945dba163b74951"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Borrow",
+      "name": "LiqwidSNEK2BorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "efd1c58719879ddb6b03fb83659f35dd0f3a3f67f80fbbb6608d0f5d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSNEK2CollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0d65655b3c5d58b19d181916e455eed69545d6e7e3c6f926b1cd89f3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Liquidation",
+      "name": "LiqwidSNEK2Liquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "213f71f3bbef4f9377a7d0a4ce5ee342d3b181704a5572c5006cefca"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2Loan",
+      "type": "Validator",
+      "scriptHash": "fcac85f53f09441c739952324b3a9d614f1c31896927f1e1fbd91421"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2NewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "89fb4db38e0dd015bce7fbb9a13e74a9d6f2c2210cf580b50f814030"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "MarketParams",
+      "name": "LiqwidSNEK2MarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b43d2ec505a4a364688a8596ad6d5bacfb3aaf30c7c8b3317a6ee70d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2MarketState",
+      "type": "Validator",
+      "scriptHash": "b88deb72abd08a855b807ef3326b81813ddc98243f6d5d67bc0b1783"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2MarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5af40b3ceabec5fd25fa13f218008fe3a6f97f805607de6333d3dbd6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSNEK2NewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "9da5c614cfd73957963e1b16091dff980429a25ebca04f0d5c7ddc20"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSNEK2LoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d8df9308dc56b44a4f344f313509a88049cbbb8563ad9d746c416856"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSNEK2LoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "cd94bd7999048dfcf6d7b53779a258b95064cd55a0219acd8474020d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2",
+      "componentName": "QToken",
+      "name": "LiqwidSNEK2QToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7cc27c4d862d0d8c7ded84405836f275c921a5a73f2e0d4f46802013"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Action",
+      "name": "LiqwidSNEK2-ADAAction",
+      "type": "Validator",
+      "scriptHash": "e12b4454a2a87cc0d49500576f3dac5ed7aca60d838da45123f48001"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "dd73cc68a954b839bc8f52ea9439a517b0648460bd16bcb237353dbc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditBatch",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditBatch",
+      "type": "Validator",
+      "scriptHash": "d73a2c7f57e278f36dcb107a4cf548ed919eb0023717f9ba55ddca2d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditBatchFinal",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditBatchFinal",
+      "type": "Validator",
+      "scriptHash": "9d18593a364304d5afb8bab2f792125edfb26ce97837fb5921f36407"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "612a4a1e44ef6f776d24c603ff22abb2de1fadc9c0f2d75fd6211fc8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "9b7c923e3bcdfd765cb369c50f978b1ad131bef210eade71954f3733"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "AnastasiaAuditMarketState",
+      "name": "LiqwidSNEK2-ADAAnastasiaAuditMarketState",
+      "type": "Validator",
+      "scriptHash": "c1c751c30a31b5d456c87f7fa3caecabd3d2585e5463dd866eb25511"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Batch",
+      "name": "LiqwidSNEK2-ADABatch",
+      "type": "Validator",
+      "scriptHash": "db74c8bf77a8fe069be4b77a61a028ff5cd0ef53b2b8611115febc20"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSNEK2-ADABatchFinal",
+      "type": "Validator",
+      "scriptHash": "b85c70e5cb40a9923d8476e6e3a337a030da4140d0690a9669946cba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Borrow",
+      "name": "LiqwidSNEK2-ADABorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9a40e800205a941c5986798df629f6687be0f995b4c20949aa36721a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSNEK2-ADACollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ab503a98ae3ce8481ada07be79db0a1fd569011438d97358a2fe9ad8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Liquidation",
+      "name": "LiqwidSNEK2-ADALiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "df9b970885f5940c729ab68e3e686d8f6388d1841fe62298cf332b2f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2-ADALoan",
+      "type": "Validator",
+      "scriptHash": "a5ef4a4e501430061be0b1b418edfca000f9bf3452bd573885bfc341"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2-ADANewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "67e1b2fd5b803dbfbdae923367bbb186d3d27f54f75c8572f2443ebc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "MarketParams",
+      "name": "LiqwidSNEK2-ADAMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c7341a7ad9a3b1b4635b5f5cc55566bf92a57e24eadf290123b0b944"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2-ADAMarketState",
+      "type": "Validator",
+      "scriptHash": "37b96b418302297c5ed7d0e1735347340460b0b4b8d9f38fcf4ae246"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2-ADAMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "be82399bdf9cc082e9cd35d82fcecf58cda8a77e57d12fbf0d7f72ee"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSNEK2-ADANewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "bc7f36746506b9827c4aef3f1ca6b460a3ac7689ac952e3eeaa55945"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSNEK2-ADALoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "43e4b6f12c5bb43323aaf2d36a727dc53b636ed349350b55f52ca1a6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSNEK2-ADALoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d38f2206a74230f22ae7306229dc31860d43d8c02b0429c03075edc4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-ADA",
+      "componentName": "QToken",
+      "name": "LiqwidSNEK2-ADAQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7a35cf17f7d4fc14e9b5ba99cf9be338d0e05a9df3841de767728ae5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Action",
+      "name": "LiqwidSNEK2-USDCxAction",
+      "type": "Validator",
+      "scriptHash": "4c93fed861034ae5715a114db2344db16b5ed9fb4528a427c0f5c6fb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSNEK2-USDCxAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "ca6a9add9948759e88f630d7593db838df9103e50a15aafbf50c4f3f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSNEK2-USDCxAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "b44de579b6f201d242b95b274ea5c96189b03aa6f84098a914e786bc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSNEK2-USDCxAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "c11d42e11f0a097d09d2c65da7e97a948d8ca28dd92b7c17e335ea5e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Batch",
+      "name": "LiqwidSNEK2-USDCxBatch",
+      "type": "Validator",
+      "scriptHash": "d1874958434e4b9ef1c640a0cbf15d1d8886aa7b1d1d6bab29fb7070"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSNEK2-USDCxBatchFinal",
+      "type": "Validator",
+      "scriptHash": "875bb27292d9a985d012af5e9d25507155adf37cc969969c87813bca"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Borrow",
+      "name": "LiqwidSNEK2-USDCxBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6e4b9360f6be0b85e8a6814d8665a5d34af3f02906dc32b3cd07d484"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSNEK2-USDCxCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "8ec1b9719fab2c82dcbaa12a3b944db1f0160886b85b3e1ea92c3b2e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Liquidation",
+      "name": "LiqwidSNEK2-USDCxLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "79516daead39d3375e79833d6eda01df1d974cb8d514ea2bf2fb4a5b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2-USDCxLoan",
+      "type": "Validator",
+      "scriptHash": "9957df3289668ce24163d68c2576a6248955793473b9e79837dd399f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidSNEK2-USDCxNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "d1a3f275a37525bf5cb3d1f24f59d120d151955dd309e93a2a3d41aa"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "MarketParams",
+      "name": "LiqwidSNEK2-USDCxMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c097e28e9c5476b10ab51e5e33bbf7b3b1569afa3ab669e4fc548b09"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2-USDCxMarketState",
+      "type": "Validator",
+      "scriptHash": "00487b0ee879c1da2a8a3563d11b0eaadf0400960c4233ab3d2c81c1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidSNEK2-USDCxMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "481e1bc8ebe7d0f2a8d107f5588703646588eac6b4975d4575c33c00"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSNEK2-USDCxNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "7800ee6c5dc5007b192ce9ed672ea5df097214bc390ccb4f48a1f104"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSNEK2-USDCxLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "54d9a00b48d67bc470993214e53f2e30b5d1fa5c85d8179a015c4dd5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSNEK2-USDCxLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "cec8934015417d00285b1a76467336df57984da9bf81ac83d46cc65c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "SNEK2-USDCx",
+      "componentName": "QToken",
+      "name": "LiqwidSNEK2-USDCxQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c0b2cfe96c71a73447011a0b6195eee756fe1747dcf06579b69564bb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Action",
+      "name": "LiqwidSTRIKEAction",
+      "type": "Validator",
+      "scriptHash": "2b5d88631a416fbed6a8202acc9edebdfca7e42aac5d4166b3fdda7b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSTRIKEAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "0616eee6c734989333f194b3ab92bfd4ae1a2d7b8299da1d1a2aa01d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSTRIKEAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "f5731fe6923ab4686c90f5cfce852b75eb39814f18140801ad13d014"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSTRIKEAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "0214a5071cc1de78af3eb08612fe11ea02774f307c5b916e5619e61d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Batch",
+      "name": "LiqwidSTRIKEBatch",
+      "type": "Validator",
+      "scriptHash": "cb60783d259afbc97b44d193e26e73d9ac6237898753f50117b9c0eb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSTRIKEBatchFinal",
+      "type": "Validator",
+      "scriptHash": "8fd3e432f156b82b43734d2ec88b1b93e19ac7a15714b75f220f36e4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Borrow",
+      "name": "LiqwidSTRIKEBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "198955769d00ebcaaa91f9d2c678f2d456d6a3faea11513505c8139f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSTRIKECollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "76b539eaed744298e909c4167f89404b93cf8f85f0075e75065465a5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Liquidation",
+      "name": "LiqwidSTRIKELiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "1a1bbd24662ec034cabb8fa6d4a022a242cbbf75dcbcf8741f8caff7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKELoan",
+      "type": "Validator",
+      "scriptHash": "735c3729196e078c3f2d3ce84e3104b8f77cf5e232430426b4e762a9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKENewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "bf260ddf6abd9cb68b687957c10e1f13367ff081c8702035914833bd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "MarketParams",
+      "name": "LiqwidSTRIKEMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6fa64966397fa5b340c7ed12d33a39091afcf3c048ed6e1d64bcc763"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKEMarketState",
+      "type": "Validator",
+      "scriptHash": "bc5a4d0fd042d6e631830de95d7451f63bfcd1420bfbbfce8cb08e1a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKEMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a43e97c7fd3072e0679bc2e5003b6a9db9dafbe4e760f0dc68e6dc4b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSTRIKENewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "01bb2818d40071c6ffb38fa889d56f9c88c93da931af0d72c80e8f70"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSTRIKELoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "63ba35a67587ac882ca4d7f4812ddaf5ada8ad185d81324381170667"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSTRIKELoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "9081e335355840576daf1177490cbf0380af0a662e4fb7c2cb3f79b0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE",
+      "componentName": "QToken",
+      "name": "LiqwidSTRIKEQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "12c8a522ca40065bc742b2d9733338a67e6ee7baa7adb73291a4222f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Action",
+      "name": "LiqwidSTRIKE-ADAAction",
+      "type": "Validator",
+      "scriptHash": "5838cbb7e68eeb7b1f4776475ed15c8637e9e9192c32ae11657fbf69"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "2e787b1c62dc72754d0552b6605fce496c06251b73e6fc4503b3235b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditBatch",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditBatch",
+      "type": "Validator",
+      "scriptHash": "e3c25342f3ae4ed3208cde5c333cd3ca8b48bf91cee8cecff4d8c363"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditBatchFinal",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditBatchFinal",
+      "type": "Validator",
+      "scriptHash": "0c4e125ec60e335a35278964cd71da667c76f907a8afdfef4b09482c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "6ac0d3433b55407cf2e95ad8aa9c353d296ad4998bbc2964efc17767"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3b2adf449f1b669ab80a4a40c6950da5e0753e2b8022a98a276a088b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "AnastasiaAuditMarketState",
+      "name": "LiqwidSTRIKE-ADAAnastasiaAuditMarketState",
+      "type": "Validator",
+      "scriptHash": "95eaacbabd6559f92850d36d411ce3f32c486195dbc428f26ce50ea2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Batch",
+      "name": "LiqwidSTRIKE-ADABatch",
+      "type": "Validator",
+      "scriptHash": "90f7f23518605fcd8472ccf0865516af53355c6d6e477406e26ee770"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSTRIKE-ADABatchFinal",
+      "type": "Validator",
+      "scriptHash": "07e47256b13da9b8fefc376e8c1b02a76e96fa739462deaccb0c52fb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Borrow",
+      "name": "LiqwidSTRIKE-ADABorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ece99399fc864ff5bfad424fc1cefe3c5a3b68036d2e36c41363f5a0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSTRIKE-ADACollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "88d9ca4cb500ed51bd19857f3d5de7ea0764eaa54c58f201857df7f0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Liquidation",
+      "name": "LiqwidSTRIKE-ADALiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "155450afea7ce67b4c92bf2287dd7f9e06711cf1dd9767a2d6620079"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKE-ADALoan",
+      "type": "Validator",
+      "scriptHash": "bb0a87ed064a5453a3028e757818692abeeb775fbdbed58bb265b2a3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKE-ADANewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "e208583202f4ed3e0217209e5a9ccdd6d293743602a28afff71ae728"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "MarketParams",
+      "name": "LiqwidSTRIKE-ADAMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "78582edc4c9ea4807e5ee3ed090a9867e31831972b820da06a12d6ff"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKE-ADAMarketState",
+      "type": "Validator",
+      "scriptHash": "87f0f8098098f2cd4f377e1c0944e2916f534ed2a1a4faaa842d9f3d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKE-ADAMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b44553158796da29abd7d74ebd61cfe64274d00b72962acc6b5befba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSTRIKE-ADANewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "2a8b2a5afe4bf67e21385b70fb27af71f652022a246a95ba0b1c8252"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSTRIKE-ADALoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "f57afb894350ca469a788189566546a98d720a1f7432c8ea86db6910"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSTRIKE-ADALoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "c77ecc5a708aceb6c0dfed7bb11f1e2e2aab98e4a4f37a9e95f62d83"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-ADA",
+      "componentName": "QToken",
+      "name": "LiqwidSTRIKE-ADAQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7cc5b5e85b03b9dc18ee93162a13a911a5bedad39053506d669465e8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Action",
+      "name": "LiqwidSTRIKE-USDCxAction",
+      "type": "Validator",
+      "scriptHash": "d85c0f55c0aad6aa7645a239a6ea750fc544e63898e8cb7922731374"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidSTRIKE-USDCxAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "23a3fa6ce5fa6c402d945d89224e8cf9827eab3f7098cd8e045b0c79"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidSTRIKE-USDCxAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "9cd1317bd352138a5439ca4bcbeec180e30dd9e12742c8b3e552fea8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidSTRIKE-USDCxAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ac9601f2f16cb136521ca907d5cdf1bb0fb5c1e211ad96c739cfe15e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Batch",
+      "name": "LiqwidSTRIKE-USDCxBatch",
+      "type": "Validator",
+      "scriptHash": "b5ff85941219c247ffa26dc71bdf8a622625da5b2ffa90e6626e5dbb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "BatchFinal",
+      "name": "LiqwidSTRIKE-USDCxBatchFinal",
+      "type": "Validator",
+      "scriptHash": "a8bffa70733bd767d407dd2f3b7b9b241ebab62c3da40284eb55ca92"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Borrow",
+      "name": "LiqwidSTRIKE-USDCxBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "e8987181eb1add2ee0fc06c71b802fa3653b752e2029eeb7a137bea7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "CollateralParams",
+      "name": "LiqwidSTRIKE-USDCxCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "09aaa2077d84d4c4528f0b2b52738876ec3aeb9e35fbd8e31557ffb7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Liquidation",
+      "name": "LiqwidSTRIKE-USDCxLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "61ceae208f31a4aae8dba7db92ad4e967f1e93dd1ec2af5a3e253d31"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKE-USDCxLoan",
+      "type": "Validator",
+      "scriptHash": "dcabe078d5c639dd1408cbe368c6dbba049bc80b322dcb4aa9424a7d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidSTRIKE-USDCxNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "fbf8633098590c7b61a83e6c4e414a2fc52cee0e51cacabde9a1309c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "MarketParams",
+      "name": "LiqwidSTRIKE-USDCxMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "e51b23d114be81389e53020a62cea826ac5871fa37dd50a944de584d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKE-USDCxMarketState",
+      "type": "Validator",
+      "scriptHash": "d3bf6c9174e9d7a633c50b7290a431179c8d5a0de31f615f01c2f895"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidSTRIKE-USDCxMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d99b0f6281878e41f95f078ef2be8ca237873a6ca1ace73d5f4d0ddf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "NewBorrow",
+      "name": "LiqwidSTRIKE-USDCxNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "140e533bdb97f8869f98647c0aed22597b39f8007c3e53f3b831436d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidSTRIKE-USDCxLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "1cd63b7e0e0bdfdf83b786cdce56405ced005395ba295dc00eb682b8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidSTRIKE-USDCxLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "31e589803ad99e423a5affd73243fac9fe3359ce20f8d191a7aab112"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "STRIKE-USDCx",
+      "componentName": "QToken",
+      "name": "LiqwidSTRIKE-USDCxQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6907b42c607019522d93701d8bf4377e13e78a2dfcf17764118902fb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Action",
+      "name": "LiqwidUSDAAction",
+      "type": "Validator",
+      "scriptHash": "536fdafec178c3f649997ebf961065ffd1aef69f5935dde4e59446d9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Action",
+      "name": "LiqwidUSDANewAction",
+      "type": "Validator",
+      "scriptHash": "0264e44df001085f8a7efa45863fdbab54ddc759c0eaa96c282f7823"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDAAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "bebb904dd907ff87e023f33860f63a0f5c689490cc8331d095054ef0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDAAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "a2f6d5c754614e238d57b1705adb63bfb4618238a286372700d5e227"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDAAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "8f027606ab5d79d6aca53bdf91db725ad5be919351826ad8f756f20c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Batch",
+      "name": "LiqwidUSDABatch",
+      "type": "Validator",
+      "scriptHash": "0f8879cc6dac04758a399e0163794afab537d9b500f50be8451f5f4b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDABatchFinal",
+      "type": "Validator",
+      "scriptHash": "ec15c32dd207a23a3e4920492ffcf8aa45d6783dea18986fe68235ef"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDABorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "fc58c82ec174056145ac9ef20c22a00c77a55f3b6985d007cbff9221"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDACollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "713d6727de08f625448a05302758f6003557843a3ce2c26b69fd5a6c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDALiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "f8ce78ffa7b03cbca6e18cef4e6b65c6604e4b15754fe1fe65caddde"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Loan",
+      "name": "LiqwidUSDALoan",
+      "type": "Validator",
+      "scriptHash": "dd4657091fdb7e8fa8680b5a87ebb914c95056ba0523913a7cd2b081"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "Loan",
+      "name": "LiqwidUSDANewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "0c35b8e5c63b470ff7c8b4158ca0e13842eff42e58bd40215bfca871"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDAMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "63523a527d2eefce0415b61743ebdccef41f8aee09f96b74152f66fe"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDAMarketState",
+      "type": "Validator",
+      "scriptHash": "07de5eb4fdb9f6bd23c7bc3c588306f03d46c8c59ee980223132c87e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDAMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9330ff6f3d301a9abc1979cffd1465cd27f7563837a7d635f59f1aa2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDANewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "2472ba5bdcaaf36c28f2e495a0bf02014497c6fc0d78f86db2bcaf26"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDALoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "4e6b7ebb87c2f8eaa3ecaa1400f7dc49bf9e5c830435518aa0b96605"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDALoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "31792a19c55463c168f5830fb60f3048db472168ec9c02ca8afe6987"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDA",
+      "componentName": "QToken",
+      "name": "LiqwidUSDAQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "aa280c98c5b07fdfc8d7a93fb5ba84510b421388e4a18e16efa8eb5f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Action",
+      "name": "LiqwidUSDCAction",
+      "type": "Validator",
+      "scriptHash": "469772d2f93d70f92a4930fa608457392e58e480babf723ade7f9857"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Action",
+      "name": "LiqwidUSDCNewAction",
+      "type": "Validator",
+      "scriptHash": "8e7c7e727987a98e86908beff1afd514f0716985e85e1bb1d7949532"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDCAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "d9734dc3225ae877270e895d0ec77145a1dd0c826f207702ed837fbc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDCAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ff4ba0964ee3b4c6beb024a914f7b495125435a78b51a19649b58052"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDCAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "06527ef9fa190184f1f23cdf2bce2b92dd35a3c30892ecd3fb53b894"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Batch",
+      "name": "LiqwidUSDCBatch",
+      "type": "Validator",
+      "scriptHash": "6bb0851fa2bf40c6729c9d5df97a4201fdea2b3ae169ad5242bfe47a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDCBatchFinal",
+      "type": "Validator",
+      "scriptHash": "8c5a532c6332f85e6a927750e129aba954eec6ead209cd72d08f5a32"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDCBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "43c0cf8e50e96599534ee86ebc6fd5da0f8160c86dd8147aa67b73df"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDCCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a80b9489e5a8e5e5eadcc0c2856f46c5883f5c3d88676ce5559d8cdc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDCLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "f79c83ce02ecfee5cda7ca12188f14acc4bfe27fc90254f1d489124f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCLoan",
+      "type": "Validator",
+      "scriptHash": "4986257bffd6bc8bda0e56fd7796c5d125fe496deb3a00c5196068a3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "5d9bb00b6fce163121dac9e3c55b51c8105797d0bc093b66130ec6cd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDCMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "1847265fd9019209f837113ec1753a4b0de657987e66f89ebcee47e6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCMarketState",
+      "type": "Validator",
+      "scriptHash": "1579f32be90cf3825e7194568240dae5e0b87c7c40108ed7cdfe89f8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "191f768460713989c5ae88821f208522df7800f6b5572ca7905a7a60"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDCNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "109d3bc1b23ac267cf7c59f0d569ae2eff0b94338e6d6b3d51b92ba9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDCLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "5f2d3acf5e3f8f72d650c33aeacd59dd750f7d56006e1967a2f6c47d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDCLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "a17cebd19f2198f33d0ddd12d7b57ccc872590f57120fcca986efbac"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDC",
+      "componentName": "QToken",
+      "name": "LiqwidUSDCQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "aebcb6eaba17dea962008a9d693e39a3160b02b5b89b1c83e537c599"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Action",
+      "name": "LiqwidUSDCxAction",
+      "type": "Validator",
+      "scriptHash": "91ee36f9f0b5ff9846f3df0466964e93c9fe32565d958c6e80bcc45d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDCxAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "1557ed5cc20ca6148994f93ea9a0002455b24d92da558bf8cd4d4dc5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDCxAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "134e32c1a707ac2d9950263957d3133f6b46f7bf85141db32ec6586b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDCxAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "02790a1e33482988ac30ff8fac1979255556d7f3ff3c15404f3ae111"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Batch",
+      "name": "LiqwidUSDCxBatch",
+      "type": "Validator",
+      "scriptHash": "c0b2a5a9e2aa4b203d4ae80b04406142245220d7a430cf7c3dc340aa"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDCxBatchFinal",
+      "type": "Validator",
+      "scriptHash": "e713f31432992e14d5ff39b04bf16397c31cff86747f458d71e8c600"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDCxBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b3ca739215f1116d07b9b0a001a59e72328343151ebac7d2bfea9ff8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDCxCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7ba94a60896901ba28e95e33d4860db8eec0f84cf7d020da96f70c20"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDCxLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "e2cb5336ffe82fe06a6e2c81b3af69e497b01c9643515751173f97f9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCxLoan",
+      "type": "Validator",
+      "scriptHash": "caf9a22e10a109be7d17398fe7d3a2b638cab7afe201af7d4e315419"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCxNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "dae51337a0fdf712decff4aa43c29dbc5902eda76ea55a718a880f6e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDCxMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ed7343604efa609d3d2843fe0303afb84530733641694b0cb2f8c863"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCxMarketState",
+      "type": "Validator",
+      "scriptHash": "e8ded9661d13c56a711b1d82e8a10035a7cc713c5d4c94a9ba41b896"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCxMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d959ec7ee9b45b293ec2494304a5a5603bd9a7d46794d736f79813ce"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDCxNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "cdbf03da53f0905b39c6a132bff0d73f47dda2a487a6329373604ce0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDCxLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "09a271179891457650b4bf1b8cdc7aea56bbc61c5cf10e3350617b7c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDCxLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "b7239448b1a5be4467c46ed8e100fa55a966be1524d4c750ecd076f6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx",
+      "componentName": "QToken",
+      "name": "LiqwidUSDCxQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d3ff4ac09b0978b1ef7f830fd04d79c4246b53b8bcb08108f4ac5d98"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Action",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPAction",
+      "type": "Validator",
+      "scriptHash": "3af28bc931af80e31e1d94a02b05b6c7cfd4292747990bfdc06c73dd"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "271b7b9d7317a209265d37d9d8ccdb09970f0124500c033513a2dfde"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "491c30ed4defe0940955177b84195e5f3f9a7f559ed377b4346cfd71"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "9c36bbcecd4a56b130851c0359e390a168b00ac961fadda5e308887f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Batch",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPBatch",
+      "type": "Validator",
+      "scriptHash": "46cec3ff9f7c351bc85a36e86738333fa1b1d1a2afb15c2c62ebd4af"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPBatchFinal",
+      "type": "Validator",
+      "scriptHash": "1a45d6129040bbb9a7e14ad28fe63a53e4bfb45fee0adbf8a6f09058"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9fe59064edee1479d9d91aa12d91a05456f7c6acabf5687a136b36b2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a52723a20ba1bb73ea28f7525a8538cf60c6454d39a14641e6c1cdf5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "91e222a481cfc4ef1cfea1e2a47c746a4daaae12bb782142aa9a6c8d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPLoan",
+      "type": "Validator",
+      "scriptHash": "4f942f3528a79b5fca223ae4ac6228b2100273637d48920c792c359d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "Loan",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "374737cab31b0eaa892686a6530ff393f7088a1290c8a027ea7e3bce"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "28ff7f806e800ed167ac96f95622d2b03bd984a1038c014d9460838d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPMarketState",
+      "type": "Validator",
+      "scriptHash": "cf3128adeac108b4a1eb6c8b76cc67e8a218d5cc161cfcaaf2b445e0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "e15fd1cdbff134b5ddc3938abd777ae55c3555e85644f671989be6e4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "45204e64ebd1d05e8c983e74b1d6dbe0898dfbd2c7f34355d87b7b71"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "5101e65977da07409b8840dc9f3efefc2fc4986cf19c18947350d948"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d85b5afdf6161bdceeeec1eaf7fe601fd0494e2f19e29d95ddb07700"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+      "componentName": "QToken",
+      "name": "LiqwidUSDCx-USDM-SUNDAE-LP-STABLESWAPQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "2dbe1daa1522e5640331909fbe7458e082fe22cbc047e3c7575fcc8b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Action",
+      "name": "LiqwidUSDMAction",
+      "type": "Validator",
+      "scriptHash": "c33a552babbaa6141e2b14c94f15efe337dba3d12d7bf51f8251011f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Action",
+      "name": "LiqwidUSDMNewAction",
+      "type": "Validator",
+      "scriptHash": "9b1a315b8a529a76fa1801582fbb0043a9d52df354ca6c0a4e078fc6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDMAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "5f44048a0a9d304e434729d1be559096323ae8afae98ace237dff641"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDMAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "6e6f9011c09b228213a1887048e2f617e36f407212be7ae2b0f466e8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDMAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "10be8c0f9a957b5c28464312c4ce0870d555d5358aa3d939a28c0b0b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Batch",
+      "name": "LiqwidUSDMBatch",
+      "type": "Validator",
+      "scriptHash": "951fcbea064c62c3565d359455eda162c36aea141690b93ce1585772"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDMBatchFinal",
+      "type": "Validator",
+      "scriptHash": "7444634afd3b0c81ca45c2079cfcb3f14788c7410e06c84529b9fcc1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDMBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "3d2d5fd86b8a76b812a64c7e342e8e3ce234ed2b21a4ad407fd195f4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDMCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "e796b3f26966e9d1549970caa4fe9f33ae1c2989b173f5a7f12b3bf3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDMLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "dfc8b0ed99d862e2d5e332e069c46a3be0e9d121798a0d30e754f8d9"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Loan",
+      "name": "LiqwidUSDMLoan",
+      "type": "Validator",
+      "scriptHash": "4cbdb859b85e22319045d82cde85efb14779b4ee6a3ba5cfacf12eca"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "Loan",
+      "name": "LiqwidUSDMNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "e1d55cdc8255ba4a54e465d520dc6600a1900c83237bfec15d4bf682"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDMMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5ba0102094888ce634630f087b62339c9c9044d7d8dcce3aeeb75344"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDMMarketState",
+      "type": "Validator",
+      "scriptHash": "05a1efe8520e7bcc27e233db5f5b504b39a14e897b56420f33f8f13f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDMMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "dae2eab1798b6a6184c34e305faf7b04c325201f9a24535b98ddbf8b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDMNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "73a7b8a53c2e2b6a176b38a8eb8ac767c83222f2ca94d6635f5a3722"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDMLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3e9d0556fbe7360521bc44c6dd856bd17d3ae07ae352c8c2bb5275fc"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDMLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "8564592df86ca9e3abcadd5783e49e734cb9d3caa9d85d5d871c6e8a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM",
+      "componentName": "QToken",
+      "name": "LiqwidUSDMQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9e00df0615de0a7b121a7f961d43e23165b8e81b64786c6eb708d370"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Action",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEAction",
+      "type": "Validator",
+      "scriptHash": "4f025aa71b45d1a4622e2d431e8d5246f5a6f8967ec240ac01b70b89"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "58233cb71c782465a361fccbf959495685586e2605fee812ff7ae945"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "81fba8264070ddba2a2ae2c63c93eeaf713e66c0bbabb88c4eccc3f7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "cb7a9290228a759b3051db5f68c343f15092c2d6185bebcb0e6c6379"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Batch",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEBatch",
+      "type": "Validator",
+      "scriptHash": "e2ca041c8d89c25ec18f1ff1f2a1903486027547617cd5eb496fb71f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEBatchFinal",
+      "type": "Validator",
+      "scriptHash": "b5ba81aa17c9f5e2530a5e2b352406139d1e2b27eb40e009ea15c039"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d776820b7d3628f75f78afef6242e267eff0778b30d455a9b7e1a0fb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLECollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "498116e7f94977b7c8838f791d9a39ec15155cd40586177e1887d7ef"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLELiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "820403775874aba3cb5fa3650a4d96a6f208376ec667c12951cfe44f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Loan",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLELoan",
+      "type": "Validator",
+      "scriptHash": "e12e0945f72bf86fed6e555d2333186c26d84bb39a27e2d5709ed886"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "Loan",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLENewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "57396fd2d21f0b84ff16bc2c8e5a32ffddc722cedf6fef0e9f5309b1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "6f2d55e0e4c768297d2c5ea7509a114d2cea16f2e88ed538c7e6b308"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEMarketState",
+      "type": "Validator",
+      "scriptHash": "b4b42df4cb70c7442c8bd0d25b1aa4e5f2efcadf4499961a36d532b5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "40314e19034c542c950e4a7cb67af00133c3ab2b23d2f0b2476a17bb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLENewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "54a25d428942063740b6176cc4f7010ad2d7385123b45369d37e7ad5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLELoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "a13342868d1fb15e114a7fdb97059e05ef26892ec3b1ca04680e88ae"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLELoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "d77149c1f0ba515e78ce66b1ef9f09fe1c9e6c3118cfb44b46f1ef7c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDM-USDA-MINSWAP-LP-STABLE",
+      "componentName": "QToken",
+      "name": "LiqwidUSDM-USDA-MINSWAP-LP-STABLEQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "fcd2d1b8a86cd6dda70553f17e67ba36f8ab0090b5ffbbfa8b2bb8d1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Action",
+      "name": "LiqwidUSDTAction",
+      "type": "Validator",
+      "scriptHash": "187314a316d8584705690ff0e8f6d0e5fe0af7c2a1d0b997579bb45c"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Action",
+      "name": "LiqwidUSDTNewAction",
+      "type": "Validator",
+      "scriptHash": "84ef98a575be7be6cb6a2d5aa12ee56bb40b2ff03a3b1c163fc26d8a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "AnastasiaAuditAction",
+      "name": "LiqwidUSDTAnastasiaAuditAction",
+      "type": "Validator",
+      "scriptHash": "c086509c779aedb5e7827f26c80a92e9237f4b045e84ac20a7ca3435"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "AnastasiaAuditLoanBorrowStaking",
+      "name": "LiqwidUSDTAnastasiaAuditLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "ea5c6035bcfd83a92c04eff0008b6fd02efac6a20e0abdaebaee2808"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "AnastasiaAuditLoanLiquidationStaking",
+      "name": "LiqwidUSDTAnastasiaAuditLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "afd0199edce0910b2d4ba9cf97e373d342b8de8ca2a2b764538a4dae"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Batch",
+      "name": "LiqwidUSDTBatch",
+      "type": "Validator",
+      "scriptHash": "301d6ffb386dc89d2257968d6c8503f40a1cf81f12e778aa83b6a3f8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDTBatchFinal",
+      "type": "Validator",
+      "scriptHash": "bbbc2587e04ec1a574d6fc287ea57ef279dd9e970bebc36193ad50d2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDTBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "41c2316fd1586fc9fd4fbaca47306b4f2d79dc382d0d70c44436430b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDTCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "84b4d2685752e6e6ec7f21b89c7351659d93f30e64c828f8058d4cac"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDTLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "1e417fb7b39650586f5bcd5b1fce5afc3b0fd2d8feefa61866b39f7d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Loan",
+      "name": "LiqwidUSDTLoan",
+      "type": "Validator",
+      "scriptHash": "f2538e1341feef79c6314d571118a95a988a433a7e0dd70ba5cddb18"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "Loan",
+      "name": "LiqwidUSDTNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "3e0ca2b05cc18fb4427fb8d86425840ee699662efd743dd79fa0a2d3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDTMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "db176459c6cb8ff1d45e517da641021939c4e2999c834bc4c4547e0d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDTMarketState",
+      "type": "Validator",
+      "scriptHash": "2b48af6fd01c49d05ddee3badaba999c4cf8c41ca69c71928a3a6986"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDTMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "a5667ec9e9334143dd828e260e1270be265dd84e9e46e4333d76ea57"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDTNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "ff8754379f6e9c797f2e038828f44542e5223dbabf0fe2428a972b4b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDTLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "3c37a2331119a093caef1fdd3ae865e12d1d1f21afe2aad7506d3640"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDTLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "0c344baab281eae69ed1fd851046878ccfcb7804e5fbee45675ddaec"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDT",
+      "componentName": "QToken",
+      "name": "LiqwidUSDTQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7a4d45e6b4e6835c4cea3968f291fab3704949cfd2f2dc1997c4eeec"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Action",
+      "name": "LiqwidUSDrfAction",
+      "type": "Validator",
+      "scriptHash": "99bf8c3c9037c5ebee0e72e18e3d28fd5d0c382b4d9e6db4b31d518d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Batch",
+      "name": "LiqwidUSDrfBatch",
+      "type": "Validator",
+      "scriptHash": "532a2d8680d0e5d8045e0357b6b45d01f7b7dbc9e8bc0b314ef9c1f1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "BatchFinal",
+      "name": "LiqwidUSDrfBatchFinal",
+      "type": "Validator",
+      "scriptHash": "2bebb2d8e8e96953722f3f777ce7454ade1475844c871100542156a8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Borrow",
+      "name": "LiqwidUSDrfBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d693ac235571556baa269badab9e74c7ae6c4ea372573e2d2a7177a6"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "CollateralParams",
+      "name": "LiqwidUSDrfCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "cea081a0dd5658a7d4b81e8a7239520cae43e8bc2b306452b4bcc7a0"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Liquidation",
+      "name": "LiqwidUSDrfLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "54969af28bd1c0967645826c515b3efd96a94eda47e505557b17a43a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Loan",
+      "name": "LiqwidUSDrfLoan",
+      "type": "Validator",
+      "scriptHash": "5b9cdc9f1058fd2f3757789677740200ebd2cbfa06c6a8f211b7e128"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "Loan",
+      "name": "LiqwidUSDrfNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "c62d90f088202624e729f55329405d6445114e06aba90f31c1f7126f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "MarketParams",
+      "name": "LiqwidUSDrfMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "23e6f41c6ba77a20ac9806137424041ac93d4ceffee5377fdb54944b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDrfMarketState",
+      "type": "Validator",
+      "scriptHash": "5e5a13c9975582400de922cac0139b0bd0bf3e9d225c893078f46524"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "MarketState",
+      "name": "LiqwidUSDrfMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "62d34f15df19777fe0f7f90ce405b64aa3be21b15fae0d919028fafe"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "NewBorrow",
+      "name": "LiqwidUSDrfNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "13362216cb08c10be9aca0fb3f5b2927e7960b689746a0e70f592444"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidUSDrfLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "38329ef79166dc59870c435773b7f46818f562ccdf7395a49ef485b5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidUSDrfLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "e22cc35ebdc7dd370c68e99af0dc0493977dda2a29c3214c35836b7f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "USDrf",
+      "componentName": "QToken",
+      "name": "LiqwidUSDrfQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "9211fe2d28e6cfaf8b70b624857ce45c7f3b59a3fd3a7a63731fcd01"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Action",
+      "name": "LiqwidWMTAction",
+      "type": "Validator",
+      "scriptHash": "4811377ea9279acb8fff1d65a225e19c0eca68bb5c1d836a47584e67"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Action",
+      "name": "LiqwidWMTNewAction",
+      "type": "Validator",
+      "scriptHash": "13f0244cbfab0ec0b71b04b44561bccf3a0068fcf7b55ccd5a725218"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Batch",
+      "name": "LiqwidWMTBatch",
+      "type": "Validator",
+      "scriptHash": "5bf90fe45e0f130a36947ff5ef69b162c0e19c88284ef95e830ef080"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "BatchFinal",
+      "name": "LiqwidWMTBatchFinal",
+      "type": "Validator",
+      "scriptHash": "3eca957ef02d32f3ae24fe7a8a0b210522de7abe32282203eb32fe0a"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Borrow",
+      "name": "LiqwidWMTBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "989f82644660e5cfc77889cbab443ad0729171973fbf8da39aaafdb5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "CollateralParams",
+      "name": "LiqwidWMTCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "02fa62eaba4e762cbe455aaaf9399d71d4362a90e2176f7b2d4342c3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Liquidation",
+      "name": "LiqwidWMTLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "652b378a21deeb568dc6d338d8b26fd9c7c134d69d1ba713408573bb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Loan",
+      "name": "LiqwidWMTLoan",
+      "type": "Validator",
+      "scriptHash": "add1efe119a861bd883aaa8616437187d4b215425b8bbc8afdcd5610"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "Loan",
+      "name": "LiqwidWMTNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "63b4bdbf75254f205cc1ec1233a370cd58cfa6abb4e7a6867e2d3219"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "MarketParams",
+      "name": "LiqwidWMTMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ee73884453cf3c5788313ca0341f494f684c1c40bb3bc5c0df85be6d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "MarketState",
+      "name": "LiqwidWMTMarketState",
+      "type": "Validator",
+      "scriptHash": "f42f7a0c16e377a7313404e8880386a6f8e5725db39985d25757b6ba"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "MarketState",
+      "name": "LiqwidWMTMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "d8c6d5509d11856fe3c2cfc434e6f251f0ed6b0d54090b40656df6ae"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "NewBorrow",
+      "name": "LiqwidWMTNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "8aa51e818de054715289795ace343b05b2104243f8817bc31689cd80"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidWMTLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "261fc5fe1c25e25d81065a487b0b3ab67cc0440c1e2de3d76b7f5eb7"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidWMTLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "c1101b83255befc754ff629d12ff6e70bf8c05731ea26a08b1fec073"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "WMT",
+      "componentName": "QToken",
+      "name": "LiqwidWMTQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "f2636c8280e49e7ed7a7b1151341130989631b45a08d1b320f016981"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Action",
+      "name": "LiqwidsUSDrfAction",
+      "type": "Validator",
+      "scriptHash": "543740d898d0cda14f9e6e24800b311ce159a133e09a5b43e0dbae54"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Batch",
+      "name": "LiqwidsUSDrfBatch",
+      "type": "Validator",
+      "scriptHash": "490acbb3d0bb7067809960323079b6ad779c10aaa2e066e0898d1dcf"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "BatchFinal",
+      "name": "LiqwidsUSDrfBatchFinal",
+      "type": "Validator",
+      "scriptHash": "b9ce27789b862a79eae71c10cea37ba348c49a59315b82270a29b422"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Borrow",
+      "name": "LiqwidsUSDrfBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "7668ad11602afc77618a131852b3c6f7d5428cb7b36f9e02f82a254f"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "CollateralParams",
+      "name": "LiqwidsUSDrfCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "b87057ad5e1ebda3e7c6b081360683f436155bbfa9d86916ad03defe"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Liquidation",
+      "name": "LiqwidsUSDrfLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "7550f0d82b41620a2a17963bfd3577d8bcfa2910458e4869c823b4bb"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Loan",
+      "name": "LiqwidsUSDrfLoan",
+      "type": "Validator",
+      "scriptHash": "2175fabf180fae9fdff6725dea189c4689c4a27dcd0a4c59ff59faf3"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "Loan",
+      "name": "LiqwidsUSDrfNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "aa10a76055b05f2ee919860dc61b38acae343f8f81a56e57eaeea0c2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "MarketParams",
+      "name": "LiqwidsUSDrfMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "edd51f97e1da71067307d9d708120bcbfdaf02657e76f427e2d93bd5"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "MarketState",
+      "name": "LiqwidsUSDrfMarketState",
+      "type": "Validator",
+      "scriptHash": "b80ac637b92af8d0a8bb366e9cbd153ca3ebfdb7d1d209a7c0a75b34"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "MarketState",
+      "name": "LiqwidsUSDrfMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "5ebdbcb5c27cfef9c04e57e5c3d30022afb1f28ac05c7c4e245efa1d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "NewBorrow",
+      "name": "LiqwidsUSDrfNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "dac7f41b3f291c08e4b32236fb3f4d1268e97c5271e022fa6905bac1"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidsUSDrfLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "df7e3581884082fea821bec6dee8ea6657687955acfbe977d68bdc9b"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidsUSDrfLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "02de727103fd2d8a29bf7557416ec010140363a55e0d808c1a8a8e81"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf",
+      "componentName": "QToken",
+      "name": "LiqwidsUSDrfQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "ada59c0aedbbf4bce5b899c6faad2682464ddc943c7ec3b70180899e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Action",
+      "name": "LiqwidsUSDrf-USDCxAction",
+      "type": "Validator",
+      "scriptHash": "049e1669c5f2984f92785d5b540d972ffe204444afcf5eda196543c4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Batch",
+      "name": "LiqwidsUSDrf-USDCxBatch",
+      "type": "Validator",
+      "scriptHash": "d3069f1adee86b624a96833e21469ff741a29e996de1a091f68caf14"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "BatchFinal",
+      "name": "LiqwidsUSDrf-USDCxBatchFinal",
+      "type": "Validator",
+      "scriptHash": "1396c63063dea39e954405fb32feef296b42be76f57b09a787397b98"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Borrow",
+      "name": "LiqwidsUSDrf-USDCxBorrowToken",
+      "type": "MintingPolicy",
+      "scriptHash": "04613923bf1968cda018978d3c69125d0a7edd927db76e91a7f692d4"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "CollateralParams",
+      "name": "LiqwidsUSDrf-USDCxCollateralParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c383c8452d4c2224be75cc78bcef87461474894e6e19e3fb8c4d9376"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Liquidation",
+      "name": "LiqwidsUSDrf-USDCxLiquidation",
+      "type": "MintingPolicy",
+      "scriptHash": "83e42e9986526907da0fc56f0be0a68e5f310d7bd873391ff2b3a77d"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidsUSDrf-USDCxLoan",
+      "type": "Validator",
+      "scriptHash": "b25a1f4318b378d334a684f5c54fe821450f102c46c02665dcf58123"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "Loan",
+      "name": "LiqwidsUSDrf-USDCxNewLoanValidator",
+      "type": "Validator",
+      "scriptHash": "e4d38950ece507f25a8f28ff90c757773456dd022fc89455b4df3e9e"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "MarketParams",
+      "name": "LiqwidsUSDrf-USDCxMarketParamsToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0363bdae22942a2715af2c787b18cadf9bc37733662f960c624385f2"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidsUSDrf-USDCxMarketState",
+      "type": "Validator",
+      "scriptHash": "3429463efbc284ce2e409da6a666c209c0bfa5b06ac13b2a7344da18"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "MarketState",
+      "name": "LiqwidsUSDrf-USDCxMarketStateToken",
+      "type": "MintingPolicy",
+      "scriptHash": "037d0a01f547818ecc5bad52416ed759f573f8deb16b82d097309e90"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "NewBorrow",
+      "name": "LiqwidsUSDrf-USDCxNewLoanPolicy",
+      "type": "MintingPolicy",
+      "scriptHash": "6f638364e1bc73ffc4e1cf05a9dde29d2f6fd50eff6f30f131931ad8"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "NewLoanBorrowStaking",
+      "name": "LiqwidsUSDrf-USDCxLoanBorrowStaking",
+      "type": "StakeValidator",
+      "scriptHash": "73acd7d0c1e33bc44a07a7379f9a5f9b5255f06fce95dbf9e9b29b17"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "NewLoanLiquidationStaking",
+      "name": "LiqwidsUSDrf-USDCxLoanLiquidationStaking",
+      "type": "StakeValidator",
+      "scriptHash": "77d06c745129de45530e87bbc5f854e219b972a5b357857c765d6a12"
+    },
+    {
+      "tag": "liqwidMainnet",
+      "market": "sUSDrf-USDCx",
+      "componentName": "QToken",
+      "name": "LiqwidsUSDrf-USDCxQToken",
+      "type": "MintingPolicy",
+      "scriptHash": "c11c3484799f26af5f9b2692d1a6d93a69dd3b4c0a5e1b6fdf3a4cb2"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "0faa4f20b9d810205f89b42896e693ffc89c3ee4e307f4f0a4893e13"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "31415bb210164cf6b84d1b12537f0792d2912d156e0f1ed1d91c83ce"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "3ffeeefc63489a728d3b126c59d537d8ddcb56a1116704aaa3b8a90c"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "7dd5bab2fa79f087d1ea2f5bf58a9a5dfc3b09061032ec3cc372566e"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Action",
+      "name": "LiqwidAdaAction",
+      "type": "Validator",
+      "scriptHash": "800ca266a8f29a834dc8c4a9bc507cb3d9f4cd078934ddcc8ff97823"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Batch",
+      "name": "LiqwidAdaBatch",
+      "type": "Validator",
+      "scriptHash": "038e9126b0113b9c496c245b256abfc2962161d8ed2fe119564a3933"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Batch",
+      "name": "LiqwidAdaBatch",
+      "type": "Validator",
+      "scriptHash": "a3e56ea9d2db008038ce6fb32e500faef1523dcb042e5a637d633fc8"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "Ada",
+      "componentName": "Batch",
+      "name": "LiqwidAdaBatch",
+      "type": "Validator",
+      "scriptHash": "c0588460f21b1474de8f7621b3c90572ce05ee08e22b006bb2f21f64"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "DJED",
+      "componentName": "Action",
+      "name": "LiqwidDJEDAction",
+      "type": "Validator",
+      "scriptHash": "1a9cf06cd17107f521441065eb64567f49451c83f8fed5cd6c6bdf0d"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "DJED",
+      "componentName": "Action",
+      "name": "LiqwidDJEDAction",
+      "type": "Validator",
+      "scriptHash": "7bd80451bde142f4e9d9af436de303fb4c0aaf51d96b14a41e2e07de"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "DJED",
+      "componentName": "Action",
+      "name": "LiqwidDJEDAction",
+      "type": "Validator",
+      "scriptHash": "da11a50969a7f77225a9e9e2c86e43d391a69dd47f339a4fd830d165"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "DJED",
+      "componentName": "Batch",
+      "name": "LiqwidDJEDBatch",
+      "type": "Validator",
+      "scriptHash": "5d211d7259fc8fb6eae43875d369cd676dfe680c5fd89fd73c0b5491"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "DJED",
+      "componentName": "Batch",
+      "name": "LiqwidDJEDBatch",
+      "type": "Validator",
+      "scriptHash": "acee18e799d5b4e30046e2eaad1f75fc95997dd6ec37995f02670ccd"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "IUSD",
+      "componentName": "Action",
+      "name": "LiqwidIUSDAction",
+      "type": "Validator",
+      "scriptHash": "14386d24c827f3ce74bdf6c875e548d928e12036c145ebec14f04df5"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "IUSD",
+      "componentName": "Action",
+      "name": "LiqwidIUSDAction",
+      "type": "Validator",
+      "scriptHash": "21f07a4f016c05332a390494328968ab3127a4d638150f51a8874134"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "IUSD",
+      "componentName": "Action",
+      "name": "LiqwidIUSDAction",
+      "type": "Validator",
+      "scriptHash": "451e7db46cf0e46aacc15257b0af84510fe9da5bd7e28e4d37f31e8d"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "IUSD",
+      "componentName": "Batch",
+      "name": "LiqwidIUSDBatch",
+      "type": "Validator",
+      "scriptHash": "9392bfc154f465f6788192c0176feca44c4b43318585b246712629db"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "IUSD",
+      "componentName": "Batch",
+      "name": "LiqwidIUSDBatch",
+      "type": "Validator",
+      "scriptHash": "9ce90fdadd7089ebda384bf921521a1e7cb2e365dee681e0d3e2af0c"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "SHEN",
+      "componentName": "Action",
+      "name": "LiqwidSHENAction",
+      "type": "Validator",
+      "scriptHash": "1d1e863afcf2182c32eb5c83e11e8ffecdcb95216b6da7ed547f6149"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "SHEN",
+      "componentName": "Action",
+      "name": "LiqwidSHENAction",
+      "type": "Validator",
+      "scriptHash": "948711b192d0703ff4a1bc0d565e681f64b3027b0cae562765b0c584"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "SHEN",
+      "componentName": "Action",
+      "name": "LiqwidSHENAction",
+      "type": "Validator",
+      "scriptHash": "d63f64eb6daeb633fe63ec17818b563a806de8940a7e41c8e7c513c0"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "SHEN",
+      "componentName": "Batch",
+      "name": "LiqwidSHENBatch",
+      "type": "Validator",
+      "scriptHash": "6a0e34af4d51828a50c6f3d4b1610381de87f95d199a143efdcb8123"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "SHEN",
+      "componentName": "Batch",
+      "name": "LiqwidSHENBatch",
+      "type": "Validator",
+      "scriptHash": "866ec79823a71f803617c9cc76cfefbbd65b8dbd4a902dfa261f483a"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDC",
+      "componentName": "Action",
+      "name": "LiqwidUSDCAction",
+      "type": "Validator",
+      "scriptHash": "469772d2f93d70f92a4930fa608457392e58e480babf723ade7f9857"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDC",
+      "componentName": "Action",
+      "name": "LiqwidUSDCAction",
+      "type": "Validator",
+      "scriptHash": "b2effcce85662fbd52ea6517fcae417a9cd85db752f0f94c1c91a266"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDC",
+      "componentName": "Batch",
+      "name": "LiqwidUSDCBatch",
+      "type": "Validator",
+      "scriptHash": "6bb0851fa2bf40c6729c9d5df97a4201fdea2b3ae169ad5242bfe47a"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDT",
+      "componentName": "Action",
+      "name": "LiqwidUSDTAction",
+      "type": "Validator",
+      "scriptHash": "187314a316d8584705690ff0e8f6d0e5fe0af7c2a1d0b997579bb45c"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDT",
+      "componentName": "Action",
+      "name": "LiqwidUSDTAction",
+      "type": "Validator",
+      "scriptHash": "fe4ee3dc2ebe6d57cffda8f896ce93c56d094e26607d6823b1ddd3e8"
+    },
+    {
+      "tag": "liqwidMainnetLegacy",
+      "market": "USDT",
+      "componentName": "Batch",
+      "name": "LiqwidUSDTBatch",
+      "type": "Validator",
+      "scriptHash": "301d6ffb386dc89d2257968d6c8503f40a1cf81f12e778aa83b6a3f8"
+    },
+    {
+      "tag": "oracleMainnet",
+      "componentName": "HardcodedOracleValidator",
+      "name": "LiqwidHardcodedOracleValidator",
+      "type": "Validator",
+      "scriptHash": "38cb4955f3696ba0a27a3295a0b9af8a693057f0828e5709ca1b1c41"
+    },
+    {
+      "tag": "oracleMainnet",
+      "componentName": "Oracle",
+      "name": "LiqwidOracleToken",
+      "type": "MintingPolicy",
+      "scriptHash": "0fde77a0ea0833502b386d34e33d78f86c754bad309ee8bf008d7a9d"
+    },
+    {
+      "tag": "oracleMainnet",
+      "componentName": "Oracle",
+      "name": "LiqwidOracleValidator",
+      "type": "Validator",
+      "scriptHash": "21bd8c2e0df2fbe92137f78dbaba48f62308e52303049f0d628b6c4c"
+    },
+    {
+      "tag": "oracleMainnet",
+      "componentName": "OracleWithHardCaps",
+      "name": "LiqwidOracleWithHardCapsValidator",
+      "type": "Validator",
+      "scriptHash": "38af3730fecea148e9dfa30d3fcfff573d1ea8c8e31efe73471112a1"
+    }
+  ],
+  "other": {
+    "liqwidMainnetParams": {
+      "AGIX": {
+        "marketDecimal": 8,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "41474958"
+          },
+          "symbol": {
+            "unCurrencySymbol": "f43a62fdc3965df486de8a0d32fe800963589c41b38946602a0dc535"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "Ada": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": ""
+          },
+          "symbol": {
+            "unCurrencySymbol": ""
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "BTC": {
+        "marketDecimal": 8,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "425443"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "COPI": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "436f726e75636f70696173205b76696120436861696e506f72742e696f5d"
+          },
+          "symbol": {
+            "unCurrencySymbol": "b6a7467ea1deb012808ef4e87b5ff371e85f7142d7b356a40d9b42a0"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "DAI": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "444149"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "DJED": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "446a65644d6963726f555344"
+          },
+          "symbol": {
+            "unCurrencySymbol": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "ERG": {
+        "marketDecimal": 9,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "7273455247"
+          },
+          "symbol": {
+            "unCurrencySymbol": "04b95368393c821f180deee8229fbd941baaf9bd748ebcdbf7adbb14"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "ETH": {
+        "marketDecimal": 8,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "455448"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "EURC": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "45555243"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "IAG": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "494147"
+          },
+          "symbol": {
+            "unCurrencySymbol": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "IUSD": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "69555344"
+          },
+          "symbol": {
+            "unCurrencySymbol": "f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "LQ": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "4c51"
+          },
+          "symbol": {
+            "unCurrencySymbol": "da8c30857834c6ae7203935b89278c532b3995245295456f993e1d24"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "MIN": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "4d494e"
+          },
+          "symbol": {
+            "unCurrencySymbol": "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "NIGHT": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "4e49474854"
+          },
+          "symbol": {
+            "unCurrencySymbol": "0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "POL": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "4c51"
+          },
+          "symbol": {
+            "unCurrencySymbol": "da8c30857834c6ae7203935b89278c532b3995245295456f993e1d24"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "PYUSD": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5059555344"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "SHEN": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5368656e4d6963726f555344"
+          },
+          "symbol": {
+            "unCurrencySymbol": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "SNEK": {
+        "marketDecimal": 0,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "534e454b"
+          },
+          "symbol": {
+            "unCurrencySymbol": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "SNEK2": {
+        "marketDecimal": 0,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "534e454b"
+          },
+          "symbol": {
+            "unCurrencySymbol": "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "SNEK2-ADA": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": ""
+          },
+          "symbol": {
+            "unCurrencySymbol": ""
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "SNEK2-USDCx": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5553444378"
+          },
+          "symbol": {
+            "unCurrencySymbol": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "STRIKE": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "535452494b45"
+          },
+          "symbol": {
+            "unCurrencySymbol": "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "STRIKE-ADA": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": ""
+          },
+          "symbol": {
+            "unCurrencySymbol": ""
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "STRIKE-USDCx": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5553444378"
+          },
+          "symbol": {
+            "unCurrencySymbol": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDA": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "55534441"
+          },
+          "symbol": {
+            "unCurrencySymbol": "fe7c786ab321f41c654ef6c1af7b3250a613c24e4213e0425a7ae456"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDC": {
+        "marketDecimal": 8,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "55534443"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDCx": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5553444378"
+          },
+          "symbol": {
+            "unCurrencySymbol": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDCx-USDM-SUNDAE-LP-STABLESWAP": {
+        "marketDecimal": 0,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "0014df10d7c7a7db47ab71ef07f0aa65e6b0bcf9409977c183e85fe6f0a5feb6"
+          },
+          "symbol": {
+            "unCurrencySymbol": "4de79a0c17180030bff4c36825cb6e99caa007bc632f789561a26d56"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDM": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "0014df105553444d"
+          },
+          "symbol": {
+            "unCurrencySymbol": "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDM-USDA-MINSWAP-LP-STABLE": {
+        "marketDecimal": 0,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "5553444d2d555344412d534c50"
+          },
+          "symbol": {
+            "unCurrencySymbol": "5f0d38b3eb8fea72cd3cbdaa9594a74d0db79b5a27e85be5e9015bd6"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDT": {
+        "marketDecimal": 8,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "55534454"
+          },
+          "symbol": {
+            "unCurrencySymbol": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "USDrf": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "tag": "fixedToken",
+          "symbol": {
+            "unCurrencySymbol": "7d9e4a0ee1a3f5d5ff8159ea91a83310cf2795ee7a87170c7aea05ae"
+          },
+          "name": {
+            "unTokenName": "55534472"
+          }
+        }
+      },
+      "WMT": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "name": {
+            "unTokenName": "776f726c646d6f62696c65746f6b656e"
+          },
+          "symbol": {
+            "unCurrencySymbol": "1d7f33bd23d85e1a25d87d86fac4f199c3197a2f7afeb662a0f34e1e"
+          },
+          "tag": "fixedToken"
+        }
+      },
+      "sUSDrf": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "tag": "fixedToken",
+          "symbol": {
+            "unCurrencySymbol": "7d9e4a0ee1a3f5d5ff8159ea91a83310cf2795ee7a87170c7aea05ae"
+          },
+          "name": {
+            "unTokenName": "7355534472"
+          }
+        }
+      },
+      "sUSDrf-USDCx": {
+        "marketDecimal": 6,
+        "underlyingClass": {
+          "tag": "fixedToken",
+          "symbol": {
+            "unCurrencySymbol": "1f3aec8bfe7ea4fe14c5f121e2a92e301afe414147860d557cac7e34"
+          },
+          "name": {
+            "unTokenName": "5553444378"
+          }
+        }
+      }
+    }
+  },
+  "handKept": {
+    "paramCredential": "b575da974ec756ba2afdccdc07cbd1839acaf0a24c4f80afd81d3fb6",
+    "launchMarketStateValidators": {
+      "Ada": "0fd1b854729d2e29290d47fe2173319aae3c4c885a955dc203f72759",
+      "DJED": "63d65418f841e9901d5ee634cc07377cca2be7fb2b797e3f0e0d8334",
+      "IUSD": "9885c2bc619cb1e09d63c59eebef3c27e7b796cdca3ff89fdbfb4fa1",
+      "SHEN": "89ea1358d8147feb5ef1875fbad449f65719ced6102ce1600bf093a7"
+    }
+  }
+}

@@ -13,13 +13,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Union
 
-import cbor2  # type: ignore[import-not-found]
-from pycardano import Address
-from pycardano import ScriptHash
-from pycardano.exception import DecodingException
-from pycardano.exception import DeserializeException
-from pycardano.exception import InvalidAddressInputException
-
 from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
@@ -32,6 +25,8 @@ from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolManagerStat
 from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4PoolState
 from charli3_dendrite.lending.fluidtokens_v4.state import FluidV4RequestState
 from charli3_dendrite.lending.fluidtokens_v4.state import identity_name
+from charli3_dendrite.lending.units import DECODE_ERRORS
+from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
 
 FluidV4State = Union[
@@ -66,18 +61,6 @@ _STATE_CLASS: dict[EntityKind, type[FluidV4State]] = {
     EntityKind.LENDER_MANAGER: FluidV4LenderManagerState,
     EntityKind.LOCKED_BORROWER_MANAGER: FluidV4LockedBorrowerState,
 }
-
-# Everything a malformed record can raise while its datum is decoded. Truncated CBOR
-# raises cbor2's end-of-stream error, which is not a ValueError.
-DECODE_ERRORS = (
-    cbor2.CBORDecodeError,
-    DeserializeException,
-    ValueError,
-    TypeError,
-    KeyError,
-    IndexError,
-    AttributeError,
-)
 
 
 @dataclass(frozen=True)
@@ -136,28 +119,6 @@ def entity_selectors(
         )
         for kind, credential, policy in kinds
     }
-
-
-def script_credential(address: str) -> str | None:
-    """Payment script hash (hex) of a bech32 address; None for any other address.
-
-    Every V4 entity sits at a script credential, so a key-hash payment part (even one
-    whose bytes equal a V4 script hash) returns None, as does an unparseable address.
-    pycardano asserts key-hash sizes and decodes a bech32 Byron header as CBOR, so a
-    malformed address can also raise ``AssertionError`` or ``DeserializeException``.
-    """
-    try:
-        part = Address.decode(address).payment_part
-    except (
-        AssertionError,
-        DecodingException,
-        DeserializeException,
-        InvalidAddressInputException,
-        TypeError,
-        ValueError,
-    ):
-        return None
-    return part.payload.hex() if isinstance(part, ScriptHash) else None
 
 
 def parse_utxo(
