@@ -2,7 +2,8 @@
 
 Canonical-ordering index lookups (the Plutus script context sorts inputs and
 reference inputs by ``(tx_id, index)``), the reward (stake-script) address encoding,
-integer redeemers, and the ledger minimum-ADA of an output.
+integer redeemers, the ledger minimum-ADA of an output, and zero withdrawals merged
+into a builder that several legs contribute to.
 """
 
 from __future__ import annotations
@@ -12,22 +13,29 @@ from typing import TYPE_CHECKING
 from pycardano import Address
 from pycardano import Network
 from pycardano import RawPlutusData
+from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
+from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import Withdrawals
 from pycardano import min_lovelace
 
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.lending.transactions.infra import EvalContext
+from charli3_dendrite.lending.transactions.utxos import script_hash_of
+from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
     from pycardano import Datum
+    from pycardano import PlutusData
 
     from charli3_dendrite.lending.transactions.utxos import Utxo
 
 __all__ = [
+    "add_zero_withdrawal",
     "input_index",
     "min_ada",
     "out_ref_of",
@@ -111,3 +119,42 @@ def settled_min_ada(address: Address, assets: dict[str, int], datum: Datum) -> i
         if needed <= lovelace:
             return lovelace
         lovelace = needed
+
+
+def _reference_member(
+    tx_builder: TransactionBuilder,
+    tx_input: TransactionInput,
+) -> UTxO | TransactionInput | None:
+    """The builder's reference input at ``tx_input`` (a `UTxO` or bare input)."""
+    for member in tx_builder.reference_inputs:
+        member_input = member.input if isinstance(member, UTxO) else member
+        if member_input == tx_input:
+            return member
+    return None
+
+
+def add_zero_withdrawal(
+    tx_builder: TransactionBuilder,
+    *,
+    script_ref: Utxo,
+    redeemer: PlutusData | RawPlutusData,
+) -> None:
+    """Withdraw zero from the reward account of the script ``script_ref`` carries.
+
+    The script runs from ``script_ref`` as a reference input, typed by its recorded
+    language, with ``redeemer``. The withdrawal merges into those already on the
+    builder; when the account is already among them, nothing is added. When the
+    builder already references ``script_ref``'s out-ref, that reference input is
+    kept and no second one is added.
+    """
+    account = reward_address(script_hash_of(script_ref))
+    withdrawals = dict(tx_builder.withdrawals or {})
+    if account in withdrawals:
+        return
+    withdrawals[account] = 0
+    tx_builder.withdrawals = Withdrawals(withdrawals)
+    utxo = to_pycardano_utxo(script_ref)
+    existing = _reference_member(tx_builder, utxo.input)
+    tx_builder.add_withdrawal_script(utxo, Redeemer(redeemer))
+    if existing is not None and existing != utxo:
+        tx_builder.reference_inputs.discard(utxo)
