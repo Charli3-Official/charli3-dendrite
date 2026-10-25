@@ -4,9 +4,10 @@ The capture path (``*Snapshot.from_capture``) parses a recorded transaction; the
 helpers resolve the same building blocks from current chain state through the
 backend's dbsync ``db_query``: an output by its out-ref (with its typed reference
 script and, for an output without an inline datum, its datum hash) and the unspent
-outputs at a wallet address. ``allow_spent=True`` lets a caller resolve a historical
-(already consumed) output by its out-ref, which replays a captured transaction against
-live dbsync; live callers leave it ``False`` so only unspent outputs are returned.
+outputs at a wallet address (optionally only those holding one asset).
+``allow_spent=True`` lets a caller resolve a historical (already consumed) output by
+its out-ref, which replays a captured transaction against live dbsync; live callers
+leave it ``False`` so only unspent outputs are returned.
 
 Live resolution requires a dbsync-backed backend: ``db_query`` is a dbsync-only
 method, so a different backend raises a clear :class:`TypeError` rather than an opaque
@@ -20,6 +21,7 @@ from typing import Any
 
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -129,23 +131,44 @@ def resolve_utxo_by_outref(
     )
 
 
+# Keeps only the outputs holding the asset ``policy`` + ``name`` (hex).
+_HOLDS_ASSET = """
+             AND EXISTS (
+               SELECT 1
+               FROM ma_tx_out m
+               JOIN multi_asset ma ON ma.id = m.ident
+               WHERE m.tx_out_id = o.id
+                 AND ma.policy = decode(%(policy)s, 'hex')
+                 AND ma.name = decode(%(name)s, 'hex'))"""
+
+
 def resolve_funding(
     backend: AbstractBackend,
     address: str,
     *,
-    limit: int = 20,
+    limit: int | None = 20,
+    asset: str | None = None,
 ) -> list[Utxo]:
-    """Resolve the unspent UTxOs at ``address`` (most recent first, up to ``limit``)."""
+    """Resolve the unspent UTxOs at ``address`` (most recent first, up to ``limit``).
+
+    ``asset`` (a unit: the 56-hex policy, then the hex asset name) keeps only the
+    outputs holding it; ``limit=None`` reads every matching output.
+    """
+    args: dict[str, Any] = {"addr": address, "lim": limit}
+    holds = ""
+    if asset is not None:
+        holds = _HOLDS_ASSET
+        args.update(policy=asset[:POLICY_HEX_LEN], name=asset[POLICY_HEX_LEN:])
     rows = db_query_rows(
         backend,
-        """SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
+        f"""SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
            FROM tx_out o
            JOIN tx t ON t.id = o.tx_id
            JOIN address a ON a.id = o.address_id
            WHERE a.address = %(addr)s
-             AND o.consumed_by_tx_id IS NULL
+             AND o.consumed_by_tx_id IS NULL{holds}
            ORDER BY o.id DESC
-           LIMIT %(lim)s""",
-        {"addr": address, "lim": limit},
+           LIMIT %(lim)s""",  # noqa: S608 - a fixed clause, values are parameters
+        args,
     )
     return [resolve_utxo_by_outref(backend, r["tx_hash"], int(r["idx"])) for r in rows]
