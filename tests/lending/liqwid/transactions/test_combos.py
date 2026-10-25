@@ -19,8 +19,7 @@ from pycardano import TransactionBuilder
 from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.datums import decode_loan
-from charli3_dendrite.lending.liqwid.datums import encode_action_datum
-from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     RemoveAndRedeemSnapshot,
@@ -36,19 +35,17 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import CapExceededError
 from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
-from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
+from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_payout
 from charli3_dendrite.lending.liqwid.transactions.terms import supply_mint
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.errors import ValidityWindowError
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
-from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
-from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
-from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.transactions.backend import FixtureBackend
 from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.replay import assert_replays
@@ -463,175 +460,6 @@ def test_a_live_remove_and_redeem_paying_below_the_minimum_is_refused():
         )
 
 
-# --- same-market supply-and-borrow (Ada into Ada, qAda collateral) ---------------
-
-# Two captures read the same Ada MarketParams and MarketState and spend two
-# different Ada action UTxOs: the open borrows Ada, the redeem runs the qAda
-# policy.
-SAME_MARKET_BASE = "open_single"
-SAME_MARKET_OTHER = "redeem_ada"
-ADA_SUPPLY = 1_000_000_000
-ADA_BORROW = 100_000_000
-
-
-def _ada_cparams_for_qada():
-    """The live Ada CollateralParams record of qAda (the wash-borrow record)."""
-    ada = default_deployment().market_by_name("Ada")
-    (info,) = [
-        record.info
-        for _, record in parsed_records("collateral_params", live=True)
-        if record.market_id == ada.market_id
-        and getattr(record.datum, "collateral", None) == QADA
-        and not record.datum.policy_wide
-    ]
-    return info
-
-
-def _action_input(label):
-    ada = default_deployment().market_by_name("Ada")
-    (action,) = CapturedTx.of(fixture(label)).action_inputs(ada)
-    return action
-
-
-def _with_principal(action: ActionUtxo, principal: int):
-    """``action``'s UTxO with ``principal`` pending on its record."""
-    datum = dataclasses.replace(action.datum, principal_delta=principal)
-    return dataclasses.replace(action.utxo, datum=encode_action_datum(datum).hex())
-
-
-def _same_market_backend(*, heavy: str | None = None, principal: int = 0):
-    """Ada records, scripts and feeds, two live Ada action UTxOs and a wallet.
-
-    ``heavy`` names the action UTxO (by out-ref) given ``principal`` pending.
-    """
-    base = fixture(SAME_MARKET_BASE)
-    other = fixture(SAME_MARKET_OTHER)
-    actions = [_action_input(SAME_MARKET_BASE), _action_input(SAME_MARKET_OTHER)]
-    utxos = [
-        _with_principal(a, principal) if a.out_ref == heavy else a.utxo for a in actions
-    ]
-    refs = [utxo_from_dict(u) for u in base["ref_inputs"]]
-    qtoken_script = [
-        u
-        for u in (utxo_from_dict(r) for r in other["ref_inputs"])
-        if u.ref_script and u.out_ref not in {r.out_ref for r in refs}
-    ]
-    scripts = [u for u in refs if u.ref_script] + qtoken_script
-    held = {u.out_ref for u in scripts}
-    stand_ins = [u for u in _reference_utxos() if u.out_ref not in held]
-    records = [u for u in refs if u.datum and not u.ref_script] + utxos
-    return FixtureBackend(
-        records=[*(utxo_to_info(u) for u in records), _ada_cparams_for_qada()],
-        utxos=[*scripts, *stand_ins],
-        tip_time=base["block_time"],
-    )
-
-
-def _wallet():
-    base = CapturedTx.of(fixture(SAME_MARKET_BASE))
-    return [u for u in base.inputs if not u.datum]
-
-
-def _same_market(backend, **kwargs):
-    wallet = _wallet()
-    return SupplyAndBorrowSnapshot.from_backend(
-        backend,
-        supply_market="Ada",
-        borrow_market="Ada",
-        owner_address=wallet[0].address,
-        supply_amount=ADA_SUPPLY,
-        borrow_amount=ADA_BORROW,
-        funding=wallet,
-        **kwargs,
-    )
-
-
-def test_a_same_market_supply_and_borrow_spends_two_action_utxos(deployment_hashes):
-    for seed in range(4):
-        snapshot = _same_market(_same_market_backend(), rng=random.Random(seed))
-        supply, borrow = snapshot.supply, snapshot.borrow
-        assert supply.action.out_ref != borrow.action.out_ref
-        assert {supply.action.out_ref, borrow.action.out_ref} == {
-            _action_input(SAME_MARKET_BASE).out_ref,
-            _action_input(SAME_MARKET_OTHER).out_ref,
-        }
-    assert borrow.collateral == {QADA: supply.qtokens}
-    slot = block_slot(fixture(SAME_MARKET_BASE))
-    built = build(build_supply_and_borrow, snapshot, slot=slot)
-    assert len([r for r in redeemers(built) if r[0] == "spend"]) == 2
-    capture = CapturedTx.of(fixture(SAME_MARKET_BASE))
-    ada = default_deployment().market_by_name("Ada")
-    records = capture.market_records(ada)
-    refs = {f"{h}#{i}" for h, i in reference_inputs(built)}
-    states = [r for r in refs if r == records.state.out_ref]
-    assert states == [records.state.out_ref]
-    feeds = [f for f in capture.feeds if f.out_ref in refs]
-    assert [f.asset_unit for f in feeds] == ["lovelace"]
-    # One action script, the qAda and loan-token policies, the borrow staking
-    # script, the MarketParams and MarketState, qAda's CollateralParams and the
-    # Ada feed.
-    assert len(refs) == 8
-    assert mints(built) == {
-        (QADA, supply.qtokens),
-        (ada.new_borrow_policy + "01", 1),
-    }
-
-
-def test_a_same_market_pin_of_one_action_utxo_for_both_legs_is_refused(
-    deployment_hashes,
-):
-    pin = _action_input(SAME_MARKET_BASE).out_ref
-    with pytest.raises(ValueError, match="two different action UTxOs"):
-        _same_market(_same_market_backend(), action_utxos=(pin, pin))
-
-
-def test_a_same_market_pin_of_the_borrow_legs_action_utxo_leaves_the_supply_the_other(
-    deployment_hashes,
-):
-    pin = _action_input(SAME_MARKET_BASE).out_ref
-    other = _action_input(SAME_MARKET_OTHER).out_ref
-    for seed in range(8):
-        snapshot = _same_market(
-            _same_market_backend(),
-            action_utxos=(None, pin),
-            rng=random.Random(seed),
-        )
-        assert snapshot.supply.action.out_ref == other
-        assert snapshot.borrow.action.out_ref == pin
-
-
-def test_the_borrow_cap_is_checked_on_the_borrow_legs_action_utxo(deployment_hashes):
-    # One action UTxO carries enough pending principal to pass the borrow cap; the
-    # supply may spend it (a supply checks no borrow cap) but the borrow may not.
-    heavy = _action_input(SAME_MARKET_OTHER).out_ref
-    light = _action_input(SAME_MARKET_BASE).out_ref
-    principal = 10**16
-    backend = _same_market_backend(heavy=heavy, principal=principal)
-    with pytest.raises(CapExceededError) as caught:
-        _same_market(backend, action_utxos=(light, None))
-    assert caught.value.cap == "borrow"
-    snapshot = _same_market(backend, action_utxos=(heavy, None))
-    assert snapshot.borrow.action.out_ref == light
-    slot = block_slot(fixture(SAME_MARKET_BASE))
-    build(build_supply_and_borrow, snapshot, slot=slot)
-    # The build checks the borrow leg's UTxO too: swapping the legs' choices fails.
-    swapped = dataclasses.replace(
-        snapshot,
-        supply=dataclasses.replace(snapshot.supply, action=snapshot.borrow.action),
-        borrow=dataclasses.replace(snapshot.borrow, action=snapshot.supply.action),
-    )
-    with pytest.raises(CapExceededError):
-        build(build_supply_and_borrow, swapped, slot=slot)
-
-
-def test_a_same_market_supply_and_borrow_stashes_the_funding_once(
-    deployment_hashes,
-):
-    snapshot = _same_market(_same_market_backend(), rng=random.Random(0))
-    build(build_supply_and_borrow, snapshot, slot=block_slot(fixture(SAME_MARKET_BASE)))
-    assert snapshot.additional_utxo() == [ogmios_entry(u) for u in _wallet()]
-
-
 def test_a_supply_and_borrow_over_the_borrow_cap_reads_the_params_borrow_cap():
     fix, snapshot = _supply_and_borrow("supply_and_borrow_ada_night")
     snapshot.borrow = with_params(snapshot.borrow, borrow_cap=(0, 1))
@@ -639,33 +467,75 @@ def test_a_supply_and_borrow_over_the_borrow_cap_reads_the_params_borrow_cap():
         _build(build_supply_and_borrow, snapshot, fix)
 
 
-def _another(record):
-    """``record`` at the next output index of its transaction."""
-    index = record.info.tx_index + 1
-    return dataclasses.replace(
-        record,
-        out_ref=f"{record.info.tx_hash}#{index}",
-        info=record.info.model_copy(update={"tx_index": index}),
-    )
+# --- one market --------------------------------------------------------------------
+
+# One transaction spends at most one action UTxO of a market: the scripts refuse a
+# supply-and-borrow on one market and a remove-and-redeem of the loan market's own
+# qTokens (the Ogmios gates record both refusals).
 
 
 @pytest.mark.parametrize(
-    ("field", "kind"),
-    [("params", "MarketParams"), ("state", "MarketState")],
+    "action_utxos",
+    [(None, None), ("aa" * 32 + "#0", "bb" * 32 + "#0")],
+    ids=["chosen", "pinned"],
 )
-def test_same_market_legs_reading_two_records_of_one_kind_are_refused(
-    deployment_hashes,
-    field,
-    kind,
-):
-    snapshot = _same_market(_same_market_backend(), rng=random.Random(0))
-    supply = snapshot.supply
-    records = dataclasses.replace(
-        supply.records,
-        **{field: _another(getattr(supply.records, field))},
-    )
-    snapshot.supply = dataclasses.replace(supply, records=records)
+def test_a_supply_and_borrow_on_one_market_is_refused_before_any_read(action_utxos):
+    backend = FixtureBackend()
+    with pytest.raises(UnsupportedMarketError) as raised:
+        SupplyAndBorrowSnapshot.from_backend(
+            backend,
+            supply_market="Ada",
+            borrow_market="Ada",
+            owner_address=SupplySnapshot.from_capture(
+                fixture("supply_ada"),
+            ).owner_address,
+            supply_amount=1_000_000_000,
+            borrow_amount=100_000_000,
+            action_utxos=action_utxos,
+        )
+    assert raised.value.market == "Ada"
+    assert "two markets" in raised.value.reason
+    assert backend.calls == backend.queries == []
+
+
+def test_a_built_supply_and_borrow_on_one_market_is_refused():
+    # A supply to Ada and an open on Ada, each a captured leg of its own.
+    supply = SupplySnapshot.from_capture(fixture("supply_ada"))
+    borrow = BorrowSnapshot.from_capture(fixture("open_single"))
+    assert supply.market.market_id == borrow.market.market_id
+    borrow.collateral = {supply.market.qtoken_policy: supply.qtokens}
+    snapshot = SupplyAndBorrowSnapshot(supply=supply, borrow=borrow)
     tx_builder = _empty_builder()
-    with pytest.raises(ValueError, match=f"two {kind} records of market Ada"):
+    with pytest.raises(UnsupportedMarketError, match="two markets"):
         build_supply_and_borrow(tx_builder, snapshot=snapshot)
+    assert not tx_builder.inputs
+
+
+def test_a_remove_and_redeem_of_the_loan_markets_qtoken_is_refused_after_the_loan():
+    fix, captured = _remove_and_redeem("remove_and_redeem_night")
+    night = captured.collateral.market
+    backend = capture_backend(fix)
+    with pytest.raises(UnsupportedMarketError) as raised:
+        RemoveAndRedeemSnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.collateral.loan.utxo.out_ref),
+            owner_address=captured.collateral.owner_address,
+            qtoken_unit=night.qtoken_policy,
+            qtokens=1,
+            funding=captured.collateral.funding,
+        )
+    assert raised.value.market == night.name
+    assert "another market" in raised.value.reason
+    # Only the loan is read: no market record and no wallet UTxO.
+    assert backend.calls == []
+    assert not [q for q in backend.queries if "addr" in q]
+
+
+def test_a_built_remove_and_redeem_of_the_loan_markets_qtoken_is_refused():
+    _, snapshot = _remove_and_redeem("remove_and_redeem_night")
+    night = snapshot.collateral.market
+    snapshot.redeem = dataclasses.replace(snapshot.redeem, market=night)
+    tx_builder = _empty_builder()
+    with pytest.raises(UnsupportedMarketError, match="another market"):
+        build_remove_and_redeem(tx_builder, snapshot=snapshot)
     assert not tx_builder.inputs

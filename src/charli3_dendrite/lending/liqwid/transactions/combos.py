@@ -9,12 +9,18 @@ Each combination is the exact union of two legs built by their own flows:
   change) and redeems them on market X (spending one of X's action UTxOs), burning
   them straight out of the loan: no wallet input or output holds them.
 
+X and Y are two different markets. One transaction spends at most one action UTxO
+of a market: the Liqwid scripts refuse a supply-and-borrow whose legs spend two
+action UTxOs of one market, and a remove-and-redeem whose redeem spends an action
+UTxO of the loan's own market next to the loan's collateral change. Both
+combinations refuse one market for X and Y with `UnsupportedMarketError`.
+
 The action-only leg is added first and the loan leg last, so the loan flow's end
 (health set and check, owner signer, borrow staking withdrawal, reference hygiene)
 covers the whole transaction. The funding is spent and stashed once, on the
 combination's snapshot; the references merge by out-ref (the first kept), so a
-market both legs read is referenced once. Both legs must read the same MarketState
-of such a market (and, within one market, the same MarketParams).
+market both legs read is referenced once. The action leg's market, when it is a
+collateral market of the loan, must be read through one MarketState by both legs.
 
 The validity window ends by the batch deadline ``s8 + p[3]`` of each market whose
 action UTxO the transaction spends: a supply-and-borrow's by both markets' (the
@@ -22,8 +28,6 @@ supply leg refuses a bound past its market's, the open caps its bound at the
 borrow market's), a remove-and-redeem's by the redeemed market's alone. The
 collateral change of a remove-and-redeem spends no action UTxO and its loan
 validator checks no deadline, so the loan market's deadline does not bound it.
-When X and Y are the same market, the two legs spend two different action UTxOs
-of it, each checked against its own caps.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ from charli3_dendrite.lending.liqwid.transactions.borrow import _build_borrow
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.collateral import CollateralSnapshot
 from charli3_dendrite.lending.liqwid.transactions.collateral import _build_collateral
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.supply import RedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import _build_redeem
@@ -57,6 +62,7 @@ if TYPE_CHECKING:
     import random
 
     from charli3_dendrite.backend.backend_base import AbstractBackend
+    from charli3_dendrite.lending.liqwid.deployment import MarketComponents
     from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
     from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
     from charli3_dendrite.lending.transactions.utxos import Utxo
@@ -116,12 +122,24 @@ class _CapturedWallet:
         )
 
 
+# Why a combination cannot act on one market (`UnsupportedMarketError` reasons).
+_ONE_MARKET_SUPPLY_AND_BORROW = (
+    "a supply-and-borrow needs two markets: the scripts refuse two action UTxOs "
+    "of one market in one transaction"
+)
+_ONE_MARKET_REMOVE_AND_REDEEM = (
+    "a remove-and-redeem needs a qToken of another market than the loan's: the "
+    "scripts refuse the market's action UTxO next to a collateral change of its "
+    "loan"
+)
+
+
 # --- snapshots ---------------------------------------------------------------
 
 
 @dataclass
 class SupplyAndBorrowSnapshot(PoolActionSnapshot):
-    """A supply to one market and an open on another (or the same) market.
+    """A supply to one market and an open on another market.
 
     The legs carry the deployment and the datum style: a combination has no
     ``deployment`` or ``indefinite`` of its own, which could disagree with its
@@ -183,37 +201,28 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
         ``supply_market``; the open as `BorrowSnapshot.from_backend` on
         ``borrow_market`` against the qTokens the supply mints, funded by the same
         wallet UTxOs. ``action_utxos`` pins the supply's and the open's action
-        UTxOs. When the two markets are the same, the open's choice also excludes
-        the supply's action UTxO, and the supply's choice excludes the open's
-        pinned one. Both legs end at the earlier of their bounds.
+        UTxOs. Both legs end at the earlier of their bounds.
 
         Raises:
-            ValueError: The same market's action UTxO is pinned for both legs.
             KeyError: No market has one of the names.
+            UnsupportedMarketError: The two names are one market (refused before
+                anything is read).
             LiqwidBuildError: As the legs' ``from_backend``.
         """
         active = resolve_deployment(deployment)
-        same = (
-            active.market_by_name(supply_market).market_id
-            == active.market_by_name(borrow_market).market_id
+        _refuse_one_market(
+            active.market_by_name(supply_market),
+            active.market_by_name(borrow_market),
+            _ONE_MARKET_SUPPLY_AND_BORROW,
         )
         supply_pin, borrow_pin = action_utxos
-        if same and supply_pin is not None and supply_pin == borrow_pin:
-            msg = (
-                f"a supply-and-borrow on one market spends two different action "
-                f"UTxOs, not {supply_pin} twice"
-            )
-            raise ValueError(msg)
-        supply_exclude = (
-            {*exclude, borrow_pin} if same and borrow_pin is not None else exclude
-        )
         supply = SupplySnapshot.from_backend(
             backend,
             market=supply_market,
             owner_address=owner_address,
             amount=supply_amount,
             action_utxo=supply_pin,
-            exclude=supply_exclude,
+            exclude=exclude,
             valid_to_ms=valid_to_ms,
             funding=funding,
             rng=rng,
@@ -226,7 +235,7 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
             amount=borrow_amount,
             collateral={supply.market.qtoken_policy: supply.qtokens},
             action_utxo=borrow_pin,
-            exclude={*exclude, supply.action.out_ref} if same else exclude,
+            exclude=exclude,
             valid_to_ms=valid_to_ms,
             funding=supply.funding,
             rng=rng,
@@ -298,18 +307,21 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
 
         The collateral leg is `CollateralSnapshot.from_backend` on the loan at
         ``loan_utxo`` with ``qtokens`` fewer of ``qtoken_unit``; the redeem leg
-        burns them on the market whose qToken ``qtoken_unit`` is, paying ``floor(Q
-        * s9)`` from the pinned ``action_utxo`` or a random one (by ``rng``) not in
-        ``exclude``. The wallet UTxOs at ``owner_address`` fund both legs unless
-        ``funding`` is given. The upper bound is ``valid_to_ms`` or the default
-        window, capped at the redeemed market's batch deadline; the loan market's
-        deadline does not bound the transaction. ``allow_spent`` resolves an
-        already consumed loan (a captured replay).
+        burns them on the market whose qToken ``qtoken_unit`` is, which must not be
+        the loan's market, paying ``floor(Q * s9)`` from the pinned ``action_utxo``
+        or a random one (by ``rng``) not in ``exclude``. The wallet UTxOs at
+        ``owner_address`` fund both legs unless ``funding`` is given. The upper
+        bound is ``valid_to_ms`` or the default window, capped at the redeemed
+        market's batch deadline; the loan market's deadline does not bound the
+        transaction. ``allow_spent`` resolves an already consumed loan (a captured
+        replay).
 
         Raises:
             ValueError: ``qtoken_unit`` is no Liqwid market's qToken, or the loan
                 holds fewer than ``qtokens`` (or ``qtokens`` is not positive).
             UnsupportedLoanError: The loan is legacy-generation or no loan.
+            UnsupportedMarketError: ``qtoken_unit`` is the qToken of the loan's
+                market (refused once the loan is read, before anything else).
             MinValueError: The payout is below the redeemed market's minimum.
             MarketAwaitingBatchError: The redeemed market's batch deadline is too
                 close.
@@ -333,6 +345,7 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
             deployment=deployment,
             allow_spent=allow_spent,
         )
+        _refuse_one_market(market, loan.market, _ONE_MARKET_REMOVE_AND_REDEEM)
         held = loan.collateral.get(qtoken_unit, 0)
         if not 0 < qtokens <= held:
             msg = (
@@ -380,9 +393,10 @@ def build_supply_and_borrow(
     amount and the change land in its change output), signs and submits.
 
     Raises:
+        UnsupportedMarketError: Both legs act on one market.
         ValueError: The loan's collateral is not exactly the qTokens the supply
             mints, both legs spend one action UTxO, or the legs read different
-            records of one market.
+            MarketState records of the supply market.
         LiqwidBuildError, ValidityWindowError: As `build_supply` and
             `build_borrow`.
     """
@@ -400,8 +414,10 @@ def build_remove_and_redeem(
     in its change output), signs and submits.
 
     Raises:
+        UnsupportedMarketError: The redeemed qTokens are the loan market's own.
         ValueError: The collateral change does not take out exactly the qTokens
-            the redeem burns, or the legs read different records of one market.
+            the redeem burns, or the legs read different MarketState records of
+            the redeemed market.
         LiqwidBuildError, ValidityWindowError: As `build_redeem` and
             `build_collateral`.
     """
@@ -416,6 +432,7 @@ def _build_supply_and_borrow(
 ) -> None:
     """`build_supply_and_borrow`, stashing the funding on ``stash``."""
     supply, borrow = snapshot.supply, snapshot.borrow
+    _refuse_one_market(supply.market, borrow.market, _ONE_MARKET_SUPPLY_AND_BORROW)
     minted = {supply.market.qtoken_policy: supply.qtokens}
     if held_collateral(borrow.collateral) != minted:
         msg = (
@@ -429,7 +446,7 @@ def _build_supply_and_borrow(
             f"{supply.action.out_ref} twice"
         )
         raise ValueError(msg)
-    _check_shared_records(supply.records, borrow.records, borrow.health)
+    _check_shared_state(supply.records, borrow.health)
     _build_supply(tx_builder, supply, stash=stash)
     _build_borrow(tx_builder, borrow, stash=stash)
 
@@ -442,6 +459,7 @@ def _build_remove_and_redeem(
 ) -> None:
     """`build_remove_and_redeem`, stashing the funding on ``stash``."""
     collateral, redeem = snapshot.collateral, snapshot.redeem
+    _refuse_one_market(redeem.market, collateral.market, _ONE_MARKET_REMOVE_AND_REDEEM)
     unit = redeem.market.qtoken_policy
     removed = collateral.loan.collateral.get(unit, 0) - collateral.collateral.get(
         unit,
@@ -453,40 +471,44 @@ def _build_remove_and_redeem(
             f"burns {redeem.qtokens}"
         )
         raise ValueError(msg)
-    _check_shared_records(redeem.records, collateral.records, collateral.health)
+    _check_shared_state(redeem.records, collateral.health)
     _build_redeem(tx_builder, redeem, stash=stash)
     _build_collateral(tx_builder, collateral, stash=stash)
 
 
-def _check_shared_records(
-    action_market: MarketRecords,
-    loan_market: MarketRecords,
-    health: HealthInputs | None,
+def _refuse_one_market(
+    action_market: MarketComponents,
+    loan_market: MarketComponents,
+    reason: str,
 ) -> None:
-    """Refuse two legs that read different records of one market.
-
-    The action leg reads ``action_market``'s MarketParams and MarketState; the
-    loan leg reads ``loan_market``'s and, through ``health``, the MarketState of
-    each collateral market. A market both read must be read through one UTxO of
-    each record, which the merged references then hold once.
+    """Refuse a combination whose action leg and loan leg act on one market.
 
     Raises:
-        ValueError: The legs read two MarketParams or two MarketState UTxOs of one
-            market.
+        UnsupportedMarketError: ``action_market`` is ``loan_market``.
+    """
+    if action_market.market_id == loan_market.market_id:
+        raise UnsupportedMarketError(action_market.name, reason)
+
+
+def _check_shared_state(
+    action_market: MarketRecords,
+    health: HealthInputs | None,
+) -> None:
+    """Refuse two legs that read different MarketState records of one market.
+
+    The action leg reads ``action_market``'s MarketState; the loan leg reads,
+    through ``health``, the MarketState of each collateral market other than its
+    own. The action leg's market, a collateral market of the loan, must be read
+    through one MarketState UTxO, which the merged references then hold once.
+
+    Raises:
+        ValueError: The legs read two MarketState UTxOs of the action leg's market.
     """
     market = action_market.market
-    if market.market_id == loan_market.market.market_id:
-        pairs = [
-            ("MarketParams", action_market.params, loan_market.params),
-            ("MarketState", action_market.state, loan_market.state),
-        ]
-    else:
-        state = None if health is None else health.states.get(market.market_id)
-        pairs = [] if state is None else [("MarketState", action_market.state, state)]
-    for kind, mine, theirs in pairs:
-        if mine.out_ref != theirs.out_ref:
-            msg = (
-                f"the legs read two {kind} records of market {market.name}: "
-                f"{mine.out_ref} and {theirs.out_ref}"
-            )
-            raise ValueError(msg)
+    state = None if health is None else health.states.get(market.market_id)
+    if state is not None and state.out_ref != action_market.state.out_ref:
+        msg = (
+            f"the legs read two MarketState records of market {market.name}: "
+            f"{action_market.state.out_ref} and {state.out_ref}"
+        )
+        raise ValueError(msg)

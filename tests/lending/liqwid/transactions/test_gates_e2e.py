@@ -27,11 +27,14 @@ from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.transactions import legs
 from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
+from charli3_dendrite.lending.liqwid.transactions.borrow import _build_borrow
 from charli3_dendrite.lending.liqwid.transactions.borrow import build_borrow
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import IncreaseSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import build_increase
 from charli3_dendrite.lending.liqwid.transactions.builder import LiqwidTxBuilder
+from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.collateral import CollateralSnapshot
+from charli3_dendrite.lending.liqwid.transactions.collateral import _build_collateral
 from charli3_dendrite.lending.liqwid.transactions.collateral import build_collateral
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     RemoveAndRedeemSnapshot,
@@ -50,6 +53,8 @@ from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
 from charli3_dendrite.lending.liqwid.transactions.supply import RedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
+from charli3_dendrite.lending.liqwid.transactions.supply import _build_redeem
+from charli3_dendrite.lending.liqwid.transactions.supply import _build_supply
 from charli3_dendrite.lending.liqwid.transactions.supply import build_redeem
 from charli3_dendrite.lending.liqwid.transactions.supply import build_supply
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_burn_for
@@ -59,8 +64,12 @@ from charli3_dendrite.lending.transactions.base import ActionParams
 from charli3_dendrite.lending.transactions.base import LendingAction
 from charli3_dendrite.lending.transactions.errors import OgmiosEvaluationError
 from charli3_dendrite.lending.transactions.utxos import Utxo
+from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
+from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import out_ref_text
+from tests.lending.liqwid.records import parsed_records
+from tests.lending.liqwid.transactions.backend import FixtureBackend
 from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.replay import Mutation
 from tests.lending.liqwid.transactions.replay import add_reference
@@ -82,6 +91,10 @@ from tests.lending.liqwid.transactions.replay import shift_loan_datum
 from tests.lending.liqwid.transactions.replay import shift_value
 from tests.lending.liqwid.transactions.replay import synthetic_utxo
 from tests.lending.liqwid.transactions.replay import with_params
+from tests.lending.liqwid.transactions.test_resolve import _reference_utxos
+from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
+    deployment_hashes,
+)
 from tests.lending.liqwid.transactions.test_supply import _redeem
 
 pytestmark = needs_ogmios
@@ -568,3 +581,288 @@ def test_a_spent_action_utxo_raises_action_utxo_spent_error():
     cause = info.value.__cause__
     assert isinstance(cause, OgmiosEvaluationError)
     assert cause.code == SCRIPT_FAILURE
+
+
+# --- one action UTxO per market ----------------------------------------------------
+
+# Two Ada action UTxOs one batch created, both reading one Ada MarketState: the
+# action inputs of these captures (``#4`` and ``#5`` of one transaction).
+SUPPLY_SIDE = "supply_ada"
+BORROW_SIDE = "increase_ada"
+ADA_SUPPLY = 1_000_000_000
+ADA_BORROW = 100_000_000
+WALLET_QADA = 47_000_000_000
+LOAN_QADA = 100_000_000_000
+REMOVED_QADA = 20_000_000_000
+
+
+def _ada() -> Any:  # noqa: ANN401
+    return default_deployment().market_by_name("Ada")
+
+
+def _ada_action(label: str) -> str:
+    (action,) = CapturedTx.of(fixture(label)).action_inputs(_ada())
+    return action.out_ref
+
+
+def _ada_cparams_for_qada() -> Any:  # noqa: ANN401
+    """The live Ada CollateralParams record of qAda."""
+    ada = _ada()
+    (info,) = [
+        record.info
+        for _, record in parsed_records("collateral_params", live=True)
+        if record.market_id == ada.market_id
+        and getattr(record.datum, "collateral", None) == ada.qtoken_policy
+        and not record.datum.policy_wide
+    ]
+    return info
+
+
+def _one_market_fixtures() -> list[dict[str, Any]]:
+    return [fixture(SUPPLY_SIDE), fixture(BORROW_SIDE)]
+
+
+def _one_market_backend(*utxos: Utxo) -> FixtureBackend:
+    """Ada's records, scripts and feed, both Ada action UTxOs, and ``utxos``."""
+    supply_side, borrow_side = _one_market_fixtures()
+    refs = [utxo_from_dict(u) for u in borrow_side["ref_inputs"]]
+    held = {u.out_ref for u in refs}
+    scripts = [u for u in refs if u.ref_script] + [
+        u
+        for u in (utxo_from_dict(r) for r in supply_side["ref_inputs"])
+        if u.ref_script and u.out_ref not in held
+    ]
+    script_refs = {u.out_ref for u in scripts}
+    stand_ins = [u for u in _reference_utxos() if u.out_ref not in script_refs]
+    actions = [
+        a.utxo
+        for fix in (supply_side, borrow_side)
+        for a in CapturedTx.of(fix).action_inputs(_ada())
+    ]
+    records = [u for u in refs if u.datum and not u.ref_script] + actions
+    return FixtureBackend(
+        records=[*(utxo_to_info(u) for u in records), _ada_cparams_for_qada()],
+        utxos=[*scripts, *stand_ins, *utxos],
+        tip_time=max(fix["block_time"] for fix in (supply_side, borrow_side)),
+    )
+
+
+def _one_market_wallet() -> list[Utxo]:
+    return [
+        u
+        for fix in _one_market_fixtures()
+        for u in CapturedTx.of(fix).inputs
+        if not u.datum
+    ]
+
+
+def _qada_wallet(seed: str, owner: str, qtokens: int) -> Utxo:
+    """A wallet UTxO no ledger holds, with 5 ADA and ``qtokens`` qAda."""
+    return synthetic_utxo(
+        seed,
+        address=owner,
+        lovelace=5_000_000,
+        assets=[(_ada().qtoken_policy, "", qtokens)],
+    )
+
+
+def _ada_loan_holding_qada() -> Utxo:
+    """increase_ada's Ada loan holding only ``LOAN_QADA`` qAda, at a new out-ref."""
+    (loan,) = CapturedTx.of(fixture(BORROW_SIDE)).loan_inputs()
+    token = [a for a in loan.utxo.assets if a[0] == _ada().new_borrow_policy]
+    assets = sorted([*token, (_ada().qtoken_policy, "", LOAN_QADA)])
+    return dataclasses.replace(loan.utxo, assets=assets, out_ref=("ee" * 32, 0))
+
+
+def _one_market_evaluated(
+    contribute: Callable[..., None],
+    snapshot: Any,  # noqa: ANN401
+    extra: tuple[Utxo, ...] = (),
+) -> list[str]:
+    """Evaluate ``snapshot`` built at the later capture's slot, all UTxOs supplied."""
+    fixes = _one_market_fixtures()
+    built = build(contribute, snapshot, slot=max(block_slot(f) for f in fixes))
+    cparams = utxo_from_info(_ada_cparams_for_qada())
+    utxos = [*(u for f in fixes for u in fixture_utxos(f)), cparams, *extra]
+    return evaluate(built, utxos)
+
+
+def _script_refused(
+    contribute: Callable[..., None],
+    snapshot: Any,  # noqa: ANN401
+    extra: tuple[Utxo, ...] = (),
+) -> list[str]:
+    """The sorted purposes of the scripts that refuse ``snapshot``'s build."""
+    with pytest.raises(OgmiosEvaluationError) as info:
+        _one_market_evaluated(contribute, snapshot, extra)
+    assert info.value.code == SCRIPT_FAILURE, info.value
+    return sorted(failure["validator"]["purpose"] for failure in info.value.data)
+
+
+def _supply(action_utxo: str) -> SupplySnapshot:
+    wallet = _one_market_wallet()
+    return SupplySnapshot.from_backend(
+        _one_market_backend(),
+        market="Ada",
+        owner_address=wallet[0].address,
+        amount=ADA_SUPPLY,
+        action_utxo=action_utxo,
+        funding=wallet,
+    )
+
+
+def _open(action_utxo: str, qtokens: int, *extra: Utxo) -> BorrowSnapshot:
+    wallet = _one_market_wallet()
+    return BorrowSnapshot.from_backend(
+        _one_market_backend(),
+        market="Ada",
+        owner_address=wallet[0].address,
+        amount=ADA_BORROW,
+        collateral={_ada().qtoken_policy: qtokens},
+        action_utxo=action_utxo,
+        funding=[*wallet, *extra],
+    )
+
+
+def _removal(loan: Utxo) -> CollateralSnapshot:
+    wallet = _one_market_wallet()
+    return CollateralSnapshot.from_backend(
+        _one_market_backend(loan),
+        loan_utxo=out_ref_text(loan.out_ref),
+        owner_address=wallet[0].address,
+        collateral={_ada().qtoken_policy: LOAN_QADA - REMOVED_QADA},
+        funding=wallet,
+    )
+
+
+def _redeem_of(action_utxo: str, funding: list[Utxo]) -> RedeemSnapshot:
+    return RedeemSnapshot.from_backend(
+        _one_market_backend(),
+        market="Ada",
+        owner_address=funding[0].address,
+        withdraw_all=True,
+        action_utxo=action_utxo,
+        funding=funding,
+    )
+
+
+def _supply_then_open(
+    tx_builder: Any,  # noqa: ANN401
+    *,
+    snapshot: SupplyAndBorrowSnapshot,
+) -> None:
+    """Both legs of a supply-and-borrow, without the combination's market check."""
+    _build_supply(tx_builder, snapshot.supply, stash=snapshot)
+    _build_borrow(tx_builder, snapshot.borrow, stash=snapshot)
+
+
+def _redeem_then_remove(
+    tx_builder: Any,  # noqa: ANN401
+    *,
+    snapshot: RemoveAndRedeemSnapshot,
+) -> None:
+    """Both legs of a remove-and-redeem, without the combination's market check."""
+    _build_redeem(tx_builder, snapshot.redeem, stash=snapshot)
+    _build_collateral(tx_builder, snapshot.collateral, stash=snapshot)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_each_one_market_leg_evaluates_alone():
+    """Each leg of the refused one-market combinations evaluates on its own.
+
+    A supply of 1,000 ADA on one Ada action UTxO; an open of 100 ADA on the other,
+    its qAda collateral from a wallet UTxO; 20e9 qAda taken out of an Ada loan
+    holding 100e9; a redeem of 20e9 qAda on an Ada action UTxO.
+    """
+    supply_pin, borrow_pin = _ada_action(SUPPLY_SIDE), _ada_action(BORROW_SIDE)
+    owner = _one_market_wallet()[0].address
+    collateral = _qada_wallet("one-market-collateral", owner, WALLET_QADA)
+    redeemed = _qada_wallet("one-market-redeemed", owner, REMOVED_QADA)
+    loan = _ada_loan_holding_qada()
+    assert _one_market_evaluated(build_supply, _supply(supply_pin)) == [
+        "mint",
+        "spend",
+    ]
+    opened = _open(borrow_pin, WALLET_QADA, collateral)
+    assert _one_market_evaluated(build_borrow, opened, (collateral,)) == [
+        "mint",
+        "spend",
+        "withdraw",
+    ]
+    assert _one_market_evaluated(build_collateral, _removal(loan), (loan,)) == [
+        "mint",
+        "spend",
+        "withdraw",
+    ]
+    redeem = _redeem_of(borrow_pin, [*_one_market_wallet(), redeemed])
+    assert redeem.qtokens == REMOVED_QADA
+    assert _one_market_evaluated(build_redeem, redeem, (redeemed,)) == [
+        "mint",
+        "spend",
+    ]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+@pytest.mark.parametrize("swapped", [False, True], ids=["as-captured", "swapped"])
+def test_a_supply_and_borrow_on_one_market_is_refused_by_the_scripts(swapped):
+    """Two action UTxOs of one market in one transaction are refused.
+
+    The supply on one Ada action UTxO and the open on the other, its collateral the
+    qAda the supply mints, each evaluate alone (above). Together both action
+    spends, the qAda policy and the borrow staking script fail; only the loan-token
+    policy passes. This is why `SupplyAndBorrowSnapshot` refuses one market.
+    """
+    supply_pin, borrow_pin = _ada_action(SUPPLY_SIDE), _ada_action(BORROW_SIDE)
+    if swapped:
+        supply_pin, borrow_pin = borrow_pin, supply_pin
+    supply = _supply(supply_pin)
+    borrow = _open(borrow_pin, supply.qtokens)
+    combined = SupplyAndBorrowSnapshot(supply=supply, borrow=borrow)
+    failed = _script_refused(_supply_then_open, combined)
+    assert failed == ["mint", "spend", "spend", "withdraw"]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_an_open_of_one_market_are_refused_without_the_mint():
+    """The refusal does not depend on the open's collateral coming from the mint.
+
+    The open's qAda come from a wallet UTxO, as in the open alone; the supply and
+    the open on two Ada action UTxOs are still refused together.
+    """
+    supply_pin, borrow_pin = _ada_action(SUPPLY_SIDE), _ada_action(BORROW_SIDE)
+    owner = _one_market_wallet()[0].address
+    collateral = _qada_wallet("one-market-collateral", owner, WALLET_QADA)
+    combined = SupplyAndBorrowSnapshot(
+        supply=_supply(supply_pin),
+        borrow=_open(borrow_pin, WALLET_QADA, collateral),
+    )
+    failed = _script_refused(_supply_then_open, combined, (collateral,))
+    assert failed == ["mint", "spend", "spend", "withdraw"]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_remove_and_redeem_on_the_loans_market_is_refused_by_the_scripts():
+    """An action UTxO spent next to a collateral change of its market's loan.
+
+    20e9 qAda taken out of an Ada loan and redeemed on an Ada action UTxO: each leg
+    evaluates alone (above), and together the Ada action validator and the borrow
+    staking script fail. This is why `RemoveAndRedeemSnapshot` refuses the loan
+    market's own qToken.
+    """
+    loan = _ada_loan_holding_qada()
+    removal = _removal(loan)
+    redeem = RedeemSnapshot._from_records(
+        _one_market_backend(),
+        removal.records,
+        owner_address=removal.owner_address,
+        qtokens=REMOVED_QADA,
+        funding=removal.funding,
+        action_utxo=_ada_action(BORROW_SIDE),
+        exclude=(),
+        valid_to_ms=None,
+        rng=None,
+        deployment=None,
+    )
+    combined = RemoveAndRedeemSnapshot(collateral=removal, redeem=redeem)
+    failed = _script_refused(_redeem_then_remove, combined, (loan,))
+    assert failed == ["spend", "withdraw"]
