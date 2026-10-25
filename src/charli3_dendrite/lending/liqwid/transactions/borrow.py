@@ -30,23 +30,23 @@ from pycardano import Address
 from pycardano import TransactionBuilder
 from pycardano import VerificationKeyHash
 
-from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions._flow import check_flow_limits
+from charli3_dendrite.lending.liqwid.transactions._flow import loan_target
 from charli3_dendrite.lending.liqwid.transactions._flow import market_references
 from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
+from charli3_dendrite.lending.liqwid.transactions._flow import required_script
+from charli3_dendrite.lending.liqwid.transactions._flow import written_loan
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
-from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.legs import add_action_leg
 from charli3_dendrite.lending.liqwid.transactions.legs import add_funding
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_input
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_token_change
 from charli3_dendrite.lending.liqwid.transactions.legs import check_loan_health
 from charli3_dendrite.lending.liqwid.transactions.legs import finish_loan_flow
-from charli3_dendrite.lending.liqwid.transactions.legs import loan_output
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
@@ -59,7 +59,6 @@ from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
 from charli3_dendrite.lending.liqwid.transactions.terms import open_loan
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
-from charli3_dendrite.lending.units import script_payment_address
 
 if TYPE_CHECKING:
     import random
@@ -78,7 +77,6 @@ __all__ = [
     "ResolvedBorrow",
     "add_borrow",
     "build_borrow",
-    "held_collateral",
     "owner_key_hash",
     "resolve_borrow",
 ]
@@ -140,6 +138,11 @@ class BorrowSnapshot(PoolActionSnapshot):
 
         The captured action UTxO, funding, validity window, loan lovelace, loan
         token name and datum style are pinned.
+
+        Raises:
+            ValueError: The capture does not write one loan and spend one action
+                UTxO of its market, references no action validator of it, or has
+                no upper bound.
         """
         capture = CapturedTx.of(fix, deployment=deployment)
         loan: LoanRecord = sole(capture.loan_outputs(), "loan output")
@@ -347,12 +350,6 @@ class LoanChange:
     previous_lovelace: int | None
 
 
-def _script(ref: Utxo | None, market: MarketComponents, what: str) -> Utxo:
-    if ref is None:
-        raise UnsupportedMarketError(market.name, f"no {what} reference script")
-    return ref
-
-
 def add_borrow(
     tx_builder: TransactionBuilder,
     snapshot: BorrowSnapshot | IncreaseSnapshot,
@@ -362,25 +359,37 @@ def add_borrow(
 ) -> None:
     """Add a borrow of ``snapshot.amount`` writing ``change`` to ``tx_builder``.
 
-    The limits of the flow are checked on the snapshot's action UTxO first; then
-    the funding is spent (and stashed on ``stash``), the input loan (if any) spent
-    by the loan validator, the action UTxO re-created with ``change.deltas``, the
-    loan token minted (and the input's burnt), the loan output written at the
-    market's loan validator, the flow finished (`finish_loan_flow`: health set and
-    check, owner signer, borrow staking withdrawal, reference hygiene) and the
-    validity window merged, its upper bound capped at the batch deadline.
+    Before anything is added: the market's loan validator address and loan-token
+    policy (`loan_target`), the reference scripts the borrow runs (the action
+    validator, the loan-token policy, the borrow staking script and, when
+    ``change`` spends a loan, the loan validator), the flow's limits on the
+    snapshot's action UTxO and the loan output. Then the funding is spent (and
+    stashed on ``stash``), the input loan (if any) spent by the loan validator,
+    the action UTxO re-created with ``change.deltas``, the loan token minted (and
+    the input's burnt), the loan output written, the flow finished
+    (`finish_loan_flow`: health set and check, owner signer, borrow staking
+    withdrawal, reference hygiene) and the validity window merged, its upper
+    bound capped at the batch deadline. The health check and the reference
+    hygiene run after the legs are added: discard the builder when they raise.
 
     Raises:
         UnsupportedMarketError: The market's MarketParams name no loan validator,
-            the market has no current loan-token policy, or a script the flow
+            the market has no current loan-token policy, or a script the borrow
             runs is missing from ``snapshot.script_refs``.
         LiqwidBuildError: A limit or the health rule fails.
     """
     market, records = snapshot.market, snapshot.records
     params, state = records.params_datum, records.state_datum
-    if params.loan_validator is None or market.new_borrow_policy is None:
-        raise UnsupportedMarketError(market.name, "no current loan scripts")
+    target = loan_target(records)
     refs = snapshot.script_refs
+    action_script = required_script(refs.action, market, "action validator")
+    loan_policy = required_script(refs.loan_policy, market, "loan-token policy")
+    required_script(refs.borrow_staking, market, "borrow staking")
+    loan_validator = (
+        None
+        if change.loan is None
+        else required_script(refs.loan_validator, market, "loan validator")
+    )
     held = held_collateral(change.collateral_out)
     check_flow_limits(
         change.flow,
@@ -390,19 +399,13 @@ def add_borrow(
         amount=snapshot.amount,
         output_collateral_count=len(held),
     )
-    output = loan_output(
-        address=script_payment_address(params.loan_validator),
-        datum=encode_loan_datum(change.datum, indefinite=bool(snapshot.indefinite)),
-        loan_policy=market.new_borrow_policy,
+    output = written_loan(
+        target,
+        datum=change.datum,
+        indefinite=snapshot.indefinite,
         loan_token=change.token_name,
         collateral=held,
         previous_lovelace=change.previous_lovelace,
-    )
-    loan_policy = _script(refs.loan_policy, market, "loan-token policy")
-    loan_validator = (
-        None
-        if change.loan is None
-        else _script(refs.loan_validator, market, "loan validator")
     )
     add_funding(tx_builder, stash, snapshot.funding)
     if change.loan is not None and loan_validator is not None:
@@ -411,7 +414,7 @@ def add_borrow(
         tx_builder,
         action=snapshot.action,
         deltas=change.deltas,
-        script_ref=refs.action,
+        script_ref=action_script,
         references=market_references(records),
         underlying=market.underlying,
         indefinite=snapshot.indefinite,
@@ -419,7 +422,7 @@ def add_borrow(
     add_loan_token_change(
         tx_builder,
         policy_ref=loan_policy,
-        loan_policy=market.new_borrow_policy,
+        loan_policy=target.policy,
         current_name=None if change.loan is None else change.loan.token_name,
         new_name=change.token_name,
     )
@@ -449,6 +452,12 @@ def build_borrow(tx_builder: TransactionBuilder, *, snapshot: BorrowSnapshot) ->
 
     The caller balances, signs and submits; the borrowed amount and any change
     reach the caller through balancing.
+
+    Raises:
+        UnsupportedMarketError: The market has no current loan scripts, or a
+            script the open runs is missing from ``snapshot.script_refs``.
+        LiqwidBuildError: A limit or the health rule fails (as `add_borrow`).
+        ValidityWindowError: The merged validity window is empty.
     """
     _build_borrow(tx_builder, snapshot, stash=snapshot)
 

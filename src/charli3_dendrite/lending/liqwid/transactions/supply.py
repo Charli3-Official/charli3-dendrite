@@ -28,6 +28,7 @@ from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions._flow import check_flow_limits
 from charli3_dendrite.lending.liqwid.transactions._flow import market_references
 from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
+from charli3_dendrite.lending.liqwid.transactions._flow import required_script
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.legs import add_action_leg
@@ -104,6 +105,10 @@ class SupplySnapshot(PoolActionSnapshot):
         """Rebuild the snapshot of a captured supply (for byte-exact replay).
 
         The captured amounts, signers, validity bounds and datum style are pinned.
+
+        Raises:
+            ValueError: As `_captured_flow`.
+            UnsupportedMarketError: The capture lacks the market's records.
         """
         flow = _captured_flow(fix)
         return cls(
@@ -225,6 +230,10 @@ class RedeemSnapshot(PoolActionSnapshot):
 
         The captured burn and payout, signers, validity bounds and datum style are
         pinned.
+
+        Raises:
+            ValueError: As `_captured_flow`.
+            UnsupportedMarketError: The capture lacks the market's records.
         """
         flow = _captured_flow(fix)
         return cls(
@@ -374,6 +383,7 @@ def build_supply(tx_builder: TransactionBuilder, *, snapshot: SupplySnapshot) ->
 
     Raises:
         ValueError: The snapshot mints more than ``floor(A / s9)`` qTokens.
+        UnsupportedMarketError: A reference script the supply runs is missing.
         MinValueError: The amount is below the market minimum.
         CapExceededError: The supply passes the action UTxO's supply cap.
         ValidityWindowError: The upper bound is past the batch deadline or the
@@ -391,6 +401,7 @@ def build_redeem(tx_builder: TransactionBuilder, *, snapshot: RedeemSnapshot) ->
 
     Raises:
         ValueError: The snapshot pays more than ``floor(Q * s9)``.
+        UnsupportedMarketError: A reference script the redeem runs is missing.
         MinValueError: The payout is below the market minimum.
         InsufficientLiquidityError: The action UTxO cannot pay the payout.
         ValidityWindowError: The upper bound is past the batch deadline or the
@@ -462,10 +473,20 @@ def _add_action_flow(
 
     Funding, the action leg with ``deltas`` (referencing the MarketParams and
     MarketState), the qToken mint or burn of ``deltas.qtoken``, the snapshot's
-    signers and its validity window. The limits and the upper bound are checked
-    before anything is added.
+    signers and its validity window. The two reference scripts, the limits and
+    the upper bound are checked before anything is added.
+
+    Raises:
+        UnsupportedMarketError: ``snapshot.script_refs`` lacks the action
+            validator or the qToken policy.
+        LiqwidBuildError: A limit fails.
+        ValidityWindowError: The upper bound is past the batch deadline or the
+            merged window is empty.
     """
-    records = snapshot.records
+    records, market = snapshot.records, snapshot.market
+    refs = snapshot.script_refs
+    action_script = required_script(refs.action, market, "action validator")
+    qtoken_script = required_script(refs.qtoken_policy, market, "qToken policy")
     check_flow_limits(
         flow,
         records=records,
@@ -480,15 +501,15 @@ def _add_action_flow(
         tx_builder,
         action=snapshot.action,
         deltas=deltas,
-        script_ref=snapshot.script_refs.action,
+        script_ref=action_script,
         references=market_references(records),
-        underlying=snapshot.market.underlying,
+        underlying=market.underlying,
         indefinite=snapshot.indefinite,
     )
     add_qtoken_leg(
         tx_builder,
-        policy_ref=snapshot.script_refs.qtoken_policy,
-        qtoken_policy=snapshot.market.qtoken_policy,
+        policy_ref=qtoken_script,
+        qtoken_policy=market.qtoken_policy,
         quantity=deltas.qtoken,
     )
     for signer in snapshot.required_signers:

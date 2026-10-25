@@ -28,18 +28,18 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import TypeVar
 
-from charli3_dendrite.lending.liqwid.datums import ActionDatum
 from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.deployment import staking_roles
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
-from charli3_dendrite.lending.liqwid.indexing import parse_action
+from charli3_dendrite.lending.liqwid.indexing import action_selector
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
+from charli3_dendrite.lending.liqwid.transactions.resolve import action_record
 from charli3_dendrite.lending.liqwid.transactions.resolve import health_inputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import loan_record
 from charli3_dendrite.lending.liqwid.transactions.resolve import loan_script_refs
@@ -93,7 +93,8 @@ class CapturedTx:
     ``records`` are the routed Liqwid records among the reference inputs and
     ``feeds`` the genuine oracle feeds among them; ``mints`` are the minted (and,
     negative, burnt) ``(policy, name, quantity)`` and ``required_signers`` the key
-    hashes (hex) the transaction requires.
+    hashes (hex) the transaction requires; ``tx_hash`` names the transaction in
+    a refusal.
     """
 
     inputs: tuple[Utxo, ...]
@@ -106,6 +107,7 @@ class CapturedTx:
     feeds: tuple[LiqwidFeed, ...]
     mints: tuple[tuple[str, str, int], ...] = ()
     required_signers: tuple[str, ...] = ()
+    tx_hash: str = ""
 
     @classmethod
     def of(
@@ -135,6 +137,7 @@ class CapturedTx:
             ),
             mints=tuple((p, n, int(q)) for p, n, q in fix.get("mints", ())),
             required_signers=tuple(fix.get("required_signers", ())),
+            tx_hash=fix.get("tx_hash", ""),
         )
 
     @property
@@ -245,7 +248,7 @@ class CapturedTx:
             if (found := self.deployment.market_of_qtoken(policy)) is not None
         }
         if len(markets) != 1:
-            msg = "the capture does not mint or burn one market's qTokens"
+            msg = f"capture {self.tx_hash} does not mint or burn one market's qTokens"
             raise ValueError(msg)
         (market,) = markets
         return market
@@ -254,12 +257,43 @@ class CapturedTx:
         return self.script(script_hash) if script_hash else None
 
     def action_inputs(self, market: MarketComponents) -> list[ActionUtxo]:
-        """The spent action UTxOs of ``market``, in input order."""
-        return _actions(self.inputs, market)
+        """The spent action UTxOs of ``market``, in input order (`_actions`).
+
+        Raises:
+            UnsupportedMarketError: As `_actions`.
+        """
+        return self._actions(self.inputs, market)
 
     def action_outputs(self, market: MarketComponents) -> list[ActionUtxo]:
-        """The re-created action UTxOs of ``market``, in output order."""
-        return _actions(self.outputs, market)
+        """The re-created action UTxOs of ``market``, in output order (`_actions`).
+
+        Raises:
+            UnsupportedMarketError: As `_actions`.
+        """
+        return self._actions(self.outputs, market)
+
+    def _actions(
+        self,
+        utxos: Iterable[Utxo],
+        market: MarketComponents,
+    ) -> list[ActionUtxo]:
+        """The members of ``utxos`` that are action UTxOs of ``market``.
+
+        A UTxO counts as live resolution counts it (:func:`action_record`): at the
+        action validator the market's referenced MarketParams name, holding the
+        market's action token and an action record.
+
+        Raises:
+            UnsupportedMarketError: The capture references no MarketParams or
+                MarketState of ``market``, or they name no action validator.
+        """
+        params = self.market_records(market).params_datum
+        selector = action_selector(market, params)
+        return [
+            ActionUtxo(utxo=u, datum=record.datum)
+            for u in utxos
+            if (record := action_record(utxo_to_info(u), market, selector)) is not None
+        ]
 
     def loan_inputs(self) -> list[LoanRecord]:
         """The current-generation loans spent, in input order."""
@@ -307,12 +341,3 @@ class CapturedTx:
                 return u.address
         msg = "the captured transaction has no wallet input or output"
         raise ValueError(msg)
-
-
-def _actions(utxos: Iterable[Utxo], market: MarketComponents) -> list[ActionUtxo]:
-    found = []
-    for u in utxos:
-        record = parse_action(utxo_to_info(u), market)
-        if record is not None and isinstance(record.datum, ActionDatum):
-            found.append(ActionUtxo(utxo=u, datum=record.datum))
-    return found

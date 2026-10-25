@@ -32,14 +32,16 @@ from typing import Any
 from typing import TypeVar
 
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
-from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions._flow import check_flow_limits
 from charli3_dendrite.lending.liqwid.transactions._flow import kept_loan_lovelace
+from charli3_dendrite.lending.liqwid.transactions._flow import loan_target
 from charli3_dendrite.lending.liqwid.transactions._flow import market_references
 from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
+from charli3_dendrite.lending.liqwid.transactions._flow import required_script
+from charli3_dendrite.lending.liqwid.transactions._flow import written_loan
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.legs import add_action_leg
@@ -48,7 +50,6 @@ from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_input
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_token_change
 from charli3_dendrite.lending.liqwid.transactions.legs import finish_loan_flow
 from charli3_dendrite.lending.liqwid.transactions.legs import flip_name
-from charli3_dendrite.lending.liqwid.transactions.legs import loan_output
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
@@ -67,7 +68,6 @@ from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.lending.transactions.utxos import Utxo
-from charli3_dendrite.lending.units import script_payment_address
 
 if TYPE_CHECKING:
     import random
@@ -144,6 +144,7 @@ def _plan(
 
 
 def _required(value: _T | None, what: str) -> _T:
+    """``value``; refused with ``ValueError`` naming ``what`` when it is None."""
     if value is None:
         msg = f"this repay needs {what}"
         raise ValueError(msg)
@@ -199,6 +200,11 @@ class RepaySnapshot(PoolActionSnapshot):
 
         The captured loan lovelace, datum style and validity window are pinned, and
         ``repay`` is what the captured action UTxO received.
+
+        Raises:
+            ValueError: The capture spends no loan or several.
+            UnsupportedMarketError: The capture references no MarketParams or
+                MarketState of the loan's market.
         """
         capture = CapturedTx.of(fix)
         loan: LoanRecord = sole(capture.loan_inputs(), "loan input")
@@ -364,6 +370,10 @@ class RepaySnapshot(PoolActionSnapshot):
 def build_repay(tx_builder: TransactionBuilder, *, snapshot: RepaySnapshot) -> None:
     """Add a repay of ``snapshot`` to ``tx_builder`` (see the module docstring).
 
+    The market's loan scripts and every reference script the repay runs are
+    checked before anything is added; the health check and the reference hygiene
+    run after the legs are added, so discard the builder when they raise.
+
     Raises:
         RepayAmountError: the repay is above the settled debt and below the payoff.
         MinValueError: a partial repay is below the market minimum ``p[1]``.
@@ -371,9 +381,11 @@ def build_repay(tx_builder: TransactionBuilder, *, snapshot: RepaySnapshot) -> N
         UnhealthyLoanError: a collateral decrease leaves the loan unhealthy.
         ForeignReferenceInputError: the transaction references an input the loan
             validator would reject.
+        UnsupportedMarketError: the market's MarketParams name no loan validator,
+            it has no current loan-token policy, or a script the repay runs is
+            missing from ``snapshot.script_refs``.
         ValueError: the snapshot lacks what its path needs (an action UTxO, a
-            validity bound, a reference script), or a close is given a
-            collateral target.
+            validity bound), or a close is given a collateral target.
     """
     _build_repay(tx_builder, snapshot, stash=snapshot)
 
@@ -384,21 +396,24 @@ def _build_repay(
     *,
     stash: PoolActionSnapshot,
 ) -> None:
+    """`build_repay`, stashing the funding on ``stash``."""
     records = snapshot.records
     params, state = records.params_datum, records.state_datum
     market = snapshot.market
     loan = snapshot.loan
     refs = snapshot.script_refs
     plan = _plan(loan, state.index, snapshot.repay, snapshot.collateral)
-    loan_policy: str = _required(
-        market.new_borrow_policy,
-        "a current loan-token policy",
-    )
+    target = loan_target(records)
+    loan_validator = required_script(refs.loan_validator, market, "loan validator")
+    loan_policy = required_script(refs.loan_policy, market, "loan-token policy")
+    required_script(refs.borrow_staking, market, "borrow staking")
     market_refs = market_references(records)
     action: ActionUtxo | None = None
     upper = snapshot.valid_to_ms
+    action_script: Utxo | None = None
     if plan.deltas is not None:
         action = _required(snapshot.action, "an action UTxO")
+        action_script = required_script(refs.action, market, "action validator")
         check_flow_limits(
             plan.flow,
             records=records,
@@ -416,24 +431,20 @@ def _build_repay(
         raise ValueError(msg)
     new_name = flip_name(loan.token_name) if plan.loan is not None else None
     add_funding(tx_builder, stash, snapshot.funding)
-    add_loan_input(
-        tx_builder,
-        loan=loan.utxo,
-        script_ref=_required(refs.loan_validator, "the loan validator script"),
-    )
+    add_loan_input(tx_builder, loan=loan.utxo, script_ref=loan_validator)
     add_loan_token_change(
         tx_builder,
-        policy_ref=_required(refs.loan_policy, "the loan-token policy script"),
-        loan_policy=loan_policy,
+        policy_ref=loan_policy,
+        loan_policy=target.policy,
         current_name=loan.token_name,
         new_name=new_name,
     )
-    if action is not None and plan.deltas is not None:
+    if action is not None and action_script is not None and plan.deltas is not None:
         add_action_leg(
             tx_builder,
             action=action,
             deltas=plan.deltas,
-            script_ref=_required(refs.action, "the action validator script"),
+            script_ref=action_script,
             references=market_refs,
             underlying=market.underlying,
             indefinite=snapshot.indefinite,
@@ -445,15 +456,10 @@ def _build_repay(
         merge_reference_inputs(tx_builder, market_refs)
     if plan.loan is not None and new_name is not None:
         tx_builder.add_output(
-            loan_output(
-                address=script_payment_address(
-                    _required(params.loan_validator, "a loan validator"),
-                ),
-                datum=encode_loan_datum(
-                    plan.loan,
-                    indefinite=bool(snapshot.indefinite),
-                ),
-                loan_policy=loan_policy,
+            written_loan(
+                target,
+                datum=plan.loan,
+                indefinite=snapshot.indefinite,
                 loan_token=new_name,
                 collateral=plan.collateral or {},
                 previous_lovelace=kept_loan_lovelace(loan, snapshot.loan_lovelace),

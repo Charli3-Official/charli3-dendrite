@@ -869,14 +869,27 @@ def collateral_link(
     return market, datum
 
 
+@dataclass(frozen=True)
+class _CollateralLinks:
+    """Each unit's CollateralParams record, the collateral markets, the underlyings.
+
+    The underlyings start with the borrowed one; markets are keyed by id.
+    """
+
+    cparams: dict[str, LiqwidRecord]
+    markets: dict[str, MarketComponents]
+    underlyings: list[str]
+
+
 def _collateral_links(
     units: Iterable[str],
     borrow: MarketRecords,
     deployment: LiqwidDeployment,
-) -> tuple[dict[str, LiqwidRecord], dict[str, MarketComponents], list[str]]:
-    """Each unit's CollateralParams record, the collateral markets, the underlyings.
+) -> _CollateralLinks:
+    """Link each of ``units`` to its collateral market (:func:`collateral_link`).
 
-    The underlyings start with the borrowed one; markets are keyed by id.
+    Raises:
+        UnsupportedCollateralError: As :func:`collateral_link`.
     """
     cparams: dict[str, LiqwidRecord] = {}
     markets: dict[str, MarketComponents] = {}
@@ -890,7 +903,33 @@ def _collateral_links(
         cparams[unit] = borrow.collateral_params[unit]
         markets.setdefault(market.market_id, market)
         underlyings.append(datum.underlying)
-    return cparams, markets, list(dict.fromkeys(underlyings))
+    return _CollateralLinks(cparams, markets, list(dict.fromkeys(underlyings)))
+
+
+def _linked_health_inputs(
+    links: _CollateralLinks,
+    *,
+    borrow: MarketRecords,
+    records: Iterable[LiqwidRecord],
+    feeds: Iterable[LiqwidFeed],
+) -> HealthInputs:
+    """:func:`health_inputs` over collateral links already made.
+
+    Raises:
+        UnsupportedMarketError: ``records`` hold no MarketState of a collateral
+            market.
+        MissingFeedError: no feed prices an underlying.
+    """
+    held = list(records)
+    states = {borrow.market.market_id: borrow.state}
+    for market_id, market in links.markets.items():
+        if market_id not in states:
+            states[market_id] = _newest(held, LiqwidKind.MARKET_STATE, market)
+    return HealthInputs(
+        cparams=links.cparams,
+        states=states,
+        feeds=feeds_for(links.underlyings, feeds),
+    )
 
 
 def health_inputs(
@@ -918,16 +957,11 @@ def health_inputs(
         MissingFeedError: no feed prices an underlying.
     """
     active = resolve_deployment(deployment)
-    cparams, markets, underlyings = _collateral_links(units, borrow, active)
-    held = list(records)
-    states = {borrow.market.market_id: borrow.state}
-    for market_id, market in markets.items():
-        if market_id not in states:
-            states[market_id] = _newest(held, LiqwidKind.MARKET_STATE, market)
-    return HealthInputs(
-        cparams=cparams,
-        states=states,
-        feeds=feeds_for(underlyings, feeds),
+    return _linked_health_inputs(
+        _collateral_links(units, borrow, active),
+        borrow=borrow,
+        records=records,
+        feeds=feeds,
     )
 
 
@@ -954,19 +988,17 @@ def resolve_health_inputs(
         MissingFeedError: no feed prices an underlying.
     """
     active = resolve_deployment(deployment)
-    wanted = list(units)
-    _, markets, _ = _collateral_links(wanted, borrow, active)
-    others = [m for m_id, m in markets.items() if m_id != borrow.market.market_id]
+    links = _collateral_links(units, borrow, active)
+    others = [m for m_id, m in links.markets.items() if m_id != borrow.market.market_id]
     selectors = [s for market in others for s in state_selectors(active, market)]
     records = (
         fetch_records(backend, selectors, deployment=deployment) if selectors else []
     )
-    return health_inputs(
-        wanted,
+    return _linked_health_inputs(
+        links,
         borrow=borrow,
         records=records,
         feeds=_live_feeds(backend, deployment),
-        deployment=deployment,
     )
 
 

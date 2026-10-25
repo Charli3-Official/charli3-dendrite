@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import TypeVar
 
 from pycardano import TransactionBuilder
 
@@ -68,12 +69,63 @@ __all__ = [
 ]
 
 
+# A leg of a combination: each holds its own ``owner_address`` and ``funding``.
+_Leg = TypeVar(
+    "_Leg",
+    SupplySnapshot,
+    BorrowSnapshot,
+    CollateralSnapshot,
+    RedeemSnapshot,
+)
+
+
+@dataclass(frozen=True)
+class _CapturedWallet:
+    """The wallet address and inputs both legs of a captured combination share."""
+
+    owner_address: str
+    funding: tuple[Utxo, ...]
+
+    @classmethod
+    def of(
+        cls,
+        capture: CapturedTx,
+        *,
+        spent: Sequence[Utxo],
+        written: Sequence[Utxo],
+    ) -> _CapturedWallet:
+        """The wallet of ``capture``: every input but the legs' ``spent`` UTxOs.
+
+        The address is the first input's, else the first output's, outside
+        ``spent`` and the protocol UTxOs ``written``.
+
+        Raises:
+            ValueError: Every input and output is one of the legs' UTxOs.
+        """
+        return cls(
+            owner_address=capture.wallet_address(*spent, *written),
+            funding=tuple(capture.funding(*spent)),
+        )
+
+    def share(self, leg: _Leg) -> _Leg:
+        """``leg`` with this wallet's address and funding in place of its own."""
+        return dataclasses.replace(
+            leg,
+            owner_address=self.owner_address,
+            funding=list(self.funding),
+        )
+
+
 # --- snapshots ---------------------------------------------------------------
 
 
 @dataclass
 class SupplyAndBorrowSnapshot(PoolActionSnapshot):
     """A supply to one market and an open on another (or the same) market.
+
+    The legs carry the deployment and the datum style: a combination has no
+    ``deployment`` or ``indefinite`` of its own, which could disagree with its
+    legs', and nothing reads one from the combination.
 
     Attributes:
         supply: The supply leg; its qTokens are the loan's collateral.
@@ -105,20 +157,8 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
             *(a.utxo for a in capture.action_outputs(borrow.market)),
             *(loan.utxo for loan in capture.loan_outputs()),
         ]
-        owner_address = capture.wallet_address(*spent, *written)
-        funding = capture.funding(*spent)
-        return cls(
-            supply=dataclasses.replace(
-                supply,
-                owner_address=owner_address,
-                funding=list(funding),
-            ),
-            borrow=dataclasses.replace(
-                borrow,
-                owner_address=owner_address,
-                funding=list(funding),
-            ),
-        )
+        wallet = _CapturedWallet.of(capture, spent=spent, written=written)
+        return cls(supply=wallet.share(supply), borrow=wallet.share(borrow))
 
     @classmethod
     def from_backend(
@@ -201,6 +241,9 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
 class RemoveAndRedeemSnapshot(PoolActionSnapshot):
     """qTokens taken out of a loan and redeemed in the same transaction.
 
+    As for `SupplyAndBorrowSnapshot`, the deployment and the datum style are the
+    legs'.
+
     Attributes:
         collateral: The collateral change of the loan; its target holds ``Q`` fewer
             of the redeemed market's qTokens than the loan.
@@ -231,20 +274,8 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
             *(a.utxo for a in capture.action_outputs(redeem.market)),
             *(loan.utxo for loan in capture.loan_outputs()),
         ]
-        owner_address = capture.wallet_address(*spent, *written)
-        funding = capture.funding(*spent)
-        return cls(
-            collateral=dataclasses.replace(
-                collateral,
-                owner_address=owner_address,
-                funding=list(funding),
-            ),
-            redeem=dataclasses.replace(
-                redeem,
-                owner_address=owner_address,
-                funding=list(funding),
-            ),
-        )
+        wallet = _CapturedWallet.of(capture, spent=spent, written=written)
+        return cls(collateral=wallet.share(collateral), redeem=wallet.share(redeem))
 
     @classmethod
     def from_backend(

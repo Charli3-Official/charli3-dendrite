@@ -68,6 +68,7 @@ from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import check_health
 from charli3_dendrite.lending.liqwid.transactions.terms import collateral_holdings
 from charli3_dendrite.lending.liqwid.transactions.terms import health_required
+from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
 from charli3_dendrite.lending.transactions.common import add_zero_withdrawal
 from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.common import plutus_int
@@ -608,8 +609,10 @@ def finish_loan_flow(
     output loan must carry ``debt`` (`health_debt`) at the borrow market's
     maximum LTV. A close (``collateral_out=None``) references no health set.
     Every flow then requires the ``owner``'s signature, withdraws zero from the
-    borrow staking script and passes `check_reference_hygiene`. Nothing is added
-    when the health check fails.
+    borrow staking script and passes `check_reference_hygiene`. The health check
+    runs before the health set, the signer and the withdrawal are added, but the
+    flow's earlier legs are already on ``tx_builder``: discard the builder when
+    this raises.
 
     Args:
         tx_builder: The builder the flow's legs were added to.
@@ -639,9 +642,8 @@ def finish_loan_flow(
         if health is None:
             msg = "a loan flow that keeps its loan needs health inputs"
             raise ValueError(msg)
-        held = [unit for unit, qty in collateral_out.items() if qty > 0]
         references = health_reference_set(
-            held,
+            list(held_collateral(collateral_out)),
             borrow_market_id=records.market.market_id,
             borrow_underlying=records.market.underlying,
             inputs=health,

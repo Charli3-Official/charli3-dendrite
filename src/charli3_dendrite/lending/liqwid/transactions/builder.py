@@ -42,6 +42,7 @@ from charli3_dendrite.lending.transactions.infra import current_slot
 from charli3_dendrite.lending.transactions.infra import evaluate_tx_cbor
 from charli3_dendrite.lending.transactions.infra import parse_out_ref
 from charli3_dendrite.lending.transactions.resolve import resolve_utxo_by_outref
+from charli3_dendrite.lending.units import out_ref_text
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -170,11 +171,22 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
           ``collateral``; empty removes it all.
 
         A loan action reads its market from the loan; a non-empty ``market_name``
-        must name that market.
+        must name that market. That check runs on the resolved snapshot, after the
+        flow's own resolution has read the chain.
 
         Raises:
-            ValueError: The action is unsupported, a field it needs is absent, or
-                the loan is on another market than ``market_name``.
+            ValueError: The action is unsupported, a field it needs is absent, the
+                loan is on another market than ``market_name``, or the flow's
+                ``from_backend`` refuses its arguments.
+            KeyError: No Liqwid market is named ``market_name`` (DEPOSIT,
+                WITHDRAW, BORROW).
+            LiqwidBuildError: The flow's ``from_backend`` refuses it (a subclass:
+                ``MinValueError``, ``CapExceededError``,
+                ``InsufficientLiquidityError``, ``CollateralCountError``,
+                ``UnhealthyLoanError``, ``RepayAmountError``,
+                ``MarketAwaitingBatchError``, ``ActionUtxoSpentError``,
+                ``UnsupportedMarketError``, ``UnsupportedLoanError``,
+                ``UnsupportedCollateralError``, ``MissingFeedError``).
         """
         if action not in _ACTIONS:
             raise ValueError(
@@ -182,7 +194,7 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
             )
         if action in _LOAN_ACTIONS:
             snapshot = self._resolve_loan_action(backend, action, params)
-            market = snapshot.market.name  # type: ignore[attr-defined]
+            market = snapshot.market.name
             if market_name and market != market_name:
                 msg = (
                     f"loan {params.loan_utxo} is on market {market}, not {market_name}"
@@ -240,7 +252,7 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
         backend: AbstractBackend,
         action: LendingAction,
         params: ActionParams,
-    ) -> PoolActionSnapshot:
+    ) -> IncreaseSnapshot | RepaySnapshot | CollateralSnapshot:
         """INCREASE, REPAY or MODIFY_COLLATERAL of the loan ``params.loan_utxo``."""
         loan_utxo = _loan_utxo(params)
         target = dict(params.collateral) if params.collateral else None
@@ -284,6 +296,7 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
         Raises:
             ValueError: The action is unsupported.
             TypeError: The snapshot is not one the action takes.
+            LiqwidBuildError, ValidityWindowError: As the flow's ``build_*``.
         """
         if action not in _ACTIONS:
             raise ValueError(
@@ -313,6 +326,8 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
         chosen is reported missing by Ogmios.
 
         Raises:
+            ValueError, KeyError, LiqwidBuildError: As :meth:`resolve_snapshot`
+                and the flow's build.
             ActionUtxoSpentError: Ogmios reports a chosen action UTxO missing from
                 its UTxO set; resolve again with it in ``exclude``.
             OgmiosEvaluationError: Any other evaluation failure.
@@ -337,7 +352,7 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
         try:
             return evaluate_tx_cbor(tx_cbor, snapshot.additional_utxo())
         except OgmiosEvaluationError as error:
-            missing = {f"{tx}#{index}" for tx, index in error.missing_inputs()}
+            missing = {out_ref_text(ref) for ref in error.missing_inputs()}
             spent = sorted(missing & chosen_action_utxos(snapshot))
             if spent:
                 raise ActionUtxoSpentError(spent[0]) from error

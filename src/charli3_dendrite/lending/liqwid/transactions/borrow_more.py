@@ -97,6 +97,11 @@ class IncreaseSnapshot(PoolActionSnapshot):
 
         The captured action UTxO, funding, validity window, output collateral,
         loan lovelace and datum style are pinned.
+
+        Raises:
+            ValueError: The capture does not spend one loan and one action UTxO
+                of its market and write one of each, references no action
+                validator of it, or has no upper bound.
         """
         capture = CapturedTx.of(fix, deployment=deployment)
         loan: LoanRecord = sole(capture.loan_inputs(), "loan input")
@@ -227,6 +232,12 @@ def build_increase(
 
     The caller balances, signs and submits; the borrowed amount, any collateral
     removed and the change reach the caller through balancing.
+
+    Raises:
+        UnsupportedMarketError: The market has no current loan scripts, or a
+            script the borrow more runs is missing from ``snapshot.script_refs``.
+        LiqwidBuildError: A limit or the health rule fails (as `add_borrow`).
+        ValidityWindowError: The merged validity window is empty.
     """
     _build_increase(tx_builder, snapshot, stash=snapshot)
 

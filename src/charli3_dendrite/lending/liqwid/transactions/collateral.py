@@ -26,12 +26,13 @@ from typing import Any
 
 from pycardano import TransactionBuilder
 
-from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions._flow import kept_loan_lovelace
+from charli3_dendrite.lending.liqwid.transactions._flow import loan_target
 from charli3_dendrite.lending.liqwid.transactions._flow import market_references
+from charli3_dendrite.lending.liqwid.transactions._flow import written_loan
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.legs import add_funding
@@ -39,7 +40,6 @@ from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_input
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_token_change
 from charli3_dendrite.lending.liqwid.transactions.legs import finish_loan_flow
 from charli3_dendrite.lending.liqwid.transactions.legs import flip_name
-from charli3_dendrite.lending.liqwid.transactions.legs import loan_output
 from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanScriptRefs
@@ -53,7 +53,6 @@ from charli3_dendrite.lending.liqwid.transactions.terms import settle
 from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.lending.transactions.utxos import Utxo
-from charli3_dendrite.lending.units import script_payment_address
 
 if TYPE_CHECKING:
     from charli3_dendrite.backend.backend_base import AbstractBackend
@@ -73,15 +72,6 @@ def _check_collateral_count(
         amount=0,
         output_collateral_count=len(held_collateral(collateral)),
     )
-
-
-def _loan_address(records: MarketRecords) -> str:
-    """The enterprise address of the loan validator the MarketParams name."""
-    loan_validator = records.params_datum.loan_validator
-    if loan_validator is None:
-        msg = f"liqwid market {records.market.name}: no loan validator in p[35]"
-        raise ValueError(msg)
-    return script_payment_address(loan_validator)
 
 
 @dataclass
@@ -223,8 +213,14 @@ def build_collateral(
 ) -> None:
     """Add the collateral change ``snapshot`` describes to ``tx_builder``.
 
+    The collateral count and the market's loan scripts are checked before
+    anything is added; the health check and the reference hygiene run after the
+    legs are added, so discard the builder when they raise.
+
     Raises:
         CollateralCountError: The target holds more than ``p[14]`` units.
+        UnsupportedMarketError: The market's MarketParams name no loan validator,
+            or it has no current loan-token policy.
         UnsupportedCollateralError: A target unit has no exact CollateralParams
             record of the loan's market.
         UnhealthyLoanError: The output loan fails the health rule.
@@ -243,10 +239,7 @@ def _build_collateral(
     """:func:`build_collateral`, stashing the funding on ``stash``."""
     records, loan, refs = snapshot.records, snapshot.loan, snapshot.script_refs
     _check_collateral_count(records.params_datum, snapshot.collateral)
-    loan_policy = snapshot.market.new_borrow_policy
-    if loan_policy is None:
-        msg = f"liqwid market {snapshot.market.name}: no current loan-token policy"
-        raise ValueError(msg)
+    target = loan_target(records)
     s5 = records.state_datum.index
     settled = settle(loan.datum, s5)
     new_name = flip_name(loan.token_name)
@@ -256,18 +249,15 @@ def _build_collateral(
     add_loan_token_change(
         tx_builder,
         policy_ref=refs.loan_policy,
-        loan_policy=loan_policy,
+        loan_policy=target.policy,
         current_name=loan.token_name,
         new_name=new_name,
     )
     tx_builder.add_output(
-        loan_output(
-            address=_loan_address(records),
-            datum=encode_loan_datum(
-                rebase_for_collateral(loan.datum, s5),
-                indefinite=bool(snapshot.indefinite),
-            ),
-            loan_policy=loan_policy,
+        written_loan(
+            target,
+            datum=rebase_for_collateral(loan.datum, s5),
+            indefinite=snapshot.indefinite,
             loan_token=new_name,
             collateral=snapshot.collateral,
             previous_lovelace=kept_loan_lovelace(loan, snapshot.loan_lovelace),
