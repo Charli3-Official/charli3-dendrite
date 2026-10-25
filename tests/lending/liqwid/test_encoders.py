@@ -245,3 +245,44 @@ def test_market_params_named_fields_refuse_a_bool():
     params = _keyword_params((0, True, 0, 15_000_000, 0, 0, 0, 4))
     with pytest.raises(ValueError, match="liqwid market params: "):
         _ = params.min_value
+
+
+def _captured_action_datums() -> list[tuple[str, str]]:
+    """``(label, datum hex)`` of every action UTxO spent or written by a capture."""
+    from charli3_dendrite.lending.liqwid.deployment import default_deployment
+    from tests.lending.liqwid.transactions.replay import fixture
+    from tests.lending.liqwid.transactions.replay import labels
+
+    policies = {
+        m.action_token_policy
+        for m in default_deployment().markets
+        if m.action_token_policy is not None
+    }
+    found = {}
+    for label in labels():
+        fix = fixture(label)
+        for utxo in fix["inputs"] + fix["outputs"]:
+            if utxo.get("datum") and any(p in policies for p, _, _ in utxo["assets"]):
+                found.setdefault(utxo["datum"], label)
+    return sorted((label, datum) for datum, label in found.items())
+
+
+ACTION_DATUMS = _captured_action_datums()
+
+
+def test_the_captures_hold_action_datums_of_both_styles():
+    styles = Counter(datum_style(datum) for _, datum in ACTION_DATUMS)
+    assert styles["definite"] > 0
+    assert styles["indefinite"] > 0
+
+
+@pytest.mark.parametrize(
+    ("label", "datum"),
+    ACTION_DATUMS,
+    ids=[f"{label}-{datum[-12:]}" for label, datum in ACTION_DATUMS],
+)
+def test_captured_action_datums_round_trip_to_their_bytes(label, datum):
+    indefinite = datum_style(datum) == "indefinite"
+    assert encode_action_datum(decode_action(datum), indefinite=indefinite) == (
+        bytes.fromhex(datum)
+    )
