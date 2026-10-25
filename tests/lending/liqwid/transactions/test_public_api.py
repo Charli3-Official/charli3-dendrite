@@ -197,6 +197,27 @@ def test_every_exported_name_imports() -> None:
         assert getattr(package, name) is not None
 
 
+def test_type_checkers_see_every_exported_name_from_its_module() -> None:
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(package.__file__ or "").read_text())
+    (guard,) = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.If) and ast.unparse(node.test) == "TYPE_CHECKING"
+    ]
+    seen = {
+        alias.name: node.module
+        for node in guard.body
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    assert seen == {
+        name: f"{_PACKAGE}.{module}" for name, module in package._MODULE_OF.items()
+    }
+
+
 def test_each_name_is_the_owning_module_object() -> None:
     for name in package.__all__:
         value = getattr(package, name)
@@ -242,7 +263,42 @@ def test_the_other_primitives_import_from_their_modules(
     exported = getattr(imported, "__all__", None)
     if module in ELSEWHERE:
         assert exported is not None
+    if exported is not None:
         assert set(names) <= set(exported)
+
+
+# The named MarketParams fields and properties a liquidation reads.
+MARKET_PARAMS_NAMES = [
+    "min_value",
+    "max_batch_time_ms",
+    "action_count",
+    "max_collaterals",
+    "borrow_cap",
+    "supply_cap",
+]
+
+
+@pytest.mark.parametrize("name", MARKET_PARAMS_NAMES)
+def test_market_params_name_their_fields(name: str) -> None:
+    import dataclasses
+
+    from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
+
+    fields = {f.name for f in dataclasses.fields(MarketParamsDatum)}
+    member = getattr(MarketParamsDatum, name, None)
+    assert name in fields or isinstance(member, property), name
+
+
+def test_market_params_properties_read_their_fields() -> None:
+    from charli3_dendrite.lending.liqwid.deployment import default_deployment
+    from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
+    from tests.lending.liqwid.transactions.replay import fixture
+
+    ada = default_deployment().market_by_name("Ada")
+    params = CapturedTx.of(fixture("supply_ada")).market_records(ada).params_datum
+    assert params.min_value == params.raw[1]
+    assert params.max_batch_time_ms == params.raw[3]
+    assert params.action_count == params.raw[7]
 
 
 def test_the_action_kind_is_public() -> None:
@@ -303,4 +359,14 @@ def test_importing_lending_registers_only_the_core_oracle_sources() -> None:
         "resolver_sources, CORE_ORACLE_SOURCES; "
         "got = resolver_sources(); "
         "assert got == CORE_ORACLE_SOURCES, sorted(s.value for s in got)",
+    )
+
+
+def test_importing_the_registry_registers_the_liqwid_read_side() -> None:
+    _run(
+        "import charli3_dendrite.lending.registry as registry; "
+        "from charli3_dendrite.lending.oracles.models import "
+        "resolver_sources, OracleSource; "
+        "assert 'liqwid' in registry.available_lending_protocols(); "
+        "assert OracleSource.LIQWID in resolver_sources()",
     )

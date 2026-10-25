@@ -189,8 +189,9 @@ def test_the_staked_borrow_more_measures_the_settled_debt():
 
 def test_the_staked_borrow_more_sits_two_parts_in_1e11_inside_its_limit():
     # The captured collateral covers at most a debt of 167994659835331/8000
-    # (20,999,332,479.42): the captured debt passes by a relative 3331/
-    # 167994659832000 (about 1.98e-11) of the collateral price.
+    # (20,999,332,479.42). The captured debt passes by 3331/8000, which is
+    # 3331/167994659832000 of the debt; the collateral price may fall by
+    # 3331/167994659835331 of itself. Both are about 1.98e-11.
     fix = fixture("family_staked_increase")
     snapshot = IncreaseSnapshot.from_capture(fix)
     underlying = _staked_collateral_underlying(snapshot)

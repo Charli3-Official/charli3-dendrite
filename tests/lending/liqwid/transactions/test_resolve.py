@@ -1169,3 +1169,37 @@ def test_health_inputs_select_from_records_in_hand():
     )
     with pytest.raises(UnsupportedMarketError):
         resolve.health_inputs(units, borrow=borrow, records=[], feeds=feeds)
+
+
+class _RecordingDbsync:
+    """Answers the wallet query with no rows and keeps every query it was sent."""
+
+    def __init__(self) -> None:
+        self.queries: list[tuple[str, dict]] = []
+
+    def db_query(self, sql: str, args: dict) -> list[dict]:
+        self.queries.append((sql, dict(args)))
+        return []
+
+
+def test_owner_funding_reads_every_utxo_holding_the_asset_without_a_limit():
+    backend = _RecordingDbsync()
+    unit = "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68"
+    assert resolve.resolve_owner_funding(backend, "addr1w", holding=unit) == []
+    (recent_sql, recent), (held_sql, held) = backend.queries
+    assert recent == {"addr": "addr1w", "lim": 20}
+    assert "ma_tx_out" not in recent_sql
+    assert held == {"addr": "addr1w", "lim": None, "policy": unit, "name": ""}
+    assert "EXISTS" in held_sql
+    assert "ma.policy = decode(%(policy)s, 'hex')" in held_sql
+    assert "ma.name = decode(%(name)s, 'hex')" in held_sql
+    assert "consumed_by_tx_id IS NULL" in held_sql
+
+
+def test_owner_funding_given_is_used_as_it_is():
+    backend = _RecordingDbsync()
+    given = [Utxo(address="addr1w", lovelace=1, assets=[], datum=None)]
+    assert resolve.resolve_owner_funding(backend, "addr1w", given, holding="ab") == (
+        given
+    )
+    assert backend.queries == []

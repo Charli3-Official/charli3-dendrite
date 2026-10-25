@@ -637,3 +637,35 @@ def test_a_supply_and_borrow_over_the_borrow_cap_reads_the_params_borrow_cap():
     snapshot.borrow = with_params(snapshot.borrow, borrow_cap=(0, 1))
     with pytest.raises(CapExceededError):
         _build(build_supply_and_borrow, snapshot, fix)
+
+
+def _another(record):
+    """``record`` at the next output index of its transaction."""
+    index = record.info.tx_index + 1
+    return dataclasses.replace(
+        record,
+        out_ref=f"{record.info.tx_hash}#{index}",
+        info=record.info.model_copy(update={"tx_index": index}),
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "kind"),
+    [("params", "MarketParams"), ("state", "MarketState")],
+)
+def test_same_market_legs_reading_two_records_of_one_kind_are_refused(
+    deployment_hashes,
+    field,
+    kind,
+):
+    snapshot = _same_market(_same_market_backend(), rng=random.Random(0))
+    supply = snapshot.supply
+    records = dataclasses.replace(
+        supply.records,
+        **{field: _another(getattr(supply.records, field))},
+    )
+    snapshot.supply = dataclasses.replace(supply, records=records)
+    tx_builder = _empty_builder()
+    with pytest.raises(ValueError, match=f"two {kind} records of market Ada"):
+        build_supply_and_borrow(tx_builder, snapshot=snapshot)
+    assert not tx_builder.inputs

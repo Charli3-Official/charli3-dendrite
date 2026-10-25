@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market_records
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
 from charli3_dendrite.lending.transactions.utxos import utxo_to_info
@@ -92,8 +95,29 @@ def test_sole_names_what_it_did_not_find_once():
 
 def test_the_qtoken_market_is_the_one_whose_qtokens_are_minted():
     assert CapturedTx.of(fixture("supply_ada")).qtoken_market() == _ada()
-    with pytest.raises(ValueError, match="one market's qTokens"):
-        CapturedTx.of(fixture("open_single")).qtoken_market()
+    fix = fixture("open_single")
+    with pytest.raises(ValueError, match=f"capture {fix['tx_hash']} does not mint"):
+        CapturedTx.of(fix).qtoken_market()
+
+
+def test_an_action_utxo_off_the_action_validator_is_not_an_action_input():
+    fix = fixture("supply_ada")
+    capture = CapturedTx.of(fix)
+    (action,) = capture.action_inputs(_ada())
+    wallet = next(u for u in capture.inputs if not u.datum)
+    moved = dataclasses.replace(action.utxo, address=wallet.address)
+    elsewhere = dataclasses.replace(
+        capture,
+        inputs=tuple(moved if u is action.utxo else u for u in capture.inputs),
+    )
+    assert elsewhere.action_inputs(_ada()) == []
+
+
+def test_action_inputs_need_the_market_s_records():
+    capture = CapturedTx.of(fixture("supply_ada"))
+    djed = default_deployment().market_by_name("DJED")
+    with pytest.raises(UnsupportedMarketError):
+        capture.action_inputs(djed)
 
 
 def test_a_required_script_the_capture_lacks_is_refused_by_name():
