@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 
+from charli3_dendrite.lending.transactions.infra import additional_utxo_out_ref
+
 
 class PoolActionSnapshot(ABC):
     """Live building blocks shared by every pool action.
@@ -27,10 +29,18 @@ class PoolActionSnapshot(ABC):
         """Append an actor (funding) input's Ogmios `additionalUtxo` entry.
 
         Called while the action is contributed, once the funding input is known.
-        Initialized lazily so dataclass subclasses need no cooperative `__init__`.
+        An entry whose out-ref (``transaction.id``, ``index``) is already stashed is
+        skipped, so the first entry for an out-ref wins. Initialized lazily so
+        dataclass subclasses need no cooperative `__init__`.
         """
         if not hasattr(self, "_additional_utxos"):
             self._additional_utxos = []
+        out_ref = additional_utxo_out_ref(entry)
+        if out_ref is not None and any(
+            additional_utxo_out_ref(stashed) == out_ref
+            for stashed in self._additional_utxos
+        ):
+            return
         self._additional_utxos.append(entry)
 
     def additional_utxo(self) -> list[dict[str, Any]]:

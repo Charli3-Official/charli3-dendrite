@@ -31,6 +31,7 @@ from charli3_dendrite.lending.transactions.common import plutus_int
 from charli3_dendrite.lending.transactions.common import reward_address
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.infra import assemble_unsigned
+from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 
 # A well-formed mainnet payment address; only its bech32 decoding is exercised here.
 _ACTOR = (
@@ -381,3 +382,42 @@ def test_plutus_int_withdrawal_redeemer_assembles():
         (key.tag.name, key.index, cbor2.dumps(value.data).hex())
         for key, value in redeemers.items()
     ] == [("WITHDRAWAL", 0, "00")]
+
+
+class _Snapshot(PoolActionSnapshot):
+    pass
+
+
+def _stash_entry(tx_id: str, index: int, address: str = "addr") -> dict:
+    return {
+        "transaction": {"id": tx_id},
+        "index": index,
+        "address": address,
+        "value": {"ada": {"lovelace": 2_000_000}},
+    }
+
+
+def test_stash_keeps_one_entry_per_out_ref():
+    # A funding UTxO stashed twice (say by two legs of one transaction) is sent to
+    # Ogmios once; the first entry stashed wins.
+    snapshot = _Snapshot()
+    first = _stash_entry("aa" * 32, 0)
+    snapshot.add_actor_additional_utxo(first)
+    snapshot.add_actor_additional_utxo(_stash_entry("aa" * 32, 0, "other"))
+    snapshot.add_actor_additional_utxo(_stash_entry("aa" * 32, 1))
+    snapshot.add_actor_additional_utxo(_stash_entry("bb" * 32, 0))
+    stashed = snapshot.additional_utxo()
+    assert [(e["transaction"]["id"], e["index"]) for e in stashed] == [
+        ("aa" * 32, 0),
+        ("aa" * 32, 1),
+        ("bb" * 32, 0),
+    ]
+    assert stashed[0] is first
+
+
+def test_stash_appends_entries_without_an_out_ref():
+    # Only entries that name an out-ref are de-duplicated.
+    snapshot = _Snapshot()
+    snapshot.add_actor_additional_utxo({"funding": True})
+    snapshot.add_actor_additional_utxo({"funding": True})
+    assert snapshot.additional_utxo() == [{"funding": True}, {"funding": True}]

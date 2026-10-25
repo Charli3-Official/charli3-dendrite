@@ -20,6 +20,7 @@ signs or submits.
 owning the shared `additionalUtxo` stash for actor funding inputs. ``infra.py`` holds
 the protocol-agnostic, eval-only machinery: the network-free chain context, manual
 (no-balancing) assembly, slot/out-ref helpers, the Ogmios `additionalUtxo` builder,
-and the `evaluateTransaction` client. Protocol-specific domain logic stays in each
-protocol's own ``transactions`` package.
+and the `evaluateTransaction` client. ``errors.py`` holds the typed build errors,
+including `OgmiosEvaluationError` for a failed evaluation. Protocol-specific domain
+logic stays in each protocol's own ``transactions`` package.
 """
