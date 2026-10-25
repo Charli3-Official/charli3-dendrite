@@ -301,7 +301,41 @@ class RedeemSnapshot(PoolActionSnapshot):
                 f" and the funding holds {held}"
             )
             raise ValueError(msg)
-        payout = redeem_payout(qtokens, rate)
+        return cls._from_records(
+            backend,
+            records,
+            owner_address=owner_address,
+            qtokens=qtokens,
+            funding=wallet,
+            action_utxo=action_utxo,
+            exclude=exclude,
+            valid_to_ms=valid_to_ms,
+            rng=rng,
+            deployment=deployment,
+        )
+
+    @classmethod
+    def _from_records(
+        cls,
+        backend: AbstractBackend,
+        records: MarketRecords,
+        *,
+        owner_address: str,
+        qtokens: int,
+        funding: list[Utxo],
+        action_utxo: str | None,
+        exclude: Collection[str],
+        valid_to_ms: int | None,
+        rng: random.Random | None,
+        deployment: LiqwidDeployment | None,
+    ) -> RedeemSnapshot:
+        """Resolve a burn of ``qtokens`` on the market of ``records``.
+
+        The payout is ``floor(Q * s9)``; the minimum ``p[1]`` is checked on it before
+        the action UTxO is chosen (`_resolve_action_side`). Where the qTokens come
+        from (the funding, or a loan the same transaction spends) is the caller's.
+        """
+        payout = redeem_payout(qtokens, records.state_datum.qtoken_rate)
         side = _resolve_action_side(
             backend,
             records,
@@ -322,7 +356,7 @@ class RedeemSnapshot(PoolActionSnapshot):
             owner_address=owner_address,
             qtokens=qtokens,
             payout=payout,
-            funding=wallet,
+            funding=funding,
             valid_to_ms=side.valid_to_ms,
             deployment=deployment,
         )
