@@ -655,6 +655,7 @@ TERMS_IMPORTS = {
     "__future__",
     "collections.abc",
     "dataclasses",
+    "enum",
     "fractions",
     "typing",
     "charli3_dendrite.lending.liqwid",
