@@ -162,7 +162,14 @@ class ActionDeltas:
     min_interest_paid: int = 0
 
     def apply_to(self, action: ActionDatum) -> ActionDatum:
-        """``action`` with these deltas added field-wise; the nonce is kept."""
+        """``action`` with these deltas added field-wise; the nonce is kept.
+
+        Args:
+            action: The action UTxO's record before the flow.
+
+        Returns:
+            The record written back.
+        """
         return replace(
             action,
             supply_delta=action.supply_delta + self.supply,
@@ -177,6 +184,9 @@ class ActionDeltas:
 
         ``supply - principal - interest + min_interest_paid``: supplies and
         repayments flow in, redeems and borrows flow out.
+
+        Returns:
+            The signed change, positive when the action UTxO gains underlying.
         """
         return self.supply - self.principal - self.interest + self.min_interest_paid
 
@@ -229,6 +239,13 @@ def settle(loan: LoanDatum, s5: int) -> Settlement:
 def supply_mint(amount: int, s9: Rational) -> int:
     """QTokens minted for supplying ``amount``, ``floor(amount * den / num)``.
 
+    Args:
+        amount: The underlying supplied, in base units.
+        s9: The market's qToken rate (underlying per qToken).
+
+    Returns:
+        The qTokens minted.
+
     Raises:
         ValueError: On a negative amount or a non-positive rate.
     """
@@ -237,6 +254,13 @@ def supply_mint(amount: int, s9: Rational) -> int:
 
 def redeem_payout(qtokens: int, s9: Rational) -> int:
     """Most underlying a burn of ``qtokens`` may pay, ``floor(qtokens * s9)``.
+
+    Args:
+        qtokens: The qTokens burnt.
+        s9: The market's qToken rate (underlying per qToken).
+
+    Returns:
+        The underlying paid out, in base units.
 
     Raises:
         ValueError: On a negative quantity or a non-positive rate.
@@ -248,6 +272,13 @@ def redeem_payout(qtokens: int, s9: Rational) -> int:
 
 def redeem_burn_for(amount: int, s9: Rational) -> int:
     """Fewest qTokens whose payout is at least ``amount``, ``ceil(amount / s9)``.
+
+    Args:
+        amount: The underlying to be paid out, in base units.
+        s9: The market's qToken rate (underlying per qToken).
+
+    Returns:
+        The qTokens to burn.
 
     Raises:
         ValueError: On a negative amount or a non-positive rate.
@@ -376,6 +407,14 @@ def repay_from_settlement(
 def apply_repay(loan: LoanDatum, s5: int, repay: int) -> RepayResult:
     """Settle ``loan`` to ``s5`` and repay ``repay`` (`repay_from_settlement`).
 
+    Args:
+        loan: The loan record before the repay.
+        s5: The loan market's MarketState index.
+        repay: The amount paid into the action UTxO.
+
+    Returns:
+        The loan record written back and the action deltas.
+
     Raises:
         ValueError: On a negative repay.
         RepayAmountError: When ``repay`` exceeds the settled debt.
@@ -384,7 +423,15 @@ def apply_repay(loan: LoanDatum, s5: int, repay: int) -> RepayResult:
 
 
 def close_payment(loan: LoanDatum, s5: int) -> int:
-    """The exact amount that closes ``loan``, ``p0 + max(iS, m0)``."""
+    """The exact amount that closes ``loan``, ``p0 + max(iS, m0)``.
+
+    Args:
+        loan: The loan record.
+        s5: The loan market's MarketState index.
+
+    Returns:
+        The payment in base units of the borrowed asset.
+    """
     return lqm.payoff(loan, s5)
 
 
@@ -393,6 +440,13 @@ def close_deltas(loan: LoanDatum, s5: int) -> ActionDeltas:
 
     The close is the only flow that tops up the minimum interest; the action's
     underlying grows by exactly `close_payment`.
+
+    Args:
+        loan: The loan record.
+        s5: The loan market's MarketState index.
+
+    Returns:
+        The action deltas of the close.
     """
     settled = settle(loan, s5).interest
     return ActionDeltas(
@@ -407,6 +461,13 @@ def rebase_for_collateral(loan: LoanDatum, s5: int) -> LoanDatum:
 
     Unchanged when the loan index is at or above ``s5``; otherwise settled:
     ``(p0, iS, m0, x1)``.
+
+    Args:
+        loan: The loan record.
+        s5: The loan market's MarketState index.
+
+    Returns:
+        The loan record written back (``loan`` itself when unchanged).
     """
     if loan.index >= s5:
         return loan
@@ -553,6 +614,20 @@ def check_limits(
     underlying: str,
 ) -> None:
     """`check_market_limits` then `check_action_limits`, for a pinned action UTxO.
+
+    Args:
+        flow: The flow being built.
+        params: The market's MarketParams.
+        state: The market's current MarketState.
+        action_datum: The chosen action UTxO's record before this transaction.
+        deltas: This transaction's deltas on that action UTxO.
+        amount: The flow's action amount in underlying base units (ignored by a
+            close and a collateral change).
+        output_collateral_count: Distinct collateral assets in the output loan (0
+            when no loan output remains).
+        action_underlying: The action UTxO's underlying holding, in base units
+            (lovelace on the Ada market).
+        underlying: The market's underlying unit (``"lovelace"`` for Ada).
 
     Raises:
         MinValueError: When ``amount`` is below ``p[1]``.
@@ -709,7 +784,15 @@ def check_health(
 
 
 def ttl_cap_ms(state: MarketStateDatum, params: MarketParamsDatum) -> int:
-    """The market's batch deadline ``s8 + p[3]``, the latest valid upper bound (ms)."""
+    """The market's batch deadline ``s8 + p[3]``, the latest valid upper bound.
+
+    Args:
+        state: The market's current MarketState (``s8``, its last batch time).
+        params: The market's MarketParams (``p[3]``, the longest batch interval).
+
+    Returns:
+        The deadline in POSIX milliseconds.
+    """
     return state.last_batch_ms + params.max_batch_time_ms
 
 
@@ -721,6 +804,14 @@ def default_valid_to_ms(
     """Default upper bound: 15 minutes from now, or a second before the deadline.
 
     ``min(now + 900_000, s8 + p[3] - 1_000)`` in POSIX milliseconds.
+
+    Args:
+        now_ms: The current time.
+        state: The market's current MarketState.
+        params: The market's MarketParams.
+
+    Returns:
+        The default upper bound, in POSIX milliseconds.
     """
     return min(now_ms + DEFAULT_TTL_MS, ttl_cap_ms(state, params) - TTL_MARGIN_MS)
 

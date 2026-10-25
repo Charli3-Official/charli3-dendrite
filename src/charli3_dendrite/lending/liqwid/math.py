@@ -293,8 +293,10 @@ class WeightedHolding:
         rate: Underlying per receipt token (the collateral market's ``s9``).
         price: The underlying's price per base unit, in the numeraire the borrowed
             asset's price is given in.
-        weight: The collateral's liquidation weight (``liquidation_weight``: its
-            CollateralParams weight times ``p[18]``).
+        weight: The weight the caller's health rule applies to the value: the
+            CollateralParams weight ``w`` for the loan validator's health check
+            on a build, or ``liquidation_weight`` (``w`` times ``p[18]``) for
+            the liquidation health factor.
     """
 
     amount: int
