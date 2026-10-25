@@ -62,6 +62,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MissingFeedError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
+from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import collateral_link
 from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import check_health
@@ -88,7 +89,7 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
     from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
     from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
-    from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
+    from charli3_dendrite.lending.liqwid.transactions.resolve import LoanScriptRefs
     from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
     from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 
@@ -377,22 +378,23 @@ def add_loan_token_change(
 def add_staking_withdrawal(
     tx_builder: TransactionBuilder,
     *,
-    script_refs: LiqwidScriptRefs,
+    script_refs: LiqwidScriptRefs | LoanScriptRefs,
     role: StakingRole,
 ) -> None:
     """Withdraw zero from the market's ``role`` staking script.
 
     The redeemer is ``0`` for the borrow script and ``1`` for the liquidation
     script; a withdrawal already on the builder is kept as it is.
+    ``LoanScriptRefs`` carry the borrow script only.
 
     Raises:
         ValueError: ``script_refs`` carries no script for ``role``.
     """
-    script = (
-        script_refs.borrow_staking
-        if role is StakingRole.BORROW
-        else script_refs.liquidation_staking
-    )
+    script: Utxo | None = None
+    if role is StakingRole.BORROW:
+        script = script_refs.borrow_staking
+    elif isinstance(script_refs, LiqwidScriptRefs):
+        script = script_refs.liquidation_staking
     if script is None:
         msg = f"no {role.value} staking reference script was resolved"
         raise ValueError(msg)
@@ -588,7 +590,7 @@ def finish_loan_flow(
     tx_builder: TransactionBuilder,
     *,
     records: MarketRecords,
-    script_refs: LiqwidScriptRefs,
+    script_refs: LiqwidScriptRefs | LoanScriptRefs,
     health: HealthInputs | None,
     owner: str,
     collateral_in: Mapping[str, int],
@@ -612,7 +614,8 @@ def finish_loan_flow(
     Args:
         tx_builder: The builder the flow's legs were added to.
         records: The borrow market's records.
-        script_refs: The borrow market's reference scripts.
+        script_refs: The borrow market's reference scripts (the borrow staking
+            script is the one read).
         health: The health inputs of the output collateral; required when a loan
             output remains.
         owner: The loan owner's key hash (hex).

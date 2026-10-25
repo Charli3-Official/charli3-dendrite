@@ -916,3 +916,125 @@ def _q_ada():
 def test_now_is_the_chain_tip():
     backend = FixtureBackend(tip_time=1_790_000_123)
     assert resolve_now_ms(backend) == 1_790_000_123_000
+
+
+# --- selections over records in hand -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        lambda: _market_and_params("POL"),
+        lambda: _without_loan_policy("Ada"),
+        lambda: _without_staking_pair("Ada"),
+    ],
+    ids=["short-layout", "no-loan-policy", "no-staking-pair"],
+)
+def test_the_owner_loan_scripts_of_an_unfit_market_are_refused_unread(case):
+    market, params = case()
+    with pytest.raises(UnsupportedMarketError) as info:
+        resolve.resolve_loan_script_refs(_UnreadableBackend(), market, params)
+    assert info.value.market == market.name
+    with pytest.raises(UnsupportedMarketError):
+        resolve.loan_script_refs(_reference_utxos(), market, params)
+
+
+def test_the_owner_loan_scripts_are_the_three_of_the_full_set(deployment_hashes):
+    for market, params in _live36():
+        full = resolve_script_refs(_script_backend(), market, params)
+        owner = resolve.resolve_loan_script_refs(_script_backend(), market, params)
+        assert isinstance(owner, resolve.LoanScriptRefs)
+        assert (owner.loan_validator, owner.loan_policy, owner.borrow_staking) == (
+            full.loan_validator,
+            full.loan_policy,
+            full.borrow_staking,
+        ), market.name
+
+
+def test_the_owner_loan_scripts_are_picked_by_hash_from_utxos_in_hand():
+    from charli3_dendrite.lending.transactions.utxos import script_hash_of
+    from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
+    from tests.lending.liqwid.transactions.replay import fixture
+
+    refs = [utxo_from_dict(u) for u in fixture("collateral_add")["ref_inputs"]]
+    market, params = _market_and_params("USDC")
+    owner = resolve.loan_script_refs(refs, market, params)
+    roles = staking_roles(market, params)
+    assert [
+        script_hash_of(owner.loan_validator),
+        script_hash_of(owner.loan_policy),
+        script_hash_of(owner.borrow_staking),
+    ] == [params.loan_validator, market.new_borrow_policy, roles.borrow]
+    with pytest.raises(ValueError, match="no reference script"):
+        resolve.loan_script_refs(
+            [u for u in refs if u is not owner.loan_policy], market, params
+        )
+
+
+def test_market_records_select_from_records_in_hand():
+    ada = default_deployment().market_by_name("Ada")
+    records = [record for _, record in parsed_records("market_params", live=True)]
+    records += [record for _, record in parsed_records("market_state", live=True)]
+    records += [record for _, record in parsed_records("collateral_params", live=True)]
+    assert resolve.market_records(records, ada) == _ada_records()
+    with pytest.raises(UnsupportedMarketError):
+        resolve.market_records(
+            [r for r in records if r.kind is not LiqwidKind.MARKET_STATE],
+            ada,
+        )
+
+
+def test_a_loan_record_is_read_from_a_utxo_in_hand():
+    rec, record = next(
+        (rec, record)
+        for rec, record in parsed_records("loan", live=True)
+        if record.generation == "new"
+    )
+    utxo = utxo_from_info(record_info(rec))
+    loan = resolve.loan_record(utxo)
+    assert loan == resolve_loan(_loan_backend(), rec["out_ref"])
+    tokens = loan.market.loan_token_policies
+    assert loan.collateral == {
+        policy + name: qty for policy, name, qty in utxo.assets if policy not in tokens
+    }
+    assert all(policy_of(unit) not in tokens for unit in loan.collateral)
+    state = utxo_from_info(record_info(records_of("market_state", live=True)[0]))
+    with pytest.raises(UnsupportedLoanError):
+        resolve.loan_record(state)
+
+
+def test_feeds_for_selects_among_feeds_in_hand():
+    member = POLICY_WIDE + "4e4d"
+    feeds = [
+        feed
+        for info in live_records("oracle")
+        if (feed := resolve.parse_feed(info)) is not None
+    ]
+    found = resolve.feeds_for([member, "lovelace"], feeds)
+    assert found == resolve_feeds(
+        FixtureBackend(records=live_records("oracle")),
+        [member, "lovelace"],
+    )
+    with pytest.raises(MissingFeedError):
+        resolve.feeds_for(["ee" * 28 + "4e4d"], feeds)
+
+
+def test_health_inputs_select_from_records_in_hand():
+    deployment = default_deployment()
+    borrow = _ada_records()
+    djed = deployment.market_by_name("DJED")
+    units = [djed.qtoken_policy, borrow.market.qtoken_policy]
+    states = [record for _, record in parsed_records("market_state", live=True)]
+    feeds = [
+        feed
+        for info in live_records("oracle")
+        if (feed := resolve.parse_feed(info)) is not None
+    ]
+    found = resolve.health_inputs(units, borrow=borrow, records=states, feeds=feeds)
+    assert found == resolve_health_inputs(
+        FixtureBackend(records=live_records()),
+        units,
+        borrow=borrow,
+    )
+    with pytest.raises(UnsupportedMarketError):
+        resolve.health_inputs(units, borrow=borrow, records=[], feeds=feeds)
