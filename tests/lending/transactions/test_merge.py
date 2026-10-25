@@ -244,8 +244,29 @@ def test_reference_inputs_merge_across_calls_and_existing_members():
     assert _reference_out_refs(tx_builder) == sorted([a.out_ref, b.out_ref, c.out_ref])
     assert bare_c in tx_builder.reference_inputs
     assert to_pycardano_utxo(c) not in tx_builder.reference_inputs
-    # One index per out-ref in the canonical ordering (bare inputs carry none).
-    assert ref_index(tx_builder) == {a.out_ref: 0, b.out_ref: 1}
+    # One index per out-ref in the canonical ordering, bare inputs included.
+    assert ref_index(tx_builder) == {a.out_ref: 0, b.out_ref: 1, c.out_ref: 2}
+
+
+def test_ref_index_counts_a_bare_input_that_sorts_first():
+    a = _script_ref(SCRIPT_A, 0xA1)
+    tx_builder = _builder()
+    tx_builder.reference_inputs.add(TransactionInput(TransactionId(bytes(32)), 0))
+    merge_reference_inputs(tx_builder, [a])
+
+    assert ref_index(tx_builder) == {("00" * 32, 0): 0, a.out_ref: 1}
+
+
+def test_zero_withdrawal_without_an_out_ref_leaves_the_builder_unchanged():
+    ref = _script_ref(SCRIPT_A, 0xA1)
+    ref.out_ref = None
+    tx_builder = _builder()
+
+    with pytest.raises(ValueError):
+        add_zero_withdrawal(tx_builder, script_ref=ref, redeemer=plutus_int(0))
+
+    assert not tx_builder.withdrawals
+    assert not tx_builder.reference_inputs
 
 
 def test_reference_inputs_and_a_zero_withdrawal_share_one_member():

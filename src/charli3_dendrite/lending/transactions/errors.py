@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from typing import Any
-from typing import Mapping
 
 __all__ = [
     "CANNOT_CREATE_EVALUATION_CONTEXT",
@@ -60,6 +60,11 @@ class OgmiosEvaluationError(LendingBuildError, AssertionError):
         self.code: int | None = code if isinstance(code, int) else None
         self.reason: str | None = message if isinstance(message, str) else None
         self.data: Any = error.get("data")
+        self._error = dict(error)
+
+    def __reduce__(self) -> tuple[type[OgmiosEvaluationError], tuple[dict]]:
+        """Rebuild from the Ogmios error object, so pickle and copy round-trip."""
+        return type(self), (self._error,)
 
     def overlapping_refs(self) -> frozenset[tuple[str, int]]:
         """The out-refs a 3002 names as already on the ledger; empty otherwise."""

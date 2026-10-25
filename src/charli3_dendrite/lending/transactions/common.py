@@ -51,7 +51,9 @@ __all__ = [
 
 def ref_index(tx_builder: TransactionBuilder) -> dict[tuple[str, int], int]:
     """Map each reference input's out-ref to its index in the canonical ordering."""
-    inputs = [u.input for u in tx_builder.reference_inputs if isinstance(u, UTxO)]
+    inputs = [
+        u.input if isinstance(u, UTxO) else u for u in tx_builder.reference_inputs
+    ]
     inputs.sort(key=lambda i: (bytes(i.transaction_id), i.index))
     return {
         (bytes(i.transaction_id).hex(), i.index): pos for pos, i in enumerate(inputs)
@@ -154,9 +156,9 @@ def add_zero_withdrawal(
     withdrawals = dict(tx_builder.withdrawals or {})
     if account in withdrawals:
         return
+    utxo = to_pycardano_utxo(script_ref)
     withdrawals[account] = 0
     tx_builder.withdrawals = Withdrawals(withdrawals)
-    utxo = to_pycardano_utxo(script_ref)
     existing = _reference_member(tx_builder, utxo.input)
     tx_builder.add_withdrawal_script(utxo, Redeemer(redeemer))
     if existing is not None and existing != utxo:

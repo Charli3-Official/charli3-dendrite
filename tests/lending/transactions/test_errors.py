@@ -95,6 +95,17 @@ def test_error_tolerates_a_body_without_code_or_message():
     assert error.missing_inputs() == frozenset()
 
 
+def test_error_survives_pickle_and_copy():
+    import copy
+    import pickle
+
+    error = OgmiosEvaluationError({"code": 3002, "message": "m", "data": {"k": 1}})
+    for clone in (pickle.loads(pickle.dumps(error)), copy.copy(error)):
+        assert type(clone) is OgmiosEvaluationError
+        assert (clone.code, clone.reason, clone.data) == (3002, "m", {"k": 1})
+        assert str(clone) == str(error)
+
+
 def test_validity_window_error_is_a_build_error():
     assert issubclass(ValidityWindowError, LendingBuildError)
     assert issubclass(LendingBuildError, ValueError)
