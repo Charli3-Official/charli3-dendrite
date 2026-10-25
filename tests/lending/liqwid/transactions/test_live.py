@@ -72,7 +72,7 @@ SCRIPT_FAILURE = 3010
 
 # Loans whose token is named 31: a USDC loan and an Ada loan.
 USDC_LOAN_31 = "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#40"
-ADA_LOAN_31 = "79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#40"
+ADA_LOAN_31 = "ca1ad64194bd05265926a9e1494250b6ff2b811502e311171f83aa123583fe02#0"
 # A BTC loan owing only its minimum interest, (0, 0, m0 > 0).
 MINIMUM_ONLY_LOAN = "027c8b4f62b81f6c116951a5210b05d18213961673af455d91a5356ffb4b5bbf#1"
 LP_MARKET = "USDM-USDA-MINSWAP-LP-STABLE"
@@ -311,16 +311,23 @@ def test_a_loan_owing_only_its_minimum_interest_closes(backend):
 
 
 def _live_loans(backend: Any, policy: str) -> list[str]:  # noqa: ANN401
-    """The out-refs of the latest unspent outputs holding a ``policy`` token."""
+    """The out-refs of the latest unspent outputs holding a ``policy`` token.
+
+    The policy's outputs are gathered first: ordered and limited directly, the
+    planner walks ``tx_out`` backwards by id and filters every output.
+    """
     rows = db_query_rows(
         backend,
-        """SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
-           FROM ma_tx_out m
-           JOIN multi_asset ma ON ma.id = m.ident
-           JOIN tx_out o ON o.id = m.tx_out_id
+        """WITH held AS MATERIALIZED (
+               SELECT m.tx_out_id
+               FROM multi_asset ma
+               JOIN ma_tx_out m ON m.ident = ma.id
+               WHERE ma.policy = decode(%(policy)s, 'hex'))
+           SELECT encode(t.hash, 'hex') AS tx_hash, o.index AS idx
+           FROM held
+           JOIN tx_out o ON o.id = held.tx_out_id
            JOIN tx t ON t.id = o.tx_id
-           WHERE ma.policy = decode(%(policy)s, 'hex')
-             AND o.consumed_by_tx_id IS NULL
+           WHERE o.consumed_by_tx_id IS NULL
            ORDER BY o.id DESC
            LIMIT 50""",
         {"policy": policy},
