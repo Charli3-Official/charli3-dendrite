@@ -571,6 +571,17 @@ def test_close_of_the_lp_loan_pays_the_settled_debt():
         )
 
 
+def test_close_of_the_79e2bda3_loan_pays_the_settled_debt():
+    # Ada loan 79e2bda3acd86e9188c5a008fb825437e9d91a04d871b38961f05d907cc00902#40
+    # settled at the market index: no minimum interest, so the close pays Ds.
+    loan = _loan(383_321_869, 0, 0, 19_359_639_391_292_492)
+    s5 = 19_764_188_185_007_556
+    assert terms.close_payment(loan, s5) == 391_331_957
+    deltas = terms.close_deltas(loan, s5)
+    assert deltas == ActionDeltas(principal=-383_321_869, interest=-8_010_088)
+    assert deltas.underlying_delta() == 391_331_957
+
+
 @pytest.mark.parametrize(
     ("principal", "interest", "min_interest", "pay", "top_up"),
     [
@@ -665,15 +676,43 @@ TERMS_IMPORTS = {
 }
 
 
-def test_terms_imports_only_records_arithmetic_and_errors():
-    tree = ast.parse(Path(terms.__file__).read_text())
+def _imported_modules(source: str) -> set[str]:
+    """Every module ``source`` imports, at any depth of the syntax tree."""
     imported: set[str] = set()
-    for node in tree.body:
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            assert node.module is not None
-            imported.add(node.module)
+            imported.add("." * node.level + (node.module or ""))
+    return imported
+
+
+def test_imported_modules_sees_nested_imports():
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    from pycardano import Address\n"
+        "try:\n"
+        "    import requests\n"
+        "except ImportError:\n"
+        "    pass\n"
+        "def build():\n"
+        "    import charli3_dendrite.backend\n"
+        "class Builder:\n"
+        "    def run(self):\n"
+        "        from . import oracles\n"
+    )
+    assert _imported_modules(source) == {
+        "typing",
+        "pycardano",
+        "requests",
+        "charli3_dendrite.backend",
+        ".",
+    }
+
+
+def test_terms_imports_only_records_arithmetic_and_errors():
+    imported = _imported_modules(Path(terms.__file__).read_text())
     assert imported <= TERMS_IMPORTS, sorted(imported - TERMS_IMPORTS)
 
 
