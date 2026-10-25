@@ -2,7 +2,7 @@
 
 Canonical-ordering index lookups (the Plutus script context sorts inputs and
 reference inputs by ``(tx_id, index)``), the reward (stake-script) address encoding,
-and the ledger minimum-ADA of an output.
+integer redeemers, and the ledger minimum-ADA of an output.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from pycardano import Address
 from pycardano import Network
+from pycardano import RawPlutusData
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
@@ -30,6 +31,7 @@ __all__ = [
     "input_index",
     "min_ada",
     "out_ref_of",
+    "plutus_int",
     "ref_index",
     "reward_address",
     "settled_min_ada",
@@ -65,6 +67,14 @@ def reward_address(script_hash: str) -> bytes:
             network=Network.MAINNET,
         ),
     )
+
+
+def plutus_int(n: int) -> RawPlutusData:
+    """An integer Plutus datum or redeemer: the bare CBOR integer ``n``.
+
+    `assemble_unsigned` serializes it as given, so ``plutus_int(0)`` encodes ``00``.
+    """
+    return RawPlutusData(n)
 
 
 def out_ref_of(utxo: Utxo) -> tuple[str, int]:
