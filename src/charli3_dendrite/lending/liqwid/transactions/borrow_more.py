@@ -20,13 +20,12 @@ from typing import Any
 
 from pycardano import TransactionBuilder
 
-from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.transactions._flow import kept_loan_lovelace
 from charli3_dendrite.lending.liqwid.transactions.borrow import LoanChange
 from charli3_dendrite.lending.liqwid.transactions.borrow import add_borrow
-from charli3_dendrite.lending.liqwid.transactions.borrow import held_collateral
 from charli3_dendrite.lending.liqwid.transactions.borrow import resolve_borrow
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
@@ -36,8 +35,10 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
+from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import Flow
 from charli3_dendrite.lending.liqwid.transactions.terms import health_debt
+from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
 from charli3_dendrite.lending.liqwid.transactions.terms import increase
 from charli3_dendrite.lending.liqwid.transactions.terms import settle
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
@@ -120,14 +121,14 @@ class IncreaseSnapshot(PoolActionSnapshot):
                 recreated.utxo,
                 written.utxo,
             ),
-            amount=recreated.datum.principal_delta - action.datum.principal_delta,
+            amount=ActionDeltas.between(action.datum, recreated.datum).principal,
             collateral=collateral,
             funding=funding,
             valid_to_ms=capture.upper_bound_ms(),
             valid_from_ms=capture.valid_from_ms,
             loan_lovelace=written.utxo.lovelace,
             deployment=deployment,
-            indefinite=datum_style(written.utxo.datum or "") == "indefinite",
+            indefinite=capture.indefinite(written.utxo),
         )
 
     @classmethod
@@ -160,9 +161,7 @@ class IncreaseSnapshot(PoolActionSnapshot):
             LiqwidBuildError: As ``resolve_borrow``.
         """
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
-        from charli3_dendrite.lending.liqwid.transactions.resolve import (
-            resolve_market_records,
-        )
+        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
 
         active = resolve_deployment(deployment)
         loan = resolve_loan(
@@ -172,8 +171,7 @@ class IncreaseSnapshot(PoolActionSnapshot):
             allow_spent=allow_spent,
         )
         market = loan.market
-        records = resolve_market_records(backend, [market], deployment=active)
-        borrow = records[market.name]
+        borrow = resolve_market(backend, market, deployment=active)
         target = held_collateral(loan.collateral if collateral is None else collateral)
         resolved = resolve_borrow(
             backend,
@@ -260,10 +258,6 @@ def _build_increase(
             collateral_out=snapshot.collateral_out,
             debt=_debt(loan, snapshot.records, snapshot.amount),
             token_name=flip_name(loan.token_name),
-            previous_lovelace=(
-                loan.utxo.lovelace
-                if snapshot.loan_lovelace is None
-                else snapshot.loan_lovelace
-            ),
+            previous_lovelace=kept_loan_lovelace(loan, snapshot.loan_lovelace),
         ),
     )

@@ -250,6 +250,20 @@ def test_action_deltas_apply_field_wise_and_keep_the_nonce():
     assert ActionDeltas().apply_to(action) == action
 
 
+def test_action_deltas_between_two_records_undo_apply_to():
+    before = ActionDatum(10, 20, 30, 40, 50, ["nonce", 7])
+    after = ActionDatum(11, 18, 33, 36, 55, ["nonce", 8])
+    deltas = ActionDeltas.between(before, after)
+    assert deltas == ActionDeltas(
+        supply=1, qtoken=-2, principal=3, interest=-4, min_interest_paid=5
+    )
+    assert deltas.apply_to(before) == ActionDatum(11, 18, 33, 36, 55, ["nonce", 7])
+
+
+def test_held_collateral_drops_zero_quantities():
+    assert terms.held_collateral({"a": 3, "b": 0, "c": -1}) == {"a": 3, "c": -1}
+
+
 def test_action_deltas_underlying_delta_follows_the_value_rule():
     # supply - principal - interest + min_interest_paid
     deltas = ActionDeltas(

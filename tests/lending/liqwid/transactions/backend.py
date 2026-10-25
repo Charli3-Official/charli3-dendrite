@@ -10,6 +10,8 @@
   :mod:`charli3_dendrite.lending.transactions.resolve`, answered from canned
   :class:`Utxo` s (a spent one only when the query does not filter spent outputs);
 - ``last_block``: one block at ``tip_time`` (POSIX seconds).
+
+:func:`capture_backend` seeds one from a captured transaction.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.transactions.utxos import Utxo
+from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
+from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from tests.lending.liqwid.records import UTXO_KINDS
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
@@ -148,3 +152,27 @@ def live_records(*kinds: str) -> list[PoolStateInfo]:
         for kind in kinds or UTXO_KINDS
         for rec in records_of(kind, live=True)
     ]
+
+
+def capture_backend(
+    fix: dict[str, Any],
+    *,
+    live_inputs: bool = True,
+    utxos: Iterable[Utxo] = (),
+    tip_time: int | None = None,
+) -> FixtureBackend:
+    """A backend serving what the capture ``fix`` spent and referenced as live.
+
+    The datum-bearing reference inputs (records and feeds) are live records, and so
+    are the datum-bearing inputs (action UTxOs, loans) unless ``live_inputs`` is
+    unset. The reference scripts, every input and ``utxos`` resolve by out-ref. The
+    tip is at ``tip_time`` (POSIX seconds), by default the capture's block time.
+    """
+    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
+    inputs = [utxo_from_dict(u) for u in fix["inputs"]]
+    held = refs + inputs if live_inputs else refs
+    return FixtureBackend(
+        records=[utxo_to_info(u) for u in held if u.datum and not u.ref_script],
+        utxos=[*(u for u in refs if u.ref_script), *inputs, *utxos],
+        tip_time=fix["block_time"] if tip_time is None else tip_time,
+    )

@@ -77,6 +77,7 @@ __all__ = [
     "default_valid_to_ms",
     "health_debt",
     "health_required",
+    "held_collateral",
     "increase",
     "open_loan",
     "rebase_for_collateral",
@@ -160,6 +161,26 @@ class ActionDeltas:
     principal: int = 0
     interest: int = 0
     min_interest_paid: int = 0
+
+    @classmethod
+    def between(cls, before: ActionDatum, after: ActionDatum) -> ActionDeltas:
+        """The deltas that turn the record ``before`` into ``after``, field-wise.
+
+        Args:
+            before: An action UTxO's record before a flow.
+            after: The record the flow wrote back.
+
+        Returns:
+            The deltas, so that ``between(before, after).apply_to(before)``
+            equals ``after`` up to the nonce.
+        """
+        return cls(
+            supply=after.supply_delta - before.supply_delta,
+            qtoken=after.qtoken_delta - before.qtoken_delta,
+            principal=after.principal_delta - before.principal_delta,
+            interest=after.interest_delta - before.interest_delta,
+            min_interest_paid=after.min_interest_paid - before.min_interest_paid,
+        )
 
     def apply_to(self, action: ActionDatum) -> ActionDatum:
         """``action`` with these deltas added field-wise; the nonce is kept.
@@ -711,8 +732,9 @@ def collateral_holdings(
     return holdings
 
 
-def _held_units(holding: Mapping[str, int]) -> dict[str, int]:
-    return {unit: amount for unit, amount in holding.items() if amount != 0}
+def held_collateral(collateral: Mapping[str, int]) -> dict[str, int]:
+    """``collateral`` without its zero quantities: the units a loan holds."""
+    return {unit: amount for unit, amount in collateral.items() if amount != 0}
 
 
 def health_required(
@@ -741,7 +763,7 @@ def health_required(
         return True
     if any(collateral_out.get(unit, 0) < q for unit, q in collateral_in.items()):
         return True
-    changed = _held_units(collateral_in) != _held_units(collateral_out)
+    changed = held_collateral(collateral_in) != held_collateral(collateral_out)
     return borrow == 0 and repay == 0 and changed
 
 

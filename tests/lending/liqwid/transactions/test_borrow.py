@@ -26,16 +26,15 @@ from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
-from charli3_dendrite.lending.liqwid.transactions.resolve import record_from_utxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market_records
 from charli3_dendrite.lending.liqwid.transactions.terms import health_debt
 from charli3_dendrite.lending.liqwid.transactions.terms import settle
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
-from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.utility import posix_ms_to_slot
 from tests.lending.liqwid.transactions.backend import FixtureBackend
+from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.backend import live_records
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import build
@@ -51,7 +50,10 @@ from tests.lending.liqwid.transactions.replay import protocol_outputs
 from tests.lending.liqwid.transactions.replay import redeemers
 from tests.lending.liqwid.transactions.replay import reference_inputs
 from tests.lending.liqwid.transactions.replay import required_signers
+from tests.lending.liqwid.transactions.replay import validator_credentials
 from tests.lending.liqwid.transactions.replay import validity
+from tests.lending.liqwid.transactions.replay import with_feed_price
+from tests.lending.liqwid.transactions.replay import with_params
 from tests.lending.liqwid.transactions.replay import withdrawals
 from tests.lending.liqwid.transactions.test_resolve import _reference_utxos
 from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
@@ -78,12 +80,6 @@ OWNER = str(
 )
 
 
-def _credentials(snapshot):
-    """The payment credentials of the protocol outputs: action and loan validators."""
-    params = snapshot.records.params_datum
-    return {params.action_validator, params.loan_validator}
-
-
 def _build(contribute, snapshot, fix):
     return build(contribute, snapshot, slot=fix["invalid_hereafter"])
 
@@ -100,7 +96,7 @@ def test_an_open_replays_its_capture(label):
     fix = fixture(label)
     snapshot = BorrowSnapshot.from_capture(fix)
     built = _build(build_borrow, snapshot, fix)
-    assert_replays(built, fix, credentials=_credentials(snapshot))
+    assert_replays(built, fix, credentials=validator_credentials(snapshot))
 
 
 @pytest.mark.parametrize("label", INCREASES)
@@ -108,7 +104,7 @@ def test_a_borrow_more_replays_its_capture(label):
     fix = fixture(label)
     snapshot = IncreaseSnapshot.from_capture(fix)
     built = _build(build_increase, snapshot, fix)
-    assert_replays(built, fix, credentials=_credentials(snapshot))
+    assert_replays(built, fix, credentials=validator_credentials(snapshot))
 
 
 def test_an_open_on_a_liquidation_first_market_withdraws_from_the_borrow_script():
@@ -149,40 +145,25 @@ def test_one_more_unit_on_an_open_at_the_limit_is_unhealthy():
         _build(build_borrow, snapshot, fixture("open_at_limit"))
 
 
-def _with_borrow_cap(snapshot, cap):
-    records = snapshot.records
-    params = dataclasses.replace(records.params_datum, borrow_cap=cap)
-    snapshot.records = dataclasses.replace(
-        records,
-        params=dataclasses.replace(records.params, datum=params),
-    )
-    return snapshot
-
-
 def test_the_borrow_cap_binds_at_the_captured_utilisation():
     # increase_ada lends 103 ADA from an action UTxO with no pending principal; the
     # per-UTxO utilisation after it is 3813458396338/9212231794565.
     fix = fixture("increase_ada")
     n = 413_955_975_205_470_918_050_687
-    below = _with_borrow_cap(IncreaseSnapshot.from_capture(fix), (n, 10**24))
+    below = with_params(IncreaseSnapshot.from_capture(fix), borrow_cap=(n, 10**24))
     with pytest.raises(CapExceededError) as caught:
         _build(build_increase, below, fix)
     assert caught.value.cap == "borrow"
-    at = _with_borrow_cap(IncreaseSnapshot.from_capture(fix), (n + 1, 10**24))
-    assert_replays(_build(build_increase, at, fix), fix, credentials=_credentials(at))
+    at = with_params(IncreaseSnapshot.from_capture(fix), borrow_cap=(n + 1, 10**24))
+    assert_replays(
+        _build(build_increase, at, fix), fix, credentials=validator_credentials(at)
+    )
 
 
 def _scaled_price(snapshot, underlying, factor):
     feed = snapshot.health.feeds[underlying]
-    scaled = Fraction(feed.usd_num, feed.usd_den) * factor
-    feeds = dict(snapshot.health.feeds)
-    feeds[underlying] = dataclasses.replace(
-        feed,
-        usd_num=scaled.numerator,
-        usd_den=scaled.denominator,
-    )
-    snapshot.health = dataclasses.replace(snapshot.health, feeds=feeds)
-    return snapshot
+    price = Fraction(feed.usd_num, feed.usd_den) * factor
+    return with_feed_price(snapshot, underlying, price)
 
 
 def _staked_collateral_underlying(snapshot):
@@ -214,7 +195,9 @@ def test_the_staked_borrow_more_sits_two_parts_in_1e11_inside_its_limit():
     snapshot = IncreaseSnapshot.from_capture(fix)
     underlying = _staked_collateral_underlying(snapshot)
     one = _scaled_price(snapshot, underlying, 1 - Fraction(1, 10**11))
-    assert_replays(_build(build_increase, one, fix), fix, credentials=_credentials(one))
+    assert_replays(
+        _build(build_increase, one, fix), fix, credentials=validator_credentials(one)
+    )
     snapshot = IncreaseSnapshot.from_capture(fix)
     two = _scaled_price(snapshot, underlying, 1 - Fraction(2, 10**11))
     with pytest.raises(UnhealthyLoanError):
@@ -262,7 +245,7 @@ def test_a_borrow_more_on_a_31_loan_burns_it_and_mints_01():
     assert mints(built) == {(policy + "31", -1), (policy + "01", 1)}
     (loan_out,) = [
         v
-        for v in protocol_outputs(built, _credentials(snapshot))
+        for v in protocol_outputs(built, validator_credentials(snapshot))
         if (policy + "01", 1) in v.assets
     ]
     assert decode_loan(loan_out.datum).owner == loan.datum.owner
@@ -271,24 +254,15 @@ def test_a_borrow_more_on_a_31_loan_burns_it_and_mints_01():
 # --- live resolution ------------------------------------------------------------
 
 
-def _capture_backend(fix, *, spent_inputs=()):
-    """A backend serving a capture's records and scripts as the live chain.
+def _capture_backend(fix):
+    """A backend serving a capture's records, scripts and spent inputs as live.
 
-    The action UTxOs and loans in ``spent_inputs`` are served unspent; every other
-    reference script the deployment lists is a stand-in at its recorded out-ref.
+    Every other reference script the deployment lists is a stand-in at its
+    recorded out-ref.
     """
-    capture = CapturedTx.of(fix)
-    references = [u for u in capture.references if record_from_utxo(u) is not None]
-    records = [utxo_to_info(u) for u in references]
-    records += [utxo_to_info(u) for u in spent_inputs]
-    scripts = [u for u in capture.references if u.ref_script]
-    held = {u.out_ref for u in scripts}
+    held = {u.out_ref for u in CapturedTx.of(fix).references if u.ref_script}
     stand_ins = [u for u in _reference_utxos() if u.out_ref not in held]
-    return FixtureBackend(
-        records=records,
-        utxos=[*scripts, *stand_ins, *spent_inputs],
-        tip_time=fix["block_time"],
-    )
+    return capture_backend(fix, utxos=stand_ins)
 
 
 def _assert_same_protocol_effects(built, fix, snapshot):
@@ -304,7 +278,7 @@ def test_an_open_resolved_from_the_backend_builds_the_captured_open(
 ):
     fix = fixture("open_single")
     captured = BorrowSnapshot.from_capture(fix)
-    backend = _capture_backend(fix, spent_inputs=[captured.action.utxo])
+    backend = _capture_backend(fix)
     snapshot = BorrowSnapshot.from_backend(
         backend,
         market="Ada",
@@ -335,10 +309,7 @@ def test_a_borrow_more_resolved_from_the_backend_builds_the_captured_one(
 ):
     fix = fixture("increase_ada")
     captured = IncreaseSnapshot.from_capture(fix)
-    backend = _capture_backend(
-        fix,
-        spent_inputs=[captured.action.utxo, captured.loan.utxo],
-    )
+    backend = _capture_backend(fix)
     snapshot = IncreaseSnapshot.from_backend(
         backend,
         loan_utxo="{}#{}".format(*captured.loan.utxo.out_ref),
@@ -350,8 +321,8 @@ def test_a_borrow_more_resolved_from_the_backend_builds_the_captured_one(
     assert snapshot.action.out_ref == captured.action.out_ref
     built = _build(build_increase, snapshot, fix)
     _assert_same_protocol_effects(built, fix, snapshot)
-    assert protocol_outputs(built, _credentials(snapshot)) == (
-        captured_protocol_outputs(fix, _credentials(snapshot))
+    assert protocol_outputs(built, validator_credentials(snapshot)) == (
+        captured_protocol_outputs(fix, validator_credentials(snapshot))
     )
 
 

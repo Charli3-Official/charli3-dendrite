@@ -3,11 +3,13 @@
 A capture is the record of a transaction already on chain: its spent inputs,
 outputs and reference inputs as :class:`~charli3_dendrite.lending.transactions.utxos.
 Utxo` dictionaries (``address, lovelace, assets, datum, ref_script, ref_script_type,
-out_ref``) and its validity interval in slots (``invalid_before``,
-``invalid_hereafter``). :class:`CapturedTx` decodes it once and answers what a
-builder snapshot's ``from_capture`` needs: the market records and oracle feeds among
-the reference inputs, the reference scripts by hash, the action UTxOs and loans it
-spends, the loan it writes, and the wallet inputs that funded it.
+out_ref``), its mints as ``[policy, name, quantity]``, its required signers and its
+validity interval in slots (``invalid_before``, ``invalid_hereafter``).
+:class:`CapturedTx` decodes it once and answers what a builder snapshot's
+``from_capture`` needs: the market records and oracle feeds among the reference
+inputs, the reference scripts by hash, the market whose qTokens it mints or burns,
+the action UTxOs and loans it spends and writes, the style of the datums it writes,
+and the wallet inputs that funded it.
 
 The records and feeds are assembled by the same functions live resolution uses
 (:func:`~charli3_dendrite.lending.liqwid.transactions.resolve.market_records`,
@@ -17,6 +19,7 @@ the reference inputs instead of a backend read.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -26,6 +29,7 @@ from typing import Any
 from typing import TypeVar
 
 from charli3_dendrite.lending.liqwid.datums import ActionDatum
+from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.deployment import staking_roles
@@ -38,6 +42,7 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRef
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import health_inputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import loan_record
+from charli3_dendrite.lending.liqwid.transactions.resolve import loan_script_refs
 from charli3_dendrite.lending.liqwid.transactions.resolve import market_records
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import script_ref_by_hash
@@ -51,11 +56,22 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
     from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
     from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
+    from charli3_dendrite.lending.liqwid.transactions.resolve import LoanScriptRefs
     from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
 
 __all__ = ["CapturedTx", "sole"]
 
 _T = TypeVar("_T")
+
+# The script each LiqwidScriptRefs field carries, as a refusal names it.
+_SCRIPT_NAMES = {
+    "action": "action validator",
+    "qtoken_policy": "qToken policy",
+    "loan_validator": "loan validator",
+    "loan_policy": "loan-token policy",
+    "borrow_staking": "borrow staking script",
+    "liquidation_staking": "liquidation staking script",
+}
 
 
 def sole(items: Sequence[_T], what: str) -> _T:
@@ -75,7 +91,9 @@ class CapturedTx:
     """A captured transaction, decoded against a Liqwid deployment.
 
     ``records`` are the routed Liqwid records among the reference inputs and
-    ``feeds`` the genuine oracle feeds among them.
+    ``feeds`` the genuine oracle feeds among them; ``mints`` are the minted (and,
+    negative, burnt) ``(policy, name, quantity)`` and ``required_signers`` the key
+    hashes (hex) the transaction requires.
     """
 
     inputs: tuple[Utxo, ...]
@@ -86,6 +104,8 @@ class CapturedTx:
     deployment: LiqwidDeployment
     records: tuple[LiqwidRecord, ...]
     feeds: tuple[LiqwidFeed, ...]
+    mints: tuple[tuple[str, str, int], ...] = ()
+    required_signers: tuple[str, ...] = ()
 
     @classmethod
     def of(
@@ -113,6 +133,8 @@ class CapturedTx:
             feeds=tuple(
                 feed for info in infos if (feed := parse_feed(info, active)) is not None
             ),
+            mints=tuple((p, n, int(q)) for p, n, q in fix.get("mints", ())),
+            required_signers=tuple(fix.get("required_signers", ())),
         )
 
     @property
@@ -166,31 +188,67 @@ class CapturedTx:
         self,
         market: MarketComponents,
         params: MarketParamsDatum,
+        *,
+        require: Collection[str] = ("action",),
     ) -> LiqwidScriptRefs:
         """The market's scripts the transaction references; the others are None.
 
+        ``require`` names the fields of
+        :class:`~charli3_dendrite.lending.liqwid.transactions.resolve.LiqwidScriptRefs`
+        the transaction must reference (the action validator by default).
+
         Raises:
-            ValueError: No reference input carries the action validator ``params``
-                names.
+            ValueError: No reference input carries a required script.
         """
-        action = (
-            self.script(params.action_validator) if params.action_validator else None
-        )
-        if action is None:
-            msg = f"the capture references no action validator of {market.name}"
-            raise ValueError(msg)
         borrow = liquidation = None
         if params.withdraw_zero is not None:
             roles = staking_roles(market, params)
             borrow, liquidation = roles.borrow, roles.liquidation
-        return LiqwidScriptRefs(
-            action=action,
+        refs = LiqwidScriptRefs(
+            action=self._optional_script(params.action_validator),
             qtoken_policy=self.script(market.qtoken_policy),
             loan_validator=self._optional_script(params.loan_validator),
             loan_policy=self._optional_script(market.new_borrow_policy),
             borrow_staking=self._optional_script(borrow),
             liquidation_staking=self._optional_script(liquidation),
         )
+        for field in require:
+            if getattr(refs, field) is None:
+                msg = (
+                    f"the capture references no {_SCRIPT_NAMES[field]} of {market.name}"
+                )
+                raise ValueError(msg)
+        return refs
+
+    def loan_script_refs(
+        self,
+        market: MarketComponents,
+        params: MarketParamsDatum,
+    ) -> LoanScriptRefs:
+        """The market's owner loan scripts among the reference inputs.
+
+        Raises:
+            UnsupportedMarketError: The market is unfit for loan flows.
+            ValueError: No reference input carries one of the scripts.
+        """
+        return loan_script_refs(self.references, market, params)
+
+    def qtoken_market(self) -> MarketComponents:
+        """The one market whose qTokens the transaction mints or burns.
+
+        Raises:
+            ValueError: It mints or burns the qTokens of no market, or of several.
+        """
+        markets = {
+            found
+            for policy, _, _ in self.mints
+            if (found := self.deployment.market_of_qtoken(policy)) is not None
+        }
+        if len(markets) != 1:
+            msg = "the capture does not mint or burn one market's qTokens"
+            raise ValueError(msg)
+        (market,) = markets
+        return market
 
     def _optional_script(self, script_hash: str | None) -> Utxo | None:
         return self.script(script_hash) if script_hash else None
@@ -218,6 +276,16 @@ class CapturedTx:
             if (record := parse_utxo(utxo_to_info(u), self.deployment)) is not None
             and record.kind is LiqwidKind.LOAN
         ]
+
+    def indefinite(self, *written: Utxo | None) -> bool:
+        """True when a datum of ``written`` (outputs; None skipped) is indefinite.
+
+        The captured array style, which a replay pins.
+        """
+        return any(
+            u is not None and u.datum and datum_style(u.datum) == "indefinite"
+            for u in written
+        )
 
     def funding(self, *spent: Utxo) -> list[Utxo]:
         """The inputs other than ``spent`` (the protocol UTxOs), in input order."""

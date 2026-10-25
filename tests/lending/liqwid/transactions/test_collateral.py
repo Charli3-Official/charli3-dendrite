@@ -6,6 +6,7 @@ behind the market's). It spends no action UTxO and writes no validity window.
 """
 
 import dataclasses
+from fractions import Fraction
 
 import pytest
 from pycardano import PlutusV2Script
@@ -29,11 +30,9 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import LoanScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.terms import rebase_for_collateral
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
-from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
-from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.lending.units import script_payment_address
-from tests.lending.liqwid.transactions.backend import FixtureBackend
+from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import build
 from tests.lending.liqwid.transactions.replay import captured_protocol_outputs
@@ -44,6 +43,7 @@ from tests.lending.liqwid.transactions.replay import redeemers
 from tests.lending.liqwid.transactions.replay import reference_inputs
 from tests.lending.liqwid.transactions.replay import required_signers
 from tests.lending.liqwid.transactions.replay import validity
+from tests.lending.liqwid.transactions.replay import with_feed_price
 from tests.lending.liqwid.transactions.replay import withdrawals
 
 COLLATERAL_LABELS = [
@@ -257,16 +257,7 @@ def test_the_removal_boundary_reads_the_captured_btc_feed():
 def test_an_add_is_held_to_the_health_rule_at_the_collateral_price(price, healthy):
     snapshot = _snapshot("collateral_add")
     underlying = snapshot.health.cparams[QBTC].datum.underlying
-    feeds = dict(snapshot.health.feeds)
-    feeds[underlying] = dataclasses.replace(
-        feeds[underlying],
-        usd_num=price,
-        usd_den=1_000_000,
-    )
-    priced = dataclasses.replace(
-        snapshot,
-        health=dataclasses.replace(snapshot.health, feeds=feeds),
-    )
+    priced = with_feed_price(snapshot, underlying, Fraction(price, 1_000_000))
     if healthy:
         _build(priced)
     else:
@@ -304,22 +295,12 @@ def test_a_zero_target_quantity_removes_the_unit():
 # --- live resolution ---------------------------------------------------------------
 
 
-def _backend(fix):
-    """A backend holding a capture's records, feeds, scripts, loan and wallet."""
-    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
-    inputs = [utxo_from_dict(u) for u in fix["inputs"]]
-    return FixtureBackend(
-        records=[utxo_to_info(u) for u in refs if not u.ref_script],
-        utxos=[u for u in refs if u.ref_script] + inputs,
-    )
-
-
 @pytest.mark.parametrize("label", COLLATERAL_LABELS)
 def test_from_backend_builds_the_captured_change(label):
     fix = fixture(label)
     captured = CollateralSnapshot.from_capture(fix)
     snapshot = CollateralSnapshot.from_backend(
-        _backend(fix),
+        capture_backend(fix),
         loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
         owner_address=captured.owner_address,
         collateral=captured.collateral,
@@ -342,7 +323,7 @@ def test_from_backend_reads_the_owner_wallet_when_no_funding_is_given():
     fix = fixture("collateral_add")
     captured = CollateralSnapshot.from_capture(fix)
     snapshot = CollateralSnapshot.from_backend(
-        _backend(fix),
+        capture_backend(fix),
         loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
         owner_address=captured.owner_address,
         collateral=captured.collateral,
@@ -355,7 +336,7 @@ def test_from_backend_reads_the_owner_wallet_when_no_funding_is_given():
 def test_from_backend_refuses_too_many_collaterals_before_reading_health():
     fix = fixture("collateral_add")
     captured = CollateralSnapshot.from_capture(fix)
-    backend = _backend(fix)
+    backend = capture_backend(fix)
     target = dict(captured.collateral)
     target.update({f"{index:02x}" * 28: 1 for index in range(6)})
     with pytest.raises(CollateralCountError):

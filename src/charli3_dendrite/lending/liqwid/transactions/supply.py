@@ -22,12 +22,14 @@ from typing import Any
 
 from pycardano import TransactionBuilder
 
-from charli3_dendrite.lending.liqwid.datums import datum_style
-from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
-from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
+from charli3_dendrite.lending.liqwid.transactions._flow import check_flow_limits
+from charli3_dendrite.lending.liqwid.transactions._flow import market_references
+from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
+from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
+from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.legs import add_action_leg
 from charli3_dendrite.lending.liqwid.transactions.legs import add_funding
 from charli3_dendrite.lending.liqwid.transactions.legs import add_owner_signer
@@ -35,32 +37,21 @@ from charli3_dendrite.lending.liqwid.transactions.legs import add_qtoken_leg
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
-from charli3_dendrite.lending.liqwid.transactions.resolve import record_from_utxo
 from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import Flow
-from charli3_dendrite.lending.liqwid.transactions.terms import check_action_limits
-from charli3_dendrite.lending.liqwid.transactions.terms import check_limits
 from charli3_dendrite.lending.liqwid.transactions.terms import check_market_limits
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_burn_for
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_payout
 from charli3_dendrite.lending.liqwid.transactions.terms import supply_mint
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
-from charli3_dendrite.lending.liqwid.transactions.terms import valid_to_ms
 from charli3_dendrite.lending.transactions.errors import ValidityWindowError
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.lending.transactions.utxos import Utxo
-from charli3_dendrite.lending.transactions.utxos import script_ref_by_hash
-from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
-from charli3_dendrite.lending.transactions.utxos import utxo_from_info
-from charli3_dendrite.lending.transactions.validity import merge_validity
-from charli3_dendrite.utility import posix_ms_to_slot
-from charli3_dendrite.utility import slot_to_posix_ms
 
 if TYPE_CHECKING:
     import random
 
     from charli3_dendrite.backend.backend_base import AbstractBackend
-    from charli3_dendrite.lending.liqwid.indexing import LiqwidRecord
 
 __all__ = [
     "RedeemSnapshot",
@@ -120,7 +111,7 @@ class SupplySnapshot(PoolActionSnapshot):
             records=flow.records,
             action=flow.action,
             script_refs=flow.script_refs,
-            owner_address=flow.funding[0].address,
+            owner_address=flow.owner_address,
             amount=flow.deltas.supply,
             qtokens=flow.deltas.qtoken,
             funding=flow.funding,
@@ -160,6 +151,10 @@ class SupplySnapshot(PoolActionSnapshot):
             ActionUtxoSpentError: The pinned action UTxO is not live.
             MarketAwaitingBatchError: The market's batch deadline is too close.
         """
+        from charli3_dendrite.lending.liqwid.transactions.resolve import (
+            resolve_owner_funding,
+        )
+
         records = _resolve_records(backend, market, deployment)
         rate = records.state_datum.qtoken_rate
         deltas = ActionDeltas(supply=amount, qtoken=supply_mint(amount, rate))
@@ -183,7 +178,7 @@ class SupplySnapshot(PoolActionSnapshot):
             owner_address=owner_address,
             amount=amount,
             qtokens=deltas.qtoken,
-            funding=_funding(backend, owner_address, funding),
+            funding=resolve_owner_funding(backend, owner_address, funding),
             valid_to_ms=side.valid_to_ms,
             deployment=deployment,
         )
@@ -237,7 +232,7 @@ class RedeemSnapshot(PoolActionSnapshot):
             records=flow.records,
             action=flow.action,
             script_refs=flow.script_refs,
-            owner_address=flow.funding[0].address,
+            owner_address=flow.owner_address,
             qtokens=-flow.deltas.qtoken,
             payout=-flow.deltas.supply,
             funding=flow.funding,
@@ -285,11 +280,15 @@ class RedeemSnapshot(PoolActionSnapshot):
             ActionUtxoSpentError: The pinned action UTxO is not live.
             MarketAwaitingBatchError: The market's batch deadline is too close.
         """
+        from charli3_dendrite.lending.liqwid.transactions.resolve import (
+            resolve_owner_funding,
+        )
+
         if (amount is None) == (not withdraw_all):
             msg = "a redeem takes exactly one of an amount and withdraw_all"
             raise ValueError(msg)
         records = _resolve_records(backend, market, deployment)
-        wallet = _funding(backend, owner_address, funding)
+        wallet = resolve_owner_funding(backend, owner_address, funding)
         held = _qtokens_held(wallet, records.market)
         rate = records.state_datum.qtoken_rate
         qtokens = held if amount is None else redeem_burn_for(amount, rate)
@@ -433,31 +432,23 @@ def _add_action_flow(
     before anything is added.
     """
     records = snapshot.records
-    params, state = records.params_datum, records.state_datum
-    underlying = snapshot.market.underlying
-    check_limits(
+    check_flow_limits(
         flow,
-        params=params,
-        state=state,
-        action_datum=snapshot.action.datum,
+        records=records,
+        action=snapshot.action,
         deltas=deltas,
         amount=amount,
         output_collateral_count=0,
-        action_underlying=snapshot.action.underlying_amount(underlying),
-        underlying=underlying,
     )
-    upper, lower = _validity_slots(snapshot, records)
+    _check_upper_bound(snapshot, records)
     add_funding(tx_builder, stash, snapshot.funding)
     add_action_leg(
         tx_builder,
         action=snapshot.action,
         deltas=deltas,
         script_ref=snapshot.script_refs.action,
-        references=[
-            utxo_from_info(records.params.info),
-            utxo_from_info(records.state.info),
-        ],
-        underlying=underlying,
+        references=market_references(records),
+        underlying=snapshot.market.underlying,
         indefinite=snapshot.indefinite,
     )
     add_qtoken_leg(
@@ -468,14 +459,18 @@ def _add_action_flow(
     )
     for signer in snapshot.required_signers:
         add_owner_signer(tx_builder, signer)
-    merge_validity(tx_builder, upper_slot=upper, lower_slot=lower)
+    merge_validity_ms(
+        tx_builder,
+        upper_ms=snapshot.valid_to_ms,
+        lower_ms=snapshot.valid_from_ms,
+    )
 
 
-def _validity_slots(
+def _check_upper_bound(
     snapshot: SupplySnapshot | RedeemSnapshot,
     records: MarketRecords,
-) -> tuple[int, int | None]:
-    """The snapshot's validity bounds as slots, the upper one checked.
+) -> None:
+    """Refuse an upper bound past the market's batch deadline.
 
     Raises:
         ValidityWindowError: The upper bound is past the batch deadline.
@@ -487,11 +482,6 @@ def _validity_slots(
             f"{records.market.name}'s batch deadline {cap} ms"
         )
         raise ValidityWindowError(msg)
-    lower = snapshot.valid_from_ms
-    return (
-        posix_ms_to_slot(snapshot.valid_to_ms),
-        None if lower is None else posix_ms_to_slot(lower),
-    )
 
 
 # --- live resolution ---------------------------------------------------------
@@ -507,12 +497,10 @@ def _resolve_records(
     Raises:
         KeyError: No market is named ``name``.
     """
-    from charli3_dendrite.lending.liqwid.transactions.resolve import (
-        resolve_market_records,
-    )
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
 
     market = resolve_deployment(deployment).market_by_name(name)
-    return resolve_market_records(backend, [market], deployment=deployment)[name]
+    return resolve_market(backend, market, deployment=deployment)
 
 
 @dataclass(frozen=True)
@@ -540,66 +528,39 @@ def _resolve_action_side(
     """Check the market limits, then choose an action UTxO that takes ``deltas``.
 
     The market-level limits run first, then each candidate action UTxO's limits
-    (`check_action_limits`) decide which may be chosen. The action and qToken
-    reference scripts are resolved and the upper bound is ``requested_ms`` or the
-    default window from the chain tip (`valid_to_ms`).
+    decide which may be chosen (`resolve_flow_action`). The upper bound is
+    ``requested_ms`` or the default window from the chain tip
+    (`resolve_valid_to_ms`); the action and qToken reference scripts are resolved
+    last.
     """
-    from charli3_dendrite.lending.liqwid.transactions.resolve import choose_action_utxo
-    from charli3_dendrite.lending.liqwid.transactions.resolve import (
-        resolve_action_utxos,
-    )
-    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_now_ms
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_flow_action
     from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_script_refs
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_valid_to_ms
 
-    market = records.market
-    params, state = records.params_datum, records.state_datum
-    check_market_limits(flow, params=params, amount=amount, output_collateral_count=0)
-
-    def check(candidate: ActionUtxo) -> None:
-        check_action_limits(
-            flow,
-            params=params,
-            state=state,
-            action_datum=candidate.datum,
-            deltas=deltas,
-            action_underlying=candidate.underlying_amount(market.underlying),
-            underlying=market.underlying,
-        )
-
-    action = choose_action_utxo(
-        resolve_action_utxos(backend, market, params),
-        check=check,
+    check_market_limits(
+        flow,
+        params=records.params_datum,
+        amount=amount,
+        output_collateral_count=0,
+    )
+    action = resolve_flow_action(
+        backend,
+        records,
+        flow=flow,
+        deltas=deltas,
         pin=action_utxo,
         exclude=exclude,
         rng=rng,
     )
-    upper = valid_to_ms(
-        resolve_now_ms(backend),
-        requested_ms,
-        state=state,
-        params=params,
-        market=market.name,
-    )
+    upper = resolve_valid_to_ms(backend, records, requested_ms)
     script_refs = resolve_script_refs(
         backend,
-        market,
-        params,
+        records.market,
+        records.params_datum,
         deployment=deployment,
         loans=False,
     )
     return _ActionSide(action=action, script_refs=script_refs, valid_to_ms=upper)
-
-
-def _funding(
-    backend: AbstractBackend,
-    owner_address: str,
-    funding: Sequence[Utxo] | None,
-) -> list[Utxo]:
-    if funding is not None:
-        return list(funding)
-    from charli3_dendrite.lending.transactions.resolve import resolve_funding
-
-    return resolve_funding(backend, owner_address)
 
 
 def _qtokens_held(funding: Sequence[Utxo], market: MarketComponents) -> int:
@@ -624,6 +585,7 @@ class _CapturedFlow:
     action: ActionUtxo
     script_refs: LiqwidScriptRefs
     deltas: ActionDeltas
+    owner_address: str
     funding: list[Utxo]
     valid_to_ms: int
     valid_from_ms: int | None
@@ -641,81 +603,29 @@ def _captured_flow(fix: dict[str, Any]) -> _CapturedFlow:
 
     Raises:
         ValueError: The capture does not mint or burn exactly one market's qTokens,
-            or lacks the market's records, action UTxO or scripts.
+            or lacks the market's action UTxO, its action validator or its qToken
+            policy.
+        UnsupportedMarketError: The capture lacks the market's records.
     """
-    active = resolve_deployment()
-    markets = {
-        found
-        for policy, _, _ in fix["mints"]
-        if (found := active.market_of_qtoken(policy)) is not None
-    }
-    if len(markets) != 1:
-        msg = f"capture {fix['label']} does not mint or burn one market's qTokens"
-        raise ValueError(msg)
-    (market,) = markets
-    inputs = [utxo_from_dict(u) for u in fix["inputs"]]
-    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
-    records = _captured_records(refs, market)
-    spent = _holder(inputs, market, fix)
-    written = _holder([utxo_from_dict(u) for u in fix["outputs"]], market, fix)
-    before, after = decode_action(spent.datum or ""), decode_action(written.datum or "")
-    params = records.params_datum
-    if params.action_validator is None:
-        msg = f"market {market.name} MarketParams names no action validator"
-        raise ValueError(msg)
-    lower = fix["invalid_before"]
+    capture = CapturedTx.of(fix)
+    market = capture.qtoken_market()
+    records = capture.market_records(market)
+    spent: ActionUtxo = sole(capture.action_inputs(market), "action input")
+    written: ActionUtxo = sole(capture.action_outputs(market), "action output")
     return _CapturedFlow(
         market=market,
         records=records,
-        action=ActionUtxo(utxo=spent, datum=before),
-        script_refs=LiqwidScriptRefs(
-            action=script_ref_by_hash(refs, params.action_validator),
-            qtoken_policy=script_ref_by_hash(refs, market.qtoken_policy),
-            loan_validator=None,
-            loan_policy=None,
-            borrow_staking=None,
-            liquidation_staking=None,
+        action=spent,
+        script_refs=capture.script_refs(
+            market,
+            records.params_datum,
+            require=("action", "qtoken_policy"),
         ),
-        deltas=ActionDeltas(
-            supply=after.supply_delta - before.supply_delta,
-            qtoken=after.qtoken_delta - before.qtoken_delta,
-        ),
-        funding=[u for u in inputs if u.out_ref != spent.out_ref],
-        valid_to_ms=slot_to_posix_ms(fix["invalid_hereafter"]),
-        valid_from_ms=None if lower is None else slot_to_posix_ms(lower),
-        required_signers=tuple(fix["required_signers"]),
-        indefinite=datum_style(written.datum or "") == "indefinite",
+        deltas=ActionDeltas.between(spent.datum, written.datum),
+        owner_address=capture.wallet_address(spent.utxo, written.utxo),
+        funding=capture.funding(spent.utxo),
+        valid_to_ms=capture.upper_bound_ms(),
+        valid_from_ms=capture.valid_from_ms,
+        required_signers=capture.required_signers,
+        indefinite=capture.indefinite(written.utxo),
     )
-
-
-def _captured_records(refs: Sequence[Utxo], market: MarketComponents) -> MarketRecords:
-    found: dict[LiqwidKind, LiqwidRecord] = {}
-    for u in refs:
-        record = record_from_utxo(u)
-        if record is not None and record.market_id == market.market_id:
-            found.setdefault(record.kind, record)
-    try:
-        params = found[LiqwidKind.MARKET_PARAMS]
-        state = found[LiqwidKind.MARKET_STATE]
-    except KeyError as missing:
-        msg = f"no referenced {missing.args[0].value} record of market {market.name}"
-        raise ValueError(msg) from None
-    return MarketRecords(
-        market=market,
-        params=params,
-        state=state,
-        collateral_params={},
-    )
-
-
-def _holder(utxos: Sequence[Utxo], market: MarketComponents, fix: dict) -> Utxo:
-    """The one UTxO of ``utxos`` holding ``market``'s action token."""
-    policy = market.action_token_policy
-    holders = [u for u in utxos if policy is not None and u.holds_policy(policy)]
-    if len(holders) != 1:
-        msg = (
-            f"capture {fix['label']} has {len(holders)} action UTxOs of market "
-            f"{market.name} on one side"
-        )
-        raise ValueError(msg)
-    return holders[0]

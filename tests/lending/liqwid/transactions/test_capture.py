@@ -88,3 +88,37 @@ def test_sole_names_what_it_did_not_find_once():
         sole([], "loan input")
     with pytest.raises(ValueError, match="found 2"):
         sole([1, 2], "loan input")
+
+
+def test_the_qtoken_market_is_the_one_whose_qtokens_are_minted():
+    assert CapturedTx.of(fixture("supply_ada")).qtoken_market() == _ada()
+    with pytest.raises(ValueError, match="one market's qTokens"):
+        CapturedTx.of(fixture("open_single")).qtoken_market()
+
+
+def test_a_required_script_the_capture_lacks_is_refused_by_name():
+    capture = CapturedTx.of(fixture("open_single"))
+    params = capture.market_records(_ada()).params_datum
+    assert capture.script_refs(_ada(), params).qtoken_policy is None
+    with pytest.raises(ValueError, match="no qToken policy of Ada"):
+        capture.script_refs(_ada(), params, require=("action", "qtoken_policy"))
+    assert capture.script_refs(_ada(), params, require=()).action is not None
+
+
+def test_the_written_style_is_indefinite_when_any_written_datum_is():
+    indefinite = CapturedTx.of(fixture("open_indefinite"))
+    (loan,) = indefinite.loan_outputs()
+    assert indefinite.indefinite(None, loan.utxo) is True
+    definite = CapturedTx.of(fixture("open_single"))
+    (loan,) = definite.loan_outputs()
+    assert definite.indefinite(loan.utxo) is False
+    assert definite.indefinite() is False
+
+
+def test_the_capture_keeps_its_mints_and_required_signers():
+    fix = fixture("supply_ada")
+    capture = CapturedTx.of(fix)
+    assert capture.required_signers == tuple(fix["required_signers"])
+    assert {(p + n, q) for p, n, q in capture.mints} == {
+        (p + n, int(q)) for p, n, q in fix["mints"]
+    }

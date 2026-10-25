@@ -12,7 +12,6 @@ import random
 import pytest
 from pycardano import Address
 
-from charli3_dendrite.lending.liqwid.datums import ActionDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.datums import decode_loan
@@ -26,20 +25,20 @@ from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanErr
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
 from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
-from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
-from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
 from tests.lending.liqwid.records import records_of
-from tests.lending.liqwid.transactions.backend import FixtureBackend
+from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.replay import assert_replays
+from tests.lending.liqwid.transactions.replay import block_slot
 from tests.lending.liqwid.transactions.replay import build
 from tests.lending.liqwid.transactions.replay import fixture
 from tests.lending.liqwid.transactions.replay import mints
 from tests.lending.liqwid.transactions.replay import protocol_outputs
 from tests.lending.liqwid.transactions.replay import reference_inputs
 from tests.lending.liqwid.transactions.replay import required_signers
+from tests.lending.liqwid.transactions.replay import validator_credentials
 from tests.lending.liqwid.transactions.replay import validity
 from tests.lending.liqwid.transactions.replay import withdrawals
 
@@ -70,17 +69,8 @@ def _snapshot(label):
     return RepaySnapshot.from_capture(fixture(label))
 
 
-def _slot(fix):
-    return posix_ms_to_slot(fix["block_time"] * 1000)
-
-
 def _build(snapshot, fix):
-    return build(build_repay, snapshot, slot=_slot(fix))
-
-
-def _credentials(snapshot):
-    params = snapshot.records.params_datum
-    return {params.action_validator, params.loan_validator}
+    return build(build_repay, snapshot, slot=block_slot(fix))
 
 
 def _s5(snapshot):
@@ -110,27 +100,9 @@ def _loan_view(built, snapshot):
     return _view(built, snapshot.records.params_datum.loan_validator)
 
 
-def _deltas(before: ActionDatum, after: ActionDatum) -> ActionDeltas:
-    return ActionDeltas(
-        supply=after.supply_delta - before.supply_delta,
-        qtoken=after.qtoken_delta - before.qtoken_delta,
-        principal=after.principal_delta - before.principal_delta,
-        interest=after.interest_delta - before.interest_delta,
-        min_interest_paid=after.min_interest_paid - before.min_interest_paid,
-    )
-
-
 def _capture_backend(fix):
     """An offline backend holding what the capture spent and referenced, unspent."""
-    inputs = [utxo_from_dict(u) for u in fix["inputs"]]
-    refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
-    records = [utxo_to_info(u) for u in refs + inputs if u.datum and not u.ref_script]
-    scripts = [u for u in refs if u.ref_script]
-    return FixtureBackend(
-        records=records,
-        utxos=scripts + inputs,
-        tip_time=fix["block_time"] - 60,
-    )
+    return capture_backend(fix, tip_time=fix["block_time"] - 60)
 
 
 def _captured_scripts(monkeypatch, captured):
@@ -166,7 +138,9 @@ def _owner_address(snapshot):
 def test_captured_repays_replay(label):
     fix = fixture(label)
     snapshot = RepaySnapshot.from_capture(fix)
-    assert_replays(_build(snapshot, fix), fix, credentials=_credentials(snapshot))
+    assert_replays(
+        _build(snapshot, fix), fix, credentials=validator_credentials(snapshot)
+    )
 
 
 @pytest.mark.parametrize("label", PARTIAL_REPAYS)
@@ -204,7 +178,7 @@ def test_a_repay_above_the_payoff_closes_with_exactly_the_payoff():
     more = dataclasses.replace(snapshot, repay=payoff + 5_000_000)
     assert more.closes
     built = _build(more, fix)
-    assert_replays(built, fix, credentials=_credentials(snapshot))
+    assert_replays(built, fix, credentials=validator_credentials(snapshot))
     action = snapshot.action
     assert _action_view(built, snapshot).lovelace == action.utxo.lovelace + payoff
 
@@ -234,9 +208,8 @@ def test_a_minimum_interest_only_loan_closes_through_an_action_utxo():
     action = _action_view(built, snapshot)
     before = snapshot.action
     assert action.lovelace == before.utxo.lovelace + 82
-    assert _deltas(before.datum, decode_action(action.datum)) == ActionDeltas(
-        min_interest_paid=82,
-    )
+    deltas = ActionDeltas.between(before.datum, decode_action(action.datum))
+    assert deltas == ActionDeltas(min_interest_paid=82)
     assert required_signers(built) == [owed.owner]
     assert validity(built) == (None, posix_ms_to_slot(snapshot.valid_to_ms))
 
@@ -334,7 +307,9 @@ def test_from_backend_rebuilds_a_captured_partial_repay(monkeypatch):
     assert sorted(u.out_ref for u in snapshot.funding) == sorted(
         u.out_ref for u in captured.funding
     )
-    assert_replays(_build(snapshot, fix), fix, credentials=_credentials(captured))
+    assert_replays(
+        _build(snapshot, fix), fix, credentials=validator_credentials(captured)
+    )
 
 
 def test_from_backend_rebuilds_the_zero_debt_close_without_an_action_utxo(
@@ -354,7 +329,9 @@ def test_from_backend_rebuilds_the_zero_debt_close_without_an_action_utxo(
     assert snapshot.health is None
     assert snapshot.valid_to_ms is None
     assert all(call["assets"] is None for call in backend.calls)
-    assert_replays(_build(snapshot, fix), fix, credentials=_credentials(captured))
+    assert_replays(
+        _build(snapshot, fix), fix, credentials=validator_credentials(captured)
+    )
 
 
 def test_from_backend_refuses_a_repay_between_the_settled_debt_and_the_payoff():

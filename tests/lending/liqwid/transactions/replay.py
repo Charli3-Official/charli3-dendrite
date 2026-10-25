@@ -15,6 +15,7 @@ back indefinite), so only the raw bytes compare exactly with a capture.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import functools
 import gzip
 import json
@@ -24,6 +25,7 @@ from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Iterator
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 from typing import NamedTuple
@@ -39,6 +41,7 @@ from charli3_dendrite.lending.transactions.infra import assemble_unsigned
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
+from charli3_dendrite.utility import posix_ms_to_slot
 
 FIXTURES = Path(__file__).parent / "fixtures"
 TXS_FILE = "txs.json.gz"
@@ -171,6 +174,49 @@ def ogmios_entries(utxos: Iterable[Utxo]) -> list[dict[str, Any]]:
     for utxo in utxos:
         entries.setdefault(utxo.out_ref, ogmios_entry(utxo))
     return list(entries.values())
+
+
+# --- snapshots ------------------------------------------------------------------
+
+
+def block_slot(fix: dict[str, Any]) -> int:
+    """The slot of the block a capture landed in."""
+    return posix_ms_to_slot(fix["block_time"] * 1000)
+
+
+def validator_credentials(snapshot: Any) -> set[str]:  # noqa: ANN401
+    """The payment credentials of a snapshot market's action and loan validators."""
+    params = snapshot.records.params_datum
+    return {params.action_validator, params.loan_validator}
+
+
+def with_params(snapshot: Any, **changes: Any) -> Any:  # noqa: ANN401
+    """``snapshot`` with its market's MarketParams fields replaced by ``changes``."""
+    records = snapshot.records
+    params = dataclasses.replace(records.params_datum, **changes)
+    record = dataclasses.replace(records.params, datum=params)
+    return dataclasses.replace(
+        snapshot,
+        records=dataclasses.replace(records, params=record),
+    )
+
+
+def with_feed_price(
+    snapshot: Any,  # noqa: ANN401
+    underlying: str,
+    price: Fraction,
+) -> Any:  # noqa: ANN401
+    """``snapshot`` with the USD price of ``underlying``'s health feed replaced."""
+    feeds = dict(snapshot.health.feeds)
+    feeds[underlying] = dataclasses.replace(
+        feeds[underlying],
+        usd_num=price.numerator,
+        usd_den=price.denominator,
+    )
+    return dataclasses.replace(
+        snapshot,
+        health=dataclasses.replace(snapshot.health, feeds=feeds),
+    )
 
 
 # --- forward builds -------------------------------------------------------------

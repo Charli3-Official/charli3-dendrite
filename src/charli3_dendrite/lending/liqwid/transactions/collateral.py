@@ -26,13 +26,14 @@ from typing import Any
 
 from pycardano import TransactionBuilder
 
-from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
-from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
-from charli3_dendrite.lending.liqwid.oracles import parse_feed
+from charli3_dendrite.lending.liqwid.transactions._flow import kept_loan_lovelace
+from charli3_dendrite.lending.liqwid.transactions._flow import market_references
+from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
+from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.legs import add_funding
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_input
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_token_change
@@ -43,22 +44,15 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
-from charli3_dendrite.lending.liqwid.transactions.resolve import health_inputs
-from charli3_dendrite.lending.liqwid.transactions.resolve import loan_record
-from charli3_dendrite.lending.liqwid.transactions.resolve import loan_script_refs
-from charli3_dendrite.lending.liqwid.transactions.resolve import market_records
-from charli3_dendrite.lending.liqwid.transactions.resolve import record_from_utxo
 from charli3_dendrite.lending.liqwid.transactions.terms import Flow
 from charli3_dendrite.lending.liqwid.transactions.terms import check_market_limits
 from charli3_dendrite.lending.liqwid.transactions.terms import health_debt
+from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
 from charli3_dendrite.lending.liqwid.transactions.terms import rebase_for_collateral
 from charli3_dendrite.lending.liqwid.transactions.terms import settle
 from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.lending.transactions.utxos import Utxo
-from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
-from charli3_dendrite.lending.transactions.utxos import utxo_from_info
-from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import script_payment_address
 
 if TYPE_CHECKING:
@@ -66,11 +60,6 @@ if TYPE_CHECKING:
     from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 
 __all__ = ["CollateralSnapshot", "build_collateral"]
-
-
-def _held(collateral: Mapping[str, int]) -> dict[str, int]:
-    """The units of ``collateral`` held in a non-zero quantity."""
-    return {unit: qty for unit, qty in collateral.items() if qty != 0}
 
 
 def _check_collateral_count(
@@ -82,7 +71,7 @@ def _check_collateral_count(
         Flow.COLLATERAL,
         params=params,
         amount=0,
-        output_collateral_count=len(_held(collateral)),
+        output_collateral_count=len(held_collateral(collateral)),
     )
 
 
@@ -93,11 +82,6 @@ def _loan_address(records: MarketRecords) -> str:
         msg = f"liqwid market {records.market.name}: no loan validator in p[35]"
         raise ValueError(msg)
     return script_payment_address(loan_validator)
-
-
-def _is_loan(u: Utxo) -> bool:
-    record = record_from_utxo(u)
-    return record is not None and record.kind is LiqwidKind.LOAN
 
 
 @dataclass
@@ -130,48 +114,30 @@ class CollateralSnapshot(PoolActionSnapshot):
         """Rebuild the snapshot of a captured mainnet collateral change.
 
         The loan is the input at a loan validator; every other input is funding,
-        and the owner address is the first funding input's. Records, feeds and
-        scripts come from the captured reference inputs. The target collateral,
-        the loan lovelace and the record style are the captured output loan's.
+        and the owner address is the first funding input's (the first other output's
+        when there is none). Records, feeds and scripts come from the captured
+        reference inputs. The target collateral, the loan lovelace and the record
+        style are the captured output loan's.
 
         Raises:
             ValueError: The capture spends or creates other than one loan.
         """
-        inputs = [utxo_from_dict(u) for u in fix["inputs"]]
-        refs = [utxo_from_dict(u) for u in fix["ref_inputs"]]
-        spent = [u for u in inputs if _is_loan(u)]
-        created = [u for u in map(utxo_from_dict, fix["outputs"]) if _is_loan(u)]
-        if len(spent) != 1 or len(created) != 1:
-            msg = (
-                "a collateral change spends and creates one loan; the capture "
-                f"spends {len(spent)} and creates {len(created)}"
-            )
-            raise ValueError(msg)
-        loan, output = loan_record(spent[0]), loan_record(created[0])
-        records = [r for u in refs if (r := record_from_utxo(u)) is not None]
-        borrow = market_records(records, loan.market)
+        capture = CapturedTx.of(fix)
+        loan: LoanRecord = sole(capture.loan_inputs(), "loan input")
+        output: LoanRecord = sole(capture.loan_outputs(), "loan output")
+        borrow = capture.market_records(loan.market)
         target = output.collateral
-        funding = [u for u in inputs if u.out_ref != loan.utxo.out_ref]
         return cls(
             loan=loan,
             market=loan.market,
             records=borrow,
-            script_refs=loan_script_refs(refs, loan.market, borrow.params_datum),
-            health=health_inputs(
-                _held(target),
-                borrow=borrow,
-                records=records,
-                feeds=[
-                    feed
-                    for u in refs
-                    if (feed := parse_feed(utxo_to_info(u))) is not None
-                ],
-            ),
-            owner_address=funding[0].address if funding else "",
+            script_refs=capture.loan_script_refs(loan.market, borrow.params_datum),
+            health=capture.health(held_collateral(target), borrow=borrow),
+            owner_address=capture.wallet_address(loan.utxo, output.utxo),
             collateral=target,
-            funding=funding,
+            funding=capture.funding(loan.utxo),
             loan_lovelace=output.utxo.lovelace,
-            indefinite=datum_style(output.utxo.datum or "") == "indefinite",
+            indefinite=capture.indefinite(output.utxo),
         )
 
     @classmethod
@@ -210,10 +176,10 @@ class CollateralSnapshot(PoolActionSnapshot):
         from charli3_dendrite.lending.liqwid.transactions.resolve import (
             resolve_loan_script_refs,
         )
+        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
         from charli3_dendrite.lending.liqwid.transactions.resolve import (
-            resolve_market_records,
+            resolve_owner_funding,
         )
-        from charli3_dendrite.lending.transactions.resolve import resolve_funding
 
         loan = resolve_loan(
             backend,
@@ -222,8 +188,7 @@ class CollateralSnapshot(PoolActionSnapshot):
             allow_spent=allow_spent,
         )
         market = loan.market
-        records = resolve_market_records(backend, [market], deployment=deployment)
-        borrow = records[market.name]
+        borrow = resolve_market(backend, market, deployment=deployment)
         target = dict(collateral)
         _check_collateral_count(borrow.params_datum, target)
         script_refs = resolve_loan_script_refs(
@@ -234,7 +199,7 @@ class CollateralSnapshot(PoolActionSnapshot):
         )
         health = resolve_health_inputs(
             backend,
-            _held(target),
+            held_collateral(target),
             borrow=borrow,
             deployment=deployment,
         )
@@ -246,11 +211,7 @@ class CollateralSnapshot(PoolActionSnapshot):
             health=health,
             owner_address=owner_address,
             collateral=target,
-            funding=(
-                list(funding)
-                if funding is not None
-                else resolve_funding(backend, owner_address)
-            ),
+            funding=resolve_owner_funding(backend, owner_address, funding),
             deployment=deployment,
         )
 
@@ -309,17 +270,10 @@ def _build_collateral(
             loan_policy=loan_policy,
             loan_token=new_name,
             collateral=snapshot.collateral,
-            previous_lovelace=(
-                loan.utxo.lovelace
-                if snapshot.loan_lovelace is None
-                else snapshot.loan_lovelace
-            ),
+            previous_lovelace=kept_loan_lovelace(loan, snapshot.loan_lovelace),
         ),
     )
-    merge_reference_inputs(
-        tx_builder,
-        [utxo_from_info(records.params.info), utxo_from_info(records.state.info)],
-    )
+    merge_reference_inputs(tx_builder, market_references(records))
     finish_loan_flow(
         tx_builder,
         records=records,

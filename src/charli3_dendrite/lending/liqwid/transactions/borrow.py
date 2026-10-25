@@ -30,11 +30,13 @@ from pycardano import Address
 from pycardano import TransactionBuilder
 from pycardano import VerificationKeyHash
 
-from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.transactions._flow import check_flow_limits
+from charli3_dendrite.lending.liqwid.transactions._flow import market_references
+from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.capture import sole
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
@@ -52,19 +54,12 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
 from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import Flow
-from charli3_dendrite.lending.liqwid.transactions.terms import check_action_limits
-from charli3_dendrite.lending.liqwid.transactions.terms import check_limits
 from charli3_dendrite.lending.liqwid.transactions.terms import check_market_limits
+from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
 from charli3_dendrite.lending.liqwid.transactions.terms import open_loan
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
-from charli3_dendrite.lending.liqwid.transactions.terms import (
-    valid_to_ms as upper_bound_ms,
-)
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
-from charli3_dendrite.lending.transactions.utxos import utxo_from_info
-from charli3_dendrite.lending.transactions.validity import merge_validity
 from charli3_dendrite.lending.units import script_payment_address
-from charli3_dendrite.utility import posix_ms_to_slot
 
 if TYPE_CHECKING:
     import random
@@ -90,11 +85,6 @@ __all__ = [
 
 # The loan-token name an open mints.
 OPEN_TOKEN_NAME = "01"
-
-
-def held_collateral(collateral: Mapping[str, int]) -> dict[str, int]:
-    """``collateral`` without its zero quantities."""
-    return {unit: qty for unit, qty in collateral.items() if qty}
 
 
 def owner_key_hash(address: str) -> str:
@@ -175,7 +165,7 @@ class BorrowSnapshot(PoolActionSnapshot):
             loan_lovelace=loan.utxo.lovelace,
             loan_token=loan.token_name,
             deployment=deployment,
-            indefinite=datum_style(loan.utxo.datum or "") == "indefinite",
+            indefinite=capture.indefinite(loan.utxo),
         )
 
     @classmethod
@@ -205,19 +195,17 @@ class BorrowSnapshot(PoolActionSnapshot):
             ValueError: ``owner_address`` has no payment key hash.
             LiqwidBuildError: As :func:`resolve_borrow`.
         """
-        from charli3_dendrite.lending.liqwid.transactions.resolve import (
-            resolve_market_records,
-        )
+        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
 
         active = resolve_deployment(deployment)
         borrow_market = active.market_by_name(market)
         owner = owner_key_hash(owner_address)
-        records = resolve_market_records(backend, [borrow_market], deployment=active)
+        records = resolve_market(backend, borrow_market, deployment=active)
         target = held_collateral(collateral)
         resolved = resolve_borrow(
             backend,
             flow=Flow.OPEN,
-            records=records[borrow_market.name],
+            records=records,
             owner_address=owner_address,
             amount=amount,
             collateral_out=target,
@@ -231,7 +219,7 @@ class BorrowSnapshot(PoolActionSnapshot):
         )
         return cls(
             market=borrow_market,
-            records=records[borrow_market.name],
+            records=records,
             action=resolved.action,
             script_refs=resolved.script_refs,
             health=resolved.health,
@@ -292,20 +280,23 @@ def resolve_borrow(
         UnsupportedCollateralError, MissingFeedError, UnhealthyLoanError: The
             collateral cannot be valued or does not cover ``debt``.
     """
-    from charli3_dendrite.lending.liqwid.transactions.resolve import choose_action_utxo
-    from charli3_dendrite.lending.liqwid.transactions.resolve import (
-        resolve_action_utxos,
-    )
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_flow_action
     from charli3_dendrite.lending.liqwid.transactions.resolve import (
         resolve_health_inputs,
     )
-    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_now_ms
+    from charli3_dendrite.lending.liqwid.transactions.resolve import (
+        resolve_owner_funding,
+    )
     from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_script_refs
-    from charli3_dendrite.lending.transactions.resolve import resolve_funding
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_valid_to_ms
 
-    market = records.market
-    params, state = records.params_datum, records.state_datum
-    script_refs = resolve_script_refs(backend, market, params, deployment=deployment)
+    params = records.params_datum
+    script_refs = resolve_script_refs(
+        backend,
+        records.market,
+        params,
+        deployment=deployment,
+    )
     held = held_collateral(collateral_out)
     check_market_limits(
         flow,
@@ -313,29 +304,12 @@ def resolve_borrow(
         amount=amount,
         output_collateral_count=len(held),
     )
-    upper = upper_bound_ms(
-        resolve_now_ms(backend),
-        valid_to_ms,
-        state=state,
-        params=params,
-        market=market.name,
-    )
-    deltas = ActionDeltas(principal=amount)
-
-    def admits(candidate: ActionUtxo) -> None:
-        check_action_limits(
-            flow,
-            params=params,
-            state=state,
-            action_datum=candidate.datum,
-            deltas=deltas,
-            action_underlying=candidate.underlying_amount(market.underlying),
-            underlying=market.underlying,
-        )
-
-    action = choose_action_utxo(
-        resolve_action_utxos(backend, market, params),
-        check=admits,
+    upper = resolve_valid_to_ms(backend, records, valid_to_ms)
+    action = resolve_flow_action(
+        backend,
+        records,
+        flow=flow,
+        deltas=ActionDeltas(principal=amount),
         pin=action_utxo,
         exclude=exclude,
         rng=rng,
@@ -346,9 +320,7 @@ def resolve_borrow(
         script_refs=script_refs,
         action=action,
         health=health,
-        funding=list(
-            funding if funding is not None else resolve_funding(backend, owner_address),
-        ),
+        funding=resolve_owner_funding(backend, owner_address, funding),
         valid_to_ms=upper,
     )
 
@@ -410,16 +382,13 @@ def add_borrow(
         raise UnsupportedMarketError(market.name, "no current loan scripts")
     refs = snapshot.script_refs
     held = held_collateral(change.collateral_out)
-    check_limits(
+    check_flow_limits(
         change.flow,
-        params=params,
-        state=state,
-        action_datum=snapshot.action.datum,
+        records=records,
+        action=snapshot.action,
         deltas=change.deltas,
         amount=snapshot.amount,
         output_collateral_count=len(held),
-        action_underlying=snapshot.action.underlying_amount(market.underlying),
-        underlying=market.underlying,
     )
     output = loan_output(
         address=script_payment_address(params.loan_validator),
@@ -443,10 +412,7 @@ def add_borrow(
         action=snapshot.action,
         deltas=change.deltas,
         script_ref=refs.action,
-        references=[
-            utxo_from_info(records.params.info),
-            utxo_from_info(records.state.info),
-        ],
+        references=market_references(records),
         underlying=market.underlying,
         indefinite=snapshot.indefinite,
     )
@@ -471,15 +437,10 @@ def add_borrow(
         repay=0,
         deployment=resolve_deployment(snapshot.deployment),
     )
-    upper = min(snapshot.valid_to_ms, ttl_cap_ms(state, params))
-    merge_validity(
+    merge_validity_ms(
         tx_builder,
-        upper_slot=posix_ms_to_slot(upper),
-        lower_slot=(
-            None
-            if snapshot.valid_from_ms is None
-            else posix_ms_to_slot(snapshot.valid_from_ms)
-        ),
+        upper_ms=min(snapshot.valid_to_ms, ttl_cap_ms(state, params)),
+        lower_ms=snapshot.valid_from_ms,
     )
 
 

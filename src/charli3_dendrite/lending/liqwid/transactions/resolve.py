@@ -8,13 +8,17 @@ Each resolver reads current chain state through a backend and returns resolved
   validators, from the out-refs the deployment records for their hashes, and
   :func:`resolve_loan_script_refs` the three an owner loan flow runs;
 - :func:`resolve_action_utxos` and :func:`choose_action_utxo`: the market's live
-  action UTxOs and the choice of the one a transaction spends;
+  action UTxOs and the choice of the one a transaction spends, and
+  :func:`resolve_flow_action` that choice for one flow's deltas;
 - :func:`resolve_market_records`: each market's newest MarketParams, MarketState
-  and CollateralParams records, from one fetch;
+  and CollateralParams records, from one fetch (:func:`resolve_market` for one
+  market);
 - :func:`resolve_loan`: a loan by its out-ref;
 - :func:`resolve_feeds` and :func:`resolve_health_inputs`: the oracle feeds,
   CollateralParams and MarketStates a health check reads;
-- :func:`resolve_now_ms`: the chain tip's time.
+- :func:`resolve_now_ms`: the chain tip's time, and :func:`resolve_valid_to_ms` a
+  flow's upper validity bound from it;
+- :func:`resolve_owner_funding`: the wallet UTxOs that fund a flow.
 
 :func:`loan_script_refs`, :func:`action_record`, :func:`market_records`,
 :func:`loan_record`, :func:`feeds_for` and :func:`health_inputs` are the same
@@ -80,8 +84,11 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedLoanError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
+from charli3_dendrite.lending.liqwid.transactions.terms import check_action_limits
+from charli3_dendrite.lending.liqwid.transactions.terms import valid_to_ms
 from charli3_dendrite.lending.transactions.common import out_ref_of
 from charli3_dendrite.lending.transactions.infra import current_slot
+from charli3_dendrite.lending.transactions.resolve import resolve_funding
 from charli3_dendrite.lending.transactions.resolve import resolve_utxo_by_outref
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
@@ -100,6 +107,8 @@ if TYPE_CHECKING:
 
     from charli3_dendrite.backend.backend_base import AbstractBackend
     from charli3_dendrite.dataclasses.models import PoolStateInfo
+    from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
+    from charli3_dendrite.lending.liqwid.transactions.terms import Flow
 
 __all__ = [
     "ActionUtxo",
@@ -120,12 +129,16 @@ __all__ = [
     "record_from_utxo",
     "resolve_action_utxos",
     "resolve_feeds",
+    "resolve_flow_action",
     "resolve_health_inputs",
     "resolve_loan",
     "resolve_loan_script_refs",
+    "resolve_market",
     "resolve_market_records",
     "resolve_now_ms",
+    "resolve_owner_funding",
     "resolve_script_refs",
+    "resolve_valid_to_ms",
 ]
 
 # The MarketParams layout that carries the loan validator (p[35]) and the staking
@@ -473,6 +486,50 @@ def choose_action_utxo(
     raise InsufficientLiquidityError(0, 0)
 
 
+def resolve_flow_action(
+    backend: AbstractBackend,
+    records: MarketRecords,
+    *,
+    flow: Flow,
+    deltas: ActionDeltas,
+    pin: str | None = None,
+    exclude: Collection[str] = (),
+    rng: random.Random | None = None,
+) -> ActionUtxo:
+    """The live action UTxO of ``records``' market that ``flow`` spends.
+
+    :func:`choose_action_utxo` over :func:`resolve_action_utxos`, where a
+    candidate is eligible when the per-UTxO limits of ``flow`` with ``deltas``
+    (`check_action_limits`: caps, liquidity) admit it. The market-level limits are
+    the caller's to check first.
+
+    Raises:
+        ActionUtxoSpentError: The pin is not live or is excluded.
+        LiqwidBuildError: The pin fails the limits, or no action UTxO passes them.
+    """
+    market = records.market
+    params, state = records.params_datum, records.state_datum
+
+    def check(candidate: ActionUtxo) -> None:
+        check_action_limits(
+            flow,
+            params=params,
+            state=state,
+            action_datum=candidate.datum,
+            deltas=deltas,
+            action_underlying=candidate.underlying_amount(market.underlying),
+            underlying=market.underlying,
+        )
+
+    return choose_action_utxo(
+        resolve_action_utxos(backend, market, params),
+        check=check,
+        pin=pin,
+        exclude=exclude,
+        rng=rng,
+    )
+
+
 # --- market records ----------------------------------------------------------
 
 
@@ -594,6 +651,20 @@ def resolve_market_records(
     selectors = [s for market in wanted for s in _market_selectors(active, market)]
     records = fetch_records(backend, selectors, deployment=deployment)
     return {market.name: market_records(records, market) for market in wanted}
+
+
+def resolve_market(
+    backend: AbstractBackend,
+    market: MarketComponents,
+    *,
+    deployment: LiqwidDeployment | None = None,
+) -> MarketRecords:
+    """The live records of ``market`` alone (:func:`resolve_market_records`).
+
+    Raises:
+        UnsupportedMarketError: The market has no live MarketParams or MarketState.
+    """
+    return resolve_market_records(backend, [market], deployment=deployment)[market.name]
 
 
 def record_from_utxo(
@@ -902,3 +973,37 @@ def resolve_health_inputs(
 def resolve_now_ms(backend: AbstractBackend) -> int:
     """The chain tip's POSIX time in milliseconds (the start of its slot)."""
     return slot_to_posix_ms(current_slot(backend))
+
+
+def resolve_valid_to_ms(
+    backend: AbstractBackend,
+    records: MarketRecords,
+    requested_ms: int | None,
+) -> int:
+    """The upper validity bound of a flow on ``records``' market, from the tip.
+
+    ``requested_ms``, or the default window, as `valid_to_ms` bounds it by the
+    market's batch deadline.
+
+    Raises:
+        ValueError: ``requested_ms`` is not after the chain tip.
+        MarketAwaitingBatchError: The batch deadline is too close.
+    """
+    return valid_to_ms(
+        resolve_now_ms(backend),
+        requested_ms,
+        state=records.state_datum,
+        params=records.params_datum,
+        market=records.market.name,
+    )
+
+
+def resolve_owner_funding(
+    backend: AbstractBackend,
+    owner_address: str,
+    funding: Sequence[Utxo] | None = None,
+) -> list[Utxo]:
+    """The wallet UTxOs that fund a flow: ``funding``, else those at the address."""
+    if funding is not None:
+        return list(funding)
+    return resolve_funding(backend, owner_address)
