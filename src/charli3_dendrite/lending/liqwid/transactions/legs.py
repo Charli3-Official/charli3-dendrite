@@ -100,6 +100,7 @@ __all__ = [
     "add_owner_signer",
     "add_qtoken_leg",
     "add_staking_withdrawal",
+    "check_loan_health",
     "check_reference_hygiene",
     "finish_loan_flow",
     "flip_name",
@@ -525,14 +526,27 @@ def _price(feeds: Mapping[str, LiqwidFeed], underlying: str) -> Rational:
     return (feed.usd_num, feed.usd_den)
 
 
-def _check_loan_health(
+def check_loan_health(
     records: MarketRecords,
     inputs: HealthInputs,
     collateral: Mapping[str, int],
     debt: int,
     deployment: LiqwidDeployment,
 ) -> None:
-    """Check the output loan's health against ``debt`` (`check_health`)."""
+    """Check a loan holding ``collateral`` against ``debt`` (`check_health`).
+
+    The collateral is valued through the borrow market's (``records``)
+    CollateralParams in ``inputs`` and the debt priced by the borrowed asset's
+    feed, at the market's maximum LTV.
+
+    Raises:
+        UnsupportedCollateralError: A unit has no exact CollateralParams record
+            naming its market and underlying.
+        UnsupportedMarketError: A collateral market has no MarketState in
+            ``inputs``.
+        MissingFeedError: No feed prices an underlying or the borrowed asset.
+        UnhealthyLoanError: The loan fails the health rule.
+    """
     cparams: dict[str, CollateralParamsDatum] = {}
     rates: dict[str, Rational] = {}
     prices: dict[str, Rational] = {}
@@ -631,7 +645,7 @@ def finish_loan_flow(
             deployment=deployment,
         )
         if health_required(borrow, repay, collateral_in, collateral_out):
-            _check_loan_health(records, health, collateral_out, debt, deployment)
+            check_loan_health(records, health, collateral_out, debt, deployment)
         merge_reference_inputs(tx_builder, references)
     add_owner_signer(tx_builder, owner)
     add_staking_withdrawal(

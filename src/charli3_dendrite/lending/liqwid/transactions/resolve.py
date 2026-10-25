@@ -15,6 +15,11 @@ Each resolver reads current chain state through a backend and returns resolved
   CollateralParams and MarketStates a health check reads;
 - :func:`resolve_now_ms`: the chain tip's time.
 
+The records, loans, feeds and health inputs are assembled by pure functions over
+records already in hand (:func:`market_records`, :func:`loan_record`,
+:func:`feeds_for`, :func:`health_inputs`), which also rebuild them from a captured
+transaction's UTxOs.
+
 Reference scripts and loans are resolved by out-ref through the dbsync-only
 ``db_query`` (:mod:`charli3_dendrite.lending.transactions.resolve`); records, action
 UTxOs and feeds through ``get_pool_utxos``, which must select by payment credential
@@ -58,6 +63,7 @@ from charli3_dendrite.lending.liqwid.indexing import param_selector
 from charli3_dendrite.lending.liqwid.indexing import parse_action
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.indexing import state_selectors
+from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
 from charli3_dendrite.lending.liqwid.loader import fetch_records
 from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
@@ -102,6 +108,10 @@ __all__ = [
     "choose_action_utxo",
     "collateral_link",
     "collateral_params_records",
+    "feeds_for",
+    "health_inputs",
+    "loan_record",
+    "market_records",
     "record_from_utxo",
     "resolve_action_utxos",
     "resolve_feeds",
@@ -125,13 +135,14 @@ class LiqwidScriptRefs:
     """The reference-script UTxOs of one market's scripts.
 
     ``action`` carries the action validator its MarketParams names (``p[20]``) and
-    ``qtoken_policy`` the qToken minting policy. The loan scripts (``p[35]``, the
-    current loan-token policy and the two ``p[34]`` staking validators by role) are
-    None when they were not resolved.
+    ``qtoken_policy`` the qToken minting policy. The qToken policy and the loan
+    scripts (``p[35]``, the current loan-token policy and the two ``p[34]`` staking
+    validators by role) are None when they were not resolved: a transaction rebuilt
+    from a capture holds only the scripts it runs.
     """
 
     action: Utxo
-    qtoken_policy: Utxo
+    qtoken_policy: Utxo | None
     loan_validator: Utxo | None
     loan_policy: Utxo | None
     borrow_staking: Utxo | None
@@ -470,15 +481,28 @@ def resolve_market_records(
     wanted = list(markets)
     selectors = [s for market in wanted for s in _market_selectors(active, market)]
     records = fetch_records(backend, selectors, deployment=deployment)
-    return {
-        market.name: MarketRecords(
-            market=market,
-            params=_newest(records, LiqwidKind.MARKET_PARAMS, market),
-            state=_newest(records, LiqwidKind.MARKET_STATE, market),
-            collateral_params=collateral_params_records(records, market),
-        )
-        for market in wanted
-    }
+    return {market.name: market_records(records, market) for market in wanted}
+
+
+def market_records(
+    records: Sequence[LiqwidRecord],
+    market: MarketComponents,
+) -> MarketRecords:
+    """``market``'s newest MarketParams, MarketState and CollateralParams records.
+
+    The newest of ``records`` by chain position; records of other markets and
+    kinds are ignored.
+
+    Raises:
+        UnsupportedMarketError: ``records`` hold no MarketParams or MarketState of
+            the market.
+    """
+    return MarketRecords(
+        market=market,
+        params=_newest(records, LiqwidKind.MARKET_PARAMS, market),
+        state=_newest(records, LiqwidKind.MARKET_STATE, market),
+        collateral_params=collateral_params_records(records, market),
+    )
 
 
 def record_from_utxo(
@@ -502,6 +526,19 @@ class LoanRecord:
     market: MarketComponents
     token_name: str
 
+    @property
+    def collateral(self) -> dict[str, int]:
+        """Collateral unit -> quantity the loan holds (lovelace and loan tokens out).
+
+        As :func:`~charli3_dendrite.lending.liqwid.lifecycle.collateral_units` reads
+        it, in unit order.
+        """
+        held = collateral_units(
+            utxo_to_info(self.utxo),
+            self.market.loan_token_policies,
+        )
+        return dict(held)
+
 
 def resolve_loan(
     backend: AbstractBackend,
@@ -519,9 +556,24 @@ def resolve_loan(
             loan validator or holding a legacy loan token) or is no loan at all.
         ValueError: no such output (or it is spent and ``allow_spent`` is unset).
     """
-    active = resolve_deployment(deployment)
     tx_hash, index = out_ref_key(out_ref)
     utxo = resolve_utxo_by_outref(backend, tx_hash, index, allow_spent=allow_spent)
+    return loan_record(utxo, deployment=deployment)
+
+
+def loan_record(
+    utxo: Utxo,
+    *,
+    deployment: LiqwidDeployment | None = None,
+) -> LoanRecord:
+    """The current-generation loan ``utxo`` holds.
+
+    Raises:
+        UnsupportedLoanError: ``utxo`` is a legacy-generation loan (at a legacy loan
+            validator or holding a legacy loan token) or is no loan at all.
+    """
+    active = resolve_deployment(deployment)
+    out_ref = out_ref_text(out_ref_of(utxo))
     record = parse_utxo(utxo_to_info(utxo), deployment)
     if record is None or record.kind is not LiqwidKind.LOAN or not record.market_id:
         legacy = {m.borrow_policy for m in active.markets} - {None}
@@ -574,6 +626,22 @@ def resolve_feeds(
         for record in fetch_records(backend, selectors, deployment=deployment)
         if (feed := parse_feed(record.info, deployment)) is not None
     ]
+    return feeds_for(feeds, assets)
+
+
+def feeds_for(
+    feeds: Iterable[LiqwidFeed],
+    assets: Iterable[str],
+) -> dict[str, LiqwidFeed]:
+    """The feed among ``feeds`` pricing each of ``assets``, keyed by the asset.
+
+    The freshest feed per priced asset is kept
+    (:func:`~charli3_dendrite.lending.liqwid.oracles.select_feeds`); an asset takes
+    its exact feed when there is one, else the policy-wide feed of its policy.
+
+    Raises:
+        MissingFeedError: no feed prices an asset.
+    """
     selected = select_feeds(feeds)
     found: dict[str, LiqwidFeed] = {}
     for asset in assets:
@@ -657,35 +725,96 @@ def resolve_health_inputs(
         MissingFeedError: no feed prices an underlying.
     """
     active = resolve_deployment(deployment)
+    links = _health_links(units, borrow, active)
+    records: list[LiqwidRecord] = []
+    if links.markets:
+        selectors = [
+            s for market in links.markets for s in state_selectors(active, market)
+        ]
+        records = fetch_records(backend, selectors, deployment=deployment)
+    states = _health_states(links, borrow, records)
+    feeds = resolve_feeds(backend, links.underlyings, deployment=deployment)
+    return HealthInputs(cparams=links.cparams, states=states, feeds=feeds)
+
+
+def health_inputs(
+    units: Iterable[str],
+    *,
+    borrow: MarketRecords,
+    records: Sequence[LiqwidRecord],
+    feeds: Iterable[LiqwidFeed],
+    deployment: LiqwidDeployment | None = None,
+) -> HealthInputs:
+    """The health inputs of ``units`` from records and feeds already in hand.
+
+    As :func:`resolve_health_inputs`, with each collateral market's MarketState the
+    newest in ``records`` and the feeds chosen among ``feeds``
+    (:func:`feeds_for`); a captured transaction's reference inputs are such a set.
+
+    Raises:
+        UnsupportedCollateralError: a unit has no exact CollateralParams record of
+            the borrow market, or the record names no collateral market or
+            underlying (:func:`collateral_link`).
+        UnsupportedMarketError: ``records`` hold no MarketState of a collateral
+            market.
+        MissingFeedError: no feed prices an underlying.
+    """
+    links = _health_links(units, borrow, resolve_deployment(deployment))
+    return HealthInputs(
+        cparams=links.cparams,
+        states=_health_states(links, borrow, records),
+        feeds=feeds_for(feeds, links.underlyings),
+    )
+
+
+@dataclass(frozen=True)
+class _HealthLinks:
+    """What a health check of some collateral units reads, before any lookup.
+
+    ``markets`` are the collateral markets other than the borrow market and
+    ``underlyings`` the distinct underlying units priced, the borrowed one first.
+    """
+
+    cparams: dict[str, LiqwidRecord]
+    markets: list[MarketComponents]
+    underlyings: list[str]
+
+
+def _health_links(
+    units: Iterable[str],
+    borrow: MarketRecords,
+    deployment: LiqwidDeployment,
+) -> _HealthLinks:
     cparams: dict[str, LiqwidRecord] = {}
-    collateral_markets: dict[str, MarketComponents] = {}
+    markets: dict[str, MarketComponents] = {}
     underlyings = [borrow.market.underlying]
     for unit in units:
         market, datum = collateral_link(
             unit,
             borrow.collateral_params.get(unit),
-            active,
+            deployment,
         )
         cparams[unit] = borrow.collateral_params[unit]
-        collateral_markets.setdefault(market.market_id, market)
+        if market.market_id != borrow.market.market_id:
+            markets.setdefault(market.market_id, market)
         underlyings.append(datum.underlying)
-    states = {borrow.market.market_id: borrow.state}
-    others = [m for m_id, m in collateral_markets.items() if m_id not in states]
-    if others:
-        selectors = [s for market in others for s in state_selectors(active, market)]
-        records = fetch_records(backend, selectors, deployment=deployment)
-        for market in others:
-            states[market.market_id] = _newest(
-                records,
-                LiqwidKind.MARKET_STATE,
-                market,
-            )
-    feeds = resolve_feeds(
-        backend,
-        list(dict.fromkeys(underlyings)),
-        deployment=deployment,
+    return _HealthLinks(
+        cparams=cparams,
+        markets=list(markets.values()),
+        underlyings=list(dict.fromkeys(underlyings)),
     )
-    return HealthInputs(cparams=cparams, states=states, feeds=feeds)
+
+
+def _health_states(
+    links: _HealthLinks,
+    borrow: MarketRecords,
+    records: Sequence[LiqwidRecord],
+) -> dict[str, LiqwidRecord]:
+    """The borrow market's MarketState and each collateral market's newest one."""
+    states = {borrow.market.market_id: borrow.state}
+    for market in links.markets:
+        states[market.market_id] = _newest(records, LiqwidKind.MARKET_STATE, market)
+    return states
 
 
 def resolve_now_ms(backend: AbstractBackend) -> int:
