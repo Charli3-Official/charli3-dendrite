@@ -21,7 +21,7 @@ __all__ = ["merge_validity"]
 def merge_validity(
     tx_builder: TransactionBuilder,
     *,
-    upper_slot: int,
+    upper_slot: int | None,
     lower_slot: int | None = None,
 ) -> None:
     """Intersect the builder's validity window with ``[lower_slot, upper_slot)``.
@@ -34,11 +34,13 @@ def merge_validity(
         ValidityWindowError: The merged window is empty (its start is at or past
             its ttl). The builder is left unchanged.
     """
-    ttl = upper_slot if tx_builder.ttl is None else min(tx_builder.ttl, upper_slot)
+    ttl = tx_builder.ttl
+    if upper_slot is not None:
+        ttl = upper_slot if ttl is None else min(ttl, upper_slot)
     start = tx_builder.validity_start
     if lower_slot is not None:
         start = lower_slot if start is None else max(start, lower_slot)
-    if start is not None and start >= ttl:
+    if start is not None and ttl is not None and start >= ttl:
         raise ValidityWindowError(
             f"empty validity window: start slot {start} is not before ttl {ttl}",
         )
