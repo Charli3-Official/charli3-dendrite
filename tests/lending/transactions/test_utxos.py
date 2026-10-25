@@ -8,11 +8,17 @@ from pathlib import Path
 
 import pytest
 from pycardano import Address
+from pycardano import InvalidBefore
+from pycardano import InvalidHereAfter
 from pycardano import DatumHash
 from pycardano import Network
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import PlutusV3Script
+from pycardano import ScriptAll
+from pycardano import ScriptAny
+from pycardano import ScriptNofK
+from pycardano import ScriptPubkey
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pycardano import VerificationKeyHash
@@ -185,6 +191,58 @@ def test_ogmios_entry_defaults_to_v3_and_omits_an_absent_hash() -> None:
     assert "datumHash" not in entry
 
 
+def _native_script_cbor() -> tuple[str, dict[str, object]]:
+    """A native script using every clause, and its Ogmios JSON form."""
+    first = VerificationKeyHash(bytes(range(28)))
+    second = VerificationKeyHash(bytes(range(1, 29)))
+    script = ScriptNofK(
+        1,
+        [
+            ScriptPubkey(first),
+            ScriptAll([InvalidBefore(100), InvalidHereAfter(200)]),
+            ScriptAny([ScriptPubkey(second)]),
+        ],
+    )
+    json_form = {
+        "clause": "some",
+        "atLeast": 1,
+        "from": [
+            {"clause": "signature", "from": first.payload.hex()},
+            {
+                "clause": "all",
+                "from": [
+                    {"clause": "after", "slot": 100},
+                    {"clause": "before", "slot": 200},
+                ],
+            },
+            {
+                "clause": "any",
+                "from": [{"clause": "signature", "from": second.payload.hex()}],
+            },
+        ],
+    }
+    return script.to_cbor_hex(), json_form
+
+
+@pytest.mark.parametrize("script_type", ["timelock", "multisig"])
+def test_ogmios_entry_sends_a_native_script_in_the_native_form(
+    script_type: str,
+) -> None:
+    cbor, json_form = _native_script_cbor()
+    entry = utxos.ogmios_entry(_utxo(ref_script=cbor, ref_script_type=script_type))
+    assert entry["script"] == {"language": "native", "json": json_form, "cbor": cbor}
+
+
+def test_ogmios_entry_refuses_an_unreadable_native_script() -> None:
+    with pytest.raises(ValueError, match="native script"):
+        utxos.ogmios_entry(_utxo(ref_script=SCRIPT_BYTES, ref_script_type="timelock"))
+
+
+def test_ogmios_entry_refuses_an_unknown_script_type() -> None:
+    with pytest.raises(ValueError, match="plutusV9"):
+        utxos.ogmios_entry(_utxo(ref_script=SCRIPT_BYTES, ref_script_type="plutusV9"))
+
+
 def test_ogmios_entry_sends_only_the_inline_datum() -> None:
     entry = utxos.ogmios_entry(_utxo(datum="d87980", datum_hash="ee" * 32))
     assert entry["datum"] == "d87980"
@@ -215,6 +273,16 @@ def test_script_ref_by_hash_finds_a_v2_script() -> None:
     assert found is v2
     with pytest.raises(ValueError, match="no reference script"):
         utxos.script_ref_by_hash([v3], utxos.script_hash_of(v2))
+
+
+def test_script_ref_by_hash_skips_a_native_script() -> None:
+    native = _utxo(
+        ref_script=_native_script_cbor()[0],
+        ref_script_type="timelock",
+        out_ref=(TX_A, 0),
+    )
+    v2 = _utxo(ref_script=SCRIPT_BYTES, ref_script_type="plutusV2", out_ref=(TX_B, 1))
+    assert utxos.script_ref_by_hash([native, v2], utxos.script_hash_of(v2)) is v2
 
 
 def test_utxo_from_info_reads_a_captured_liqwid_loan() -> None:
@@ -279,6 +347,14 @@ def test_utxo_to_info_inverts_utxo_from_info() -> None:
     assert back.datum_hash == ""
     assert back.plutus_v2 is True
     assert utxos.utxo_from_info(back) == u
+
+
+def test_utxo_to_info_folds_an_empty_unit_into_lovelace() -> None:
+    u = _utxo(lovelace=5, assets=[("", "", 3), (POLICY, "01", 2)])
+    info = utxos.utxo_to_info(u)
+    assert dict(info.assets.root) == {"lovelace": 8, POLICY + "01": 2}
+    value = utxos.utxo_value(u.lovelace, u.assets)
+    assert value.coin == info.assets.root["lovelace"]
 
 
 def test_utxo_to_info_needs_an_out_ref() -> None:

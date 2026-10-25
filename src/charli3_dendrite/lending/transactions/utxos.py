@@ -8,8 +8,9 @@ The helpers turn it into a pycardano ``UTxO`` for the builder, into an Ogmios
 
 Reference scripts are typed by the language recorded with them
 (``ref_script_type``, the dbsync script type: ``plutusV1``/``plutusV2``/
-``plutusV3``); an untyped script is read as PlutusV3. The script bytes are the
-single-wrapped CBOR byte string dbsync and Ogmios return.
+``plutusV3``, or ``timelock``/``multisig`` for a native script); an untyped script
+is read as PlutusV3. A Plutus script's bytes are the single-wrapped CBOR byte
+string dbsync and Ogmios return; a native script's bytes are its CBOR.
 """
 
 from __future__ import annotations
@@ -20,10 +21,17 @@ from typing import Any
 
 from pycardano import Address
 from pycardano import DatumHash
+from pycardano import InvalidBefore
+from pycardano import InvalidHereAfter
+from pycardano import NativeScript
 from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
 from pycardano import PlutusV3Script
 from pycardano import RawCBOR
+from pycardano import ScriptAll
+from pycardano import ScriptAny
+from pycardano import ScriptNofK
+from pycardano import ScriptPubkey
 from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
@@ -31,6 +39,8 @@ from pycardano import UTxO
 from pycardano import Value
 from pycardano import plutus_script_hash
 
+from charli3_dendrite.lending.units import DECODE_ERRORS
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
@@ -64,8 +74,8 @@ _SCRIPT_CLASS: dict[str, type[PlutusV1Script | PlutusV2Script | PlutusV3Script]]
     "plutusV3": PlutusV3Script,
 }
 
-# Hex length of a policy id (a 28-byte script hash): the policy prefix of a unit.
-_POLICY_HEX_LEN = 56
+# dbsync script types of a native (phase-1) script.
+_NATIVE_SCRIPT_TYPES = frozenset({"timelock", "multisig"})
 
 
 @dataclass
@@ -105,10 +115,17 @@ def plutus_script(u: Utxo) -> PlutusV1Script | PlutusV2Script | PlutusV3Script:
     """
     if not u.ref_script:
         raise ValueError("reference UTxO carries no script")
-    cls = _SCRIPT_CLASS.get(u.ref_script_type or "plutusV3")
+    cls = _script_class(u)
     if cls is None:
         raise ValueError(f"unsupported reference script type {u.ref_script_type!r}")
     return cls(bytes.fromhex(u.ref_script))
+
+
+def _script_class(
+    u: Utxo,
+) -> type[PlutusV1Script | PlutusV2Script | PlutusV3Script] | None:
+    """The pycardano class of ``u``'s Plutus script; None for any other type."""
+    return _SCRIPT_CLASS.get(u.ref_script_type or "plutusV3")
 
 
 def script_hash_of(u: Utxo) -> str:
@@ -120,11 +137,19 @@ def utxo_value(lovelace: int, assets: list[tuple[str, str, int]]) -> Value:
     """A pycardano `Value` from a lovelace balance + (policy, name, qty) leaves."""
     from charli3_dendrite.dataclasses.models import Assets
 
+    return asset_to_value(Assets(**_unit_quantities(lovelace, assets)))
+
+
+def _unit_quantities(
+    lovelace: int,
+    assets: list[tuple[str, str, int]],
+) -> dict[str, int]:
+    """Quantity per dendrite unit; an empty (policy, name) leaf adds to lovelace."""
     root: dict[str, int] = {"lovelace": lovelace}
     for policy, name, qty in assets:
         unit = "lovelace" if not policy and not name else policy + name
         root[unit] = root.get(unit, 0) + qty
-    return asset_to_value(Assets(**root))
+    return root
 
 
 def to_pycardano_utxo(u: Utxo) -> UTxO:
@@ -147,9 +172,7 @@ def to_pycardano_utxo(u: Utxo) -> UTxO:
         DatumHash(bytes.fromhex(u.datum_hash)) if u.datum_hash and not u.datum else None
     )
     script = (
-        _SCRIPT_CLASS.get(u.ref_script_type or "plutusV3", PlutusV3Script)(
-            bytes.fromhex(u.ref_script),
-        )
+        (_script_class(u) or PlutusV3Script)(bytes.fromhex(u.ref_script))
         if u.ref_script
         else None
     )
@@ -175,6 +198,14 @@ def ogmios_entry(u: Utxo) -> dict[str, Any]:
     spent/reference inputs. Funding inputs may already be spent / freshly created, so
     Ogmios cannot resolve them from its own ledger snapshot; they are supplied here for
     evaluation.
+
+    A Plutus script is sent with its language tag (untyped reads as ``plutus:v3``); a
+    native script (``timelock``/``multisig``) is sent in Ogmios's native form, its
+    clause JSON plus its CBOR.
+
+    Raises:
+        ValueError: On a UTxO without an out-ref, a script type that is neither Plutus
+            nor native, or native script bytes that do not decode.
     """
     if u.out_ref is None:
         raise ValueError("cannot build an additionalUtxo entry without an out-ref")
@@ -192,11 +223,53 @@ def ogmios_entry(u: Utxo) -> dict[str, Any]:
     elif u.datum_hash:
         entry["datumHash"] = u.datum_hash
     if u.ref_script:
-        entry["script"] = {
-            "language": SCRIPT_LANG.get(u.ref_script_type or "", "plutus:v3"),
-            "cbor": u.ref_script,
-        }
+        entry["script"] = _ogmios_script(u.ref_script, u.ref_script_type)
     return entry
+
+
+def _ogmios_script(script: str, script_type: str | None) -> dict[str, Any]:
+    """The Ogmios ``Script`` object of reference-script bytes of ``script_type``."""
+    if script_type in _NATIVE_SCRIPT_TYPES:
+        try:
+            native = NativeScript.from_cbor(script)
+        except DECODE_ERRORS as exc:
+            raise ValueError(
+                f"reference UTxO carries an unreadable native script: {exc}",
+            ) from exc
+        return {"language": "native", "json": _native_json(native), "cbor": script}
+    language = SCRIPT_LANG.get(script_type or "plutusV3")
+    if language is None:
+        raise ValueError(f"unsupported reference script type {script_type!r}")
+    return {"language": language, "cbor": script}
+
+
+def _native_json(script: NativeScript) -> dict[str, Any]:
+    """Ogmios's clause JSON of a native script."""
+    if isinstance(script, ScriptPubkey):
+        return {"clause": "signature", "from": script.key_hash.payload.hex()}
+    if isinstance(script, ScriptAll):
+        return {
+            "clause": "all",
+            "from": [_native_json(s) for s in script.native_scripts],
+        }
+    if isinstance(script, ScriptAny):
+        return {
+            "clause": "any",
+            "from": [_native_json(s) for s in script.native_scripts],
+        }
+    if isinstance(script, ScriptNofK):
+        return {
+            "clause": "some",
+            "atLeast": script.n,
+            "from": [_native_json(s) for s in script.native_scripts],
+        }
+    if isinstance(script, InvalidBefore):
+        # Valid from slot ``before`` on.
+        return {"clause": "after", "slot": script.before}
+    if isinstance(script, InvalidHereAfter):
+        # Valid before slot ``after``.
+        return {"clause": "before", "slot": script.after}
+    raise ValueError(f"unsupported native script clause {type(script).__name__}")
 
 
 def utxo_from_dict(d: dict) -> Utxo:
@@ -221,7 +294,7 @@ def utxo_from_info(info: PoolStateInfo) -> Utxo:
     an empty datum reads as none.
     """
     assets = sorted(
-        (unit[:_POLICY_HEX_LEN], unit[_POLICY_HEX_LEN:], int(qty))
+        (unit[:POLICY_HEX_LEN], unit[POLICY_HEX_LEN:], int(qty))
         for unit, qty in info.assets.items()
         if unit != "lovelace"
     )
@@ -244,10 +317,7 @@ def utxo_to_info(u: Utxo) -> PoolStateInfo:
 
     if u.out_ref is None:
         raise ValueError("cannot build a UTxO record without an out-ref")
-    root: dict[str, int] = {"lovelace": u.lovelace}
-    for policy, name, qty in u.assets:
-        unit = policy + name
-        root[unit] = root.get(unit, 0) + qty
+    root = _unit_quantities(u.lovelace, u.assets)
     tx_hash, index = u.out_ref
     return PoolStateInfo(
         address=u.address,
@@ -267,7 +337,7 @@ def script_ref_by_hash(ref_inputs: list[Utxo], script_hash: str) -> Utxo:
     """The reference-input UTxO whose Plutus script hashes to `script_hash`."""
     target = bytes.fromhex(script_hash)
     for u in ref_inputs:
-        if not u.ref_script or (u.ref_script_type or "plutusV3") not in _SCRIPT_CLASS:
+        if not u.ref_script or _script_class(u) is None:
             continue
         if plutus_script_hash(plutus_script(u)).payload == target:
             return u

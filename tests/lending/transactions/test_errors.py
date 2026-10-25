@@ -159,8 +159,9 @@ class _Response:
 
 
 def _fake_post(
-    monkeypatch, bodies: list[dict[str, Any]]
-) -> list[dict[str, Any]]:  # noqa: ANN001
+    monkeypatch: pytest.MonkeyPatch,
+    bodies: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Answer each POST with the next body; return the posted payloads."""
     monkeypatch.setenv("OGMIOS_HOST", "localhost")
     sent: list[dict[str, Any]] = []
