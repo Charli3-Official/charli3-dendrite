@@ -764,9 +764,38 @@ def test_valid_to_caps_a_requested_window_at_the_deadline():
 
 def test_valid_to_refuses_a_requested_window_ending_in_the_current_slot():
     now = CAP_MS - 3_600_000
-    with pytest.raises(MarketAwaitingBatchError):
+    with pytest.raises(ValueError, match="requested upper bound"):
         _valid_to(now, now)
     assert posix_ms_to_slot(_valid_to(now, now + 1_000)) > posix_ms_to_slot(now)
+
+
+@pytest.mark.parametrize("requested_ms", [0, CAP_MS - 7_200_000, CAP_MS - 3_600_999])
+def test_valid_to_refuses_a_past_requested_bound_as_a_caller_error(requested_ms: int):
+    # Hours before the deadline the market accepts a later bound, so a bound that
+    # is already past is the caller's error, not a market awaiting its batch.
+    with pytest.raises(ValueError, match="requested upper bound") as info:
+        _valid_to(CAP_MS - 3_600_000, requested_ms)
+    assert not isinstance(info.value, MarketAwaitingBatchError)
+
+
+@pytest.mark.parametrize(
+    ("now_ms", "requested_ms"),
+    [
+        (CAP_MS - 1_000, CAP_MS - 1_000),
+        (CAP_MS - 500, CAP_MS - 2_000),
+        (CAP_MS, CAP_MS - 60_000),
+        (CAP_MS + 60_000, CAP_MS + 120_000),
+    ],
+)
+def test_valid_to_refuses_a_market_at_its_deadline_whatever_the_request(
+    now_ms: int,
+    requested_ms: int,
+):
+    # At or within the last second before the deadline, any request is refused
+    # because the market has to batch first.
+    with pytest.raises(MarketAwaitingBatchError) as info:
+        _valid_to(now_ms, requested_ms)
+    assert (info.value.market, info.value.deadline_ms) == ("Ada", CAP_MS)
 
 
 def test_valid_to_in_the_last_slots_before_the_deadline():
@@ -780,12 +809,13 @@ def test_valid_to_in_the_last_slots_before_the_deadline():
 
 @pytest.mark.parametrize("offset_ms", [0, 1, 999, 1_000, 1_001, 59_999])
 def test_the_slot_test_matches_the_mainnet_slot_clock(offset_ms: int):
-    # valid_to_ms refuses a bound in the current slot, by posix_ms_to_slot.
+    # valid_to_ms refuses a requested bound in the current slot, by
+    # posix_ms_to_slot.
     now = CAP_MS - 3_600_000 + 250
     bound = now + offset_ms
     later = posix_ms_to_slot(bound) > posix_ms_to_slot(now)
     if later:
         assert _valid_to(now, bound) == bound
     else:
-        with pytest.raises(MarketAwaitingBatchError):
+        with pytest.raises(ValueError, match="requested upper bound"):
             _valid_to(now, bound)

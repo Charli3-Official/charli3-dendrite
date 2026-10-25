@@ -828,8 +828,10 @@ def valid_to_ms(
 
     The requested bound (or `default_valid_to_ms` when ``None``) capped at the
     deadline ``s8 + p[3]`` (inclusive). The bound must fall in a slot after the
-    current one; when it cannot (now is at or within a second of the deadline,
-    or the requested bound is not in the future), the market has to batch first.
+    current one. While the default bound does, a requested bound that does not
+    is the caller's error. Once the default cannot (now is at or within a second
+    of the deadline), a bound that does not means the market has to batch first;
+    a requested bound up to the deadline may still be accepted.
 
     Args:
         now_ms: The current time.
@@ -842,16 +844,24 @@ def valid_to_ms(
         The upper bound.
 
     Raises:
-        MarketAwaitingBatchError: When no bound after the current slot reaches
-            the deadline.
+        ValueError: When ``requested_ms`` is not after the current slot while
+            the default bound is.
+        MarketAwaitingBatchError: When the bound, capped at the deadline, is
+            not after the current slot and the default bound is not either.
     """
     cap = ttl_cap_ms(state, params)
-    wanted = (
-        default_valid_to_ms(now_ms, state, params)
-        if requested_ms is None
-        else requested_ms
-    )
-    result = min(wanted, cap)
-    if result // _SLOT_MS <= now_ms // _SLOT_MS:
+    now_slot = now_ms // _SLOT_MS
+    default = default_valid_to_ms(now_ms, state, params)
+    if requested_ms is None:
+        result = default
+    else:
+        if requested_ms // _SLOT_MS <= now_slot < default // _SLOT_MS:
+            msg = (
+                f"requested upper bound {requested_ms} ms is not after the "
+                f"current slot (now {now_ms} ms)"
+            )
+            raise ValueError(msg)
+        result = min(requested_ms, cap)
+    if result // _SLOT_MS <= now_slot:
         raise MarketAwaitingBatchError(market, cap)
     return result
