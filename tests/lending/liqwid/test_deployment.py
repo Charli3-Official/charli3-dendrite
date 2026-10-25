@@ -1,5 +1,6 @@
 """The bundled Liqwid V2 deployment snapshot (``registry_v6.json``)."""
 
+import dataclasses
 import decimal
 import importlib.util
 import json
@@ -24,7 +25,9 @@ from charli3_dendrite.lending.liqwid import market as liqwid_market
 from charli3_dendrite.lending.liqwid import oracles
 from charli3_dendrite.lending.liqwid.deployment import BURN_CREDENTIAL
 from charli3_dendrite.lending.liqwid.deployment import FIRST_ORACLE_SLOT
+from charli3_dendrite.lending.liqwid.deployment import DRIFT_KINDS
 from charli3_dendrite.lending.liqwid.deployment import FIRST_SLOT
+from charli3_dendrite.lending.liqwid.deployment import IGNORED_MARKET_COMPONENTS
 from charli3_dendrite.lending.liqwid.deployment import MARKET_COMPONENT_ROLES
 from charli3_dendrite.lending.liqwid.deployment import MARKET_FAMILIES
 from charli3_dendrite.lending.liqwid.deployment import MARKET_ROLE_FIELDS
@@ -40,10 +43,15 @@ from charli3_dendrite.lending.liqwid.deployment import OracleValidator
 from charli3_dendrite.lending.liqwid.deployment import check_deployment
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import load_deployment
+from charli3_dendrite.lending.liqwid.deployment import ReferenceUtxo
+from charli3_dendrite.lending.liqwid.deployment import StakingPair
+from charli3_dendrite.lending.liqwid.deployment import StakingRole
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.deployment import staking_roles
 from charli3_dendrite.lending.liqwid.lifecycle import LoanKey
 from charli3_dendrite.lending.liqwid.lifecycle import LoanTransition
 from charli3_dendrite.lending.units import script_credential
+from charli3_dendrite.lending.units import script_payment_address
 from charli3_dendrite.utility import slot_to_posix_ms
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import CONTEXT_KINDS
@@ -52,6 +60,7 @@ from tests.lending.liqwid.records import SPEND_RULES
 from tests.lending.liqwid.records import UTXO_KINDS
 from tests.lending.liqwid.records import context_at
 from tests.lending.liqwid.records import live_context
+from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.records import spend_of
@@ -132,6 +141,7 @@ def test_family_table_covers_every_role():
         ("Borrow", "MintingPolicy"),
         ("NewBorrow", "MintingPolicy"),
         ("Liquidation", "MintingPolicy"),
+        ("Action", "MintingPolicy"),
         ("MarketState", "Validator"),
         ("AnastasiaAuditMarketState", "Validator"),
         ("Loan", "Validator"),
@@ -174,6 +184,7 @@ def test_every_snapshot_hash_lands_in_its_role():
         "borrow_policy",
         "new_borrow_policy",
         "liquidation_policy",
+        "action_token_policy",
         "market_state_validators",
         "legacy_loan_validators",
         "new_loan_validators",
@@ -190,6 +201,7 @@ def test_every_market_has_its_single_policies_and_generations():
         assert len(market.market_id) == 56
         assert market.borrow_policy is not None
         assert market.liquidation_policy is not None
+        assert market.action_token_policy is not None
         assert market.legacy_loan_validators
         assert market.actions
         assert market.batches
@@ -390,8 +402,22 @@ def test_refresh_script_trim_is_idempotent_on_the_snapshot():
         k: v for k, v in bundled.items() if not k.startswith("_")
     }
     assert module.HAND_KEPT == bundled["handKept"]
-    allowed = {"tag", "market", "componentName", "name", "type", "scriptHash"}
+    allowed = {
+        "tag",
+        "market",
+        "componentName",
+        "name",
+        "type",
+        "scriptHash",
+        "referenceUtxo",
+    }
     assert all(set(entry) <= allowed for entry in bundled["scriptInfos"])
+    flat = {"txId", "index", "holder", "language"}
+    assert all(
+        set(entry["referenceUtxo"]) == flat
+        for entry in bundled["scriptInfos"]
+        if "referenceUtxo" in entry
+    )
 
 
 def test_live_drift_check_fetches_the_module_registry_url():
@@ -757,6 +783,8 @@ def _keys(findings: list[DriftFinding]) -> list[tuple[str, str | None, str, str]
 def test_market_component_roles_fill_every_tracked_field() -> None:
     assert MARKET_COMPONENT_ROLES is MARKET_FAMILIES
     assert set(MARKET_COMPONENT_ROLES.values()) == set(MARKET_ROLE_FIELDS)
+    assert MARKET_COMPONENT_ROLES[("Action", "MintingPolicy")] == "action_token_policy"
+    assert ("Action", "MintingPolicy") not in IGNORED_MARKET_COMPONENTS
     for market in default_deployment().markets:
         for name in MARKET_ROLE_FIELDS:
             getattr(market, name)  # every role is a MarketComponents attribute
@@ -1196,3 +1224,454 @@ def test_payment_credentials_are_every_listed_validator() -> None:
     }
     assert staking
     assert not staking & dep.payment_credentials
+
+
+# --- Reference UTxOs, action-token policy, staking roles ---------------------
+
+ADA_MARKET_STATE_POLICY = "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c"
+ADA_ACTION_TOKEN_POLICY = "7807209cec9f79c9f6cf5bea2ab7826e6e46b6a7583a337b7e20fb36"
+# The Ada market's live user-flow scripts: (hash, reference out-ref, holder).
+ADA_REFERENCE_UTXOS = {
+    "action": (
+        "278825f2fbb67f3b2418fc239315f8911e4ddf1ddbb14f1f7c9e0393",
+        "70b23fa72b7da87997d971f916150e17fbe2c4adfc209123338e1060a8f1ea4b#0",
+        "1caa67db316367b6b9100c22573ed447f01707cd6ebac45384ec9c2f",
+    ),
+    "qtoken": (
+        "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68",
+        "fc08d1ad4c5c700008ab72e8ecb9d4f7e09bd0e6a172f77cd4d5135b823c2e96#1",
+        "b575da974ec756ba2afdccdc07cbd1839acaf0a24c4f80afd81d3fb6",
+    ),
+    "new_borrow": (
+        "63d7e1501efb7dfda4915597658552e1c3e35e6f34cdc74817fad1dc",
+        "40f636fe47756c4b31dd9733caee35ac49f44d644f7f2b536083576f6bf0bc7f#3",
+        "c813350958562bee3546a9a829b735e0ba3ceaf4a23993227995a27b",
+    ),
+    "new_loan_validator": (
+        "74115afb757a8a349fcb8f04bb9fc39f91b6ae5784bdbe4e56140a43",
+        "40f636fe47756c4b31dd9733caee35ac49f44d644f7f2b536083576f6bf0bc7f#2",
+        "c813350958562bee3546a9a829b735e0ba3ceaf4a23993227995a27b",
+    ),
+    "borrow_staking": (
+        "f10726d3903431a729948deaad3fae70c9b63707978ebcc1297e6428",
+        "70601bf5fcedea8199fc9e91234ae2653ff4d77ecd6c49817d7ecb894e148b30#0",
+        "13ba23210a0ee4c679888868d07a72648b362b353a09e8fbc7762a0d",
+    ),
+    "liquidation_staking": (
+        "588bff228f6290f6c8308b909bac77adb82b7f6738c185008714b3b9",
+        "ab30956925afe085c854ceddbf4a30d0383c6a5f61dac04883951dfd409676cb#0",
+        "0f07f8c9bf7cb384e6ddae380039f394620dbec31aaf81ce3af32f0c",
+    ),
+}
+# Markets whose MarketParams p[34] lists the liquidation staking script first.
+LIQUIDATION_FIRST = {
+    "NIGHT",
+    "SNEK2",
+    "SNEK2-ADA",
+    "SNEK2-USDCx",
+    "STRIKE",
+    "STRIKE-ADA",
+    "STRIKE-USDCx",
+    "USDCx",
+    "USDCx-USDM-SUNDAE-LP-STABLESWAP",
+    "USDM-USDA-MINSWAP-LP-STABLE",
+    "USDrf",
+    "sUSDrf",
+    "sUSDrf-USDCx",
+}
+
+
+def _live_list36() -> list[tuple[MarketComponents, Any]]:
+    """(market, MarketParams datum) of every live list36 MarketParams record."""
+    deployment = default_deployment()
+    return [
+        (deployment.market(record.market_id), record.datum)
+        for _, record in parsed_records("market_params", live=True)
+        if record.datum.length == 36
+    ]
+
+
+def _needed_hashes(market: MarketComponents, params: Any) -> set[str]:
+    return {
+        params.action_validator,
+        params.loan_validator,
+        *params.withdraw_zero,
+        market.qtoken_policy,
+        market.new_borrow_policy,
+    }
+
+
+def _ref_utxo(out_ref: str) -> Any:
+    from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
+
+    tx_hash, index = out_ref.split("#")
+    return Utxo(
+        address=script_payment_address("aa" * 28),
+        lovelace=10_000_000,
+        assets=[],
+        datum=None,
+        ref_script="00",
+        ref_script_type="plutusV2",
+        out_ref=(tx_hash, int(index)),
+    )
+
+
+def _ada_live_params() -> tuple[PoolStateInfo, MarketComponents, Any]:
+    deployment = default_deployment()
+    for rec, record in parsed_records("market_params", live=True):
+        if record.market_id == ADA_MARKET_STATE_POLICY:
+            return record_info(rec), deployment.market(record.market_id), record.datum
+    raise AssertionError("no captured live Ada MarketParams")
+
+
+def _hashes_by_out_ref(
+    monkeypatch: pytest.MonkeyPatch,
+    hashes: dict[tuple[str, int], str],
+) -> None:
+    monkeypatch.setattr(
+        deployment,
+        "_script_hash_of",
+        lambda utxo: hashes[utxo.out_ref],
+    )
+
+
+def test_every_market_has_an_action_token_policy() -> None:
+    markets = _by_name()
+    assert markets["Ada"].action_token_policy == ADA_ACTION_TOKEN_POLICY
+    policies = [m.action_token_policy for m in markets.values()]
+    assert None not in policies
+    assert len(set(policies)) == len(policies) == 35
+
+
+def test_reference_utxos_of_the_ada_user_flow_scripts() -> None:
+    deployment = default_deployment()
+    for script_hash, ref, holder in ADA_REFERENCE_UTXOS.values():
+        assert deployment.reference_utxo(script_hash) == ReferenceUtxo(
+            out_ref=ref,
+            address=script_payment_address(holder),
+            language="plutusV2",
+        )
+    action = deployment.reference_utxo(ADA_REFERENCE_UTXOS["action"][0])
+    assert action.out_ref == (
+        "70b23fa72b7da87997d971f916150e17fbe2c4adfc209123338e1060a8f1ea4b#0"
+    )
+    assert action.address == script_payment_address(
+        "1caa67db316367b6b9100c22573ed447f01707cd6ebac45384ec9c2f",
+    )
+
+
+def test_unknown_script_has_no_reference_utxo() -> None:
+    with pytest.raises(KeyError):
+        default_deployment().reference_utxo(UNKNOWN)
+
+
+def test_every_bundled_reference_utxo_is_plutus_v2() -> None:
+    references = default_deployment().reference_utxos
+    assert len(references) == 686
+    assert {ref.language for ref in references.values()} == {"plutusV2"}
+    assert len({ref.out_ref for ref in references.values()}) == len(references)
+
+
+def test_every_live_list36_market_has_its_user_flow_reference_utxos() -> None:
+    deployment = default_deployment()
+    live = _live_list36()
+    assert len(live) == 34
+    for market, params in live:
+        for script_hash in _needed_hashes(market, params):
+            assert deployment.reference_utxo(script_hash).language == "plutusV2"
+
+
+def test_reference_utxos_take_no_part_in_equality_or_hashing() -> None:
+    deployment = default_deployment()
+    bare = dataclasses.replace(deployment, reference_utxos={})
+    assert bare == deployment
+    assert hash(bare) == hash(deployment)
+
+
+def test_constructed_deployment_has_no_reference_utxos() -> None:
+    ada = _by_name()["Ada"]
+    dep = LiqwidDeployment((ada,), "aa" * 28, (), ORACLE_TOKEN_POLICY)
+    assert dep.reference_utxos == {}
+
+
+def _nested(entry: dict[str, Any]) -> dict[str, Any]:
+    """A trimmed entry back in the published registry's nested form."""
+    flat = entry.pop("referenceUtxo")
+    entry["deployment"] = {
+        "type": "lockedAt",
+        "referenceUtxo": {
+            "input": {"transactionId": flat["txId"], "index": flat["index"]},
+            "output": {
+                "output": {
+                    "address": {
+                        "addressCredential": {
+                            "tag": "ScriptCredential",
+                            "contents": flat["holder"],
+                        },
+                        "addressStakingCredential": None,
+                    },
+                },
+                "scriptRef": {
+                    "tag": "PlutusScriptRef",
+                    "contents": ["4e4d01000033222220051200120011", flat["language"]],
+                },
+            },
+        },
+    }
+    return entry
+
+
+def test_a_fetched_registry_carries_its_nested_reference_utxos() -> None:
+    document = _bundled()
+    document["scriptInfos"] = [
+        _nested(e) if "referenceUtxo" in e else e for e in document["scriptInfos"]
+    ]
+    loaded = load_deployment(document)
+    assert loaded.reference_utxos == default_deployment().reference_utxos
+
+
+def test_equal_duplicate_reference_utxos_collapse_and_conflicts_raise() -> None:
+    document = _bundled()
+    action_hash = ADA_REFERENCE_UTXOS["action"][0]
+    entry = next(e for e in document["scriptInfos"] if e["scriptHash"] == action_hash)
+    document["scriptInfos"].append(dict(entry))
+    assert load_deployment(document).reference_utxo(action_hash).out_ref == (
+        ADA_REFERENCE_UTXOS["action"][1]
+    )
+
+    clash = dict(entry, referenceUtxo=dict(entry["referenceUtxo"], index=7))
+    document["scriptInfos"].append(clash)
+    with pytest.raises(ValueError, match="two reference UTxOs"):
+        load_deployment(document)
+
+
+def test_market_by_name() -> None:
+    deployment = default_deployment()
+    assert deployment.market_by_name("Ada").market_id == ADA_MARKET_STATE_POLICY
+    assert deployment.market_by_name("DJED") is _by_name()["DJED"]
+    with pytest.raises(KeyError):
+        deployment.market_by_name("NOPE")
+
+
+def test_staking_roles_split_every_live_list36_pair() -> None:
+    liquidation_first = set()
+    for market, params in _live_list36():
+        pair = staking_roles(market, params)
+        assert isinstance(pair, StakingPair)
+        assert {pair.borrow, pair.liquidation} == set(params.withdraw_zero)
+        assert pair.borrow in market.borrow_staking
+        assert pair.liquidation in market.liquidation_staking
+        if params.withdraw_zero[0] == pair.liquidation:
+            liquidation_first.add(market.name)
+    assert liquidation_first == LIQUIDATION_FIRST
+
+
+def test_staking_roles_of_the_ada_market() -> None:
+    _, market, params = _ada_live_params()
+    assert staking_roles(market, params) == StakingPair(
+        borrow=ADA_REFERENCE_UTXOS["borrow_staking"][0],
+        liquidation=ADA_REFERENCE_UTXOS["liquidation_staking"][0],
+    )
+    assert StakingRole.BORROW.value == "borrow"
+    assert StakingRole.LIQUIDATION.value == "liquidation"
+    assert StakingRole("liquidation") is StakingRole.LIQUIDATION
+
+
+def test_staking_roles_refuse_an_ambiguous_or_missing_pair() -> None:
+    _, market, params = _ada_live_params()
+    borrow = staking_roles(market, params).borrow
+    liquidation = staking_roles(market, params).liquidation
+    for pair in ((borrow, borrow), (liquidation, liquidation), (borrow, UNKNOWN)):
+        with pytest.raises(ValueError, match="staking"):
+            staking_roles(market, dataclasses.replace(params, withdraw_zero=pair))
+    with pytest.raises(ValueError, match="staking"):
+        staking_roles(market, dataclasses.replace(params, withdraw_zero=None))
+
+
+def test_reference_is_a_drift_kind() -> None:
+    assert "reference" in DRIFT_KINDS
+
+
+def test_a_matching_reference_set_has_no_reference_findings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment = default_deployment()
+    utxos = []
+    hashes: dict[tuple[str, int], str] = {}
+    for market, params in _live_list36():
+        for script_hash in _needed_hashes(market, params):
+            utxo = _ref_utxo(deployment.reference_utxo(script_hash).out_ref)
+            utxos.append(utxo)
+            hashes[utxo.out_ref] = script_hash
+    _hashes_by_out_ref(monkeypatch, hashes)
+    assert check_deployment(_live_params(), reference_utxos=utxos) == []
+
+
+def _ada_reference_set() -> tuple[list[Any], dict[tuple[str, int], str]]:
+    utxos = [_ref_utxo(ref) for _, ref, _ in ADA_REFERENCE_UTXOS.values()]
+    hashes = {
+        utxo.out_ref: script_hash
+        for utxo, (script_hash, _, _) in zip(utxos, ADA_REFERENCE_UTXOS.values())
+    }
+    return utxos, hashes
+
+
+def test_a_missing_reference_utxo_is_one_reference_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    info, _, _ = _ada_live_params()
+    utxos, hashes = _ada_reference_set()
+    _hashes_by_out_ref(monkeypatch, hashes)
+    assert check_deployment([info], reference_utxos=utxos) == []
+    script_hash, ref, _ = ADA_REFERENCE_UTXOS["new_borrow"]
+    kept = [u for u in utxos if f"{u.out_ref[0]}#{u.out_ref[1]}" != ref]
+    findings = check_deployment([info], reference_utxos=kept)
+    assert _keys(findings) == [
+        ("reference", "Ada", "new_borrow_policy", script_hash),
+    ]
+    assert findings[0].detail == f"reference UTxO {ref} not found unspent"
+
+
+def test_a_mismatched_reference_utxo_is_one_reference_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    info, _, _ = _ada_live_params()
+    utxos, hashes = _ada_reference_set()
+    script_hash, ref, _ = ADA_REFERENCE_UTXOS["action"]
+    tx_hash, index = ref.split("#")
+    hashes[(tx_hash, int(index))] = UNKNOWN
+    _hashes_by_out_ref(monkeypatch, hashes)
+    findings = check_deployment([info], reference_utxos=utxos)
+    assert _keys(findings) == [("reference", "Ada", "actions", script_hash)]
+    assert findings[0].detail == f"reference UTxO {ref} hashes to {UNKNOWN}"
+
+
+def test_reference_check_names_each_user_flow_component(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    info, _, _ = _ada_live_params()
+    _hashes_by_out_ref(monkeypatch, {})
+    findings = check_deployment([info], reference_utxos=[_ref_utxo("ab" * 32 + "#0")])
+    assert sorted(_keys(findings)) == sorted(
+        [
+            ("reference", "Ada", component, script_hash)
+            for component, (script_hash, _, _) in zip(
+                (
+                    "actions",
+                    "qtoken_policy",
+                    "new_borrow_policy",
+                    "loan_validators",
+                    "staking",
+                    "staking",
+                ),
+                ADA_REFERENCE_UTXOS.values(),
+            )
+        ],
+    )
+
+
+def test_a_script_without_a_bundled_reference_utxo_is_a_reference_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rec, record = next(
+        (rec, record)
+        for rec, record in parsed_records("market_params", live=True)
+        if record.market_id == ADA_MARKET_STATE_POLICY
+    )
+    fields = cbor2.loads(bytes.fromhex(rec["datum_cbor"]))
+    fields[35] = bytes.fromhex(UNKNOWN)
+    info = record_info(rec, datum_cbor=cbor2.dumps(fields).hex())
+    utxos, hashes = _ada_reference_set()
+    _hashes_by_out_ref(monkeypatch, hashes)
+    findings = check_deployment([info], reference_utxos=utxos)
+    assert ("reference", "Ada", "loan_validators", UNKNOWN) in _keys(findings)
+    assert ("params", "Ada", "loan_validators", UNKNOWN) in _keys(findings)
+
+
+def test_reference_check_skips_layouts_before_list36(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _hashes_by_out_ref(monkeypatch, {})
+    older = [
+        info
+        for info in _live_params()
+        if (count := deployment.field_count(info.datum_cbor)) is not None and count < 36
+    ]
+    assert older
+    findings = check_deployment(older, reference_utxos=[_ref_utxo("ab" * 32 + "#0")])
+    assert [f for f in findings if f.kind == "reference"] == []
+
+
+def test_reference_script_hash_follows_the_script_language() -> None:
+    from pycardano import PlutusV2Script
+    from pycardano import PlutusV3Script
+    from pycardano import plutus_script_hash
+
+    utxo = _ref_utxo("ab" * 32 + "#0")
+    utxo.ref_script = "4e4d01000033222220051200120011"
+    script = bytes.fromhex(utxo.ref_script)
+    v2 = plutus_script_hash(PlutusV2Script(script)).payload.hex()
+    assert deployment._script_hash_of(utxo) == v2
+    assert v2 != plutus_script_hash(PlutusV3Script(script)).payload.hex()
+    utxo.ref_script_type = None
+    assert deployment._script_hash_of(utxo) == (
+        plutus_script_hash(PlutusV3Script(script)).payload.hex()
+    )
+    utxo.ref_script = None
+    with pytest.raises(ValueError, match="carries no script"):
+        deployment._script_hash_of(utxo)
+
+
+def _refresh_module() -> Any:
+    spec = importlib.util.spec_from_file_location("_refresh_registry", REFRESH_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_refresh_script_flattens_a_nested_reference_utxo() -> None:
+    bundled = _bundled()
+    entry = next(
+        e
+        for e in bundled["scriptInfos"]
+        if e["scriptHash"] == ADA_REFERENCE_UTXOS["action"][0]
+    )
+    flat = dict(entry["referenceUtxo"])
+    assert flat == {
+        "txId": "70b23fa72b7da87997d971f916150e17fbe2c4adfc209123338e1060a8f1ea4b",
+        "index": 0,
+        "holder": "1caa67db316367b6b9100c22573ed447f01707cd6ebac45384ec9c2f",
+        "language": "PlutusV2",
+    }
+    raw = dict(bundled)
+    raw["scriptInfos"] = [
+        _nested(dict(e)) if "referenceUtxo" in e else e for e in bundled["scriptInfos"]
+    ]
+    assert "referenceUtxo" not in raw["scriptInfos"][0]
+    trimmed = _refresh_module().trim(json.dumps(raw).encode())
+    assert trimmed["scriptInfos"] == bundled["scriptInfos"]
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("addressCredential", "tag"), "PubKeyCredential"),
+        (("addressStakingCredential",), {"tag": "StakingHash"}),
+    ],
+)
+def test_a_reference_utxo_not_held_by_a_bare_script_address_is_refused(
+    path: tuple[str, ...],
+    value: object,
+) -> None:
+    entry = _nested(
+        dict(
+            next(e for e in _bundled()["scriptInfos"] if "referenceUtxo" in e),
+        ),
+    )
+    address = entry["deployment"]["referenceUtxo"]["output"]["output"]["address"]
+    target = address
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(ValueError, match="reference UTxO"):
+        deployment.reference_utxo_entry(entry)

@@ -8,7 +8,9 @@ given with ``--from``, and writes
   ``deployment.MARKET_FAMILIES`` (tags ``liqwidMainnet`` / ``liqwidMainnetLegacy``,
   with a market) or ``deployment.ORACLE_FAMILIES`` / ``ORACLE_TOKEN_FAMILY`` (tag
   ``oracleMainnet``), each reduced to tag, market, componentName, name, type and
-  scriptHash, sorted by those keys;
+  scriptHash, sorted by those keys, plus the flat ``referenceUtxo`` (txId, index,
+  holder, language; never the script CBOR) of a deployed script
+  (``deployment.reference_utxo_entry``; an already-flat one passes through);
 - ``other.liqwidMainnetParams``: each market's ``marketDecimal`` and
   ``underlyingClass``;
 - ``handKept``: ``HAND_KEPT`` below, the facts the registry does not list;
@@ -67,14 +69,18 @@ def _kept(entry: dict) -> bool:
     )
 
 
+def _trimmed(entry: dict) -> dict:
+    kept = {key: entry[key] for key in KEPT_KEYS if key in entry}
+    reference = deployment.reference_utxo_entry(entry)
+    if reference is not None:
+        kept["referenceUtxo"] = reference
+    return kept
+
+
 def trim(raw: bytes) -> dict:
     """The snapshot document for a raw registry download."""
     registry = json.loads(raw)
-    infos = [
-        {key: entry[key] for key in KEPT_KEYS if key in entry}
-        for entry in registry["scriptInfos"]
-        if _kept(entry)
-    ]
+    infos = [_trimmed(entry) for entry in registry["scriptInfos"] if _kept(entry)]
     infos.sort(key=lambda entry: tuple(entry.get(key, "") for key in KEPT_KEYS))
     params = registry["other"]["liqwidMainnetParams"]
     return {
