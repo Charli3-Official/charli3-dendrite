@@ -41,6 +41,7 @@ from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.rates import register_rate_model
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import context_at
@@ -56,7 +57,6 @@ register_rate_model(LiqwidVariableRate)
 
 DEPLOYMENT = default_deployment()
 NOW_MS = 1_790_000_000_000
-POLICY_HEX_LEN = 56
 ADA_MARKET = "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c"
 ADA_QTOKEN = "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68"
 GENESIS_ADA_PARAMS = (

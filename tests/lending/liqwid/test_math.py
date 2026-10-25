@@ -285,6 +285,20 @@ def test_seized_qtokens_is_the_repaid_value_over_the_discounted_collateral_value
     assert "seized_qtokens" in lqm.__all__
 
 
+def test_seized_qtokens_refuses_a_discount_as_seized_value_does():
+    with pytest.raises(ValueError) as qtokens:
+        lqm.seized_qtokens(
+            900,
+            borrow_price=Fraction(1),
+            discount=Fraction(0),
+            rate=Fraction(1),
+            price=Fraction(1),
+        )
+    with pytest.raises(ValueError) as value:
+        lqm.seized_value(900, Fraction(0))
+    assert str(qtokens.value) == str(value.value)
+
+
 @pytest.mark.parametrize(
     "bad",
     ["repay", "borrow_price", "discount", "rate", "price"],

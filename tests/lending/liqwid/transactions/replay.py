@@ -34,11 +34,11 @@ from pycardano import Address
 from pycardano import Transaction
 from pycardano import TransactionBuilder
 
-from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
-from charli3_dendrite.lending.fluidtokens.transactions.utxos import ogmios_entry
-from charli3_dendrite.lending.fluidtokens.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.infra import assemble_unsigned
+from charli3_dendrite.lending.transactions.utxos import Utxo
+from charli3_dendrite.lending.transactions.utxos import ogmios_entry
+from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 
 FIXTURES = Path(__file__).parent / "fixtures"
 TXS_FILE = "txs.json.gz"

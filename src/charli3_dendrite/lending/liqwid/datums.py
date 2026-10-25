@@ -705,7 +705,10 @@ def decode_action(datum: str | bytes) -> ActionDatum:
 def datum_style(datum: str | bytes) -> DatumStyle:
     """``"indefinite"`` when ``datum`` (CBOR hex or raw bytes) opens with ``0x9f``.
 
-    Any other first byte is ``"definite"``. Raises ``ValueError`` on an empty datum.
+    Any other first byte is ``"definite"``.
+
+    Raises:
+        ValueError: On an empty datum.
     """
     head = bytes.fromhex(datum[:2]) if isinstance(datum, str) else bytes(datum[:1])
     if not head:

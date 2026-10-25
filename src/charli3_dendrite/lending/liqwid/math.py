@@ -234,9 +234,9 @@ def liquidation_debt(loan: LoanDatum, market_index: int) -> int:
     The debt health and liquidation size are measured against. Interest accrues
     only through the market index, which moves at batch time, so the debt is exact
     as of the market's latest batch. A loan rebased after that batch carries an
-    index above ``s5``; its indexed debt can round below ``principal + interest``,
-    and the protocol then settles at ``principal + interest`` (the clamp). A loan
-    index of 0 carries no accrual.
+    index at or above ``s5``; its indexed debt can round below ``principal +
+    interest``, and the protocol then settles at ``principal + interest`` (the
+    clamp). A loan index of 0 carries no accrual.
 
     Args:
         loan: The loan record.
@@ -458,11 +458,10 @@ def seized_qtokens(
     if repay <= 0:
         raise ValueError("non-positive repay")
     _check_price(borrow_price)
-    if discount <= 0:
-        raise ValueError("non-positive discount")
+    value = seized_value(repay, discount)
     if rate <= 0:
         raise ValueError("non-positive rate")
     if price <= 0:
         raise ValueError("non-positive price")
-    seized = Fraction(repay) * borrow_price / (discount * rate * price)
+    seized = value * borrow_price / (rate * price)
     return floor_div(seized.numerator, seized.denominator)

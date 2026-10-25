@@ -78,7 +78,9 @@ from charli3_dendrite.lending.transactions.utxos import script_hash_of
 from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
 from charli3_dendrite.lending.transactions.utxos import utxo_value
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 from charli3_dendrite.lending.units import out_ref_text
+from charli3_dendrite.lending.units import policy_of
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
@@ -106,7 +108,6 @@ __all__ = [
 ]
 
 _LOVELACE = "lovelace"
-_POLICY_HEX_LEN = 56
 
 # The loan-token name a modification writes for each current name.
 _FLIPPED_NAME: dict[str, str] = {"00": "01", "01": "00", "30": "01", "31": "01"}
@@ -223,7 +224,7 @@ def _shifted_value(action: ActionUtxo, underlying: str, delta: int) -> Value:
     utxo = action.utxo
     if underlying == _LOVELACE:
         return utxo_value(utxo.lovelace + delta, utxo.assets)
-    policy, name = underlying[:_POLICY_HEX_LEN], underlying[_POLICY_HEX_LEN:]
+    policy, name = policy_of(underlying), underlying[POLICY_HEX_LEN:]
     assets = [a for a in utxo.assets if (a[0], a[1]) != (policy, name)]
     if held + delta:
         assets.append((policy, name, held + delta))
