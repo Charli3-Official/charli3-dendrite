@@ -16,9 +16,12 @@ combination's snapshot; the references merge by out-ref (the first kept), so a
 market both legs read is referenced once. Both legs must read the same MarketState
 of such a market (and, within one market, the same MarketParams).
 
-The validity window ends by both markets' batch deadlines ``s8 + p[3]``: a supply
-or redeem leg refuses a bound past its market's, the open caps its bound at the
-borrow market's, and a remove-and-redeem caps the window at the loan market's.
+The validity window ends by the batch deadline ``s8 + p[3]`` of each market whose
+action UTxO the transaction spends: a supply-and-borrow's by both markets' (the
+supply leg refuses a bound past its market's, the open caps its bound at the
+borrow market's), a remove-and-redeem's by the redeemed market's alone. The
+collateral change of a remove-and-redeem spends no action UTxO and its loan
+validator checks no deadline, so the loan market's deadline does not bound it.
 When X and Y are the same market, the two legs spend two different action UTxOs
 of it, each checked against its own caps.
 """
@@ -36,7 +39,6 @@ from pycardano import TransactionBuilder
 
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
-from charli3_dendrite.lending.liqwid.transactions._flow import merge_validity_ms
 from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow import _build_borrow
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
@@ -47,7 +49,6 @@ from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import _build_redeem
 from charli3_dendrite.lending.liqwid.transactions.supply import _build_supply
 from charli3_dendrite.lending.liqwid.transactions.terms import held_collateral
-from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 from charli3_dendrite.lending.units import POLICY_HEX_LEN
 
@@ -270,22 +271,21 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
         * s9)`` from the pinned ``action_utxo`` or a random one (by ``rng``) not in
         ``exclude``. The wallet UTxOs at ``owner_address`` fund both legs unless
         ``funding`` is given. The upper bound is ``valid_to_ms`` or the default
-        window, capped at the earlier of the two markets' batch deadlines.
-        ``allow_spent`` resolves an already consumed loan (a captured replay).
+        window, capped at the redeemed market's batch deadline; the loan market's
+        deadline does not bound the transaction. ``allow_spent`` resolves an
+        already consumed loan (a captured replay).
 
         Raises:
             ValueError: ``qtoken_unit`` is no Liqwid market's qToken, or the loan
                 holds fewer than ``qtokens`` (or ``qtokens`` is not positive).
             UnsupportedLoanError: The loan is legacy-generation or no loan.
             MinValueError: The payout is below the redeemed market's minimum.
-            MarketAwaitingBatchError: A market's batch deadline is too close.
+            MarketAwaitingBatchError: The redeemed market's batch deadline is too
+                close.
             LiqwidBuildError: As the legs' ``from_backend``.
         """
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
-        from charli3_dendrite.lending.liqwid.transactions.resolve import (
-            resolve_valid_to_ms,
-        )
 
         active = resolve_deployment(deployment)
         market = (
@@ -332,8 +332,6 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
             rng=rng,
             deployment=deployment,
         )
-        loan_upper = resolve_valid_to_ms(backend, collateral.records, valid_to_ms)
-        redeem.valid_to_ms = min(redeem.valid_to_ms, loan_upper)
         return cls(collateral=collateral, redeem=redeem)
 
 
@@ -427,12 +425,6 @@ def _build_remove_and_redeem(
     _check_shared_records(redeem.records, collateral.records, collateral.health)
     _build_redeem(tx_builder, redeem, stash=stash)
     _build_collateral(tx_builder, collateral, stash=stash)
-    loan_market = collateral.records
-    merge_validity_ms(
-        tx_builder,
-        upper_ms=ttl_cap_ms(loan_market.state_datum, loan_market.params_datum),
-        lower_ms=None,
-    )
 
 
 def _check_shared_records(

@@ -3,8 +3,9 @@
 Each combination is the exact union of its legs: a supply then an open, or a redeem
 then a collateral change, with one funding stash, one owner signer, one borrow
 staking withdrawal, the references merged by out-ref and the validity window ending
-by both markets' batch deadlines. The replays rebuild the captured combinations; the
-live builds resolve them through an offline backend.
+by the batch deadline of each market whose action UTxO is spent. The replays
+rebuild the captured combinations; the live builds resolve them through an offline
+backend.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_payout
 from charli3_dendrite.lending.liqwid.transactions.terms import supply_mint
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
+from charli3_dendrite.lending.transactions.errors import ValidityWindowError
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
@@ -217,9 +219,9 @@ def test_the_captured_bound_is_inside_both_markets_deadlines(label):
         assert upper <= ttl_cap_ms(records.state_datum, records.params_datum)
 
 
-def test_a_remove_and_redeem_bound_is_capped_at_the_loan_markets_deadline():
+def test_a_remove_and_redeem_bound_passes_the_loan_markets_deadline():
     # NIGHT's deadline is 443,000 ms past the captured bound and Ada's 11,718,000 ms:
-    # a bound between the two ends at NIGHT's.
+    # a bound between the two is kept, since only the redeemed market's binds.
     fix, snapshot = _remove_and_redeem("remove_and_redeem_night")
     loan_records = snapshot.collateral.records
     redeem_records = snapshot.redeem.records
@@ -229,7 +231,16 @@ def test_a_remove_and_redeem_bound_is_capped_at_the_loan_markets_deadline():
     assert (night - captured, ada - captured) == (443_000, 11_718_000)
     snapshot.redeem.valid_to_ms = captured + 1_000_000
     built = _build(build_remove_and_redeem, snapshot, fix)
-    assert validity(built) == (None, posix_ms_to_slot(night))
+    assert validity(built) == (None, posix_ms_to_slot(captured + 1_000_000))
+
+
+def test_a_remove_and_redeem_bound_past_the_redeem_markets_deadline_is_refused():
+    fix, snapshot = _remove_and_redeem("remove_and_redeem_night")
+    redeem_records = snapshot.redeem.records
+    ada = ttl_cap_ms(redeem_records.state_datum, redeem_records.params_datum)
+    snapshot.redeem.valid_to_ms = ada + 1_000
+    with pytest.raises(ValidityWindowError, match="batch deadline"):
+        _build(build_remove_and_redeem, snapshot, fix)
 
 
 def test_a_supply_and_borrow_bound_is_capped_at_the_borrow_markets_deadline():
@@ -388,14 +399,19 @@ def test_a_remove_and_redeem_resolved_from_the_backend_builds_the_captured_one()
     )
 
 
-def test_a_live_remove_and_redeem_ends_by_both_deadlines():
+@pytest.mark.parametrize("before_loan_deadline_s", [300, -60])
+def test_a_live_remove_and_redeem_ends_by_the_redeem_markets_deadline(
+    before_loan_deadline_s,
+):
     fix, captured = _remove_and_redeem("remove_and_redeem_night")
     night = captured.collateral.records
     cap = ttl_cap_ms(night.state_datum, night.params_datum)
-    # Five minutes before NIGHT's deadline, the default window (900 s) passes it
-    # but stays well inside Ada's.
+    # Five minutes before NIGHT's deadline, and a minute past it, the default
+    # window (900 s) is kept: it stays well inside Ada's deadline, the only one
+    # that binds.
+    tip_s = cap // 1000 - before_loan_deadline_s
     snapshot = RemoveAndRedeemSnapshot.from_backend(
-        capture_backend(fix, tip_time=cap // 1000 - 300),
+        capture_backend(fix, tip_time=tip_s),
         loan_utxo=out_ref_text(captured.collateral.loan.utxo.out_ref),
         owner_address=captured.collateral.owner_address,
         qtoken_unit=QADA,
@@ -403,8 +419,8 @@ def test_a_live_remove_and_redeem_ends_by_both_deadlines():
         funding=captured.collateral.funding,
     )
     ada = snapshot.redeem.records
-    assert ttl_cap_ms(ada.state_datum, ada.params_datum) > cap + 900_000
-    assert snapshot.redeem.valid_to_ms == cap - 1_000
+    assert ttl_cap_ms(ada.state_datum, ada.params_datum) > tip_s * 1000 + 900_000
+    assert snapshot.redeem.valid_to_ms == tip_s * 1000 + 900_000
 
 
 def test_a_live_remove_and_redeem_of_more_than_the_loan_holds_is_refused():
