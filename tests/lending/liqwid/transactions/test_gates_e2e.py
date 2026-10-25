@@ -82,6 +82,7 @@ from tests.lending.liqwid.transactions.replay import fixture
 from tests.lending.liqwid.transactions.replay import fixture_utxos
 from tests.lending.liqwid.transactions.replay import keep_loan_token
 from tests.lending.liqwid.transactions.replay import labels
+from tests.lending.liqwid.transactions.replay import mints
 from tests.lending.liqwid.transactions.replay import mutated
 from tests.lending.liqwid.transactions.replay import needs_ogmios
 from tests.lending.liqwid.transactions.replay import replace_reference
@@ -866,3 +867,32 @@ def test_a_remove_and_redeem_on_the_loans_market_is_refused_by_the_scripts():
     combined = RemoveAndRedeemSnapshot(collateral=removal, redeem=redeem)
     failed = _script_refused(_redeem_then_remove, combined, (loan,))
     assert failed == ["spend", "withdraw"]
+
+
+# --- loans named 30 and 31 ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["30", "31"])
+@pytest.mark.parametrize("label", ["increase_ada", "collateral_add"])
+def test_a_loan_named_30_or_31_is_modified_to_01(label, name):
+    """A borrow-more or a collateral change on a loan named ``30``/``31`` evaluates.
+
+    The captured loan is supplied with its token renamed ``name`` at its out-ref
+    (no ledger holds it): the build burns that token and mints ``01``, and the
+    loan validator, the loan-token policy and the borrow staking script accept it.
+    """
+    fix, snapshot, build_flow = _capture(label)
+    policy = snapshot.market.new_borrow_policy
+    loan = snapshot.loan
+    assets = [(p, name if p == policy else n, q) for p, n, q in loan.utxo.assets]
+    renamed = dataclasses.replace(loan.utxo, assets=assets)
+    snapshot = dataclasses.replace(
+        snapshot,
+        loan=dataclasses.replace(loan, utxo=renamed, token_name=name),
+    )
+    built = build(build_flow, snapshot, slot=block_slot(fix))
+    loan_mints = {(unit, qty) for unit, qty in mints(built) if unit.startswith(policy)}
+    assert loan_mints == {(policy + name, -1), (policy + "01", 1)}
+    captured = [u for u in fixture_utxos(fix) if u.out_ref != renamed.out_ref]
+    purposes = evaluate(built, [renamed, *captured])
+    assert purposes == captured_purposes(fix)
