@@ -2,8 +2,8 @@
 
 Canonical-ordering index lookups (the Plutus script context sorts inputs and
 reference inputs by ``(tx_id, index)``), the reward (stake-script) address encoding,
-integer redeemers, the ledger minimum-ADA of an output, and zero withdrawals merged
-into a builder that several legs contribute to.
+integer redeemers, the ledger minimum-ADA of an output, and zero withdrawals and
+reference inputs merged into a builder that several legs contribute to.
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pycardano import Datum
     from pycardano import PlutusData
 
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
 __all__ = [
     "add_zero_withdrawal",
     "input_index",
+    "merge_reference_inputs",
     "min_ada",
     "out_ref_of",
     "plutus_int",
@@ -158,3 +161,18 @@ def add_zero_withdrawal(
     tx_builder.add_withdrawal_script(utxo, Redeemer(redeemer))
     if existing is not None and existing != utxo:
         tx_builder.reference_inputs.discard(utxo)
+
+
+def merge_reference_inputs(
+    tx_builder: TransactionBuilder,
+    utxos: Iterable[Utxo],
+) -> None:
+    """Add each of ``utxos`` as a reference input unless its out-ref is one already.
+
+    An out-ref counts once whether the builder holds it as a `UTxO` or as a bare
+    `TransactionInput`; of several UTxOs at one out-ref, the first one added stays.
+    """
+    for u in utxos:
+        utxo = to_pycardano_utxo(u)
+        if _reference_member(tx_builder, utxo.input) is None:
+            tx_builder.reference_inputs.add(utxo)

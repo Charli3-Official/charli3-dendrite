@@ -21,7 +21,9 @@ from pycardano import VerificationKeyHash
 from pycardano import Withdrawals
 
 from charli3_dendrite.lending.transactions.common import add_zero_withdrawal
+from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.common import plutus_int
+from charli3_dendrite.lending.transactions.common import ref_index
 from charli3_dendrite.lending.transactions.common import reward_address
 from charli3_dendrite.lending.transactions.errors import LendingBuildError
 from charli3_dendrite.lending.transactions.errors import ValidityWindowError
@@ -213,3 +215,48 @@ def test_two_zero_withdrawals_assemble_with_their_redeemers():
     assert {key.tag.name for key in tx.transaction_witness_set.redeemer} == {
         "WITHDRAWAL",
     }
+
+
+def test_reference_inputs_keep_the_first_of_one_out_ref():
+    # The same out-ref given as two Utxos that differ only in datum is one
+    # reference input: the first.
+    first = _script_ref(SCRIPT_A, 0xA1, datum="d87980")
+    second = _script_ref(SCRIPT_A, 0xA1, datum="d87a80")
+    tx_builder = _builder()
+
+    merge_reference_inputs(tx_builder, [first, second])
+
+    assert tx_builder.reference_inputs == {to_pycardano_utxo(first)}
+
+
+def test_reference_inputs_merge_across_calls_and_existing_members():
+    a = _script_ref(SCRIPT_A, 0xA1)
+    b = _script_ref(SCRIPT_B, 0xB2, 3)
+    c = _script_ref(SCRIPT_B, 0xC3, 1)
+    tx_builder = _builder()
+    # An existing member may be a bare input as well as a UTxO.
+    bare_c = TransactionInput(TransactionId(bytes.fromhex(c.out_ref[0])), 1)
+    tx_builder.reference_inputs.add(bare_c)
+
+    merge_reference_inputs(tx_builder, [a])
+    merge_reference_inputs(tx_builder, iter([b, a, c]))
+
+    assert _reference_out_refs(tx_builder) == sorted([a.out_ref, b.out_ref, c.out_ref])
+    assert bare_c in tx_builder.reference_inputs
+    assert to_pycardano_utxo(c) not in tx_builder.reference_inputs
+    # One index per out-ref in the canonical ordering (bare inputs carry none).
+    assert ref_index(tx_builder) == {a.out_ref: 0, b.out_ref: 1}
+
+
+def test_reference_inputs_and_a_zero_withdrawal_share_one_member():
+    ref = _script_ref(SCRIPT_A, 0xA1, datum="d87980")
+    tx_builder = _builder()
+    merge_reference_inputs(tx_builder, [ref])
+    add_zero_withdrawal(
+        tx_builder,
+        script_ref=_script_ref(SCRIPT_A, 0xA1),
+        redeemer=plutus_int(0),
+    )
+    merge_reference_inputs(tx_builder, [_script_ref(SCRIPT_A, 0xA1)])
+
+    assert tx_builder.reference_inputs == {to_pycardano_utxo(ref)}
