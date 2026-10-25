@@ -34,6 +34,8 @@ from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
 from charli3_dendrite.lending.liqwid.indexing import action_selector
 from charli3_dendrite.lending.liqwid.indexing import chain_position
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
+from charli3_dendrite.lending.liqwid.lifecycle import collateral_units
+from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.transactions import resolve
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.errors import CapExceededError
@@ -51,11 +53,16 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import HealthInputs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRefs
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
+from charli3_dendrite.lending.liqwid.transactions.resolve import action_record
 from charli3_dendrite.lending.liqwid.transactions.resolve import choose_action_utxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import collateral_link
 from charli3_dendrite.lending.liqwid.transactions.resolve import (
     collateral_params_records,
 )
+from charli3_dendrite.lending.liqwid.transactions.resolve import feeds_for
+from charli3_dendrite.lending.liqwid.transactions.resolve import health_inputs
+from charli3_dendrite.lending.liqwid.transactions.resolve import loan_record
+from charli3_dendrite.lending.liqwid.transactions.resolve import market_records
 from charli3_dendrite.lending.liqwid.transactions.resolve import record_from_utxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_action_utxos
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_feeds
@@ -71,6 +78,7 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_script_
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import plutus_script
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
+from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import policy_of
 from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.records import record_info
@@ -363,6 +371,32 @@ def test_an_action_token_away_from_p20_is_not_an_action_utxo():
     assert [a.out_ref for a in found] == [f"{TX}#1"]
 
 
+def test_an_action_record_is_read_from_a_utxo_in_hand_as_the_resolver_does():
+    market, params = _market_and_params("Ada")
+    _, other_params = _market_and_params("DJED")
+    selector = action_selector(market, params)
+    genuine = _action_info(market, params, 1)
+    found = action_record(genuine, market, selector)
+    assert (
+        found
+        == resolve_action_utxos(
+            FixtureBackend(records=[genuine]),
+            market,
+            params,
+        )[0]
+    )
+    assert action_record(utxo_to_info(found.utxo), market, selector) == found
+    elsewhere = _action_info(
+        market,
+        params,
+        2,
+        address=_action_address(other_params, STAKE_KEYS[0]),
+    )
+    assert action_record(elsewhere, market, selector) is None
+    no_token = _action_info(market, params, 3, token=False)
+    assert action_record(no_token, market, selector) is None
+
+
 def test_action_utxos_page_until_a_short_page():
     market, params = _market_and_params("Ada")
     infos = [_action_info(market, params, i) for i in range(5)]
@@ -611,6 +645,30 @@ def test_market_records_come_from_one_fetch():
     assert len(param_address) == 1
 
 
+def _live_liqwid_records(*kinds):
+    return [record for info in live_records(*kinds) if (record := parse_utxo(info))]
+
+
+def test_market_records_of_records_in_hand_are_the_resolved_ones():
+    deployment = default_deployment()
+    markets = [deployment.market_by_name("Ada"), deployment.market_by_name("DJED")]
+    resolved = resolve_market_records(FixtureBackend(records=live_records()), markets)
+    records = _live_liqwid_records()
+    for market in markets:
+        assert market_records(records, market) == resolved[market.name]
+
+
+@pytest.mark.parametrize(
+    "kinds",
+    [("market_params", "collateral_params"), ("market_state",)],
+)
+def test_market_records_missing_a_record_are_refused(kinds):
+    ada = default_deployment().market_by_name("Ada")
+    with pytest.raises(UnsupportedMarketError) as info:
+        market_records(_live_liqwid_records(*kinds), ada)
+    assert info.value.market == "Ada"
+
+
 def _param_address(deployment):
     from charli3_dendrite.lending.units import script_payment_address
 
@@ -724,6 +782,37 @@ def test_a_spent_loan_resolves_only_when_allowed():
     assert resolve_loan(backend, rec["out_ref"], allow_spent=True).datum == record.datum
 
 
+def test_a_loan_record_reads_a_utxo_in_hand_as_the_resolver_does():
+    rec = next(
+        rec
+        for rec, record in parsed_records("loan", live=True)
+        if record.generation == "new"
+    )
+    utxo = utxo_from_info(record_info(rec))
+    assert loan_record(utxo) == resolve_loan(_loan_backend(), rec["out_ref"])
+    state = utxo_from_info(record_info(records_of("market_state", live=True)[0]))
+    with pytest.raises(UnsupportedLoanError):
+        loan_record(state)
+    with pytest.raises(ValueError, match="out-ref"):
+        loan_record(dataclasses.replace(utxo, out_ref=None))
+
+
+def test_a_loan_s_collateral_is_its_held_units():
+    loans = [
+        (rec, loan_record(utxo_from_info(record_info(rec))))
+        for rec, record in parsed_records("loan", live=True)
+        if record.generation == "new"
+    ]
+    assert loans
+    for rec, loan in loans:
+        held = collateral_units(record_info(rec), loan.market.loan_token_policies)
+        assert loan.collateral == dict(held)
+        assert "lovelace" not in loan.collateral
+        assert not {policy_of(u) for u in loan.collateral} & set(
+            loan.market.loan_token_policies,
+        )
+
+
 # --- resolve_feeds -----------------------------------------------------------
 
 
@@ -781,6 +870,20 @@ def test_a_missing_feed_is_refused():
     assert info.value.asset == unknown
 
 
+def test_feeds_for_picks_from_feeds_in_hand_as_the_resolver_does():
+    member = POLICY_WIDE + "4e4d"
+    exact = _feed_info(member, ts_ms=1_000, index=0)
+    infos = [*live_records("oracle"), exact]
+    feeds = [feed for info in infos if (feed := parse_feed(info)) is not None]
+    assets = [member, POLICY_WIDE + "4f4f", "lovelace"]
+    chosen = feeds_for(assets, feeds)
+    assert chosen == resolve_feeds(FixtureBackend(records=infos), assets)
+    assert chosen[member].policy_wide is False
+    assert chosen[POLICY_WIDE + "4f4f"].policy_wide is True
+    with pytest.raises(MissingFeedError):
+        feeds_for(["ee" * 28], feeds)
+
+
 def test_feeds_take_the_freshest_exact_feed():
     member = POLICY_WIDE + "4e4d"
     old = _feed_info(member, ts_ms=1_000, index=0)
@@ -817,6 +920,34 @@ def test_health_inputs_carry_each_collateral_market_and_feed():
     assert inputs.states[borrow.market.market_id] == borrow.state
     assert inputs.states[djed.market_id].kind is LiqwidKind.MARKET_STATE
     assert sorted(inputs.feeds) == sorted({"lovelace", djed.underlying})
+
+
+def test_health_inputs_of_records_in_hand_are_the_resolved_ones():
+    deployment = default_deployment()
+    borrow = _ada_records()
+    djed = deployment.market_by_name("DJED")
+    units = [djed.qtoken_policy, borrow.market.qtoken_policy]
+    infos = live_records()
+    found = health_inputs(
+        units,
+        borrow=borrow,
+        records=_live_liqwid_records(),
+        feeds=[feed for info in infos if (feed := parse_feed(info)) is not None],
+    )
+    assert found == resolve_health_inputs(
+        FixtureBackend(records=infos),
+        units,
+        borrow=borrow,
+    )
+    with pytest.raises(UnsupportedMarketError):
+        health_inputs(units, borrow=borrow, records=[], feeds=[])
+    with pytest.raises(MissingFeedError):
+        health_inputs(
+            units,
+            borrow=borrow,
+            records=_live_liqwid_records(),
+            feeds=[],
+        )
 
 
 def test_a_wash_borrow_carries_one_state_and_one_feed():

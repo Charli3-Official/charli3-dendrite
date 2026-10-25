@@ -16,10 +16,10 @@ Each resolver reads current chain state through a backend and returns resolved
   CollateralParams and MarketStates a health check reads;
 - :func:`resolve_now_ms`: the chain tip's time.
 
-:func:`loan_script_refs`, :func:`market_records`, :func:`loan_record`,
-:func:`feeds_for` and :func:`health_inputs` are the same selections over records,
-UTxOs and feeds already in hand (a captured transaction's, for instance); the
-resolvers read the chain and apply them.
+:func:`loan_script_refs`, :func:`action_record`, :func:`market_records`,
+:func:`loan_record`, :func:`feeds_for` and :func:`health_inputs` are the same
+selections over records, UTxOs and feeds already in hand (a captured
+transaction's, for instance); the resolvers read the chain and apply them.
 
 Reference scripts and loans are resolved by out-ref through the dbsync-only
 ``db_query`` (:mod:`charli3_dendrite.lending.transactions.resolve`); records, action
@@ -108,6 +108,7 @@ __all__ = [
     "LoanRecord",
     "LoanScriptRefs",
     "MarketRecords",
+    "action_record",
     "choose_action_utxo",
     "collateral_link",
     "collateral_params_records",
@@ -140,13 +141,13 @@ class LiqwidScriptRefs:
     """The reference-script UTxOs of one market's scripts.
 
     ``action`` carries the action validator its MarketParams names (``p[20]``) and
-    ``qtoken_policy`` the qToken minting policy. The qToken policy and the loan
-    scripts (``p[35]``, the current loan-token policy and the two ``p[34]`` staking
-    validators by role) are None when they were not resolved: a transaction rebuilt
+    ``qtoken_policy`` the qToken minting policy. Either, and the loan scripts
+    (``p[35]``, the current loan-token policy and the two ``p[34]`` staking
+    validators by role), is None when it was not resolved: a transaction rebuilt
     from a capture holds only the scripts it runs.
     """
 
-    action: Utxo
+    action: Utxo | None
     qtoken_policy: Utxo | None
     loan_validator: Utxo | None
     loan_policy: Utxo | None
@@ -402,16 +403,22 @@ def resolve_action_utxos(
     found = [
         record
         for info in rows
-        if (record := _action_record(info, market, selector)) is not None
+        if (record := action_record(info, market, selector)) is not None
     ]
     return sorted(found, key=lambda action: out_ref_key(action.out_ref))
 
 
-def _action_record(
+def action_record(
     info: PoolStateInfo,
     market: MarketComponents,
     selector: LiqwidSelector,
 ) -> ActionUtxo | None:
+    """The action UTxO of ``market`` that ``info`` holds, or None.
+
+    ``info`` counts when it sits at ``selector``'s payment credential (the action
+    validator of :func:`~charli3_dendrite.lending.liqwid.indexing.action_selector`)
+    and :func:`~charli3_dendrite.lending.liqwid.indexing.parse_action` accepts it.
+    """
     if script_credential(info.address) != selector.payment_credential:
         return None
     record = parse_action(info, market)
