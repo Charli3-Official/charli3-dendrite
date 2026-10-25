@@ -462,18 +462,26 @@ def test_withdraw_all_keeps_a_given_funding():
     assert not [q for q in backend.queries if "addr" in q]
 
 
-def test_a_redeem_of_an_amount_reads_only_the_recent_funding():
+def test_a_redeem_of_an_amount_burns_qtokens_older_than_the_recent_funding():
     fix = fixture("redeem_ada")
-    backend = capture_backend(fix)
-    RedeemSnapshot.from_backend(
+    wallet = _wallet(fix)
+    newer = _ada_only(wallet, 20)
+    backend = capture_backend(fix, utxos=newer)
+    snapshot = RedeemSnapshot.from_backend(
         backend,
         market="Ada",
-        owner_address=_wallet(fix),
+        owner_address=wallet,
         amount=99_999_998,
         rng=random.Random(0),
     )
+    rate = snapshot.records.state_datum.qtoken_rate
+    assert snapshot.qtokens == redeem_burn_for(99_999_998, rate) == 4_720_665_883
+    holders = [u for u in snapshot.funding if u.holds(QADA, "")]
+    assert holders == [u for u in _inputs(fix) if u.holds(QADA, "")]
+    assert snapshot.funding == [*reversed(newer), *holders]
     assert [q for q in backend.queries if "addr" in q] == [
-        {"addr": _wallet(fix), "lim": 20},
+        {"addr": wallet, "lim": 20},
+        {"addr": wallet, "lim": None, "policy": QADA, "name": ""},
     ]
 
 

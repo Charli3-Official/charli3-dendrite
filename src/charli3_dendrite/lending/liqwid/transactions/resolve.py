@@ -1043,6 +1043,12 @@ def resolve_owner_funding(
     ``holding`` (an asset unit) every unspent UTxO at the address holding that
     asset is added after them, each out-ref once. ``funding``, when given, is
     used as it is.
+
+    The funding is the set of wallet inputs a flow starts from, not a balanced
+    selection: only a redeem reads its qTokens from it (through ``holding``). What
+    the other flows take from the wallet (the underlying of a supply or a repay,
+    the qTokens a loan locks) and the fee are left to the caller's balancer, which
+    adds wallet inputs when the funding falls short.
     """
     if funding is not None:
         return list(funding)

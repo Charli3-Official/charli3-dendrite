@@ -274,9 +274,9 @@ class RedeemSnapshot(PoolActionSnapshot):
         covers it; ``withdraw_all`` burns every qToken of the market the funding
         holds. The payout is ``floor(Q * s9)``. The wallet UTxOs at
         ``owner_address`` fund it unless ``funding`` is given; they must hold the
-        qTokens burnt. With ``withdraw_all`` and no ``funding``, every UTxO at the
-        address holding the market's qToken joins the wallet's most recent UTxOs,
-        so the whole balance at the address is burnt.
+        qTokens burnt. Without ``funding``, every UTxO at the address holding the
+        market's qToken joins the wallet's most recent UTxOs, so the redeem reads
+        the whole balance at the address however old its UTxOs are.
 
         The minimum ``p[1]`` is checked on the payout before an action UTxO is
         chosen: the pinned ``action_utxo``, or a random one (by ``rng``) not in
@@ -308,7 +308,7 @@ class RedeemSnapshot(PoolActionSnapshot):
             backend,
             owner_address,
             funding,
-            holding=records.market.qtoken_policy if withdraw_all else None,
+            holding=records.market.qtoken_policy,
         )
         held = _qtokens_held(wallet, records.market)
         rate = records.state_datum.qtoken_rate
