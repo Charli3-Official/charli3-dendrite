@@ -572,6 +572,15 @@ def test_check_health_passes_at_exact_equality_and_fails_one_unit_over():
     assert info.value.required > info.value.available
 
 
+@pytest.mark.parametrize(
+    ("borrow_price", "max_ltv"),
+    [(Fraction(0), Fraction(3, 4)), (Fraction(1), Fraction(0))],
+)
+def test_check_health_refuses_a_non_positive_price_or_ltv(borrow_price, max_ltv):
+    with pytest.raises(ValueError, match="non-positive"):
+        terms.check_health([_holding(Fraction(1))], 1, borrow_price, max_ltv)
+
+
 def test_check_health_sums_every_holding():
     borrow_price = Fraction(1)
     max_ltv = Fraction(1, 2)

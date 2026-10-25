@@ -20,7 +20,6 @@ the reference-input hygiene check.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -72,6 +71,7 @@ from charli3_dendrite.lending.transactions.common import add_zero_withdrawal
 from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.common import plutus_int
 from charli3_dendrite.lending.transactions.common import settled_min_ada
+from charli3_dendrite.lending.transactions.common import with_reference_script
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
@@ -141,33 +141,6 @@ def _out_ref_text(tx_input: TransactionInput) -> str:
     return f"{tx_hash}#{index}"
 
 
-def _reference_member(
-    tx_builder: TransactionBuilder,
-    tx_input: TransactionInput,
-) -> UTxO | TransactionInput | None:
-    for member in tx_builder.reference_inputs:
-        if (member.input if isinstance(member, UTxO) else member) == tx_input:
-            return member
-    return None
-
-
-def _with_reference_script(
-    tx_builder: TransactionBuilder,
-    script_ref: Utxo,
-    add: Callable[[UTxO], object],
-) -> None:
-    """Call ``add`` with ``script_ref`` as a pycardano UTxO, keeping the first copy.
-
-    pycardano adds the script's UTxO to the reference inputs; when the builder
-    already references that out-ref, the reference input already held stays.
-    """
-    utxo = to_pycardano_utxo(script_ref)
-    existing = _reference_member(tx_builder, utxo.input)
-    add(utxo)
-    if existing is not None and existing != utxo:
-        tx_builder.reference_inputs.discard(utxo)
-
-
 def _check_unspent(tx_builder: TransactionBuilder, utxo: UTxO) -> None:
     if any(held.input == utxo.input for held in tx_builder.inputs):
         msg = f"{_out_ref_text(utxo.input)} is already spent by this transaction"
@@ -215,7 +188,7 @@ def _add_mint(
         raise ValueError(msg)
     tx_builder.mint = merged
     if not _mints_policy(tx_builder, policy):
-        _with_reference_script(
+        with_reference_script(
             tx_builder,
             policy_ref,
             lambda ref: tx_builder.add_minting_script(ref, _unit_redeemer()),
@@ -300,7 +273,7 @@ def add_action_leg(
         _shifted_value(action, underlying, deltas.underlying_delta()),
         datum=RawCBOR(datum),
     )
-    _with_reference_script(
+    with_reference_script(
         tx_builder,
         script_ref,
         lambda ref: tx_builder.add_script_input(
@@ -351,7 +324,7 @@ def add_loan_input(
     """
     spent = to_pycardano_utxo(loan)
     _check_unspent(tx_builder, spent)
-    _with_reference_script(
+    with_reference_script(
         tx_builder,
         script_ref,
         lambda ref: tx_builder.add_script_input(

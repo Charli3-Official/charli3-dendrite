@@ -900,7 +900,7 @@ def test_a_loan_flow_with_a_foreign_reference_is_refused():
         _finish(tx_builder, collateral_in={}, collateral_out=None, debt=0)
 
 
-# --- every script the legs add is PlutusV2 (R9) ------------------------------
+# --- every script the legs add is PlutusV2 -----------------------------------
 
 
 def _all_legs():

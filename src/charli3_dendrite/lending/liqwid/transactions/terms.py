@@ -689,9 +689,13 @@ def check_health(
         max_ltv: The borrow market's maximum LTV ``p[12]``.
 
     Raises:
+        ValueError: When ``borrow_price`` or ``max_ltv`` is not positive.
         UnhealthyLoanError: When the debt value exceeds the allowed collateral
             value.
     """
+    if borrow_price <= 0 or max_ltv <= 0:
+        msg = f"non-positive borrow price {borrow_price} or max LTV {max_ltv}"
+        raise ValueError(msg)
     if debt <= 0:
         return
     required = debt * borrow_price

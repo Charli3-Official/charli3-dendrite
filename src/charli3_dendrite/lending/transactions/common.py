@@ -29,6 +29,7 @@ from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Iterable
 
     from pycardano import Datum
@@ -46,6 +47,7 @@ __all__ = [
     "ref_index",
     "reward_address",
     "settled_min_ada",
+    "with_reference_script",
 ]
 
 
@@ -159,10 +161,44 @@ def add_zero_withdrawal(
     utxo = to_pycardano_utxo(script_ref)
     withdrawals[account] = 0
     tx_builder.withdrawals = Withdrawals(withdrawals)
+    _add_by_reference(
+        tx_builder,
+        utxo,
+        lambda ref: tx_builder.add_withdrawal_script(ref, Redeemer(redeemer)),
+    )
+
+
+def with_reference_script(
+    tx_builder: TransactionBuilder,
+    script_ref: Utxo,
+    add: Callable[[UTxO], object],
+) -> None:
+    """Call ``add`` with ``script_ref`` as a pycardano UTxO, once per out-ref.
+
+    ``add`` is a pycardano call that runs the script by reference
+    (``add_script_input``, ``add_minting_script``, ``add_withdrawal_script``).
+    When the builder already references ``script_ref``'s out-ref, the reference
+    input already held stays, and the script is not counted a second time in the
+    reference-script size the fee is computed from.
+    """
+    _add_by_reference(tx_builder, to_pycardano_utxo(script_ref), add)
+
+
+def _add_by_reference(
+    tx_builder: TransactionBuilder,
+    utxo: UTxO,
+    add: Callable[[UTxO], object],
+) -> None:
     existing = _reference_member(tx_builder, utxo.input)
-    tx_builder.add_withdrawal_script(utxo, Redeemer(redeemer))
-    if existing is not None and existing != utxo:
+    counted = len(tx_builder._reference_scripts)
+    add(utxo)
+    if existing is None:
+        return
+    if existing != utxo:
         tx_builder.reference_inputs.discard(utxo)
+    script = utxo.output.script
+    if script is not None and script in tx_builder._reference_scripts[:counted]:
+        del tx_builder._reference_scripts[counted:]
 
 
 def merge_reference_inputs(

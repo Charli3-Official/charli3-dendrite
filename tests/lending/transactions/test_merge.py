@@ -11,6 +11,7 @@ import pytest
 from pycardano import Address
 from pycardano import Network
 from pycardano import PlutusV2Script
+from pycardano import Redeemer
 from pycardano import Transaction
 from pycardano import TransactionBuilder
 from pycardano import TransactionId
@@ -25,6 +26,7 @@ from charli3_dendrite.lending.transactions.common import merge_reference_inputs
 from charli3_dendrite.lending.transactions.common import plutus_int
 from charli3_dendrite.lending.transactions.common import ref_index
 from charli3_dendrite.lending.transactions.common import reward_address
+from charli3_dendrite.lending.transactions.common import with_reference_script
 from charli3_dendrite.lending.transactions.errors import LendingBuildError
 from charli3_dendrite.lending.transactions.errors import ValidityWindowError
 from charli3_dendrite.lending.transactions.infra import EvalContext
@@ -188,6 +190,36 @@ def test_zero_withdrawal_keeps_a_reference_input_already_present():
 
     assert tx_builder.reference_inputs == {first_utxo}
     assert len(tx_builder._withdrawal_script_to_redeemers) == 1
+
+
+def test_a_shared_reference_script_counts_once_in_the_script_size():
+    ref = _script_ref(SCRIPT_A, 0xA1)
+    tx_builder = _builder()
+    add_zero_withdrawal(tx_builder, script_ref=ref, redeemer=plutus_int(0))
+    with_reference_script(
+        tx_builder,
+        _script_ref(SCRIPT_A, 0xA1),
+        lambda utxo: tx_builder.add_minting_script(utxo, Redeemer(plutus_int(1))),
+    )
+
+    assert tx_builder.reference_inputs == {to_pycardano_utxo(ref)}
+    assert tx_builder._ref_script_size() == len(bytes.fromhex(SCRIPT_A))
+
+
+def test_distinct_reference_scripts_each_count_in_the_script_size():
+    tx_builder = _builder()
+    add_zero_withdrawal(
+        tx_builder,
+        script_ref=_script_ref(SCRIPT_A, 0xA1),
+        redeemer=plutus_int(0),
+    )
+    with_reference_script(
+        tx_builder,
+        _script_ref(SCRIPT_B, 0xB2),
+        lambda utxo: tx_builder.add_minting_script(utxo, Redeemer(plutus_int(1))),
+    )
+
+    assert tx_builder._ref_script_size() == 2 * len(bytes.fromhex(SCRIPT_A))
 
 
 def test_two_zero_withdrawals_assemble_with_their_redeemers():
