@@ -1,4 +1,8 @@
-"""Transaction plumbing shared by the FluidTokens V4 builders."""
+"""Transaction plumbing shared by the FluidTokens V4 builders.
+
+``out_ref_of``, ``min_ada``, ``settled_min_ada`` and ``script_hash_of`` live in the
+shared ``lending.transactions`` seam and are re-exported here for existing callers.
+"""
 
 from __future__ import annotations
 
@@ -6,24 +10,21 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from pycardano import Address
-from pycardano import PlutusV3Script
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
-from pycardano import TransactionOutput
 from pycardano import Withdrawals
-from pycardano import min_lovelace
-from pycardano import plutus_script_hash
 from pycardano import script_hash as pycardano_script_hash
 
-from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.lending.fluidtokens.transactions._common import reward_address
 from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
 from charli3_dendrite.lending.fluidtokens_v4 import constants as c
 from charli3_dendrite.lending.fluidtokens_v4.datums import AuthCardanoSignature
 from charli3_dendrite.lending.fluidtokens_v4.datums import ConfigDatum
-from charli3_dendrite.lending.transactions.infra import EvalContext
+from charli3_dendrite.lending.transactions.common import min_ada  # noqa: F401
+from charli3_dendrite.lending.transactions.common import out_ref_of
+from charli3_dendrite.lending.transactions.common import reward_address
+from charli3_dendrite.lending.transactions.common import settled_min_ada  # noqa: F401
+from charli3_dendrite.lending.transactions.utxos import script_hash_of  # noqa: F401
 from charli3_dendrite.lending.units import constr
-from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
     from pycardano import Datum
@@ -36,42 +37,6 @@ LOAN_ACTION_VALIDITY_SLOTS = 600
 
 # ``Option`` constructor alternative of ``None``: a collateral naming only a policy.
 _NONE = 1
-
-
-def out_ref_of(utxo: Utxo) -> tuple[str, int]:
-    """A resolved UTxO's out-ref; raises if it has none."""
-    if utxo.out_ref is None:
-        raise ValueError("UTxO is missing its out-ref")
-    return utxo.out_ref
-
-
-def min_ada(output: TransactionOutput) -> int:
-    """The protocol min-ADA of ``output`` as built, its own coin's encoding included.
-
-    The ledger requires it of every output, while balancing checks only the change
-    output and Ogmios evaluation none, so the builders check their own outputs.
-    """
-    return min_lovelace(EvalContext(last_block_slot=0), output=output)
-
-
-def settled_min_ada(address: Address, assets: dict[str, int], datum: Datum) -> int:
-    """The least ADA an output of ``assets`` and ``datum`` at ``address`` can hold.
-
-    That is the least lovelace amount that covers the min-ADA of the output holding
-    it: the coin's own encoding grows with the amount, so the minimum is iterated to
-    its fixed point. ``assets`` maps unit to quantity and excludes lovelace.
-    """
-    lovelace = 0
-    while True:
-        output = TransactionOutput(
-            address,
-            asset_to_value(Assets(**{"lovelace": lovelace, **assets})),
-            datum=datum,
-        )
-        needed = min_ada(output)
-        if needed <= lovelace:
-            return lovelace
-        lovelace = needed
 
 
 def signing_key(auth: Datum, what: str) -> bytes:
@@ -127,15 +92,6 @@ def captured_config(refs: Iterable[Utxo]) -> tuple[Utxo, ConfigDatum]:
     if config.datum is None:
         raise ValueError("config UTxO is missing its datum")
     return config, ConfigDatum.from_cbor(config.datum)
-
-
-def script_hash_of(script_ref: Utxo) -> str:
-    """The script hash (hex) of a resolved reference-script UTxO."""
-    if script_ref.ref_script is None:
-        raise ValueError("reference UTxO carries no script")
-    return plutus_script_hash(
-        PlutusV3Script(bytes.fromhex(script_ref.ref_script)),
-    ).payload.hex()
 
 
 def loan_address(borrower_address: str) -> str:
