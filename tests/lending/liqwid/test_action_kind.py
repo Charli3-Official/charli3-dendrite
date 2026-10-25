@@ -24,6 +24,7 @@ from charli3_dendrite.lending.liqwid.indexing import param_selector
 from charli3_dendrite.lending.liqwid.indexing import parse_action
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
 from charli3_dendrite.lending.liqwid.indexing import state_selectors
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.units import script_payment_address
@@ -107,11 +108,15 @@ def test_action_selector_reads_the_live_action_validator():
 def test_action_selector_refuses_a_market_without_an_action_script():
     market, params = _market_and_params()
     no_validator = dataclasses.replace(params, action_validator=None)
-    with pytest.raises(ValueError, match=market.name):
+    with pytest.raises(UnsupportedMarketError) as info:
         action_selector(market, no_validator)
+    assert info.value.market == market.name
+    assert "action validator" in info.value.reason
     no_policy = dataclasses.replace(market, action_token_policy=None)
-    with pytest.raises(ValueError, match=market.name):
+    with pytest.raises(UnsupportedMarketError) as info:
         action_selector(no_policy, params)
+    assert info.value.market == market.name
+    assert "action-token policy" in info.value.reason
 
 
 @pytest.mark.parametrize("indefinite", [False, True], ids=["definite", "indefinite"])

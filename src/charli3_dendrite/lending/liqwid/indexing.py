@@ -46,6 +46,7 @@ from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
@@ -242,15 +243,19 @@ def action_selector(
     :func:`liqwid_selectors`: read-side watchers never see action UTxOs.
 
     Raises:
-        ValueError: ``params`` names no action validator, or the deployment records
-            no action-token policy for ``market``.
+        UnsupportedMarketError: ``params`` names no action validator, or the
+            deployment records no action-token policy for ``market``.
     """
     if params.action_validator is None:
-        msg = f"liqwid market {market.name}: its parameters name no action validator"
-        raise ValueError(msg)
+        raise UnsupportedMarketError(
+            market.name,
+            "its parameters name no action validator",
+        )
     if market.action_token_policy is None:
-        msg = f"liqwid market {market.name}: no action-token policy in the deployment"
-        raise ValueError(msg)
+        raise UnsupportedMarketError(
+            market.name,
+            "no action-token policy in the deployment",
+        )
     return LiqwidSelector(
         kind=LiqwidKind.ACTION,
         payment_credential=params.action_validator,

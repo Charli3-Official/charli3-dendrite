@@ -40,6 +40,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanErr
 from charli3_dendrite.lending.liqwid.transactions.errors import (
     UnsupportedCollateralError,
 )
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.legs import add_action_leg
 from charli3_dendrite.lending.liqwid.transactions.legs import add_funding
 from charli3_dendrite.lending.liqwid.transactions.legs import add_loan_input
@@ -371,11 +372,14 @@ def test_one_action_utxo_cannot_be_spent_twice():
         add_action_leg(tx_builder, **leg)
 
 
-def test_the_action_leg_stashes_nothing_and_funding_stashes_only_the_wallet():
+def test_the_action_leg_leaves_the_stash_and_funding_stashes_only_the_wallet():
     script = _script(ACTION_SCRIPT)
     action = _action(script)
     snapshot = _Snapshot()
     tx_builder = _builder()
+    add_funding(tx_builder, snapshot, [_wallet(0)])
+    stashed = snapshot.additional_utxo()
+    before = list(stashed)
     add_action_leg(
         tx_builder,
         action=action,
@@ -384,10 +388,12 @@ def test_the_action_leg_stashes_nothing_and_funding_stashes_only_the_wallet():
         references=[_record_utxo("market_state")],
         underlying="lovelace",
     )
-    assert not hasattr(snapshot, "_additional_utxos")
-    add_funding(tx_builder, snapshot, [_wallet(0), action.utxo, _wallet(0)])
-    assert snapshot.additional_utxo() == [ogmios_entry(_wallet(0))]
-    assert len(tx_builder.inputs) == 2
+    assert snapshot.additional_utxo() is stashed
+    assert stashed == before == [ogmios_entry(_wallet(0))]
+    assert ogmios_entry(action.utxo) not in stashed
+    add_funding(tx_builder, snapshot, [_wallet(0), action.utxo, _wallet(1)])
+    assert snapshot.additional_utxo() == [ogmios_entry(_wallet(i)) for i in (0, 1)]
+    assert len(tx_builder.inputs) == 3
 
 
 def test_funding_adds_each_wallet_utxo_once():
@@ -695,6 +701,45 @@ def test_a_missing_feed_is_refused():
             inputs=no_feeds,
         )
     assert info.value.asset == "lovelace"
+
+
+def test_a_collateral_market_without_a_state_is_refused_by_its_name():
+    deployment = default_deployment()
+    borrow = _records("Ada")
+    djed = deployment.market_by_name("DJED")
+    inputs = _health([djed.qtoken_policy], borrow)
+    stateless = dataclasses.replace(
+        inputs,
+        states={borrow.market.market_id: borrow.state},
+    )
+    with pytest.raises(UnsupportedMarketError) as info:
+        health_reference_set(
+            [djed.qtoken_policy],
+            borrow_market_id=borrow.market.market_id,
+            borrow_underlying=borrow.market.underlying,
+            inputs=stateless,
+        )
+    assert info.value.market == "DJED"
+
+
+def test_a_record_naming_no_collateral_market_is_refused_by_the_health_set():
+    borrow = _records("Ada")
+    q_ada = borrow.market.qtoken_policy
+    inputs = _health([q_ada], borrow)
+    record = inputs.cparams[q_ada]
+    datum = dataclasses.replace(record.datum, underlying="", collateral_market_state="")
+    unlinked = dataclasses.replace(
+        inputs,
+        cparams={q_ada: dataclasses.replace(record, datum=datum)},
+    )
+    with pytest.raises(UnsupportedCollateralError) as info:
+        health_reference_set(
+            [q_ada],
+            borrow_market_id=borrow.market.market_id,
+            borrow_underlying=borrow.market.underlying,
+            inputs=unlinked,
+        )
+    assert info.value.unit == q_ada
 
 
 # --- reference hygiene -------------------------------------------------------

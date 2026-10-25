@@ -51,7 +51,9 @@ from charli3_dendrite.lending.liqwid.datums import Rational
 from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
 from charli3_dendrite.lending.liqwid.datums import encode_action_datum
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
+from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import StakingRole
+from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions.errors import (
     ForeignReferenceInputError,
 )
@@ -59,10 +61,8 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
     InsufficientLiquidityError,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MissingFeedError
-from charli3_dendrite.lending.liqwid.transactions.errors import (
-    UnsupportedCollateralError,
-)
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
+from charli3_dendrite.lending.liqwid.transactions.resolve import collateral_link
 from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
 from charli3_dendrite.lending.liqwid.transactions.terms import check_health
 from charli3_dendrite.lending.liqwid.transactions.terms import collateral_holdings
@@ -78,7 +78,7 @@ from charli3_dendrite.lending.transactions.utxos import script_hash_of
 from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
 from charli3_dendrite.lending.transactions.utxos import utxo_value
-from charli3_dendrite.lending.units import policy_of
+from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.utility import asset_to_value
 
 if TYPE_CHECKING:
@@ -136,14 +136,10 @@ def _input_ref(tx_input: TransactionInput) -> tuple[str, int]:
     return bytes(tx_input.transaction_id).hex(), tx_input.index
 
 
-def _out_ref_text(tx_input: TransactionInput) -> str:
-    tx_hash, index = _input_ref(tx_input)
-    return f"{tx_hash}#{index}"
-
-
 def _check_unspent(tx_builder: TransactionBuilder, utxo: UTxO) -> None:
     if any(held.input == utxo.input for held in tx_builder.inputs):
-        msg = f"{_out_ref_text(utxo.input)} is already spent by this transaction"
+        spent = out_ref_text(_input_ref(utxo.input))
+        msg = f"{spent} is already spent by this transaction"
         raise ValueError(msg)
 
 
@@ -451,25 +447,6 @@ def loan_output(
 # --- health ------------------------------------------------------------------
 
 
-def _collateral_link(
-    unit: str,
-    record: LiqwidRecord | None,
-) -> tuple[str, CollateralParamsDatum]:
-    """The collateral market id of ``unit`` and its CollateralParams datum.
-
-    The market is the one whose MarketState NFT the record names.
-    """
-    datum = record.datum if record is not None else None
-    if (
-        not isinstance(datum, CollateralParamsDatum)
-        or datum.policy_wide
-        or not datum.underlying
-        or not datum.collateral_market_state
-    ):
-        raise UnsupportedCollateralError(unit)
-    return policy_of(datum.collateral_market_state), datum
-
-
 def _feed(feeds: Mapping[str, LiqwidFeed], underlying: str) -> LiqwidFeed:
     feed = feeds.get(underlying)
     if feed is None or feed.info is None:
@@ -477,10 +454,10 @@ def _feed(feeds: Mapping[str, LiqwidFeed], underlying: str) -> LiqwidFeed:
     return feed
 
 
-def _state(inputs: HealthInputs, market_id: str) -> LiqwidRecord:
-    state = inputs.states.get(market_id)
+def _state(inputs: HealthInputs, market: MarketComponents) -> LiqwidRecord:
+    state = inputs.states.get(market.market_id)
     if state is None:
-        raise UnsupportedMarketError(market_id, "no MarketState among the inputs")
+        raise UnsupportedMarketError(market.name, "no MarketState among the inputs")
     return state
 
 
@@ -501,6 +478,7 @@ def health_reference_set(
     borrow_market_id: str,
     borrow_underlying: str,
     inputs: HealthInputs,
+    deployment: LiqwidDeployment | None = None,
 ) -> list[Utxo]:
     """The reference inputs a loan's health check reads, each out-ref once.
 
@@ -508,26 +486,30 @@ def health_reference_set(
     of each collateral market other than the borrow market, and one oracle feed
     per distinct underlying of the collateral and of the borrow. A collateral of
     the borrow market (a wash borrow) adds no MarketState and shares its feed.
+    Each collateral market is the one its record links in ``deployment`` (the
+    bundled one by default), as
+    :func:`~charli3_dendrite.lending.liqwid.transactions.resolve.collateral_link`
+    reads it.
 
     Raises:
         UnsupportedCollateralError: A unit has no exact CollateralParams record
-            naming its market and underlying.
+            naming its market and underlying, or the market it names is not in
+            ``deployment``.
         UnsupportedMarketError: A collateral market has no MarketState in
             ``inputs``.
         MissingFeedError: No feed in ``inputs`` prices an underlying.
     """
+    active = resolve_deployment(deployment)
     records: list[Utxo] = []
-    markets: list[str] = []
+    markets: dict[str, MarketComponents] = {}
     underlyings: list[str] = []
     for unit in dict.fromkeys(units):
-        record = inputs.cparams.get(unit)
-        market_id, datum = _collateral_link(unit, record)
-        if record is not None:
-            records.append(utxo_from_info(record.info))
-        if market_id != borrow_market_id:
-            markets.append(market_id)
+        market, datum = collateral_link(unit, inputs.cparams.get(unit), active)
+        records.append(utxo_from_info(inputs.cparams[unit].info))
+        if market.market_id != borrow_market_id:
+            markets.setdefault(market.market_id, market)
         underlyings.append(datum.underlying)
-    states = [_state(inputs, m).info for m in dict.fromkeys(markets)]
+    states = [_state(inputs, market).info for market in markets.values()]
     feeds = [
         _feed(inputs.feeds, underlying).info
         for underlying in dict.fromkeys([*underlyings, borrow_underlying])
@@ -547,6 +529,7 @@ def _check_loan_health(
     inputs: HealthInputs,
     collateral: Mapping[str, int],
     debt: int,
+    deployment: LiqwidDeployment,
 ) -> None:
     """Check the output loan's health against ``debt`` (`check_health`)."""
     cparams: dict[str, CollateralParamsDatum] = {}
@@ -555,10 +538,10 @@ def _check_loan_health(
     for unit, qty in collateral.items():
         if qty <= 0:
             continue
-        market_id, datum = _collateral_link(unit, inputs.cparams.get(unit))
-        state = _state(inputs, market_id).datum
+        market, datum = collateral_link(unit, inputs.cparams.get(unit), deployment)
+        state = _state(inputs, market).datum
         if not isinstance(state, MarketStateDatum):
-            msg = f"liqwid record of market {market_id} is not a MarketState"
+            msg = f"liqwid record of market {market.name} is not a MarketState"
             raise TypeError(msg)
         cparams[unit] = datum
         rates[unit] = state.qtoken_rate
@@ -625,7 +608,8 @@ def finish_loan_flow(
         debt: The debt the health check measures, in borrowed base units.
         borrow: Principal lent by this transaction.
         repay: Amount repaid by this transaction.
-        deployment: The Liqwid deployment the hygiene check reads.
+        deployment: The Liqwid deployment the health set links collateral markets
+            in and the hygiene check reads.
 
     Raises:
         ValueError: A loan output remains and ``health`` is None.
@@ -643,9 +627,10 @@ def finish_loan_flow(
             borrow_market_id=records.market.market_id,
             borrow_underlying=records.market.underlying,
             inputs=health,
+            deployment=deployment,
         )
         if health_required(borrow, repay, collateral_in, collateral_out):
-            _check_loan_health(records, health, collateral_out, debt)
+            _check_loan_health(records, health, collateral_out, debt, deployment)
         merge_reference_inputs(tx_builder, references)
     add_owner_signer(tx_builder, owner)
     add_staking_withdrawal(
@@ -736,4 +721,4 @@ def check_reference_hygiene(
         ):
             continue
         tx_input = member.input if isinstance(member, UTxO) else member
-        raise ForeignReferenceInputError(_out_ref_text(tx_input))
+        raise ForeignReferenceInputError(out_ref_text(_input_ref(tx_input)))

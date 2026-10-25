@@ -52,6 +52,7 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import LiqwidScriptRef
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
 from charli3_dendrite.lending.liqwid.transactions.resolve import MarketRecords
 from charli3_dendrite.lending.liqwid.transactions.resolve import choose_action_utxo
+from charli3_dendrite.lending.liqwid.transactions.resolve import collateral_link
 from charli3_dendrite.lending.liqwid.transactions.resolve import (
     collateral_params_records,
 )
@@ -372,6 +373,31 @@ def test_action_utxos_page_until_a_short_page():
     assert {call["limit"] for call in backend.calls} == {2}
 
 
+class _AddressOnlyBackend(FixtureBackend):
+    """Selects by address alone, as a backend that ignores the asset filter would."""
+
+    def get_pool_utxos(self, addresses, assets=None, **kwargs):
+        return super().get_pool_utxos(addresses, None, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("backend_type", "unparsed"),
+    [
+        (_AddressOnlyBackend, {"token": False}),
+        (FixtureBackend, {"datum_cbor": "00"}),
+    ],
+    ids=["token-less", "malformed-datum"],
+)
+def test_a_page_of_unparseable_utxos_does_not_end_the_scan(backend_type, unparsed):
+    market, params = _market_and_params("Ada")
+    junk = [_action_info(market, params, i, **unparsed) for i in (0, 1)]
+    genuine = [_action_info(market, params, i) for i in (2, 3)]
+    backend = backend_type(records=[*junk, *genuine])
+    found = resolve_action_utxos(backend, market, params, page_size=2)
+    assert [a.out_ref for a in found] == [f"{TX}#2", f"{TX}#3"]
+    assert [call["page"] for call in backend.calls] == [0, 1, 2]
+
+
 def test_action_utxos_of_a_market_without_an_action_token_policy_are_refused():
     market, params = _market_and_params("Ada")
     bare = dataclasses.replace(market, action_token_policy=None)
@@ -405,6 +431,41 @@ def test_a_layout_shorter_than_36_fields_refuses_the_loan_scripts(deployment_has
     assert refs.loan_policy is None
     assert refs.borrow_staking is None
     assert refs.liquidation_staking is None
+
+
+class _UnreadableBackend:
+    """Fails on any attribute access, so any backend read fails the test."""
+
+    def __getattr__(self, name):
+        raise AssertionError(f"the backend was read: {name}")
+
+
+def _without_loan_policy(name):
+    market, params = _market_and_params(name)
+    return dataclasses.replace(market, new_borrow_policy=None), params
+
+
+def _without_staking_pair(name):
+    market, params = _market_and_params(name)
+    return market, dataclasses.replace(
+        params, withdraw_zero=(params.loan_validator,) * 2
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        lambda: _market_and_params("POL"),
+        lambda: _without_loan_policy("Ada"),
+        lambda: _without_staking_pair("Ada"),
+    ],
+    ids=["short-layout", "no-loan-policy", "no-staking-pair"],
+)
+def test_a_market_unfit_for_loans_is_refused_before_any_backend_read(case):
+    market, params = case()
+    with pytest.raises(UnsupportedMarketError) as info:
+        resolve_script_refs(_UnreadableBackend(), market, params)
+    assert info.value.market == market.name
 
 
 @pytest.mark.parametrize("name", OLD_ACTION_MARKETS)
@@ -778,6 +839,75 @@ def test_a_collateral_without_an_exact_record_is_refused(unit):
             borrow=_ada_records(),
         )
     assert info.value.unit == unit
+
+
+def _unlinked(record):
+    """``record`` with its CollateralParams datum naming no collateral market."""
+    datum = dataclasses.replace(record.datum, underlying="", collateral_market_state="")
+    return dataclasses.replace(record, datum=datum)
+
+
+def test_a_record_naming_no_collateral_market_is_refused():
+    borrow = _ada_records()
+    q_ada = borrow.market.qtoken_policy
+    unlinked = {q_ada: _unlinked(borrow.collateral_params[q_ada])}
+    bare = dataclasses.replace(borrow, collateral_params=unlinked)
+    with pytest.raises(UnsupportedCollateralError) as info:
+        resolve_health_inputs(
+            FixtureBackend(records=live_records()),
+            [q_ada],
+            borrow=bare,
+        )
+    assert info.value.unit == q_ada
+
+
+def test_the_collateral_link_is_the_qtoken_market_on_every_live_record():
+    deployment = default_deployment()
+    exact = [
+        record
+        for _, record in parsed_records("collateral_params", live=True)
+        if not record.datum.policy_wide
+    ]
+    assert len(exact) == 336
+    for record in exact:
+        datum = record.datum
+        market, linked = collateral_link(datum.collateral, record, deployment)
+        assert linked is datum
+        assert market == deployment.market_of_qtoken(policy_of(datum.collateral))
+        assert market.market_id == policy_of(datum.collateral_market_state)
+        assert linked.underlying == market.underlying
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        None,
+        lambda: _unlinked(_ada_records().collateral_params[_q_ada()]),
+        lambda: parsed_records("market_state", live=True)[0][1],
+    ],
+    ids=["missing", "unlinked", "another-kind"],
+)
+def test_the_collateral_link_refuses_a_record_it_cannot_follow(record):
+    unit = _q_ada()
+    with pytest.raises(UnsupportedCollateralError) as info:
+        collateral_link(unit, record() if record else None, default_deployment())
+    assert info.value.unit == unit
+
+
+def test_the_collateral_link_refuses_a_market_outside_the_deployment():
+    unit = _q_ada()
+    record = _ada_records().collateral_params[unit]
+    foreign = dataclasses.replace(record.datum, collateral_market_state="ee" * 28)
+    with pytest.raises(UnsupportedCollateralError):
+        collateral_link(
+            unit,
+            dataclasses.replace(record, datum=foreign),
+            default_deployment(),
+        )
+
+
+def _q_ada():
+    return default_deployment().market_by_name("Ada").qtoken_policy
 
 
 # --- resolve_now_ms ----------------------------------------------------------

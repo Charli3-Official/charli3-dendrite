@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from charli3_dendrite.lending.fetch import PAGE_SIZE
+from charli3_dendrite.lending.fetch import unspent_utxos
+from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import POLICY_KEY_PREFIX
 from charli3_dendrite.lending.liqwid.datums import ActionDatum
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
@@ -42,6 +44,7 @@ from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.deployment import LEGACY_GENERATION
 from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
+from charli3_dendrite.lending.liqwid.deployment import StakingPair
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.deployment import staking_roles
 from charli3_dendrite.lending.liqwid.indexing import LiqwidKind
@@ -50,6 +53,7 @@ from charli3_dendrite.lending.liqwid.indexing import LiqwidSelector
 from charli3_dendrite.lending.liqwid.indexing import action_selector
 from charli3_dendrite.lending.liqwid.indexing import liqwid_selectors
 from charli3_dendrite.lending.liqwid.indexing import newest_first
+from charli3_dendrite.lending.liqwid.indexing import newest_record
 from charli3_dendrite.lending.liqwid.indexing import param_selector
 from charli3_dendrite.lending.liqwid.indexing import parse_action
 from charli3_dendrite.lending.liqwid.indexing import parse_utxo
@@ -69,6 +73,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedLoanError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
+from charli3_dendrite.lending.transactions.common import out_ref_of
 from charli3_dendrite.lending.transactions.infra import current_slot
 from charli3_dendrite.lending.transactions.resolve import resolve_utxo_by_outref
 from charli3_dendrite.lending.transactions.utxos import Utxo
@@ -76,6 +81,7 @@ from charli3_dendrite.lending.transactions.utxos import script_hash_of
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
 from charli3_dendrite.lending.transactions.utxos import utxo_to_info
 from charli3_dendrite.lending.units import out_ref_key
+from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.lending.units import policy_of
 from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import sole_token_name
@@ -94,6 +100,7 @@ __all__ = [
     "LoanRecord",
     "MarketRecords",
     "choose_action_utxo",
+    "collateral_link",
     "collateral_params_records",
     "record_from_utxo",
     "resolve_action_utxos",
@@ -106,8 +113,8 @@ __all__ = [
 ]
 
 # The MarketParams layout that carries the loan validator (p[35]) and the staking
-# pair (p[34]); loan flows need both.
-_LOAN_LAYOUT = 36
+# pair (p[34]); loan flows need both. It is the longest known layout (list36).
+_LOAN_LAYOUT = max(MARKET_PARAMS_LENGTHS)
 
 
 # --- reference scripts -------------------------------------------------------
@@ -131,13 +138,6 @@ class LiqwidScriptRefs:
     liquidation_staking: Utxo | None
 
 
-def _out_ref_text(utxo: Utxo) -> str:
-    if utxo.out_ref is None:
-        msg = "a resolved UTxO carries no out-ref"
-        raise ValueError(msg)
-    return f"{utxo.out_ref[0]}#{utxo.out_ref[1]}"
-
-
 def _reference_script(
     backend: AbstractBackend,
     market: MarketComponents,
@@ -158,9 +158,9 @@ def _reference_script(
             market.name,
             f"no reference UTxO for script {script_hash}",
         ) from None
-    tx_hash, _, index = ref.out_ref.partition("#")
+    tx_hash, index = out_ref_key(ref.out_ref)
     try:
-        utxo = resolve_utxo_by_outref(backend, tx_hash, int(index))
+        utxo = resolve_utxo_by_outref(backend, tx_hash, index)
     except ValueError:
         raise UnsupportedMarketError(
             market.name,
@@ -180,6 +180,32 @@ def _reference_script(
     return utxo
 
 
+def _loan_scripts(
+    market: MarketComponents,
+    params: MarketParamsDatum,
+) -> tuple[str, str, StakingPair]:
+    """The loan validator, loan-token policy and staking pair a loan flow runs.
+
+    Raises:
+        UnsupportedMarketError: the layout is shorter than 36 fields, the market has
+            no current loan-token policy, or the staking pair is not one script of
+            each role.
+    """
+    if params.length < _LOAN_LAYOUT or params.loan_validator is None:
+        raise UnsupportedMarketError(
+            market.name,
+            f"loan flows need the {_LOAN_LAYOUT}-field MarketParams "
+            f"(got {params.length})",
+        )
+    if market.new_borrow_policy is None:
+        raise UnsupportedMarketError(market.name, "no current loan-token policy")
+    try:
+        roles = staking_roles(market, params)
+    except ValueError as exc:
+        raise UnsupportedMarketError(market.name, str(exc)) from None
+    return params.loan_validator, market.new_borrow_policy, roles
+
+
 def resolve_script_refs(
     backend: AbstractBackend,
     market: MarketComponents,
@@ -195,7 +221,8 @@ def resolve_script_refs(
     language (PlutusV2) and hash to it. The action validator is the one ``params``
     names (``p[20]``), which need not be the newest the deployment lists; the
     staking validators are ``p[34]``'s, placed by role. ``loans=False`` resolves only
-    the action validator and the qToken policy (supply and redeem).
+    the action validator and the qToken policy (supply and redeem). A market unfit
+    for the requested scripts is refused before the backend is read.
 
     Raises:
         UnsupportedMarketError: ``params`` names no action validator; with
@@ -206,36 +233,17 @@ def resolve_script_refs(
     active = resolve_deployment(deployment)
     if params.action_validator is None:
         raise UnsupportedMarketError(market.name, "MarketParams names no action")
+    loan_scripts = _loan_scripts(market, params) if loans else None
     action = _reference_script(backend, market, active, params.action_validator)
     qtoken = _reference_script(backend, market, active, market.qtoken_policy)
-    if not loans:
+    if loan_scripts is None:
         return LiqwidScriptRefs(action, qtoken, None, None, None, None)
-    if params.length < _LOAN_LAYOUT or params.loan_validator is None:
-        raise UnsupportedMarketError(
-            market.name,
-            f"loan flows need the 36-field MarketParams (got {params.length})",
-        )
-    if market.new_borrow_policy is None:
-        raise UnsupportedMarketError(market.name, "no current loan-token policy")
-    try:
-        roles = staking_roles(market, params)
-    except ValueError as exc:
-        raise UnsupportedMarketError(market.name, str(exc)) from None
+    loan_validator, loan_policy, roles = loan_scripts
     return LiqwidScriptRefs(
         action=action,
         qtoken_policy=qtoken,
-        loan_validator=_reference_script(
-            backend,
-            market,
-            active,
-            params.loan_validator,
-        ),
-        loan_policy=_reference_script(
-            backend,
-            market,
-            active,
-            market.new_borrow_policy,
-        ),
+        loan_validator=_reference_script(backend, market, active, loan_validator),
+        loan_policy=_reference_script(backend, market, active, loan_policy),
         borrow_staking=_reference_script(backend, market, active, roles.borrow),
         liquidation_staking=_reference_script(
             backend,
@@ -259,7 +267,7 @@ class ActionUtxo:
     @property
     def out_ref(self) -> str:
         """The UTxO's ``<tx hash>#<index>``."""
-        return _out_ref_text(self.utxo)
+        return out_ref_text(out_ref_of(self.utxo))
 
     def underlying_amount(self, underlying: str) -> int:
         """The quantity of ``underlying`` (``"lovelace"`` or a unit) the UTxO holds."""
@@ -280,39 +288,29 @@ def resolve_action_utxos(
     """Every live action UTxO of ``market``, in out-ref order.
 
     Reads the holders of the market's action token at the action validator
-    ``params`` names (``p[20]``), page by page, until a short page or one that adds
-    no out-ref. A UTxO counts when it sits at that credential and
+    ``params`` names (``p[20]``) through
+    :func:`~charli3_dendrite.lending.fetch.unspent_utxos`, which pages on the rows
+    the backend returns, so a page of UTxOs that are not action UTxOs does not end
+    the read. A UTxO counts when it sits at that credential and
     :func:`~charli3_dendrite.lending.liqwid.indexing.parse_action` accepts it.
 
     Raises:
         UnsupportedMarketError: ``params`` names no action validator or the market
             has no action-token policy.
     """
-    try:
-        selector = action_selector(market, params)
-    except ValueError as exc:
-        raise UnsupportedMarketError(market.name, str(exc)) from None
-    found: dict[str, ActionUtxo] = {}
-    page = 0
-    while True:
-        rows = list(
-            backend.get_pool_utxos(
-                addresses=[selector.address],
-                assets=[selector.identity_policy],
-                limit=page_size,
-                page=page,
-                historical=False,
-            ),
-        )
-        before = len(found)
-        for info in rows:
-            record = _action_record(info, market, selector)
-            if record is not None:
-                found.setdefault(record.out_ref, record)
-        if len(rows) < page_size or len(found) == before:
-            break
-        page += 1
-    return [found[ref] for ref in sorted(found, key=out_ref_key)]
+    selector = action_selector(market, params)
+    rows = unspent_utxos(
+        backend,
+        selector.address,
+        assets=[selector.identity_policy],
+        page_size=page_size,
+    )
+    found = [
+        record
+        for info in rows
+        if (record := _action_record(info, market, selector)) is not None
+    ]
+    return sorted(found, key=lambda action: out_ref_key(action.out_ref))
 
 
 def _action_record(
@@ -448,10 +446,10 @@ def _newest(
     kind: LiqwidKind,
     market: MarketComponents,
 ) -> LiqwidRecord:
-    for record in newest_first(records):
-        if record.kind is kind and record.market_id == market.market_id:
-            return record
-    raise UnsupportedMarketError(market.name, f"no live {kind.value} record")
+    record = newest_record(records, kind, market.market_id)
+    if record is None:
+        raise UnsupportedMarketError(market.name, f"no live {kind.value} record")
+    return record
 
 
 def resolve_market_records(
@@ -522,8 +520,8 @@ def resolve_loan(
         ValueError: no such output (or it is spent and ``allow_spent`` is unset).
     """
     active = resolve_deployment(deployment)
-    tx_hash, _, index = out_ref.partition("#")
-    utxo = resolve_utxo_by_outref(backend, tx_hash, int(index), allow_spent=allow_spent)
+    tx_hash, index = out_ref_key(out_ref)
+    utxo = resolve_utxo_by_outref(backend, tx_hash, index, allow_spent=allow_spent)
     record = parse_utxo(utxo_to_info(utxo), deployment)
     if record is None or record.kind is not LiqwidKind.LOAN or not record.market_id:
         legacy = {m.borrow_policy for m in active.markets} - {None}
@@ -604,18 +602,37 @@ class HealthInputs:
     feeds: Mapping[str, LiqwidFeed]
 
 
-def _collateral_market(
+def collateral_link(
     unit: str,
-    datum: CollateralParamsDatum,
+    record: LiqwidRecord | None,
     deployment: LiqwidDeployment,
-) -> MarketComponents | None:
-    """The market whose qToken ``unit`` is, else the record's own market link."""
-    linked = deployment.market_of_qtoken(policy_of(unit))
-    if linked is None and datum.collateral_market_state:
-        linked = deployment.market_of_state_policy(
-            policy_of(datum.collateral_market_state),
-        )
-    return linked
+) -> tuple[MarketComponents, CollateralParamsDatum]:
+    """The collateral market of ``unit`` and the CollateralParams datum naming it.
+
+    ``record`` is the borrow market's exact CollateralParams record of ``unit``. Its
+    datum links the collateral market by that market's MarketState NFT and names
+    the market's underlying; a health check reads the linked MarketState and the
+    underlying's feed.
+
+    Raises:
+        UnsupportedCollateralError: ``record`` is None, not an exact
+            CollateralParams record, names no collateral market or underlying, or
+            links a market ``deployment`` does not list.
+    """
+    datum = record.datum if record is not None else None
+    if (
+        not isinstance(datum, CollateralParamsDatum)
+        or datum.policy_wide
+        or not datum.underlying
+        or not datum.collateral_market_state
+    ):
+        raise UnsupportedCollateralError(unit)
+    market = deployment.market_of_state_policy(
+        policy_of(datum.collateral_market_state),
+    )
+    if market is None:
+        raise UnsupportedCollateralError(unit)
+    return market, datum
 
 
 def resolve_health_inputs(
@@ -635,7 +652,7 @@ def resolve_health_inputs(
     Raises:
         UnsupportedCollateralError: a unit has no exact CollateralParams record of
             the borrow market, or the record names no collateral market or
-            underlying.
+            underlying (:func:`collateral_link`).
         UnsupportedMarketError: a collateral market has no live MarketState.
         MissingFeedError: no feed prices an underlying.
     """
@@ -644,17 +661,14 @@ def resolve_health_inputs(
     collateral_markets: dict[str, MarketComponents] = {}
     underlyings = [borrow.market.underlying]
     for unit in units:
-        record = borrow.collateral_params.get(unit)
-        datum = record.datum if record is not None else None
-        if record is None or not isinstance(datum, CollateralParamsDatum):
-            raise UnsupportedCollateralError(unit)
-        market = _collateral_market(unit, datum, active)
-        underlying = datum.underlying or (market.underlying if market else "")
-        if market is None or not underlying:
-            raise UnsupportedCollateralError(unit)
-        cparams[unit] = record
+        market, datum = collateral_link(
+            unit,
+            borrow.collateral_params.get(unit),
+            active,
+        )
+        cparams[unit] = borrow.collateral_params[unit]
         collateral_markets.setdefault(market.market_id, market)
-        underlyings.append(underlying)
+        underlyings.append(datum.underlying)
     states = {borrow.market.market_id: borrow.state}
     others = [m for m_id, m in collateral_markets.items() if m_id not in states]
     if others:
