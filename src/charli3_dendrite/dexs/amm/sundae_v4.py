@@ -19,7 +19,10 @@ Encoding facts that are load-bearing (each is reproduced byte-for-byte on a
   list of constructor-bearing dataclasses.
 * On-chain the non-empty arrays are indefinite-length (``9f ... ff``) and empty
   constructors are the definite empty array (``80``); pycardano reproduces both,
-  so the modelled classes round trip byte-exact.
+  so the modelled classes round trip byte-exact. The one exception is a byte
+  string over 64 bytes (an oracle module's ``module_state`` slot is one): Plutus
+  chunks it into an indefinite-length string, which re-encodes definite, so the
+  vault datum check compares decoded values rather than bytes.
 * ``Bool`` is ``False`` = constructor 0 / ``True`` = constructor 1.
   ``Option<T>`` is ``Some`` = constructor 0 ``[T]`` / ``None`` = constructor 1.
 * ``Data`` fields (an order's ``constraints`` / ``extension``, a transcript
@@ -2111,6 +2114,8 @@ _CONFIG_TYPES: dict[str, type[PlutusData]] = {
 }
 _CREATE_TAG = 121  # constructor 0
 _OPERATE_TAG = 122  # constructor 1
+# The superseded banded CL config: bands, closing, weight_total (no index).
+_INDEX_LESS_BANDED_FIELDS = 3
 
 
 def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
@@ -2147,6 +2152,62 @@ def _config_candidates(data_cbor: str, kind: str | None) -> list[Any]:
                 continue
         candidates.append(candidate)
     return candidates
+
+
+def _lift_index_less(fields: list) -> BandedCLConfig | None:
+    """The current-build config of an index-less ``[bands, closing, weight_total]``.
+
+    ``None`` when the fields are not that shape or fail the module's Create-time
+    checks.
+    """
+    bands_raw, closing_raw, weight_total = fields
+    if not isinstance(bands_raw, (list, IndefiniteList)) or not bands_raw:
+        return None
+    if not isinstance(weight_total, int) or isinstance(weight_total, bool):
+        return None
+    try:
+        bands = [BandSpec.from_primitive(band) for band in _list_items(bands_raw)]
+        closing = Rational.from_primitive(closing_raw)
+        ladder = banded_cl_ladder(bands, closing, weight_total)
+    except (DeserializeException, TypeError, ValueError, KeyError):
+        return None
+    return BandedCLConfig(
+        bands=IndefiniteList(bands),
+        index=IndefiniteList([IndefiniteList(list(entry)) for entry in ladder.index]),
+        closing=closing,
+        weight_total=weight_total,
+    )
+
+
+def _index_less_banded_configs(data_cbor: str) -> list[BandedCLConfig]:
+    """Index-less banded CL configs anywhere in a redeemer, lifted to the current shape.
+
+    The superseded build of the banded CL module committed to a constructor-0
+    ``[bands, closing, weight_total]`` with no ladder index. A vault moved off
+    that build commits to the same ladder with its index, and the transaction
+    that moves it may carry only the index-less shape, in a redeemer of a script
+    the manifest does not list. Every constructor-0 term of that shape is lifted
+    by computing its index; the caller accepts one only on a commitment match.
+    """
+    try:
+        stack: list[Any] = [RawPlutusData.from_cbor(bytes.fromhex(data_cbor)).data]
+    except (DeserializeException, TypeError, ValueError, cbor2.CBORDecodeError):
+        return []
+    out: list[BandedCLConfig] = []
+    while stack:
+        term = stack.pop()
+        if isinstance(term, CBORTag):
+            if not isinstance(term.value, (list, IndefiniteList)):
+                continue
+            fields = _list_items(term.value)
+            if term.tag == _CREATE_TAG and len(fields) == _INDEX_LESS_BANDED_FIELDS:
+                config = _lift_index_less(fields)
+                if config is not None:
+                    out.append(config)
+            stack.extend(reversed(fields))
+        elif isinstance(term, (list, IndefiniteList)):
+            stack.extend(reversed(_list_items(term)))
+    return out
 
 
 def _rate_update_rates(
@@ -2193,7 +2254,10 @@ def _matching_config(
     producing transaction's own redeemers and, failing that, each past
     transaction's redeemers visited while walking the pool NFT's history. For a
     stableswap module, each candidate is also tried with the rates of every
-    rate-update step in the same transaction; only a hash match is accepted.
+    rate-update step in the same transaction. For a banded CL module, when no
+    module redeemer matches, every index-less config in any of the transaction's
+    redeemers is lifted and tried (see :func:`_index_less_banded_configs`). Only a
+    hash match is accepted.
     """
     rate_sets = _rate_update_rates(records, pool_hash) if kind == "stableswap" else []
     for record in records:
@@ -2208,6 +2272,11 @@ def _matching_config(
                 variant = dataclasses.replace(candidate, rates=IndefiniteList(rates))
                 if module_config_hash(variant) == commitment:
                     return variant
+    if kind == "banded_cl":
+        for record in records:
+            for lifted in _index_less_banded_configs(record.data_cbor):
+                if module_config_hash(lifted) == commitment:
+                    return lifted
     return None
 
 
@@ -2483,7 +2552,7 @@ class SundaeV4Vault(DendriteBaseModel):
         ) as e:
             msg = f"SundaeV4Vault: datum is not a pool datum: {e}"
             raise NotAPoolError(msg) from e
-        if datum.to_cbor() != bytes.fromhex(datum_cbor):
+        if cbor2.loads(datum.to_cbor()) != cbor2.loads(bytes.fromhex(datum_cbor)):
             msg = "SundaeV4Vault: datum does not round-trip as a pool datum."
             raise NotAPoolError(msg)
         return datum

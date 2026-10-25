@@ -1,5 +1,5 @@
 {
-  "_comment": "Banded CL vault UTxOs read from the chain. preprod_pool is a preprod vault bound to banded_concentrated_liquidity.withdraw f75a1c14...; preprod_config is the config its module_state commits to, from the module redeemer of preprod transaction 835f02758048676bbbc7299e5863c565f33ae8953055b13dddb1ca9225e7d28f. oracle_pools are a preview and a preprod vault whose trade action also binds the oracle module (oracle.withdraw), whose module_state slot is chunked bytes.",
+  "_comment": "Banded CL vault UTxOs read from the chain. preprod_pool is a preprod vault bound to banded_concentrated_liquidity.withdraw f75a1c14...; preprod_config is the config its module_state commits to, from the module redeemer of preprod transaction 835f02758048676bbbc7299e5863c565f33ae8953055b13dddb1ca9225e7d28f. oracle_pools are a preview and a preprod vault whose trade action also binds the oracle module (oracle.withdraw), whose module_state slot is chunked bytes. upgraded_pool is a preview vault moved off banded_concentrated_liquidity.withdraw.superseded1 onto the current build; upgraded_redeemers are the redeemers of the transaction that produced it, whose migration redeemer carries the index-less config and no banded CL redeemer.",
   "preprod_pool": {
     "tx_hash": "f74c899859939b1f91e335c45a01ab405e22bda105d5306db895b258e0212180",
     "tx_index": 1,
@@ -38,5 +38,40 @@
         "a7a054cbb875e4882f1f3248a078643e66f3d00271c0a74f4d85b4770014df107d3fc34550c9eec7902cc232a02d19e97057ab5c55921a581e83447c": 925518563
       }
     }
-  }
+  },
+  "upgraded_pool": {
+    "tx_hash": "f1f5c939805137515fb7ab65d57fc289dc688d89f7a51c47cedc22381b4fa8cc",
+    "tx_index": 0,
+    "datum_cbor": "d8799f9f9fd8799f581c09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed2277187897246744f4b454e41ff1a00864f85ff9fd8799f581c09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed2277187897246744f4b454e42ff1a0037106bffff1a3c4fbc521a3c4aa4171a3aeaecbd581ca18bdc0fddeb7ae7b0a87dd92ba9c244b3173aa345ab722289a2f0a19fd8799f1864d87a809f581c33485bba2689d4b82b412fb683f07474b9c6c042778d3b9d2b691f18581c6cec93b3ee519553eda356c36b9ef6ad91397495a4316c53fc2ce426581cf291de3ed5b01fa102764bfca6b6e8bc503a5899fc44fbc903b752c3ffffd8799f18c8d87a809f581c6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd372876ffffd8799f01d87a809f581c4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d5246ffffff9f9f581c33485bba2689d4b82b412fb683f07474b9c6c042778d3b9d2b691f185820361006908c76928585007cd24aeec231db3d571df4d04a76be5c6b8f0f4313c9ff9f581c6cec93b3ee519553eda356c36b9ef6ad91397495a4316c53fc2ce4265820eb6bb8b0bf94e9d1bfa3870659f3082e15e247eaf9b3eb586d4492285d33d55fff9f581cf291de3ed5b01fa102764bfca6b6e8bc503a5899fc44fbc903b752c34180ff9f581c6076d7f51bc653c484cec76b9a7f1c116fa573175691b74cfd3728765820b7afc0e9c25e4fa2933e0ed75b11024f44b271223ddeb5e919c9ed09489e29a1ff9f581c4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d52465820c8fe18899b9e814e006db1238bddcf49041592351085b939edf91305272ae674ffff1a004c4b40d87980ff",
+    "assets": {
+      "lovelace": 50628552,
+      "09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed22771878972744f4b454e41": 8802181,
+      "09169bb6f5ff5b246d65d65935b2222cc53b5e677d7ed22771878972744f4b454e42": 3608683,
+      "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd000de140a18bdc0fddeb7ae7b0a87dd92ba9c244b3173aa345ab722289a2f0a1": 1,
+      "b8a18e251b3e5078c04203f1a9af52408064c5d3a4256cfcfe3f67dd0014df10a18bdc0fddeb7ae7b0a87dd92ba9c244b3173aa345ab722289a2f0a1": 988474557
+    }
+  },
+  "upgraded_redeemers": [
+    {
+      "tx_hash": "f1f5c939805137515fb7ab65d57fc289dc688d89f7a51c47cedc22381b4fa8cc",
+      "purpose": "spend",
+      "index": 0,
+      "script_hash": "f577d24cfa393efdb85482554acbdd5082f99acba9c17eab916cf87a",
+      "data_cbor": "d87a80"
+    },
+    {
+      "tx_hash": "f1f5c939805137515fb7ab65d57fc289dc688d89f7a51c47cedc22381b4fa8cc",
+      "purpose": "reward",
+      "index": 0,
+      "script_hash": "4e91572ab876102327c2b5cc1ab0b273de0dc40dc88d6668030d5246",
+      "data_cbor": "d87a9f9fd8799fd8799f5820e689bcf52ef6847727699762000a8a1619a62304ec34a20f16eec87ccb3fe96900ffd8799f19ea60d8799fd8799f581cf3dff64068719405ee57e8a1a954bf73095618e5fe6b85471a22b4971b000001a11334e4e0ffffffd87b80ffffff"
+    },
+    {
+      "tx_hash": "f1f5c939805137515fb7ab65d57fc289dc688d89f7a51c47cedc22381b4fa8cc",
+      "purpose": "reward",
+      "index": 2,
+      "script_hash": "f3dff64068719405ee57e8a1a954bf73095618e5fe6b85471a22b497",
+      "data_cbor": "d8799f9fd8799fd8799f5820e689bcf52ef6847727699762000a8a1619a62304ec34a20f16eec87ccb3fe96900ff00d8799f9fd8799fd8799f1a000128e01a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a00012cc81a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a000130b01a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a000134981a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a000138801a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a00013c681a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a000140501a00013880ff0100d8799f031903e8ffd8799f031903e8ffffd8799fd8799f1a000144381a00013880ff0100d8799f031903e8ffd8799f031903e8ffffffd8799f1a000148201a00013880ff08ff1a3c54e6b302d8799f19ea60d87a80ffffffff"
+    }
+  ]
 }
