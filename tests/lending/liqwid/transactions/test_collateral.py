@@ -292,6 +292,20 @@ def test_a_zero_target_quantity_removes_the_unit():
     )
 
 
+def test_a_target_equal_to_the_loan_s_collateral_is_refused():
+    snapshot = _snapshot("collateral_add")
+    unchanged = dataclasses.replace(snapshot, collateral=dict(snapshot.loan.collateral))
+    with pytest.raises(ValueError, match="current one"):
+        _build(unchanged)
+
+
+def test_a_negative_target_quantity_is_refused_by_the_build():
+    snapshot = _snapshot("collateral_add")
+    (unit, _), *_ = snapshot.collateral.items()
+    with pytest.raises(ValueError, match="negative collateral quantity"):
+        _build(_with_collateral(snapshot, **{unit: -1}))
+
+
 # --- live resolution ---------------------------------------------------------------
 
 
@@ -351,3 +365,34 @@ def test_from_backend_refuses_too_many_collaterals_before_reading_health():
     read = {address for call in backend.calls for address in call["addresses"]}
     assert read
     assert not oracles & read
+
+
+def test_from_backend_refuses_a_negative_target_before_any_read():
+    fix = fixture("collateral_add")
+    captured = CollateralSnapshot.from_capture(fix)
+    backend = capture_backend(fix)
+    (unit, _), *_ = captured.collateral.items()
+    with pytest.raises(ValueError, match="negative collateral quantity"):
+        CollateralSnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
+            owner_address=captured.owner_address,
+            collateral={**captured.collateral, unit: -1},
+            funding=captured.funding,
+        )
+    assert backend.calls == backend.queries == []
+
+
+def test_from_backend_refuses_a_change_that_keeps_the_collateral():
+    fix = fixture("collateral_add")
+    captured = CollateralSnapshot.from_capture(fix)
+    backend = capture_backend(fix)
+    with pytest.raises(ValueError, match="current one"):
+        CollateralSnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
+            owner_address=captured.owner_address,
+            collateral={**captured.loan.collateral, "ab" * 28: 0},
+            funding=captured.funding,
+        )
+    assert backend.calls == []

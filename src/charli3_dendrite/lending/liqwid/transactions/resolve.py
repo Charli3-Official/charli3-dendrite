@@ -1034,8 +1034,21 @@ def resolve_owner_funding(
     backend: AbstractBackend,
     owner_address: str,
     funding: Sequence[Utxo] | None = None,
+    *,
+    holding: str | None = None,
 ) -> list[Utxo]:
-    """The wallet UTxOs that fund a flow: ``funding``, else those at the address."""
+    """The wallet UTxOs that fund a flow: ``funding``, else those at the address.
+
+    The address's UTxOs are its most recent ones (`resolve_funding`); with
+    ``holding`` (an asset unit) every unspent UTxO at the address holding that
+    asset is added after them, each out-ref once. ``funding``, when given, is
+    used as it is.
+    """
     if funding is not None:
         return list(funding)
-    return resolve_funding(backend, owner_address)
+    wallet = resolve_funding(backend, owner_address)
+    if holding is None:
+        return wallet
+    seen = {u.out_ref for u in wallet}
+    held = resolve_funding(backend, owner_address, limit=None, asset=holding)
+    return wallet + [u for u in held if u.out_ref not in seen]

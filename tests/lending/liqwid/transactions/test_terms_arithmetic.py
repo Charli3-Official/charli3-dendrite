@@ -261,7 +261,12 @@ def test_action_deltas_between_two_records_undo_apply_to():
 
 
 def test_held_collateral_drops_zero_quantities():
-    assert terms.held_collateral({"a": 3, "b": 0, "c": -1}) == {"a": 3, "c": -1}
+    assert terms.held_collateral({"a": 3, "b": 0}) == {"a": 3}
+
+
+def test_held_collateral_refuses_a_negative_quantity():
+    with pytest.raises(ValueError, match="negative collateral quantity -1 of c"):
+        terms.held_collateral({"a": 3, "c": -1})
 
 
 def test_action_deltas_underlying_delta_follows_the_value_rule():

@@ -195,7 +195,8 @@ class BorrowSnapshot(PoolActionSnapshot):
         (:func:`resolve_borrow` lists the checks and their order).
 
         Raises:
-            ValueError: ``owner_address`` has no payment key hash.
+            ValueError: ``owner_address`` has no payment key hash, or a
+                ``collateral`` quantity is negative (before anything is read).
             LiqwidBuildError: As :func:`resolve_borrow`.
         """
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
@@ -203,8 +204,8 @@ class BorrowSnapshot(PoolActionSnapshot):
         active = resolve_deployment(deployment)
         borrow_market = active.market_by_name(market)
         owner = owner_key_hash(owner_address)
-        records = resolve_market(backend, borrow_market, deployment=active)
         target = held_collateral(collateral)
+        records = resolve_market(backend, borrow_market, deployment=active)
         resolved = resolve_borrow(
             backend,
             flow=Flow.OPEN,

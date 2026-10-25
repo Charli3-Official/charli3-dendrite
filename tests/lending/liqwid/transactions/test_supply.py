@@ -36,6 +36,7 @@ from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.errors import ValidityWindowError
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
+from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 from charli3_dendrite.utility import posix_ms_to_slot
@@ -410,6 +411,84 @@ def test_withdraw_all_burns_the_funded_qtoken_balance():
     assert snapshot.payout == redeem_payout(held, rate)
     built = build(build_redeem, snapshot, slot=block_slot(fix))
     assert mints(built) == {(QADA, -held)}
+
+
+def _ada_only(wallet: str, count: int) -> list[Utxo]:
+    """``count`` Ada-only UTxOs at ``wallet``, newer than the capture's inputs."""
+    return [
+        Utxo(
+            address=wallet,
+            lovelace=2_000_000,
+            assets=[],
+            datum=None,
+            out_ref=(f"{i:064x}", 0),
+        )
+        for i in range(1, count + 1)
+    ]
+
+
+def test_withdraw_all_burns_qtokens_older_than_the_recent_funding():
+    fix = fixture("redeem_ada")
+    wallet = _wallet(fix)
+    newer = _ada_only(wallet, 20)
+    backend = capture_backend(fix, utxos=newer)
+    snapshot = RedeemSnapshot.from_backend(
+        backend,
+        market="Ada",
+        owner_address=wallet,
+        withdraw_all=True,
+    )
+    assert snapshot.qtokens == 439_021_935_878
+    holders = [u for u in snapshot.funding if u.holds(QADA, "")]
+    assert holders == [u for u in _inputs(fix) if u.holds(QADA, "")]
+    assert snapshot.funding == [*reversed(newer), *holders]
+    assert len({u.out_ref for u in snapshot.funding}) == len(snapshot.funding)
+    asset_reads = [q for q in backend.queries if "policy" in q]
+    assert asset_reads == [{"addr": wallet, "lim": None, "policy": QADA, "name": ""}]
+
+
+def test_withdraw_all_keeps_a_given_funding():
+    fix = fixture("redeem_ada")
+    wallet = [u for u in _inputs(fix) if not u.datum]
+    backend = capture_backend(fix)
+    snapshot = RedeemSnapshot.from_backend(
+        backend,
+        market="Ada",
+        owner_address=_wallet(fix),
+        withdraw_all=True,
+        funding=wallet,
+    )
+    assert snapshot.funding == wallet
+    assert not [q for q in backend.queries if "addr" in q]
+
+
+def test_a_redeem_of_an_amount_reads_only_the_recent_funding():
+    fix = fixture("redeem_ada")
+    backend = capture_backend(fix)
+    RedeemSnapshot.from_backend(
+        backend,
+        market="Ada",
+        owner_address=_wallet(fix),
+        amount=99_999_998,
+        rng=random.Random(0),
+    )
+    assert [q for q in backend.queries if "addr" in q] == [
+        {"addr": _wallet(fix), "lim": 20},
+    ]
+
+
+@pytest.mark.parametrize("amount", [0, -1])
+def test_a_redeem_of_no_amount_is_refused(amount):
+    fix = fixture("redeem_ada")
+    backend = capture_backend(fix)
+    with pytest.raises(ValueError, match="must be positive"):
+        RedeemSnapshot.from_backend(
+            backend,
+            market="Ada",
+            owner_address=_wallet(fix),
+            amount=amount,
+        )
+    assert backend.calls == backend.queries == []
 
 
 def test_withdraw_all_without_qtokens_is_refused():

@@ -162,6 +162,8 @@ class IncreaseSnapshot(PoolActionSnapshot):
         with the health debt ``p0 + max(iS, m0) + A`` at the current index.
 
         Raises:
+            ValueError: A ``collateral`` quantity is negative (before anything is
+                read).
             UnsupportedLoanError: The out-ref is no current-generation loan.
             LiqwidBuildError: As ``resolve_borrow``.
         """
@@ -169,6 +171,7 @@ class IncreaseSnapshot(PoolActionSnapshot):
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
 
         active = resolve_deployment(deployment)
+        wanted = None if collateral is None else held_collateral(collateral)
         loan = resolve_loan(
             backend,
             loan_utxo,
@@ -177,7 +180,7 @@ class IncreaseSnapshot(PoolActionSnapshot):
         )
         market = loan.market
         borrow = resolve_market(backend, market, deployment=active)
-        target = held_collateral(loan.collateral if collateral is None else collateral)
+        target = held_collateral(loan.collateral) if wanted is None else wanted
         resolved = resolve_borrow(
             backend,
             flow=Flow.INCREASE,

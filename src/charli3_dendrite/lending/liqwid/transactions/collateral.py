@@ -74,6 +74,18 @@ def _check_collateral_count(
     )
 
 
+def _check_change(loan: LoanRecord, collateral: Mapping[str, int]) -> None:
+    """Refuse a target that holds exactly the loan's collateral.
+
+    Raises:
+        ValueError: A target quantity is negative, or the target is the loan's
+            collateral (the change would only flip the loan-token name).
+    """
+    if held_collateral(collateral) == loan.collateral:
+        msg = f"the target collateral {dict(collateral)} is the loan's current one"
+        raise ValueError(msg)
+
+
 @dataclass
 class CollateralSnapshot(PoolActionSnapshot):
     """Everything a collateral change of one loan needs.
@@ -146,11 +158,14 @@ class CollateralSnapshot(PoolActionSnapshot):
 
         ``collateral`` is the target (unit -> quantity of the output loan).
         ``funding`` defaults to the unspent UTxOs at ``owner_address``.
-        ``allow_spent`` resolves an already consumed loan (a captured replay). The
-        output collateral count (``p[14]``) is checked before the scripts and the
-        health inputs are read.
+        ``allow_spent`` resolves an already consumed loan (a captured replay). A
+        negative target quantity is refused before anything is read, a target equal
+        to the loan's collateral once the loan is read, and the output collateral
+        count (``p[14]``) before the scripts and the health inputs are read.
 
         Raises:
+            ValueError: A target quantity is negative, or the target is the loan's
+                collateral.
             UnsupportedLoanError: The loan is legacy-generation or no loan.
             UnsupportedMarketError: The market's MarketParams are shorter than 36
                 fields, or a script or record cannot be resolved.
@@ -171,15 +186,17 @@ class CollateralSnapshot(PoolActionSnapshot):
             resolve_owner_funding,
         )
 
+        target = dict(collateral)
+        held_collateral(target)
         loan = resolve_loan(
             backend,
             loan_utxo,
             deployment=deployment,
             allow_spent=allow_spent,
         )
+        _check_change(loan, target)
         market = loan.market
         borrow = resolve_market(backend, market, deployment=deployment)
-        target = dict(collateral)
         _check_collateral_count(borrow.params_datum, target)
         script_refs = resolve_loan_script_refs(
             backend,
@@ -213,11 +230,13 @@ def build_collateral(
 ) -> None:
     """Add the collateral change ``snapshot`` describes to ``tx_builder``.
 
-    The collateral count and the market's loan scripts are checked before
-    anything is added; the health check and the reference hygiene run after the
-    legs are added, so discard the builder when they raise.
+    The target, the collateral count and the market's loan scripts are checked
+    before anything is added; the health check and the reference hygiene run after
+    the legs are added, so discard the builder when they raise.
 
     Raises:
+        ValueError: A target quantity is negative, or the target is the loan's
+            collateral.
         CollateralCountError: The target holds more than ``p[14]`` units.
         UnsupportedMarketError: The market's MarketParams name no loan validator,
             or it has no current loan-token policy.
@@ -239,6 +258,7 @@ def _build_collateral(
     """:func:`build_collateral`, stashing the funding on ``stash``."""
     records, loan, refs = snapshot.records, snapshot.loan, snapshot.script_refs
     _check_collateral_count(records.params_datum, snapshot.collateral)
+    _check_change(loan, snapshot.collateral)
     target = loan_target(records)
     s5 = records.state_datum.index
     settled = settle(loan.datum, s5)

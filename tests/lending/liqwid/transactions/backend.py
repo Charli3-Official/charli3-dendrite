@@ -8,7 +8,8 @@
   ``limit``/``page``;
 - ``db_query``: the out-ref, asset and wallet queries of
   :mod:`charli3_dendrite.lending.transactions.resolve`, answered from canned
-  :class:`Utxo` s (a spent one only when the query does not filter spent outputs);
+  :class:`Utxo` s (a spent one only when the query does not filter spent outputs;
+  a wallet query with an asset filter only those holding the asset);
 - ``last_block``: one block at ``tip_time`` (POSIX seconds).
 
 :func:`capture_backend` seeds one from a captured transaction.
@@ -121,10 +122,13 @@ class FixtureBackend:
                 for p, n, q in sorted(utxo.assets)
             ]
         if "addr" in args:
+            asset = (args["policy"], args["name"]) if "policy" in args else None
             held = [
                 utxo
                 for utxo, is_spent in reversed(self._utxos)
-                if utxo.address == args["addr"] and not is_spent
+                if utxo.address == args["addr"]
+                and not is_spent
+                and (asset is None or any((p, n) == asset for p, n, _ in utxo.assets))
             ]
             return [
                 {"tx_hash": _out_ref(u)[0], "idx": _out_ref(u)[1]}

@@ -269,11 +269,14 @@ class RedeemSnapshot(PoolActionSnapshot):
     ) -> RedeemSnapshot:
         """Resolve a redeem from the market named ``market``.
 
-        Exactly one of ``amount`` and ``withdraw_all``: an ``amount`` of underlying
-        burns the fewest qTokens ``Q`` whose payout ``floor(Q * s9)`` covers it;
-        ``withdraw_all`` burns every qToken of the market the funding holds. The
-        payout is ``floor(Q * s9)``. The wallet UTxOs at ``owner_address`` fund it
-        unless ``funding`` is given; they must hold the qTokens burnt.
+        Exactly one of ``amount`` and ``withdraw_all``: a positive ``amount`` of
+        underlying burns the fewest qTokens ``Q`` whose payout ``floor(Q * s9)``
+        covers it; ``withdraw_all`` burns every qToken of the market the funding
+        holds. The payout is ``floor(Q * s9)``. The wallet UTxOs at
+        ``owner_address`` fund it unless ``funding`` is given; they must hold the
+        qTokens burnt. With ``withdraw_all`` and no ``funding``, every UTxO at the
+        address holding the market's qToken joins the wallet's most recent UTxOs,
+        so the whole balance at the address is burnt.
 
         The minimum ``p[1]`` is checked on the payout before an action UTxO is
         chosen: the pinned ``action_utxo``, or a random one (by ``rng``) not in
@@ -281,8 +284,9 @@ class RedeemSnapshot(PoolActionSnapshot):
         ``valid_to_ms`` or the default window, capped at the batch deadline.
 
         Raises:
-            ValueError: Neither or both of ``amount`` and ``withdraw_all``; or the
-                funding holds fewer qTokens than the redeem burns.
+            ValueError: Neither or both of ``amount`` and ``withdraw_all``; an
+                ``amount`` that is not positive; or the funding holds no qTokens
+                of the market, or fewer than the redeem burns.
             KeyError: No market is named ``market``.
             MinValueError: The payout is below the market minimum.
             InsufficientLiquidityError: No eligible action UTxO holds the payout.
@@ -296,8 +300,16 @@ class RedeemSnapshot(PoolActionSnapshot):
         if (amount is None) == (not withdraw_all):
             msg = "a redeem takes exactly one of an amount and withdraw_all"
             raise ValueError(msg)
+        if amount is not None and amount <= 0:
+            msg = f"a redeem amount must be positive, not {amount}"
+            raise ValueError(msg)
         records = _resolve_records(backend, market, deployment)
-        wallet = resolve_owner_funding(backend, owner_address, funding)
+        wallet = resolve_owner_funding(
+            backend,
+            owner_address,
+            funding,
+            holding=records.market.qtoken_policy if withdraw_all else None,
+        )
         held = _qtokens_held(wallet, records.market)
         rate = records.state_datum.qtoken_rate
         qtokens = held if amount is None else redeem_burn_for(amount, rate)

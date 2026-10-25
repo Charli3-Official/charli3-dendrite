@@ -15,7 +15,7 @@ withdrawal from the borrow staking script):
   collateral and the loan lovelace go to the caller's change. A loan owing only its
   minimum interest ``(0, 0, m0 > 0)`` closes this way, paying ``m0``.
 - **Zero-debt close** (a ``(0, 0, 0)`` loan): the loan is spent and its token burnt,
-  with no action UTxO and no validity window.
+  with no action UTxO; it needs no validity window.
 
 A repay strictly between ``Ds`` and the payoff is refused (`RepayAmountError`): the
 interest-first rule would write a negative principal.
@@ -161,11 +161,12 @@ class RepaySnapshot(PoolActionSnapshot):
     ``repay`` is the payment ``R`` (`closes` when it reaches the payoff, which is
     then paid exactly). ``action`` is None on a zero-debt close and ``health`` None
     on any close. ``collateral`` is a partial repay's target collateral (None keeps
-    the loan's). ``valid_to_ms`` bounds an action-spending repay (capped at the
-    market's batch deadline); a zero-debt close needs none. ``loan_lovelace`` is the
-    least lovelace the output loan keeps (the input loan's by default), ``indefinite``
-    the array style of the datums written (definite when None) and ``deployment``
-    the Liqwid deployment (the bundled one when None).
+    the loan's). ``valid_to_ms`` bounds an action-spending repay; a zero-debt close
+    needs none, and one it is given is written as well. Either is capped at the
+    market's batch deadline; ``valid_from_ms`` is written whenever it is set.
+    ``loan_lovelace`` is the least lovelace the output loan keeps (the input loan's
+    by default), ``indefinite`` the array style of the datums written (definite when
+    None) and ``deployment`` the Liqwid deployment (the bundled one when None).
     """
 
     loan: LoanRecord
@@ -279,8 +280,9 @@ class RepaySnapshot(PoolActionSnapshot):
         Raises:
             RepayAmountError: ``repay`` is above the settled debt and below the
                 payoff.
-            ValueError: ``repay`` is negative, or a close is given a collateral
-                target.
+            ValueError: ``repay`` is negative, a close is given a collateral
+                target, or a target quantity is negative (before anything is
+                read).
             LiqwidBuildError: a limit, an action UTxO, a record or a feed the
                 repay needs is refused or missing.
         """
@@ -302,6 +304,8 @@ class RepaySnapshot(PoolActionSnapshot):
             resolve_valid_to_ms,
         )
 
+        if collateral is not None:
+            held_collateral(collateral)
         loan = resolve_loan(
             backend,
             loan_utxo,
@@ -409,8 +413,10 @@ def _build_repay(
     required_script(refs.borrow_staking, market, "borrow staking")
     market_refs = market_references(records)
     action: ActionUtxo | None = None
-    upper = snapshot.valid_to_ms
     action_script: Utxo | None = None
+    cap = ttl_cap_ms(state, params)
+    # A zero-debt close needs no window; a bound it is given is capped as well.
+    upper = None if snapshot.valid_to_ms is None else min(snapshot.valid_to_ms, cap)
     if plan.deltas is not None:
         action = _required(snapshot.action, "an action UTxO")
         action_script = required_script(refs.action, market, "action validator")
@@ -422,10 +428,7 @@ def _build_repay(
             amount=plan.payment,
             output_collateral_count=len(held_collateral(plan.collateral or {})),
         )
-        upper = min(
-            _required(snapshot.valid_to_ms, "an upper validity bound"),
-            ttl_cap_ms(state, params),
-        )
+        upper = min(_required(snapshot.valid_to_ms, "an upper validity bound"), cap)
     elif snapshot.action is not None:
         msg = "a zero-debt close spends no action UTxO"
         raise ValueError(msg)
@@ -478,5 +481,4 @@ def _build_repay(
         repay=plan.payment,
         deployment=resolve_deployment(snapshot.deployment),
     )
-    if upper is not None:
-        merge_validity_ms(tx_builder, upper_ms=upper, lower_ms=snapshot.valid_from_ms)
+    merge_validity_ms(tx_builder, upper_ms=upper, lower_ms=snapshot.valid_from_ms)

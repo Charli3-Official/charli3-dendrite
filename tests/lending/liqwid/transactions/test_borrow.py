@@ -388,3 +388,34 @@ def test_a_missing_loan_script_is_refused_before_the_builder_changes():
         build_increase(tx_builder, snapshot=snapshot)
     assert not tx_builder.inputs
     assert not tx_builder.outputs
+
+
+def test_an_open_with_a_negative_collateral_is_refused_before_any_read():
+    backend = _live_backend()
+    with pytest.raises(ValueError, match="negative collateral quantity"):
+        BorrowSnapshot.from_backend(
+            backend,
+            market="Ada",
+            owner_address=OWNER,
+            amount=100_000_000,
+            collateral={_market("DJED").qtoken_policy: -1},
+            funding=[],
+        )
+    assert backend.calls == backend.queries == []
+
+
+def test_a_borrow_more_with_a_negative_target_is_refused_before_any_read():
+    fix = fixture("increase_ada")
+    captured = IncreaseSnapshot.from_capture(fix)
+    backend = _capture_backend(fix)
+    (unit, _), *_ = captured.loan.collateral.items()
+    with pytest.raises(ValueError, match="negative collateral quantity"):
+        IncreaseSnapshot.from_backend(
+            backend,
+            loan_utxo="{}#{}".format(*captured.loan.utxo.out_ref),
+            owner_address=captured.owner_address,
+            amount=captured.amount,
+            collateral={unit: -1},
+            funding=captured.funding,
+        )
+    assert backend.calls == backend.queries == []

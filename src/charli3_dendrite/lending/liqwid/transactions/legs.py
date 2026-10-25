@@ -633,7 +633,8 @@ def finish_loan_flow(
             in and the hygiene check reads.
 
     Raises:
-        ValueError: A loan output remains and ``health`` is None.
+        ValueError: A loan output remains and ``health`` is None, or
+            ``collateral_out`` holds a negative quantity.
         UnhealthyLoanError: The output loan fails the health rule.
         ForeignReferenceInputError: The transaction references an input that is
             neither a reference script nor a Liqwid record.

@@ -220,6 +220,25 @@ def test_the_zero_debt_close_writes_no_validity():
     assert validity(built) == (None, None)
 
 
+def test_a_zero_debt_close_caps_a_bound_it_is_given():
+    fix = fixture(ZERO_DEBT_CLOSE)
+    snapshot = _snapshot(ZERO_DEBT_CLOSE)
+    records = snapshot.records
+    cap = terms.ttl_cap_ms(records.state_datum, records.params_datum)
+    late = dataclasses.replace(snapshot, valid_to_ms=cap + 60_000)
+    assert validity(_build(late, fix)) == (None, posix_ms_to_slot(cap))
+    early = dataclasses.replace(snapshot, valid_to_ms=cap - 60_000)
+    assert validity(_build(early, fix)) == (None, posix_ms_to_slot(cap - 60_000))
+
+
+def test_a_zero_debt_close_keeps_a_lower_bound_without_an_upper_one():
+    fix = fixture(ZERO_DEBT_CLOSE)
+    snapshot = _snapshot(ZERO_DEBT_CLOSE)
+    lower = slot_to_posix_ms(block_slot(fix) - 100)
+    built = _build(dataclasses.replace(snapshot, valid_from_ms=lower), fix)
+    assert validity(built) == (posix_ms_to_slot(lower), None)
+
+
 def test_the_zero_debt_close_references_the_loan_scripts_and_market_records():
     fix = fixture(ZERO_DEBT_CLOSE)
     snapshot = _snapshot(ZERO_DEBT_CLOSE)
@@ -349,3 +368,19 @@ def test_from_backend_refuses_a_repay_between_the_settled_debt_and_the_payoff():
     loan_hash = captured.loan.utxo.out_ref[0]
     assert {q["h"] for q in backend.queries if "h" in q} == {loan_hash}
     assert all(call["assets"] is None for call in backend.calls)
+
+
+def test_from_backend_refuses_a_negative_target_before_any_read():
+    fix = fixture("repay_usdm")
+    captured = _snapshot("repay_usdm")
+    backend = _capture_backend(fix)
+    (unit, _), *_ = captured.loan.collateral.items()
+    with pytest.raises(ValueError, match="negative collateral quantity"):
+        RepaySnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
+            owner_address=_owner_address(captured),
+            repay=captured.repay,
+            collateral={unit: -1},
+        )
+    assert backend.calls == backend.queries == []

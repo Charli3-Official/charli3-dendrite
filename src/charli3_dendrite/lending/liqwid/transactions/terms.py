@@ -733,7 +733,15 @@ def collateral_holdings(
 
 
 def held_collateral(collateral: Mapping[str, int]) -> dict[str, int]:
-    """``collateral`` without its zero quantities: the units a loan holds."""
+    """``collateral`` without its zero quantities: the units a loan holds.
+
+    Raises:
+        ValueError: A quantity is negative.
+    """
+    for unit, amount in collateral.items():
+        if amount < 0:
+            msg = f"negative collateral quantity {amount} of {unit}"
+            raise ValueError(msg)
     return {unit: amount for unit, amount in collateral.items() if amount != 0}
 
 
