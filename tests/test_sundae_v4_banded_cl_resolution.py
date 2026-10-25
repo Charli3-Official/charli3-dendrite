@@ -3,8 +3,10 @@
 A banded vault's ``module_state`` commits to a ladder the datum does not carry. It
 is recovered from the module's ``Create`` / ``Operate`` redeemers as the four-field
 :class:`BandedCLConfig` and hash-verified, like every other module config. A vault
-bound to the superseded (pre-index) build of the module is not priced, and neither
-is one whose trade action also binds the oracle module.
+moved off the superseded (pre-index) build may only have the index-less shape in its
+history; that shape is lifted by computing its index and accepted on a hash match. A
+vault bound to the superseded build is not priced, and neither is one whose trade
+action also binds the oracle module.
 """
 
 from __future__ import annotations
@@ -51,6 +53,8 @@ SUPERSEDED = "banded_concentrated_liquidity.withdraw.superseded1"
 VAULTS = json.loads(
     (Path(__file__).parent / "sundae_v4_banded_cl_vaults.json").read_text()
 )
+# A withdraw script the manifest does not list.
+FOREIGN_SCRIPT = "f3" * 28
 # oracle.withdraw on preview, as the Sundae API lists it; not in the manifest.
 ORACLE_MODULE = bytes.fromhex(
     "144f4c996e3e85a10f2c3bd3d01b32fc4bdee1d237167fc7dd678d59"
@@ -169,6 +173,59 @@ def test_a_wrong_ladder_in_the_history_is_not_accepted() -> None:
         vault.module_config(_deployment().banded_cl_hash)
 
 
+def _index_less(config: BandedCLConfig) -> RawPlutusData:
+    """A migration-style redeemer wrapping the index-less shape of ``config``."""
+    shape = CBORTag(
+        121, [IndefiniteList(list(config.bands)), config.closing, config.weight_total]
+    )
+    return RawPlutusData(CBORTag(121, [IndefiniteList([CBORTag(121, [0, shape])])]))
+
+
+def _foreign_record(tx_hash: str, redeemer: RawPlutusData) -> dict:
+    return {**_record(tx_hash, redeemer), "index": 2, "script_hash": FOREIGN_SCRIPT}
+
+
+def test_a_vault_upgraded_off_the_superseded_build_resolves_from_its_migration() -> (
+    None
+):
+    utxo = VAULTS["upgraded_pool"]
+    records = VAULTS["upgraded_redeemers"]
+    banded = _deployment().banded_cl_hash
+    assert banded.hex() not in {record["script_hash"] for record in records}
+    set_backend(_history({utxo["tx_hash"]: records}, []))
+    vault = SundaeV4Vault.model_validate({**utxo, "block_time": 0, "block_index": 0})
+    resolved = vault.module_config(banded)
+    assert isinstance(resolved, BandedCLConfig)
+    assert module_config_hash(resolved) == vault.module_state[banded]
+    (pool,) = vault.pools()
+    assert isinstance(pool, SundaeV4BandedCLPool)
+    out = pool.get_amount_out(Assets(**{pool.asset_a: 10_000}), pool.asset_b)[0]
+    assert out.quantity() > 0
+
+
+def test_an_index_less_shape_is_accepted_only_on_a_hash_match() -> None:
+    values, config = _p1()
+    values["tx_hash"] = SCOOP_TX
+    _, wrong = build_banded_cl_vault_utxo(
+        [(TOKENA, P1_RESERVES[0]), (TOKENC, P1_RESERVES[1])],
+        starts=P1_STARTS[:7],
+        closing=P1_STARTS[7],
+        total_lp=P1_TOTAL_LP,
+    )
+    set_backend(
+        _history({SCOOP_TX: [_foreign_record(SCOOP_TX, _index_less(wrong))]}, [])
+    )
+    with pytest.raises(ModuleConfigUnavailableError):
+        SundaeV4Vault.model_validate(values).module_config(_deployment().banded_cl_hash)
+    set_backend(
+        _history({SCOOP_TX: [_foreign_record(SCOOP_TX, _index_less(config))]}, [])
+    )
+    resolved = SundaeV4Vault.model_validate(values).module_config(
+        _deployment().banded_cl_hash
+    )
+    assert resolved.to_cbor_hex() == config.to_cbor_hex()
+
+
 def test_a_vault_bound_to_the_superseded_build_fails_closed() -> None:
     values, config = _p1(module_title=SUPERSEDED)
     vault = SundaeV4Vault.model_validate(values)
@@ -197,11 +254,25 @@ def test_a_pre_index_config_is_rejected_not_dereferenced() -> None:
 
 
 @pytest.mark.parametrize("network", ["preview", "preprod"])
-def test_a_recorded_oracle_enabled_vault_is_not_a_pool(network: str) -> None:
+def test_a_recorded_oracle_enabled_vault_parses_but_is_not_priced(network: str) -> None:
     SundaeV4Vault.select_network(network)
     utxo = VAULTS["oracle_pools"][network]
+    # The oracle slot is a byte string over 64 bytes, chunked on-chain.
+    assert "5f5840" in utxo["datum_cbor"]
+    vault = SundaeV4Vault.model_validate({**utxo, "block_time": 0, "block_index": 0})
+    assert any(len(slot) > 64 for slot in vault.module_state.values())
+    set_backend(_Minimal())
+    with pytest.raises(InvalidPoolError, match="does not know"):
+        vault.pools()
+
+
+def test_a_datum_that_is_not_a_pool_datum_is_still_refused() -> None:
+    utxo = VAULTS["upgraded_pool"]
+    redeemer = VAULTS["upgraded_redeemers"][-1]["data_cbor"]
     with pytest.raises(NotAPoolError):
-        SundaeV4Vault.model_validate({**utxo, "block_time": 0, "block_index": 0})
+        SundaeV4Vault.model_validate(
+            {**utxo, "datum_cbor": redeemer, "block_time": 0, "block_index": 0}
+        )
 
 
 def test_a_trade_action_binding_a_module_the_manifest_lacks_fails_closed() -> None:
