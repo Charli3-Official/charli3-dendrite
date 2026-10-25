@@ -26,6 +26,7 @@ Labels limit the run to those jobs; without labels every job is captured. Withou
 
 from __future__ import annotations
 
+import calendar
 import sys
 from pathlib import Path
 from typing import Any
@@ -192,8 +193,8 @@ def capture(cur: Any, tx_hash: str, *, label: str) -> dict[str, Any]:
         "label": label,
         "tx_hash": tx_hash,
         "block_time": (
-            int(block_time.timestamp())
-            if hasattr(block_time, "timestamp")
+            calendar.timegm(block_time.utctimetuple())
+            if hasattr(block_time, "utctimetuple")
             else int(block_time)
         ),
         "fee": int(fee),

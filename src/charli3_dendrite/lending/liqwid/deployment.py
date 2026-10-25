@@ -40,11 +40,6 @@ from typing import TYPE_CHECKING
 from typing import Any
 from typing import Final
 
-from pycardano import PlutusV1Script
-from pycardano import PlutusV2Script
-from pycardano import PlutusV3Script
-from pycardano import plutus_script_hash
-
 from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
 from charli3_dendrite.lending.liqwid.datums import MARKET_PARAMS_LENGTHS
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
@@ -58,7 +53,7 @@ from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR_MS
 
 if TYPE_CHECKING:
     from charli3_dendrite.dataclasses.models import PoolStateInfo
-    from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
+    from charli3_dendrite.lending.transactions.utxos import Utxo
 
 REGISTRY_URL: Final[str] = "https://public.liqwid.finance/v6/registry.json"
 REGISTRY_RESOURCE: Final[str] = "registry_v6.json"
@@ -896,31 +891,17 @@ def _params_drift(
 
 # The MarketParams layout whose records name p[34] and p[35] (list36).
 _USER_FLOW_LAYOUT: Final[int] = max(MARKET_PARAMS_LENGTHS)
-# dbsync script type -> pycardano script class; an untyped script reads as PlutusV3.
-_SCRIPT_CLASSES: Final[
-    Mapping[str, type[PlutusV1Script | PlutusV2Script | PlutusV3Script]]
-] = {
-    "plutusV1": PlutusV1Script,
-    "plutusV2": PlutusV2Script,
-    "plutusV3": PlutusV3Script,
-}
 
 
 def _script_hash_of(utxo: Utxo) -> str:
     """The hash of the reference script a resolved UTxO carries, by its language.
 
     Raises:
-        ValueError: when the UTxO carries no script or an unknown script type.
+        ValueError: when the UTxO carries no script or a non-Plutus script type.
     """
-    if utxo.ref_script is None:
-        msg = "reference UTxO carries no script"
-        raise ValueError(msg)
-    script_class = _SCRIPT_CLASSES.get(utxo.ref_script_type or "plutusV3")
-    if script_class is None:
-        msg = f"reference UTxO has unknown script type {utxo.ref_script_type!r}"
-        raise ValueError(msg)
-    script = script_class(bytes.fromhex(utxo.ref_script))
-    return plutus_script_hash(script).payload.hex()
+    from charli3_dendrite.lending.transactions.utxos import script_hash_of
+
+    return script_hash_of(utxo)
 
 
 def _user_flow_scripts(
