@@ -379,11 +379,59 @@ def _supply_params() -> ActionParams:
     return ActionParams(actor_address=wallet, amount=100_000_000)
 
 
+def _missing_error(missing: list[str], *, nested: bool) -> OgmiosEvaluationError:
+    """The Ogmios error for a transaction whose inputs ``missing`` are unknown.
+
+    ``nested`` gives the shape Ogmios returns for a transaction with redeemers: a
+    script failure (3010) whose per-validator errors carry a 3004 naming each
+    input. Otherwise the 3004 is the top-level error.
+    """
+    if not nested:
+        return OgmiosEvaluationError(
+            {
+                "code": 3004,
+                "message": (
+                    "Unable to create the evaluation context from the given "
+                    "transaction. Some inputs are missing from UTxO set: "
+                    + ", ".join(missing)
+                ),
+                "data": {},
+            },
+        )
+    return OgmiosEvaluationError(
+        {
+            "code": 3010,
+            "message": "Some scripts of the transactions terminated with error(s).",
+            "data": [
+                {
+                    "validator": {"index": 0, "purpose": "mint"},
+                    "error": {
+                        "code": 3004,
+                        "message": (
+                            "Unable to create the evaluation context from the "
+                            "given transaction."
+                        ),
+                        "data": {
+                            "reason": (
+                                "Unknown transaction input (missing from UTxO "
+                                f"set): {ref}"
+                            ),
+                        },
+                    },
+                }
+                for ref in missing
+            ],
+        },
+    )
+
+
 def _spent_inputs(
     monkeypatch: pytest.MonkeyPatch,
     spent: set[str],
+    *,
+    nested: bool = True,
 ) -> list[list[dict[str, Any]]]:
-    """Make the evaluation report the inputs in ``spent`` as missing (3004)."""
+    """Make the evaluation report the inputs in ``spent`` as missing."""
     sent: list[list[dict[str, Any]]] = []
 
     def evaluate(tx_cbor: str, additional_utxo: list[dict[str, Any]]) -> list:
@@ -395,27 +443,19 @@ def _spent_inputs(
         missing = sorted(inputs & spent)
         if not missing:
             return [{"validator": {"index": 0, "purpose": "spend"}}]
-        raise OgmiosEvaluationError(
-            {
-                "code": 3004,
-                "message": (
-                    "Unable to create the evaluation context from the given "
-                    "transaction. Some inputs are missing from UTxO set: "
-                    + ", ".join(missing)
-                ),
-                "data": {},
-            },
-        )
+        raise _missing_error(missing, nested=nested)
 
     monkeypatch.setattr(builder_module, "evaluate_tx_cbor", evaluate)
     return sent
 
 
+@pytest.mark.parametrize("nested", [True, False], ids=["script-failure", "3004"])
 def test_a_spent_action_utxo_is_named_and_a_retry_excluding_it_picks_another(
     monkeypatch: pytest.MonkeyPatch,
+    nested: bool,
 ) -> None:
     actions = {_ada_action(_SUPPLY).out_ref, _ada_action(_OTHER).out_ref}
-    _spent_inputs(monkeypatch, actions)
+    _spent_inputs(monkeypatch, actions, nested=nested)
     backend = _two_action_backend()
     builder = LiqwidTxBuilder()
     with pytest.raises(ActionUtxoSpentError) as raised:
@@ -475,7 +515,8 @@ def test_a_missing_input_other_than_the_action_utxo_is_left_as_is(
             params=_supply_params(),
         )
     assert not isinstance(raised.value, ActionUtxoSpentError)
-    assert raised.value.code == 3004
+    assert raised.value.code == 3010
+    assert {f"{h}#{i}" for h, i in raised.value.missing_inputs()} == funding
 
 
 def test_build_and_evaluate_refuses_an_unsupported_action() -> None:

@@ -67,9 +67,8 @@ from tests.lending.liqwid.transactions.replay import synthetic_utxo
 
 pytestmark = needs_dbsync
 
-# Ogmios: some scripts of the transaction failed; an input is not on the ledger.
+# Ogmios: some scripts of the transaction failed.
 SCRIPT_FAILURE = 3010
-MISSING_INPUT = 3004
 
 # Loans whose token is named 31: a USDC loan and an Ada loan.
 USDC_LOAN_31 = "b48aba3d0836adb01405df4518ae915bf84c7f65d993186037adebee362ea7a9#40"
@@ -147,9 +146,10 @@ def _evaluated(
 ) -> tuple[Any, Built, list[str]]:
     """Resolve, build and evaluate a flow: its snapshot, the build and the purposes.
 
-    ``resolve`` takes the action out-refs to exclude. When Ogmios no longer holds
-    an input (a batch spent the action UTxO or a record since dbsync was read),
-    the flow is resolved and evaluated once more, without that action UTxO.
+    ``resolve`` takes the action out-refs to exclude. When Ogmios reports an
+    input missing from its UTxO set, whatever the error's top-level code (a batch
+    spent the action UTxO or a record since dbsync was read), the flow is resolved
+    and evaluated once more, without that action UTxO.
     """
     excluded: frozenset[str] = frozenset()
     for attempt in range(2):
@@ -163,9 +163,9 @@ def _evaluated(
         try:
             return snapshot, built, evaluate(built, funding(snapshot))
         except OgmiosEvaluationError as exc:
-            if exc.code != MISSING_INPUT or attempt:
-                raise
             missing = {f"{h}#{i}" for h, i in exc.missing_inputs()}
+            if not missing or attempt:
+                raise
             excluded = excluded | (chosen_action_utxos(snapshot) & missing)
     raise AssertionError("unreachable")
 

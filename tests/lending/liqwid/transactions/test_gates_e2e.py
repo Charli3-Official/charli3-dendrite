@@ -30,6 +30,7 @@ from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow import build_borrow
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import IncreaseSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import build_increase
+from charli3_dendrite.lending.liqwid.transactions.builder import LiqwidTxBuilder
 from charli3_dendrite.lending.liqwid.transactions.collateral import CollateralSnapshot
 from charli3_dendrite.lending.liqwid.transactions.collateral import build_collateral
 from charli3_dendrite.lending.liqwid.transactions.combos import (
@@ -44,6 +45,7 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_borrow,
 )
+from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
 from charli3_dendrite.lending.liqwid.transactions.supply import RedeemSnapshot
@@ -53,9 +55,13 @@ from charli3_dendrite.lending.liqwid.transactions.supply import build_supply
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_burn_for
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_payout
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
+from charli3_dendrite.lending.transactions.base import ActionParams
+from charli3_dendrite.lending.transactions.base import LendingAction
 from charli3_dendrite.lending.transactions.errors import OgmiosEvaluationError
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
+from charli3_dendrite.lending.units import out_ref_text
+from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.replay import Mutation
 from tests.lending.liqwid.transactions.replay import add_reference
 from tests.lending.liqwid.transactions.replay import block_slot
@@ -498,3 +504,67 @@ def test_a_whole_balance_redeem_below_the_market_minimum_is_refused():
         else:
             failed = _refused("redeem_ada", snapshot=whole, extra=(wallet,))
             assert failed == ["mint"]
+
+
+# --- a spent input ---------------------------------------------------------------
+
+
+def _withheld_input(label: str, role: str) -> str:
+    """The out-ref of ``label``'s ``role`` input: its action UTxO, loan or wallet."""
+    _, snapshot, _ = _capture(label)
+    if role == "action":
+        return snapshot.action.out_ref
+    if role == "loan":
+        return out_ref_text(snapshot.loan.utxo.out_ref)
+    return out_ref_text(snapshot.funding[0].out_ref)
+
+
+@pytest.mark.parametrize(
+    ("label", "role"),
+    [
+        ("supply_ada", "action"),
+        ("supply_ada", "wallet"),
+        ("increase_ada", "action"),
+        ("increase_ada", "loan"),
+    ],
+)
+def test_an_input_missing_from_the_utxo_set_is_named(label, role):
+    """An input Ogmios does not hold is read back from its error.
+
+    The capture is evaluated with every captured UTxO but one supplied. Ogmios
+    answers with a script failure (3010) whose per-validator errors carry a 3004
+    naming the input "missing from UTxO set"; `missing_inputs` reads exactly it.
+    """
+    fix, snapshot, build_flow = _capture(label)
+    withheld = _withheld_input(label, role)
+    built = build(build_flow, snapshot, slot=block_slot(fix))
+    utxos = [u for u in fixture_utxos(fix) if out_ref_text(u.out_ref) != withheld]
+    with pytest.raises(OgmiosEvaluationError) as info:
+        evaluate(built, utxos)
+    assert info.value.code == SCRIPT_FAILURE, info.value
+    assert {out_ref_text(ref) for ref in info.value.missing_inputs()} == {withheld}
+
+
+def test_a_spent_action_utxo_raises_action_utxo_spent_error():
+    """`build_and_evaluate` names a chosen action UTxO the ledger no longer holds.
+
+    The supply is resolved from the capture's records and evaluated as a live
+    build is: only the wallet funding is supplied. Ogmios holds no copy of the
+    captured action UTxO, long spent by a batch, and the evaluation maps to
+    `ActionUtxoSpentError` naming it.
+    """
+    fix = fixture("supply_ada")
+    _, snapshot, _ = _capture("supply_ada")
+    wallet = snapshot.funding[0].address
+    builder = LiqwidTxBuilder()
+    with pytest.raises(ActionUtxoSpentError) as info:
+        builder.build_and_evaluate(
+            backend=capture_backend(fix),
+            market_name="Ada",
+            action=LendingAction.DEPOSIT,
+            params=ActionParams(actor_address=wallet, amount=100_000_000),
+        )
+    assert info.value.out_ref == snapshot.action.out_ref
+    cause = info.value.__cause__
+    assert isinstance(cause, OgmiosEvaluationError)
+    assert cause.code == SCRIPT_FAILURE

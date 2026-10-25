@@ -43,6 +43,39 @@ _MISSING = {
     "data": {},
 }
 
+# The body Ogmios returns for a transaction with redeemers and one input missing
+# from its UTxO set: a script failure whose per-validator errors carry the 3004.
+_NESTED_MISSING = {
+    "code": 3010,
+    "message": "Some scripts of the transactions terminated with error(s).",
+    "data": [
+        {
+            "validator": {"index": 1, "purpose": "spend"},
+            "error": {
+                "code": 3110,
+                "message": "Extraneous (non-required) redeemers found in the transaction.",
+                "data": {"extraneousRedeemers": [{"index": 1, "purpose": "spend"}]},
+            },
+        },
+        {
+            "validator": {"index": 0, "purpose": "mint"},
+            "error": {
+                "code": 3004,
+                "message": (
+                    "Unable to create the evaluation context from the given "
+                    "transaction."
+                ),
+                "data": {
+                    "reason": (
+                        "Unknown transaction input (missing from UTxO set): "
+                        f"{_TX_C}#4"
+                    ),
+                },
+            },
+        },
+    ],
+}
+
 _RESULT = [
     {"validator": {"index": 0, "purpose": "withdraw"}, "budget": {"memory": 1}},
 ]
@@ -139,15 +172,42 @@ def test_missing_inputs_reads_the_data_text_too():
     )
 
 
-def test_missing_inputs_ignores_refs_before_the_marker_and_other_codes():
+def test_missing_inputs_ignores_refs_before_the_marker():
     body = {
         "code": 3004,
         "message": f"input {_TX_A}#1 is fine; missing from UTxO set: {_TX_C}#2",
     }
     assert OgmiosEvaluationError(body).missing_inputs() == frozenset({(_TX_C, 2)})
-    assert OgmiosEvaluationError(dict(_MISSING, code=3010)).missing_inputs() == (
-        frozenset()
+
+
+def test_missing_inputs_reads_a_3004_nested_in_a_script_failure():
+    error = OgmiosEvaluationError(_NESTED_MISSING)
+    assert error.code == 3010
+    assert error.missing_inputs() == frozenset({(_TX_C, 4)})
+
+
+def test_missing_inputs_reads_every_nested_error():
+    body = {
+        "code": 3010,
+        "message": "Some scripts of the transactions terminated with error(s).",
+        "data": [
+            {
+                "validator": {"index": i, "purpose": "spend"},
+                "error": {
+                    "code": 3004,
+                    "data": {"reason": f"missing from UTxO set: {tx}#{i}"},
+                },
+            }
+            for i, tx in enumerate([_TX_A, _TX_B])
+        ],
+    }
+    assert OgmiosEvaluationError(body).missing_inputs() == frozenset(
+        {(_TX_A, 0), (_TX_B, 1)},
     )
+
+
+def test_missing_inputs_is_empty_for_a_script_failure_naming_no_input():
+    assert OgmiosEvaluationError(_WITHDRAW_FAILURE).missing_inputs() == frozenset()
 
 
 class _Response:
@@ -213,12 +273,12 @@ def test_evaluate_retries_once_without_the_overlapping_entries(monkeypatch):
 def test_evaluate_raises_when_the_retry_fails(monkeypatch):
     sent = _fake_post(
         monkeypatch,
-        [{"error": _OVERLAPPING}, {"error": _MISSING}],
+        [{"error": _OVERLAPPING}, {"error": _NESTED_MISSING}],
     )
     with pytest.raises(OgmiosEvaluationError) as raised:
         evaluate_tx_cbor("84", [_entry(_TX_A, 0), _entry(_TX_C, 2)])
-    assert raised.value.code == 3004
-    assert raised.value.missing_inputs() == frozenset({(_TX_C, 2)})
+    assert raised.value.code == 3010
+    assert raised.value.missing_inputs() == frozenset({(_TX_C, 4)})
     assert len(sent) == 2
 
 

@@ -10,8 +10,8 @@ callers catching either type or matching that text keep working.
 
 from __future__ import annotations
 
-import json
 import re
+from collections.abc import Iterator
 from collections.abc import Mapping
 from typing import Any
 
@@ -28,7 +28,8 @@ __all__ = [
 OVERLAPPING_ADDITIONAL_UTXO = 3002
 
 # Ogmios v6: the evaluation context could not be created, e.g. an input is not in
-# the ledger's UTxO set (already spent or never created).
+# the ledger's UTxO set (already spent or never created). It comes back as the
+# top-level code, or nested in a script failure's per-validator errors.
 CANNOT_CREATE_EVALUATION_CONTEXT = 3004
 
 _MISSING_MARKER = "missing from UTxO set"
@@ -79,22 +80,17 @@ class OgmiosEvaluationError(LendingBuildError, AssertionError):
         )
 
     def missing_inputs(self) -> frozenset[tuple[str, int]]:
-        """The out-refs a 3004 reports missing from the UTxO set; empty otherwise.
+        """The out-refs the error reports missing from the UTxO set.
 
         Reads every ``<tx id>#<index>`` that follows ``missing from UTxO set`` in
-        the error's message and in its data.
+        any text of the error: its message, and every string within its data,
+        whatever the top-level code. A transaction whose only fault is a missing
+        input comes back as a 3004 naming it in the message; one with redeemers
+        comes back as a script failure (3010) whose per-validator ``error`` is a
+        3004 naming it in ``data.reason``.
         """
-        if self.code != CANNOT_CREATE_EVALUATION_CONTEXT:
-            return frozenset()
-        texts = [self.reason or ""]
-        if self.data is not None:
-            texts.append(
-                self.data
-                if isinstance(self.data, str)
-                else json.dumps(self.data, default=str),
-            )
         refs: set[tuple[str, int]] = set()
-        for text in texts:
+        for text in _texts(self.reason, self.data):
             start = text.find(_MISSING_MARKER)
             if start < 0:
                 continue
@@ -102,3 +98,16 @@ class OgmiosEvaluationError(LendingBuildError, AssertionError):
                 (m.group(1), int(m.group(2))) for m in _OUT_REF_RE.finditer(text, start)
             )
         return frozenset(refs)
+
+
+def _texts(*values: Any) -> Iterator[str]:  # noqa: ANN401
+    """Every string in ``values``, descending into mappings and sequences."""
+    stack = list(values)
+    while stack:
+        value = stack.pop()
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, Mapping):
+            stack.extend(value.values())
+        elif isinstance(value, (list, tuple)):
+            stack.extend(value)
