@@ -392,9 +392,7 @@ def test_constructed_deployment_indexes_its_markets():
 
 
 def test_refresh_script_trim_is_idempotent_on_the_snapshot():
-    spec = importlib.util.spec_from_file_location("_refresh_registry", REFRESH_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _refresh_module()
     bundled = _bundled()
     raw = json.dumps(bundled).encode()
     trimmed = module.trim(raw)
@@ -1302,7 +1300,7 @@ def _needed_hashes(market: MarketComponents, params: Any) -> set[str]:
 
 
 def _ref_utxo(out_ref: str) -> Any:
-    from charli3_dendrite.lending.fluidtokens.transactions.utxos import Utxo
+    from charli3_dendrite.lending.transactions.utxos import Utxo
 
     tx_hash, index = out_ref.split("#")
     return Utxo(
@@ -1544,6 +1542,21 @@ def test_a_mismatched_reference_utxo_is_one_reference_finding(
     findings = check_deployment([info], reference_utxos=utxos)
     assert _keys(findings) == [("reference", "Ada", "actions", script_hash)]
     assert findings[0].detail == f"reference UTxO {ref} hashes to {UNKNOWN}"
+
+
+def test_a_reference_utxo_without_a_script_is_one_reference_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    info, _, _ = _ada_live_params()
+    utxos, hashes = _ada_reference_set()
+    _hashes_by_out_ref(monkeypatch, hashes)
+    script_hash, ref, _ = ADA_REFERENCE_UTXOS["action"]
+    for utxo in utxos:
+        if f"{utxo.out_ref[0]}#{utxo.out_ref[1]}" == ref:
+            utxo.ref_script = None
+    findings = check_deployment([info], reference_utxos=utxos)
+    assert _keys(findings) == [("reference", "Ada", "actions", script_hash)]
+    assert findings[0].detail == f"reference UTxO {ref} carries no script"
 
 
 def test_reference_check_names_each_user_flow_component(

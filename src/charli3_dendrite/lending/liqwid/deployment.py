@@ -936,6 +936,8 @@ def _reference_finding(
     utxo = references.get(bundled)
     if utxo is None:
         return f"reference UTxO {bundled} not found unspent"
+    if not utxo.ref_script:
+        return f"reference UTxO {bundled} carries no script"
     try:
         held = _script_hash_of(utxo)
     except ValueError as exc:
