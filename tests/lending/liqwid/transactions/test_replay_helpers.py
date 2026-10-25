@@ -43,6 +43,8 @@ from tests.lending.liqwid.transactions.replay import captured_reference_inputs
 from tests.lending.liqwid.transactions.replay import captured_required_signers
 from tests.lending.liqwid.transactions.replay import captured_validity
 from tests.lending.liqwid.transactions.replay import captured_withdrawals
+from tests.lending.liqwid.transactions.live import dbsync_backend
+from tests.lending.liqwid.transactions.live import dsn_parts
 from tests.lending.liqwid.transactions.replay import dbsync_connect_kwargs
 from tests.lending.liqwid.transactions.replay import detach_scripts
 from tests.lending.liqwid.transactions.replay import fixture
@@ -117,6 +119,46 @@ def test_without_a_dsn_the_parts_are_read(no_dbsync_env):
         "password": "secret",
         "connect_timeout": 30,
     }
+
+
+@pytest.fixture()
+def restored_dbsync_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    """No ``DBSYNC_*`` variable set; each is restored after the test."""
+    for name in DBSYNC_PARTS:
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    return monkeypatch
+
+
+def test_a_dsn_gives_the_backend_variables():
+    assert dsn_parts("postgresql://u:p@h:6543/db") == {
+        "DBSYNC_HOST": "h",
+        "DBSYNC_PORT": "6543",
+        "DBSYNC_DB_NAME": "db",
+        "DBSYNC_USER": "u",
+        "DBSYNC_PASS": "p",
+    }
+    assert dsn_parts("postgresql://h/db")["DBSYNC_PORT"] == "5432"
+
+
+def test_the_live_backend_reads_the_dsn(restored_dbsync_env):
+    restored_dbsync_env.setenv("DBSYNC_DSN", '"postgresql+asyncpg://u:p@h:6543/db"')
+    backend = dbsync_backend()
+    assert (
+        backend.DBSYNC_HOST,
+        backend.DBSYNC_PORT,
+        backend.DBSYNC_DB_NAME,
+        backend.DBSYNC_USER,
+        backend.DBSYNC_PASS,
+    ) == ("h", "6543", "db", "u", "p")
+    assert backend.POOL is None  # nothing is connected until the first query
+
+
+def test_without_a_dsn_the_live_backend_reads_the_parts(restored_dbsync_env):
+    restored_dbsync_env.setenv("DBSYNC_HOST", "db.example")
+    restored_dbsync_env.setenv("DBSYNC_USER", "reader")
+    backend = dbsync_backend()
+    assert (backend.DBSYNC_HOST, backend.DBSYNC_USER) == ("db.example", "reader")
 
 
 # --- fixture loading ------------------------------------------------------------

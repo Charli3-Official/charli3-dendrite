@@ -18,6 +18,7 @@ import copy
 import dataclasses
 import functools
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -33,13 +34,29 @@ from typing import NamedTuple
 import cbor2
 import pytest
 from pycardano import Address
+from pycardano import Asset
+from pycardano import MultiAsset
+from pycardano import RawCBOR
+from pycardano import ScriptHash
 from pycardano import Transaction
 from pycardano import TransactionBuilder
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
+from pycardano import UTxO
+from pycardano import Value
+from pycardano import script_hash
 
+from charli3_dendrite.lending.liqwid.datums import datum_style
+from charli3_dendrite.lending.liqwid.datums import decode_action
+from charli3_dendrite.lending.liqwid.datums import decode_loan
+from charli3_dendrite.lending.liqwid.datums import encode_action_datum
+from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.infra import assemble_unsigned
+from charli3_dendrite.lending.transactions.infra import evaluate_tx_cbor
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import ogmios_entry
+from charli3_dendrite.lending.transactions.utxos import to_pycardano_utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 from charli3_dendrite.utility import posix_ms_to_slot
 
@@ -48,6 +65,8 @@ TXS_FILE = "txs.json.gz"
 SCRIPTS_FILE = "scripts.json.gz"
 # Redeemer tags as dbsync names the purposes.
 _PURPOSE = {0: "spend", 1: "mint", 2: "cert", 3: "reward", 4: "vote", 5: "propose"}
+# The dbsync purposes Ogmios names differently.
+_OGMIOS_PURPOSE = {"reward": "withdraw", "cert": "publish"}
 _UTXO_LISTS = ("inputs", "outputs", "ref_inputs")
 _DRIVER_DSN = re.compile(r"^postgres(?:ql)?\+[^:/]+://")
 
@@ -244,6 +263,252 @@ def build(
     tx_builder = TransactionBuilder(EvalContext(last_block_slot=slot))
     contribute(tx_builder, snapshot=snapshot)
     return Built(assemble_unsigned(tx_builder))
+
+
+# --- Ogmios evaluation ----------------------------------------------------------
+
+
+def evaluate(built: Built, utxos: Iterable[Utxo]) -> list[str]:
+    """Ogmios-evaluate ``built`` with ``utxos`` supplied; the sorted redeemer purposes.
+
+    Every script must succeed with a positive budget. An entry Ogmios still holds
+    on its ledger is dropped and resolved there (the seam's retry).
+    """
+    budgets = evaluate_tx_cbor(built.cbor, ogmios_entries(utxos))
+    for budget in budgets:
+        assert budget["budget"]["memory"] > 0
+        assert budget["budget"]["cpu"] > 0
+    return sorted(b["validator"]["purpose"] for b in budgets)
+
+
+def captured_purposes(fix: dict[str, Any]) -> list[str]:
+    """The sorted redeemer purposes of a capture, as Ogmios names them."""
+    return sorted(
+        _OGMIOS_PURPOSE.get(r["purpose"], r["purpose"]) for r in fix["redeemers"]
+    )
+
+
+def synthetic_utxo(
+    seed: str,
+    *,
+    address: str,
+    lovelace: int,
+    assets: Iterable[tuple[str, str, int]] = (),
+    datum: str | None = None,
+) -> Utxo:
+    """A UTxO at an out-ref no ledger holds, derived from ``seed``.
+
+    Ogmios resolves it only from ``additionalUtxo``, so a changed copy of a record
+    or a made-up wallet input is evaluated as given, whatever the ledger holds.
+    """
+    tx_hash = hashlib.blake2b(seed.encode(), digest_size=32).hexdigest()
+    return Utxo(
+        address=address,
+        lovelace=lovelace,
+        assets=list(assets),
+        datum=datum,
+        out_ref=(tx_hash, 0),
+    )
+
+
+# --- mutations ------------------------------------------------------------------
+
+# A change applied to a builder after a flow's legs, before assembly.
+Mutation = Callable[[TransactionBuilder], None]
+
+
+def mutated(
+    contribute: Callable[..., None],
+    *mutations: Mutation,
+) -> Callable[..., None]:
+    """``contribute`` followed by ``mutations``, in order (a :func:`build` argument)."""
+
+    def run(tx_builder: TransactionBuilder, *, snapshot: object) -> None:
+        contribute(tx_builder, snapshot=snapshot)
+        for mutation in mutations:
+            mutation(tx_builder)
+
+    return run
+
+
+def _credential_of(output: TransactionOutput) -> str | None:
+    payment = output.address.payment_part
+    return None if payment is None else payment.payload.hex()
+
+
+def output_index(tx_builder: TransactionBuilder, credential: str) -> int:
+    """The index of the one output at payment ``credential``."""
+    (index,) = (
+        i
+        for i, output in enumerate(tx_builder.outputs)
+        if _credential_of(output) == credential
+    )
+    return index
+
+
+def _datum_bytes(output: TransactionOutput) -> bytes:
+    datum = output.datum
+    assert isinstance(datum, RawCBOR), f"no inline datum on {output}"
+    return bytes(datum.cbor)
+
+
+def _with_value(
+    output: TransactionOutput,
+    lovelace: int,
+    multi_asset: MultiAsset,
+) -> TransactionOutput:
+    return TransactionOutput(
+        output.address,
+        Value(lovelace, multi_asset),
+        datum=output.datum,
+    )
+
+
+def change_datum(credential: str, change: Callable[[bytes], bytes]) -> Mutation:
+    """Rewrite the inline datum of the output at ``credential`` with ``change``."""
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        index = output_index(tx_builder, credential)
+        output = tx_builder.outputs[index]
+        tx_builder.outputs[index] = TransactionOutput(
+            output.address,
+            output.amount,
+            datum=RawCBOR(change(_datum_bytes(output))),
+        )
+
+    return run
+
+
+def shift_loan_datum(credential: str, **shifts: int) -> Mutation:
+    """Add ``shifts`` (LoanDatum field -> amount) to the loan output's record."""
+
+    def change(datum: bytes) -> bytes:
+        loan = decode_loan(datum)
+        fields = {name: getattr(loan, name) + by for name, by in shifts.items()}
+        indefinite = datum_style(datum) == "indefinite"
+        return encode_loan_datum(
+            dataclasses.replace(loan, **fields),
+            indefinite=indefinite,
+        )
+
+    return change_datum(credential, change)
+
+
+def shift_action_datum(credential: str, **shifts: int) -> Mutation:
+    """Add ``shifts`` (ActionDatum field -> amount) to the action output's record."""
+
+    def change(datum: bytes) -> bytes:
+        action = decode_action(datum)
+        fields = {name: getattr(action, name) + by for name, by in shifts.items()}
+        indefinite = datum_style(datum) == "indefinite"
+        return encode_action_datum(
+            dataclasses.replace(action, **fields),
+            indefinite=indefinite,
+        )
+
+    return change_datum(credential, change)
+
+
+def shift_value(
+    credential: str,
+    *,
+    lovelace: int = 0,
+    assets: dict[str, int] | None = None,
+) -> Mutation:
+    """Add ``lovelace`` and ``assets`` (unit -> quantity) to the output at ``credential``."""
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        index = output_index(tx_builder, credential)
+        output = tx_builder.outputs[index]
+        multi_asset = output.amount.multi_asset
+        for unit, qty in (assets or {}).items():
+            multi_asset = multi_asset + MultiAsset.from_primitive(
+                {bytes.fromhex(unit[:56]): {bytes.fromhex(unit[56:]): qty}},
+            )
+        tx_builder.outputs[index] = _with_value(
+            output,
+            output.amount.coin + lovelace,
+            multi_asset,
+        )
+
+    return run
+
+
+def set_upper_bound_ms(upper_ms: int | None) -> Mutation:
+    """Replace the upper validity bound by the slot holding ``upper_ms`` (None: none)."""
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        tx_builder.ttl = None if upper_ms is None else posix_ms_to_slot(upper_ms)
+
+    return run
+
+
+def drop_required_signers(tx_builder: TransactionBuilder) -> None:
+    """Require no signature."""
+    tx_builder.required_signers = None
+
+
+def add_reference(utxo: Utxo) -> Mutation:
+    """Reference ``utxo`` as well."""
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        tx_builder.reference_inputs.add(to_pycardano_utxo(utxo))
+
+    return run
+
+
+def _reference_ref(member: UTxO | TransactionInput) -> tuple[str, int]:
+    tx_input = member.input if isinstance(member, UTxO) else member
+    return bytes(tx_input.transaction_id).hex(), tx_input.index
+
+
+def replace_reference(out_ref: tuple[str, int], utxo: Utxo | None) -> Mutation:
+    """Stop referencing ``out_ref``; reference ``utxo`` in its place when given."""
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        (member,) = (
+            m for m in tx_builder.reference_inputs if _reference_ref(m) == out_ref
+        )
+        tx_builder.reference_inputs.discard(member)
+        if utxo is not None:
+            tx_builder.reference_inputs.add(to_pycardano_utxo(utxo))
+
+    return run
+
+
+def keep_loan_token(policy: str) -> Mutation:
+    """Undo the loan-token change: no mint of ``policy``, the loan keeps its name.
+
+    The burnt name replaces the minted one in every output and the policy's
+    script leaves the mint.
+    """
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        key = ScriptHash(bytes.fromhex(policy))
+        assert tx_builder.mint is not None
+        tokens = tx_builder.mint[key]
+        (burnt,) = (name for name, qty in tokens.items() if qty == -1)
+        (minted,) = (name for name, qty in tokens.items() if qty == 1)
+        rest = {k: v for k, v in tx_builder.mint.items() if k != key}
+        tx_builder.mint = MultiAsset(rest) if rest else None
+        tx_builder._minting_script_to_redeemers = [
+            (script, redeemer)
+            for script, redeemer in tx_builder._minting_script_to_redeemers
+            if script_hash(script) != key
+        ]
+        for index, output in enumerate(tx_builder.outputs):
+            held = output.amount.multi_asset.get(key)
+            if held is None or minted not in held:
+                continue
+            renamed = MultiAsset(dict(output.amount.multi_asset))
+            renamed[key] = Asset({burnt: 1})
+            tx_builder.outputs[index] = _with_value(
+                output,
+                output.amount.coin,
+                renamed,
+            )
+
+    return run
 
 
 # --- raw CBOR -------------------------------------------------------------------
