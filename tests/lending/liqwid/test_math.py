@@ -184,6 +184,34 @@ def test_payoff_is_the_indexed_debt_floored_at_the_min_interest():
     assert lqm.payoff(_loan(500, 5, 1, 0), 7) == 505
 
 
+# The Ada partial repay 1478680fb708a213a7c52cda8eefa81221a3e66c74a6f6b5abdac65403930e16
+# spends a loan rebased above the batched index: owed P + I = 5,106,691,516
+# (I = 611,618) indexes down to 5,106,691,513. The loan and market indexes below are
+# chosen to reproduce that rounding.
+CLAMP_OWED = 5_106_691_516
+CLAMP_INTEREST = 611_618
+CLAMP_INDEXED = 5_106_691_513
+CLAMP_LOAN_INDEX = 19_763_163_700_000_000
+CLAMP_MARKET_INDEX = 19_763_163_688_389_842
+
+
+def test_indexed_debt_is_clamped_at_the_owed_amount():
+    principal = CLAMP_OWED - CLAMP_INTEREST
+    loan = _loan(principal, CLAMP_INTEREST, 0, CLAMP_LOAN_INDEX)
+    assert CLAMP_LOAN_INDEX > CLAMP_MARKET_INDEX
+    indexed = lending_math.ceil_div(CLAMP_OWED * CLAMP_MARKET_INDEX, CLAMP_LOAN_INDEX)
+    assert indexed == CLAMP_INDEXED < CLAMP_OWED
+    assert lqm.liquidation_debt(loan, CLAMP_MARKET_INDEX) == CLAMP_OWED
+    assert lqm.payoff(loan, CLAMP_MARKET_INDEX) == CLAMP_OWED
+    assert lqm.liquidation_repay(loan, CLAMP_MARKET_INDEX, Fraction(1)) == CLAMP_OWED
+    # the min-interest floor still binds above the clamp
+    floored = _loan(principal, CLAMP_INTEREST, 700_000, CLAMP_LOAN_INDEX)
+    assert lqm.payoff(floored, CLAMP_MARKET_INDEX) == principal + 700_000
+    # a loan index at or below the market index is unaffected
+    assert lqm.liquidation_debt(_loan(1_000, 0, 0, 7), 7) == 1_000
+    assert lqm.liquidation_debt(_loan(1_000, 0, 0, 7), 8) == 1_143
+
+
 def test_health_and_ltv_weigh_value_against_debt():
     holdings = [
         lqm.WeightedHolding(
@@ -230,6 +258,64 @@ def test_liquidation_repay_and_seized_value():
         lqm.liquidation_repay(loan, 1, Fraction(0))
     with pytest.raises(ValueError, match="discount"):
         lqm.seized_value(900, Fraction(0))
+
+
+# The NIGHT liquidation
+# 3e4347ff93478d3420e951a037d92e5fb1bbd15795555303d96ff7341c00385e repays
+# 6,500,325,441 against qAda collateral: NIGHT at 52213/1000000 and Ada at
+# 41037/100000 per base unit, CollateralParams field 2 = 9/10, qAda rate s9 below.
+NIGHT_REPAY = 6_500_325_441
+NIGHT_PRICE = Fraction(52_213, 1_000_000)
+QADA_RATE = Fraction(53_961_680_541_062, 2_555_801_649_501_385)
+ADA_PRICE = Fraction(41_037, 100_000)
+
+
+def test_seized_qtokens_is_the_repaid_value_over_the_discounted_collateral_value():
+    seized = lqm.seized_qtokens(
+        NIGHT_REPAY,
+        borrow_price=NIGHT_PRICE,
+        discount=Fraction(9, 10),
+        rate=QADA_RATE,
+        price=ADA_PRICE,
+    )
+    assert seized == 43_524_853_028
+    # seized_value in qTokens, rounded down
+    value = lqm.seized_value(NIGHT_REPAY, Fraction(9, 10)) * NIGHT_PRICE
+    assert seized == value // (QADA_RATE * ADA_PRICE)
+    assert "seized_qtokens" in lqm.__all__
+
+
+def test_seized_qtokens_refuses_a_discount_as_seized_value_does():
+    with pytest.raises(ValueError) as qtokens:
+        lqm.seized_qtokens(
+            900,
+            borrow_price=Fraction(1),
+            discount=Fraction(0),
+            rate=Fraction(1),
+            price=Fraction(1),
+        )
+    with pytest.raises(ValueError) as value:
+        lqm.seized_value(900, Fraction(0))
+    assert str(qtokens.value) == str(value.value)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["repay", "borrow_price", "discount", "rate", "price"],
+)
+@pytest.mark.parametrize("value", [0, -1])
+def test_seized_qtokens_rejects_non_positive_inputs(bad, value):
+    args: dict[str, Any] = {
+        "repay": 900,
+        "borrow_price": Fraction(1),
+        "discount": Fraction(9, 10),
+        "rate": Fraction(1),
+        "price": Fraction(1),
+    }
+    args[bad] = value if bad == "repay" else Fraction(value)
+    repay = args.pop("repay")
+    with pytest.raises(ValueError, match=bad.replace("_", " ")):
+        lqm.seized_qtokens(repay, **args)
 
 
 def test_borrow_headroom_is_the_shared_implementation():
@@ -636,6 +722,16 @@ def test_partial_liquidation_repays_the_close_factor_and_seizes_at_the_discount(
     seized_qtokens = old_assets[QEURC] - new_assets[QEURC]
     assert seized_qtokens == 1_222_321_951
     assert seized * USDC_USD / (QEURC_RATE * EURC_USD) // 1 == seized_qtokens
+    assert (
+        lqm.seized_qtokens(
+            repay,
+            borrow_price=USDC_USD,
+            discount=QEURC_REPAID_SHARE,
+            rate=QEURC_RATE,
+            price=EURC_USD,
+        )
+        == seized_qtokens
+    )
 
 
 def test_required_collateral_reaches_the_borrow_health_floor(markets, book):

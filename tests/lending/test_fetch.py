@@ -77,6 +77,22 @@ def test_keeps_the_first_row_of_each_out_ref():
     assert found[0] is first
 
 
+class AssetBackend(Backend):
+    """A :class:`Backend` that also takes the ``assets`` filter and records it."""
+
+    def get_pool_utxos(self, addresses, assets=None, limit=1000, page=0, **kw):
+        self.assets = assets
+        return super().get_pool_utxos(addresses, limit, page, **kw)
+
+
+def test_passes_an_asset_filter_to_the_backend():
+    rows = [_row("a", 0)]
+    backend = AssetBackend(rows)
+    assert unspent_utxos(backend, ADDRESS, assets=("p1",)) == rows
+    assert backend.assets == ["p1"]
+    assert backend.calls == [((ADDRESS,), PAGE_SIZE, 0, False)]
+
+
 def test_resolve_now_ms_keeps_a_given_time():
     assert resolve_now_ms(1_790_000_000_000) == 1_790_000_000_000
     assert resolve_now_ms(0) == 0

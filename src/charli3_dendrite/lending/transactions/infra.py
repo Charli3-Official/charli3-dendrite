@@ -4,8 +4,8 @@ This is the shared seam the per-protocol lending builders reuse: a network-free
 chain context (`EvalContext`) for `min_lovelace` + the validity slot, manual
 (no-balancing) transaction assembly (`assemble_unsigned`), slot/out-ref helpers,
 an Ogmios ``additionalUtxo`` builder, and the Ogmios ``evaluateTransaction``
-client (`evaluate_tx_cbor`). Nothing here is protocol-specific and nothing signs
-or submits.
+client (`evaluate_tx_cbor`, raising `OgmiosEvaluationError`). Nothing here is
+protocol-specific and nothing signs or submits.
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from pycardano import UTxO
 from pycardano.backend.base import ChainContext
 from pycardano.backend.base import GenesisParameters
 
+from charli3_dendrite.lending.transactions.errors import OgmiosEvaluationError
 from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR
 from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR_MS
 
@@ -221,11 +222,11 @@ def ogmios_http_url() -> str:
     return f"http://{host}:{port}"
 
 
-def evaluate_tx_cbor(
+def _post_evaluate(
     tx_cbor: str,
     additional_utxo: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Return Ogmios per-redeemer execution budgets, or raise on validation failure."""
+) -> dict[str, Any]:
+    """POST one Ogmios ``evaluateTransaction`` request and return the JSON body."""
     payload = {
         "jsonrpc": "2.0",
         "method": "evaluateTransaction",
@@ -235,7 +236,43 @@ def evaluate_tx_cbor(
         },
     }
     resp = requests.post(ogmios_http_url(), json=payload, timeout=_EVAL_TIMEOUT_S)
-    body = resp.json()
+    body: dict[str, Any] = resp.json()
+    return body
+
+
+def additional_utxo_out_ref(entry: dict[str, Any]) -> tuple[str, int] | None:
+    """An Ogmios ``additionalUtxo`` entry's ``(tx id, index)``, or None without one."""
+    transaction = entry.get("transaction")
+    if not isinstance(transaction, dict) or "id" not in transaction:
+        return None
+    if "index" not in entry:
+        return None
+    return transaction["id"], int(entry["index"])
+
+
+def evaluate_tx_cbor(
+    tx_cbor: str,
+    additional_utxo: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return Ogmios per-redeemer execution budgets, or raise on validation failure.
+
+    Ogmios refuses an ``additionalUtxo`` entry its ledger still holds (error 3002,
+    which names those out-refs). On that error the named entries are dropped, so
+    Ogmios resolves them from its own ledger, and the request is sent once more;
+    the caller's list is left unchanged. Any other error, a 3002 naming no entry
+    that was sent, or an error on the second request raises `OgmiosEvaluationError`.
+    """
+    body = _post_evaluate(tx_cbor, additional_utxo)
     if "error" in body:
-        raise AssertionError(f"ogmios evaluate error: {body['error']}")
-    return body["result"]
+        error = OgmiosEvaluationError(body["error"])
+        overlapping = error.overlapping_refs()
+        kept = [
+            e for e in additional_utxo if additional_utxo_out_ref(e) not in overlapping
+        ]
+        if len(kept) == len(additional_utxo):
+            raise error
+        body = _post_evaluate(tx_cbor, kept)
+        if "error" in body:
+            raise OgmiosEvaluationError(body["error"])
+    result: list[dict[str, Any]] = body["result"]
+    return result

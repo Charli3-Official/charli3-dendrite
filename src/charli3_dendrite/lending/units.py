@@ -89,7 +89,12 @@ class OutRefSource(Protocol):
 
 def out_ref(info: OutRefSource) -> str:
     """``tx_hash#tx_index`` of a UTxO."""
-    return f"{info.tx_hash}#{info.tx_index}"
+    return out_ref_text((info.tx_hash, info.tx_index))
+
+
+def out_ref_text(key: tuple[str, int]) -> str:
+    """``tx_hash#index`` of a ``(tx_hash, index)`` pair, as `out_ref_key` reads it."""
+    return f"{key[0]}#{key[1]}"
 
 
 def out_ref_key(ref: str) -> tuple[str, int]:

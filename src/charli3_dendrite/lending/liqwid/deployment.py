@@ -7,7 +7,9 @@ with this package, is a trimmed snapshot of it:
 - ``scriptInfos``: the mainnet entries (tags ``liqwidMainnet``,
   ``liqwidMainnetLegacy`` and ``oracleMainnet``) of the component families listed in
   ``MARKET_FAMILIES`` and ``ORACLE_FAMILIES``, reduced to ``tag``, ``market``,
-  ``componentName``, ``name``, ``type`` and ``scriptHash``;
+  ``componentName``, ``name``, ``type``, ``scriptHash`` and, for a deployed script,
+  ``referenceUtxo`` (the out-ref, holder script hash and language of the UTxO that
+  carries it as a reference script; never the script bytes);
 - ``other.liqwidMainnetParams``: each market's ``marketDecimal`` and
   ``underlyingClass``;
 - ``handKept``: what the registry does not list, namely the credential of the
@@ -31,6 +33,8 @@ from collections.abc import Iterable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
+from enum import Enum
 from importlib.resources import files
 from typing import TYPE_CHECKING
 from typing import Any
@@ -43,11 +47,13 @@ from charli3_dendrite.lending.liqwid.datums import decode_market_params
 from charli3_dendrite.lending.liqwid.datums import field_count
 from charli3_dendrite.lending.units import out_ref
 from charli3_dendrite.lending.units import policy_of
+from charli3_dendrite.lending.units import script_payment_address
 from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR
 from charli3_dendrite.utility import MAINNET_SLOT_ANCHOR_MS
 
 if TYPE_CHECKING:
     from charli3_dendrite.dataclasses.models import PoolStateInfo
+    from charli3_dendrite.lending.transactions.utxos import Utxo
 
 REGISTRY_URL: Final[str] = "https://public.liqwid.finance/v6/registry.json"
 REGISTRY_RESOURCE: Final[str] = "registry_v6.json"
@@ -83,6 +89,7 @@ MARKET_FAMILIES: Final[Mapping[tuple[str, str], str]] = {
     ("Borrow", "MintingPolicy"): "borrow_policy",
     ("NewBorrow", "MintingPolicy"): "new_borrow_policy",
     ("Liquidation", "MintingPolicy"): "liquidation_policy",
+    ("Action", "MintingPolicy"): "action_token_policy",
     ("MarketState", "Validator"): "market_state_validators",
     ("AnastasiaAuditMarketState", "Validator"): "market_state_validators",
     ("Loan", "Validator"): "loan_validators",
@@ -115,6 +122,7 @@ _SINGLE_FIELDS: Final[tuple[str, ...]] = (
     "borrow_policy",
     "new_borrow_policy",
     "liquidation_policy",
+    "action_token_policy",
 )
 _REQUIRED_FIELDS: Final[tuple[str, ...]] = _SINGLE_FIELDS[:4]
 _TUPLE_FIELDS: Final[tuple[str, ...]] = (
@@ -135,7 +143,8 @@ class MarketComponents:
 
     Hashes are 56-hex blake2b-224 digests. Tuples hold every generation the
     snapshot lists, in snapshot order; ``market_state_validators`` starts with the
-    market's launch validator when it had one.
+    market's launch validator when it had one. ``action_token_policy`` is the
+    policy of the tokens that mark the market's action UTxOs.
     """
 
     name: str
@@ -156,6 +165,7 @@ class MarketComponents:
     actions: tuple[str, ...]
     batches: tuple[str, ...]
     batch_finals: tuple[str, ...]
+    action_token_policy: str | None = None
 
     @property
     def market_id(self) -> str:
@@ -190,8 +200,70 @@ class OracleValidator:
 
 
 @dataclass(frozen=True)
+class ReferenceUtxo:
+    """The UTxO that carries a script as a reference script.
+
+    ``out_ref`` is ``tx_hash#index``; ``address`` is the mainnet enterprise address
+    of the holder script; ``language`` is the dbsync script type (``plutusV2``).
+    """
+
+    out_ref: str
+    address: str
+    language: str
+
+
+class StakingRole(str, Enum):
+    """Which of a market's two MarketParams ``p[34]`` staking scripts."""
+
+    BORROW = "borrow"
+    LIQUIDATION = "liquidation"
+
+
+@dataclass(frozen=True)
+class StakingPair:
+    """A market's current borrow and liquidation staking script hashes."""
+
+    borrow: str
+    liquidation: str
+
+
+def staking_roles(market: MarketComponents, params: MarketParamsDatum) -> StakingPair:
+    """Classify the two ``p[34]`` staking scripts of a MarketParams record by role.
+
+    The datum order of the pair differs between markets, so each hash is placed by
+    membership in ``market.borrow_staking`` / ``market.liquidation_staking``.
+
+    Args:
+        market: the market the record configures.
+        params: its decoded MarketParams record.
+
+    Returns:
+        The borrow and liquidation staking script hashes.
+
+    Raises:
+        ValueError: when the record has no ``p[34]`` pair (a layout before list36)
+            or the pair is not exactly one borrow and one liquidation script of the
+            market.
+    """
+    pair = params.withdraw_zero
+    if pair is None:
+        msg = f"Liqwid market {market.name} MarketParams carries no staking pair"
+        raise ValueError(msg)
+    borrow = [h for h in pair if h in market.borrow_staking]
+    liquidation = [h for h in pair if h in market.liquidation_staking]
+    if len(borrow) != 1 or len(liquidation) != 1 or borrow == liquidation:
+        msg = (
+            f"Liqwid market {market.name} MarketParams staking pair {list(pair)} is"
+            " not one borrow and one liquidation staking script"
+        )
+        raise ValueError(msg)
+    return StakingPair(borrow=borrow[0], liquidation=liquidation[0])
+
+
+@dataclass(frozen=True)
 class _Index:
     by_id: dict[str, MarketComponents]
+    by_name: dict[str, MarketComponents]
     loan: dict[str, tuple[MarketComponents, str]]
     state: dict[str, MarketComponents]
     params: dict[str, MarketComponents]
@@ -207,9 +279,10 @@ def _put(index: dict[str, Any], key: str, value: object, what: str) -> None:
 
 
 def _build_index(markets: tuple[MarketComponents, ...]) -> _Index:
-    index = _Index({}, {}, {}, {}, {}, {})
+    index = _Index({}, {}, {}, {}, {}, {}, {})
     for market in markets:
         _put(index.by_id, market.market_id, market, "market id")
+        _put(index.by_name, market.name, market, "market name")
         _put(index.state, market.market_state_policy, market, "MarketState NFT")
         _put(index.params, market.market_params_policy, market, "MarketParams NFT")
         _put(
@@ -230,9 +303,12 @@ def _build_index(markets: tuple[MarketComponents, ...]) -> _Index:
 class LiqwidDeployment:
     """The Liqwid V2 mainnet deployment: every market and the shared scripts.
 
+    ``reference_utxos`` maps a script hash to the UTxO carrying it as a reference
+    script; it takes no part in equality or hashing.
+
     Raises:
-        ValueError: when two markets claim the same market id, NFT policy, qToken
-            policy or loan validator.
+        ValueError: when two markets claim the same market id, name, NFT policy,
+            qToken policy or loan validator.
     """
 
     markets: tuple[MarketComponents, ...]
@@ -240,6 +316,11 @@ class LiqwidDeployment:
     oracle_validators: tuple[OracleValidator, ...]
     oracle_token_policy: str
     _index: _Index = field(init=False, repr=False, compare=False)
+    reference_utxos: Mapping[str, ReferenceUtxo] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         """Index the markets by every identifier the reader looks them up by."""
@@ -252,6 +333,30 @@ class LiqwidDeployment:
             KeyError: when no market has that id.
         """
         return self._index.by_id[market_id]
+
+    def market_by_name(self, name: str) -> MarketComponents:
+        """The market whose registry name is ``name`` (``"Ada"``, ``"DJED"``, ...).
+
+        Raises:
+            KeyError: when no market has that name.
+        """
+        try:
+            return self._index.by_name[name]
+        except KeyError:
+            msg = f"no Liqwid market named {name!r}"
+            raise KeyError(msg) from None
+
+    def reference_utxo(self, script_hash: str) -> ReferenceUtxo:
+        """The UTxO carrying the script ``script_hash`` as a reference script.
+
+        Raises:
+            KeyError: when the deployment lists no reference UTxO for it.
+        """
+        try:
+            return self.reference_utxos[script_hash]
+        except KeyError:
+            msg = f"no Liqwid reference UTxO for script {script_hash}"
+            raise KeyError(msg) from None
 
     def market_of_loan_validator(
         self,
@@ -366,6 +471,7 @@ def _market_components(
         borrow_policy=singles.get("borrow_policy"),
         new_borrow_policy=singles.get("new_borrow_policy"),
         liquidation_policy=singles.get("liquidation_policy"),
+        action_token_policy=singles.get("action_token_policy"),
         market_state_validators=_distinct(lists["market_state_validators"]),
         legacy_loan_validators=_distinct(lists["legacy_loan_validators"]),
         new_loan_validators=_distinct(lists["new_loan_validators"]),
@@ -395,6 +501,70 @@ def _oracles(
     return tuple(OracleValidator(role, found[role]) for role in roles), token_policy
 
 
+def reference_utxo_entry(entry: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The flat ``referenceUtxo`` of a registry entry, None when it has none.
+
+    The published registry nests it under ``deployment.referenceUtxo``; the flat
+    form the bundled snapshot keeps is ``{"txId", "index", "holder", "language"}``
+    (``holder`` is the script hash of the address holding the UTxO, ``language``
+    the registry's script language, e.g. ``PlutusV2``). A flat entry comes back
+    unchanged.
+
+    Raises:
+        ValueError: when a published reference UTxO is not held at a bare script
+            address (a script payment credential and no staking credential).
+    """
+    flat = entry.get("referenceUtxo")
+    if flat is not None:
+        return dict(flat)
+    published = (entry.get("deployment") or {}).get("referenceUtxo")
+    if published is None:
+        return None
+    address = published["output"]["output"]["address"]
+    credential = address["addressCredential"]
+    if (
+        credential.get("tag") != "ScriptCredential"
+        or address.get("addressStakingCredential") is not None
+    ):
+        msg = (
+            f"Liqwid reference UTxO of script {entry.get('scriptHash')} is not held"
+            " at a bare script address"
+        )
+        raise ValueError(msg)
+    return {
+        "txId": published["input"]["transactionId"],
+        "index": int(published["input"]["index"]),
+        "holder": credential["contents"],
+        "language": published["output"]["scriptRef"]["contents"][1],
+    }
+
+
+def _reference_utxo(flat: Mapping[str, Any]) -> ReferenceUtxo:
+    language = str(flat["language"])
+    return ReferenceUtxo(
+        out_ref=f"{flat['txId']}#{int(flat['index'])}",
+        address=script_payment_address(flat["holder"]),
+        language=language[:1].lower() + language[1:],
+    )
+
+
+def _reference_utxos(entries: Iterable[Mapping[str, Any]]) -> dict[str, ReferenceUtxo]:
+    found: dict[str, ReferenceUtxo] = {}
+    for entry in entries:
+        flat = reference_utxo_entry(entry)
+        if flat is None:
+            continue
+        script_hash = entry["scriptHash"]
+        reference = _reference_utxo(flat)
+        if found.setdefault(script_hash, reference) != reference:
+            msg = (
+                f"Liqwid script {script_hash} has two reference UTxOs"
+                f" ({found[script_hash].out_ref}, {reference.out_ref})"
+            )
+            raise ValueError(msg)
+    return found
+
+
 @functools.lru_cache(maxsize=1)
 def _bundled_registry() -> Mapping[str, Any]:
     resource = files(__package__) / REGISTRY_RESOURCE
@@ -407,7 +577,9 @@ def load_deployment(data: Mapping[str, Any]) -> LiqwidDeployment:
     ``data`` is the bundled snapshot or a registry fetched from ``REGISTRY_URL``.
     Markets are the keys of ``other.liqwidMainnetParams``, sorted by name; script
     entries of other tags, families or markets are ignored. A document without a
-    ``handKept`` block (a fetched registry) takes the bundled snapshot's.
+    ``handKept`` block (a fetched registry) takes the bundled snapshot's. Each kept
+    entry's reference UTxO (flat or nested, see :func:`reference_utxo_entry`) lands
+    in ``reference_utxos`` under its script hash; equal duplicates collapse.
 
     Args:
         data: the registry document.
@@ -418,7 +590,8 @@ def load_deployment(data: Mapping[str, Any]) -> LiqwidDeployment:
     Raises:
         ValueError: when a market lacks a required NFT or qToken policy or lists
             two hashes for a single-hash family, an oracle role or the oracle token
-            is missing, or a launch validator names an unknown market.
+            is missing, a launch validator names an unknown market, or a script
+            has two different reference UTxOs.
         KeyError: when the document lacks ``scriptInfos`` or
             ``other.liqwidMainnetParams``.
     """
@@ -431,27 +604,33 @@ def load_deployment(data: Mapping[str, Any]) -> LiqwidDeployment:
         raise ValueError(msg)
     per_market: dict[str, list[Mapping[str, Any]]] = {name: [] for name in params}
     oracle_entries: list[Mapping[str, Any]] = []
+    kept: list[Mapping[str, Any]] = []
     for entry in data["scriptInfos"]:
         family = (entry.get("componentName"), entry.get("type"))
         if entry.get("tag") == ORACLE_TAG:
             oracle_entries.append(entry)
+            if family in ORACLE_FAMILIES or family == ORACLE_TOKEN_FAMILY:
+                kept.append(entry)
         elif (
             entry.get("tag") in MARKET_TAGS
             and entry.get("market") in per_market
             and family in MARKET_FAMILIES
         ):
             per_market[entry["market"]].append(entry)
+            kept.append(entry)
     oracle_validators, oracle_token_policy = _oracles(oracle_entries)
     markets = tuple(
         _market_components(name, params[name], per_market[name], launch.get(name))
         for name in sorted(params)
     )
-    return LiqwidDeployment(
+    deployment = LiqwidDeployment(
         markets=markets,
         param_credential=hand_kept["paramCredential"],
         oracle_validators=oracle_validators,
         oracle_token_policy=oracle_token_policy,
     )
+    # A market claimed twice is reported before any reference UTxO conflict.
+    return replace(deployment, reference_utxos=_reference_utxos(kept))
 
 
 @functools.lru_cache(maxsize=1)
@@ -467,7 +646,9 @@ def resolve_deployment(deployment: LiqwidDeployment | None = None) -> LiqwidDepl
 
 # --- Deployment drift --------------------------------------------------------
 
-DRIFT_KINDS: Final[frozenset[str]] = frozenset({"registry", "params", "identity"})
+DRIFT_KINDS: Final[frozenset[str]] = frozenset(
+    {"registry", "params", "identity", "reference"},
+)
 # The all-zero payment key hash: no one holds its key, so an identity token
 # (MarketState NFT, loan token or oracle token) sent there is retired, not drift.
 BURN_CREDENTIAL: Final[str] = "00" * 28
@@ -478,7 +659,6 @@ MARKET_COMPONENT_ROLES: Final[Mapping[tuple[str, str], str]] = MARKET_FAMILIES
 # Registry market components the reader never needs (not drift when published).
 IGNORED_MARKET_COMPONENTS: Final[frozenset[tuple[str, str]]] = frozenset(
     {
-        ("Action", "MintingPolicy"),
         ("Batch", "MintingPolicy"),
         ("DividendsIncome", "Validator"),
         ("TreasuryIncome", "Validator"),
@@ -525,8 +705,10 @@ class DriftFinding:
 
     ``kind`` is ``"registry"`` (the published registry and the bundled snapshot
     differ), ``"params"`` (a MarketParams record has an unknown layout or names a
-    script the snapshot does not bundle for its market) or ``"identity"`` (an
-    identity token sits at a credential the snapshot does not list for it).
+    script the snapshot does not bundle for its market), ``"identity"`` (an
+    identity token sits at a credential the snapshot does not list for it) or
+    ``"reference"`` (a script a user flow needs has no bundled reference UTxO, or
+    its reference UTxO is spent or carries another script).
     ``market`` is the market's registry name, None for a deployment-wide component.
     ``component`` is the ``MarketComponents`` / ``LiqwidDeployment`` field the hash
     belongs to (``"staking"`` for a p[34] withdraw-zero hash, whose pair order
@@ -559,6 +741,7 @@ def check_deployment(
     registry: Mapping[str, Any] | None = None,
     observed_credentials: Iterable[tuple[str, str]] = (),
     deployment: LiqwidDeployment | None = None,
+    reference_utxos: Iterable[Utxo] = (),
 ) -> list[DriftFinding]:
     """Every way the given chain and registry data depart from the deployment.
 
@@ -569,8 +752,12 @@ def check_deployment(
     (``scriptInfos``). ``observed_credentials`` are ``(payment credential,
     identity policy)`` pairs seen on chain; policies that are not a MarketState
     NFT, loan token or oracle token are ignored, as is a pair at
-    :data:`BURN_CREDENTIAL` (a retired token). ``deployment`` defaults to
-    :func:`default_deployment`.
+    :data:`BURN_CREDENTIAL` (a retired token). ``reference_utxos`` are unspent
+    UTxOs resolved at the bundled reference out-refs; when any are given, every
+    list36 market in ``params`` has each script its user flows reference checked
+    (``p[20]``, ``p[35]``, both ``p[34]``, the qToken and loan-token policies): its
+    bundled out-ref must be among them and hold that script. ``deployment``
+    defaults to :func:`default_deployment`.
 
     Returns:
         The findings, de-duplicated and sorted by (kind, market, component,
@@ -578,8 +765,15 @@ def check_deployment(
     """
     active = resolve_deployment(deployment)
     found: set[DriftFinding] = set()
+    references = {
+        f"{utxo.out_ref[0]}#{utxo.out_ref[1]}": utxo
+        for utxo in reference_utxos
+        if utxo.out_ref is not None
+    }
     for info in params:
         found.update(_params_drift(info, active))
+        if references:
+            found.update(_reference_drift(info, active, references))
     if registry is not None:
         found.update(_registry_drift(registry, active))
     found.update(_identity_drift(observed_credentials, active))
@@ -691,6 +885,95 @@ def _params_drift(
         for label, component, script_hash, bundled in _params_scripts(record, market)
         if script_hash not in bundled
     ]
+
+
+# --- Reference drift ---------------------------------------------------------
+
+# The MarketParams layout whose records name p[34] and p[35] (list36).
+_USER_FLOW_LAYOUT: Final[int] = max(MARKET_PARAMS_LENGTHS)
+
+
+def _script_hash_of(utxo: Utxo) -> str:
+    """The hash of the reference script a resolved UTxO carries, by its language.
+
+    Raises:
+        ValueError: when the UTxO carries no script or a non-Plutus script type.
+    """
+    from charli3_dendrite.lending.transactions.utxos import script_hash_of
+
+    return script_hash_of(utxo)
+
+
+def _user_flow_scripts(
+    record: MarketParamsDatum,
+    market: MarketComponents,
+) -> list[tuple[str, str]]:
+    """(component, hash) of every script a list36 market's user flows reference."""
+    named = [
+        ("actions", record.action_validator),
+        ("loan_validators", record.loan_validator),
+        *(("staking", script_hash) for script_hash in record.withdraw_zero or ()),
+        ("qtoken_policy", market.qtoken_policy),
+        ("new_borrow_policy", market.new_borrow_policy),
+    ]
+    return [
+        (component, script_hash)
+        for component, script_hash in named
+        if script_hash is not None
+    ]
+
+
+def _reference_finding(
+    deployment: LiqwidDeployment,
+    script_hash: str,
+    references: Mapping[str, Utxo],
+) -> str | None:
+    """Why the reference UTxO of ``script_hash`` is unusable, None when it is fine."""
+    try:
+        bundled = deployment.reference_utxo(script_hash).out_ref
+    except KeyError:
+        return "no bundled reference UTxO"
+    utxo = references.get(bundled)
+    if utxo is None:
+        return f"reference UTxO {bundled} not found unspent"
+    if not utxo.ref_script:
+        return f"reference UTxO {bundled} carries no script"
+    try:
+        held = _script_hash_of(utxo)
+    except ValueError as exc:
+        return f"reference UTxO {bundled}: {exc}"
+    if held != script_hash:
+        return f"reference UTxO {bundled} hashes to {held}"
+    return None
+
+
+def _reference_drift(
+    info: PoolStateInfo,
+    deployment: LiqwidDeployment,
+    references: Mapping[str, Utxo],
+) -> list[DriftFinding]:
+    """Reference findings for one list36 MarketParams UTxO (none for other layouts).
+
+    ``references`` maps ``tx_hash#index`` to the resolved UTxO. An unreadable
+    record is left to :func:`_params_drift`.
+    """
+    market = _params_market(info, deployment)
+    if market is None:
+        return []
+    try:
+        if field_count(info.datum_cbor) != _USER_FLOW_LAYOUT:
+            return []
+        record = decode_market_params(info.datum_cbor)
+    except LIQWID_DECODE_ERRORS:
+        return []
+    findings = []
+    for component, script_hash in _user_flow_scripts(record, market):
+        detail = _reference_finding(deployment, script_hash, references)
+        if detail is not None:
+            findings.append(
+                DriftFinding("reference", market.name, component, script_hash, detail),
+            )
+    return findings
 
 
 # --- Registry drift ----------------------------------------------------------

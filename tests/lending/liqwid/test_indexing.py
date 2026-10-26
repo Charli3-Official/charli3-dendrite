@@ -29,6 +29,7 @@ from charli3_dendrite.lending.markets import WatchSpec
 from charli3_dendrite.lending.units import plutus_fields
 from charli3_dendrite.lending.units import script_credential
 from charli3_dendrite.lending.units import script_payment_address
+from tests.lending.liqwid.records import UTXO_KINDS
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 
@@ -39,6 +40,9 @@ DATUM_CLASS = {
     LiqwidKind.COLLATERAL_PARAMS: CollateralParamsDatum,
     LiqwidKind.ORACLE: OracleFeedDatum,
 }
+
+# The kinds the read-side routes select; the action kind sits outside them.
+ROUTED_KINDS = [LiqwidKind(kind) for kind in UTXO_KINDS]
 
 # Captured non-records. Each sits at a watched credential, so only its identity token
 # or its datum shape tells it apart from a record.
@@ -114,10 +118,11 @@ def test_kind_values():
         "market_params",
         "collateral_params",
         "oracle",
+        "action",
     ]
 
 
-@pytest.mark.parametrize("kind", list(LiqwidKind), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", ROUTED_KINDS, ids=lambda k: k.value)
 def test_every_captured_record_is_accepted(kind):
     recs = _genuine(kind.value)
     assert recs
@@ -160,7 +165,7 @@ def test_a_market_state_at_another_markets_validator_is_rejected():
     assert parse_utxo(record_info(rec, address=address)) is None
 
 
-@pytest.mark.parametrize("kind", list(LiqwidKind), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", ROUTED_KINDS, ids=lambda k: k.value)
 def test_a_wrong_credential_is_rejected(kind):
     rec = _genuine(kind.value, live=True)[0]
     credential = script_credential(rec["address"])
@@ -174,7 +179,7 @@ def test_a_wrong_credential_is_rejected(kind):
     assert parse_utxo(record_info(rec, address=other_script)) is None
 
 
-@pytest.mark.parametrize("kind", list(LiqwidKind), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", ROUTED_KINDS, ids=lambda k: k.value)
 def test_the_identity_token_must_be_exactly_one(kind):
     rec = _genuine(kind.value, live=True)[0]
     policy = _identity_policy(rec, kind)
@@ -191,7 +196,7 @@ def test_the_identity_token_must_be_exactly_one(kind):
 
 @pytest.mark.parametrize(
     "kind",
-    [kind for kind in LiqwidKind if kind is not LiqwidKind.LOAN],
+    [kind for kind in ROUTED_KINDS if kind is not LiqwidKind.LOAN],
     ids=lambda k: k.value,
 )
 def test_market_and_oracle_tokens_must_have_an_empty_name(kind):
@@ -202,14 +207,14 @@ def test_market_and_oracle_tokens_must_have_an_empty_name(kind):
     assert parse_utxo(_with_assets(rec, assets)) is None
 
 
-@pytest.mark.parametrize("kind", list(LiqwidKind), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", ROUTED_KINDS, ids=lambda k: k.value)
 def test_a_record_without_an_inline_datum_is_rejected(kind):
     rec = _genuine(kind.value, live=True)[0]
     assert parse_utxo(record_info({**rec, "datum_cbor": ""})) is None
 
 
 @pytest.mark.parametrize(("name", "mangle"), MANGLES.items(), ids=list(MANGLES))
-@pytest.mark.parametrize("kind", list(LiqwidKind), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", ROUTED_KINDS, ids=lambda k: k.value)
 def test_a_malformed_datum_returns_none_without_raising(kind, name, mangle):
     rec = _genuine(kind.value, live=True)[0]
     assert parse_utxo(record_info(rec)) is not None

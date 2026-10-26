@@ -41,6 +41,7 @@ from charli3_dendrite.lending.normalized import Party
 from charli3_dendrite.lending.normalized import PartyKind
 from charli3_dendrite.lending.oracles.models import OracleSource
 from charli3_dendrite.lending.rates import register_rate_model
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 from charli3_dendrite.lending.units import script_payment_address
 from tests.lending.liqwid.records import API
 from tests.lending.liqwid.records import context_at
@@ -56,7 +57,6 @@ register_rate_model(LiqwidVariableRate)
 
 DEPLOYMENT = default_deployment()
 NOW_MS = 1_790_000_000_000
-POLICY_HEX_LEN = 56
 ADA_MARKET = "5a3cb4f52fb3a00ab5abe62080618623811ccafab9c760d0b686e44c"
 ADA_QTOKEN = "a04ce7a52545e5e33c2867e148898d9e667a69602285f6a1298f9d68"
 GENESIS_ADA_PARAMS = (
@@ -228,7 +228,7 @@ def test_market_state_without_market_parameters_raises(live_ctx, live_states):
 
 
 def test_market_without_collateral_params_has_empty_collateral(live_ctx, live_markets):
-    """Review Focus 2: no CollateralParams record is a valid market, not an error."""
+    """No CollateralParams record is a valid market, not an error."""
     with_records = set()
     for info in live_ctx.utxos:
         record = parse_utxo(info, DEPLOYMENT)
@@ -251,7 +251,7 @@ def _live_params_entry(market_id):
 def test_parked_market_params_fall_back_to_the_newest_decodable(
     live_ctx, live_states, live_markets
 ):
-    """Review Focus 2: a newer C0[] MarketParams output is skipped, never an error."""
+    """A newer C0[] MarketParams output is skipped, never an error."""
     entry = _live_params_entry(ADA_MARKET)
     newest = record_info(entry)
     parked = record_info(
@@ -274,7 +274,7 @@ def test_parked_market_params_fall_back_to_the_newest_decodable(
 def test_bare_market_with_a_newer_parked_params_output_is_still_a_view(
     live_ctx, live_states, live_markets
 ):
-    """Review Focus 2, combined: no CollateralParams and a newer C0[] MarketParams."""
+    """No CollateralParams and a newer C0[] MarketParams."""
     with_records = {
         record.market_id
         for record in (parse_utxo(info, DEPLOYMENT) for info in live_ctx.utxos)

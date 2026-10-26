@@ -49,6 +49,7 @@ __all__ = [
     "min_interest_at_borrow",
     "payoff",
     "qtoken_rate",
+    "seized_qtokens",
     "seized_value",
     "supply_apy",
     "supply_mint",
@@ -228,11 +229,14 @@ def min_interest_at_borrow(principal: int, min_rate: Fraction) -> int:
 
 
 def liquidation_debt(loan: LoanDatum, market_index: int) -> int:
-    """Unfloored debt, ``ceil((principal + interest) * s5 / loan index)``.
+    """Unfloored debt, ``max(ceil((principal + interest) * s5 / loan index), owed)``.
 
     The debt health and liquidation size are measured against. Interest accrues
     only through the market index, which moves at batch time, so the debt is exact
-    as of the market's latest batch. A loan index of 0 carries no accrual.
+    as of the market's latest batch. A loan rebased after that batch carries an
+    index at or above ``s5``; its indexed debt can round below ``principal +
+    interest``, and the protocol then settles at ``principal + interest`` (the
+    clamp). A loan index of 0 carries no accrual.
 
     Args:
         loan: The loan record.
@@ -244,7 +248,7 @@ def liquidation_debt(loan: LoanDatum, market_index: int) -> int:
     owed = loan.principal + loan.interest
     if loan.index <= 0:
         return owed
-    return ceil_div(owed * market_index, loan.index)
+    return max(ceil_div(owed * market_index, loan.index), owed)
 
 
 def payoff(loan: LoanDatum, market_index: int) -> int:
@@ -289,8 +293,10 @@ class WeightedHolding:
         rate: Underlying per receipt token (the collateral market's ``s9``).
         price: The underlying's price per base unit, in the numeraire the borrowed
             asset's price is given in.
-        weight: The collateral's liquidation weight (``liquidation_weight``: its
-            CollateralParams weight times ``p[18]``).
+        weight: The weight the caller's health rule applies to the value: the
+            CollateralParams weight ``w`` for the loan validator's health check
+            on a build, or ``liquidation_weight`` (``w`` times ``p[18]``) for
+            the liquidation health factor.
     """
 
     amount: int
@@ -413,3 +419,49 @@ def seized_value(repay: int, discount: Fraction) -> Fraction:
     if discount <= 0:
         raise ValueError("non-positive liquidation discount")
     return Fraction(repay) / discount
+
+
+def seized_qtokens(
+    repay: int,
+    *,
+    borrow_price: Fraction,
+    discount: Fraction,
+    rate: Fraction,
+    price: Fraction,
+) -> int:
+    """QTokens of one collateral a liquidator takes for ``repay``.
+
+    ``floor(repay * borrow_price / (discount * rate * price))``: the seized value
+    (``seized_value``) priced in the borrowed asset, converted to the collateral's
+    underlying and then to its qTokens, rounded down. It is the most the protocol
+    lets a liquidation seize.
+
+    ``discount`` is ``CollateralParamsDatum.liquidation_discount``, field 2 of the
+    CollateralParams record (the repaid share of the seized value, e.g. 9/10). It
+    is never ``CollateralTerms.liquidation_discount``, which is ``1 - field 2``:
+    passing that one seizes nine times the legal amount at 9/10.
+
+    Args:
+        repay: Amount repaid, in base units of the borrowed asset.
+        borrow_price: The borrowed asset's price per base unit.
+        discount: CollateralParams field 2 of the seized collateral.
+        rate: Underlying per qToken of the collateral market (its ``s9``).
+        price: The collateral underlying's price per base unit, in the numeraire
+            ``borrow_price`` is given in.
+
+    Returns:
+        The seized qTokens in base units.
+
+    Raises:
+        ValueError: When any input is not positive.
+    """
+    if repay <= 0:
+        raise ValueError("non-positive repay")
+    _check_price(borrow_price)
+    value = seized_value(repay, discount)
+    if rate <= 0:
+        raise ValueError("non-positive rate")
+    if price <= 0:
+        raise ValueError("non-positive price")
+    seized = value * borrow_price / (rate * price)
+    return floor_div(seized.numerator, seized.denominator)
