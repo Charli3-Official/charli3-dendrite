@@ -278,6 +278,37 @@ def test_the_shared_base_is_not_a_dex() -> None:
         _CardanoSwapsOneWayOrderState.dex()
 
 
+def test_one_way_state_inherits_the_shared_base() -> None:
+    """Contract-agnostic members live on the shared base, not the one-way class."""
+    from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
+
+    assert issubclass(CardanoSwapsOrderState, _CardanoSwapsOrderState)
+    assert issubclass(CardanoSwapsLegacyOrderState, _CardanoSwapsOrderState)
+    for name in (
+        "swap_utxo",
+        "build_close",
+        "reference_utxo",
+        "beacon_reference_utxo",
+        "beacon_address",
+        "directions",
+    ):
+        assert name in _CardanoSwapsOrderState.__dict__
+        assert name not in _CardanoSwapsOneWayOrderState.__dict__
+    for hook in (
+        "_fill_allowed",
+        "_take_redeemer",
+        "_continuation_datum",
+        "required_ask",
+        "claimable_offer",
+        "build_create",
+    ):
+        assert hook in _CardanoSwapsOneWayOrderState.__dict__
+    with pytest.raises(NotImplementedError):
+        _CardanoSwapsOrderState.dex()
+    state = _legacy_state()
+    assert state.directions() == (state,)
+
+
 from pycardano import ScriptHash
 
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt

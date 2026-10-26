@@ -14,11 +14,13 @@ are implemented separately.
 import dataclasses
 import hashlib
 import time
+from abc import abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Callable
 from typing import ClassVar
+from typing import Protocol
 from typing import Union
 from typing import cast
 
@@ -287,6 +289,45 @@ class CardanoSwapsSomeOutRefV3(PlutusData):
     def ref(self) -> tuple[bytes, int]:
         """The referenced output as ``(tx_hash, output_index)``."""
         return self.value.transaction_id, self.value.output_index
+
+
+class CardanoSwapsDeployment(Protocol):
+    """What the shared Cardano-Swaps order state needs from a deployment.
+
+    The swap validator and beacon policy (hashes and scripts), their Plutus
+    version, and the shape a continuation's ``prev_input`` is written in. The
+    attributes are read-only, so a frozen dataclass satisfies it.
+    """
+
+    @property
+    def swap_validator_hash(self) -> str:
+        """The swap spending validator's script hash (hex)."""
+        ...
+
+    @property
+    def beacon_policy_id(self) -> str:
+        """The beacon minting policy id (hex)."""
+        ...
+
+    @property
+    def script_class(self) -> type[PlutusV2Script] | type[PlutusV3Script]:
+        """The Plutus version both scripts are written in."""
+        ...
+
+    @property
+    def prev_input_class(
+        self,
+    ) -> type[CardanoSwapsSomeOutRef] | type[CardanoSwapsSomeOutRefV3]:
+        """The shape a continuation's ``prev_input`` is written in."""
+        ...
+
+    def swap_script(self) -> PlutusV2Script | PlutusV3Script:
+        """The swap spending validator."""
+        ...
+
+    def beacon_script(self) -> PlutusV2Script | PlutusV3Script:
+        """The beacon minting/staking policy."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -758,18 +799,21 @@ class CardanoSwapsSwapDatum(OrderDatum):
         )
 
 
-class _CardanoSwapsOneWayOrderState(AbstractOrderState):
-    """A resting Cardano-Swaps one-way swap UTxO, for the contract in ``CONTRACT``.
+class _CardanoSwapsOrderState(AbstractOrderState):
+    """A resting Cardano-Swaps swap UTxO, for the deployment in ``CONTRACT``.
+
+    Everything a Cardano-Swaps swap UTxO does whatever its contract: discovery
+    by beacon policy, reference-script lookup, the beacon-tagged swap address,
+    taking with a continuing output, and closing. A subclass supplies the datum,
+    its price and orientation, and the take hooks (:meth:`_fill_allowed`,
+    :meth:`_take_redeemer`, :meth:`required_ask`, :meth:`_continuation_datum`).
 
     From the taker's view: ``in`` is the ask asset (taker gives) and ``out`` is
-    the offer asset (taker receives). ``available`` is the offer asset held in
-    the UTxO. The datum's ``swap_price`` is ask-per-offer, so the price tuple is
-    returned as ``[numerator, denominator]`` and assets are oriented so that
-    ``unit(0)`` is the ask (in) and ``unit(1)`` is the offer (out); then
-    ``out = in * denominator / numerator`` falls out of the base class.
+    the offer asset (taker receives); a subclass's ``post_init`` orients the
+    assets so that ``unit(0)`` is the ask and ``unit(1)`` is the offer.
     """
 
-    CONTRACT: ClassVar[CardanoSwapsContract]
+    CONTRACT: ClassVar[CardanoSwapsDeployment]
 
     tx_hash: str
     tx_index: int
@@ -788,11 +832,6 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
     _batcher: Assets = Assets(lovelace=0)
     _datum_parsed: PlutusData | None = None
     _deposit: Assets = Assets(lovelace=0)
-
-    @classmethod
-    def order_datum_class(cls) -> type[PlutusData]:
-        """Returns data class used for handling order datums."""
-        return CardanoSwapsSwapDatum
 
     @classmethod
     def default_script_class(cls) -> type[PlutusV2Script] | type[PlutusV3Script]:
@@ -872,10 +911,10 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
     def extract_dex_nft(cls, values: dict) -> Assets | None:
         """Strip the beacon tokens from the UTxO assets.
 
-        A one-way swap UTxO carries up to three beacon tokens under one policy
-        (pair, offer, ask beacons). They identify the swap but are not part of
-        the tradable balance, so remove every beacon-policy token from the
-        assets and record them as the dex nft.
+        A swap UTxO carries up to three beacon tokens under its contract's
+        beacon policy (a pair beacon and one per asset). They identify the swap
+        but are not part of the tradable balance, so remove every beacon-policy
+        token from the assets and record them as the dex nft.
         """
         assets = values["assets"]
 
@@ -902,18 +941,6 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         return 0
 
     @property
-    def price(self) -> tuple[int, int]:
-        """Ask-per-offer price as ``(numerator, denominator)``.
-
-        A UTxO whose datum has a non-positive ``swap_price`` still parses, so a
-        caller can skip it on this error instead of failing a whole book.
-
-        Raises:
-            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
-        """
-        return self.order_datum.price()
-
-    @property
     def available(self) -> Assets:
         """The offer balance held in the UTxO.
 
@@ -925,39 +952,34 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         """
         return Assets(root={self.out_unit: self.assets[self.out_unit]})
 
+    @abstractmethod
     def required_ask(self, offer_taken: int) -> int:
-        """The ask a fill taking ``offer_taken`` of the offer pays into the swap.
+        """The ask a fill taking ``offer_taken`` of the offer pays into the swap."""
+        raise NotImplementedError
 
-        This is exactly what :meth:`swap_utxo` deposits into the continuing output.
-
-        Raises:
-            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
-        """
-        return self.order_datum.required_ask(offer_taken)
-
+    @abstractmethod
     def claimable_offer(self, coins_per_utxo_byte: int) -> int:
-        """The most of the offer one fill of this UTxO can take.
+        """The most of the offer one fill of this UTxO can take."""
+        raise NotImplementedError
 
-        :meth:`CardanoSwapsSwapDatum.claimable_offer` over this UTxO's offer
-        balance and accumulated ask, sized at its own output index (which the
-        continuation's ``prev_input`` records, in this contract's shape) and at
-        its address when known. A :meth:`swap_utxo` fill of this amount always
-        leaves the continuing output funded.
+    @abstractmethod
+    def _fill_allowed(self) -> bool:
+        """Whether this contract's swaps may be taken."""
+        raise NotImplementedError
 
-        Args:
-            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+    @abstractmethod
+    def _take_redeemer(self) -> PlutusData:
+        """The swap validator's spending redeemer for a take."""
+        raise NotImplementedError
 
-        Raises:
-            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
-        """
-        return self.order_datum.claimable_offer(
-            self.assets[self.out_unit],
-            coins_per_utxo_byte,
-            held_ask=self.assets[self.in_unit],
-            prev_output_index=self.tx_index,
-            address=Address.decode(self.address) if self.address is not None else None,
-            contract=self.CONTRACT,
-        )
+    @abstractmethod
+    def _continuation_datum(self) -> PlutusData:
+        """This UTxO's continuation datum (``prev_input`` = this UTxO)."""
+        raise NotImplementedError
+
+    def directions(self) -> tuple["_CardanoSwapsOrderState", ...]:
+        """Every takeable view of this UTxO: the one direction it trades."""
+        return (self,)
 
     @property
     def tvl(self) -> int:
@@ -989,53 +1011,11 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         """No batcher stake address."""
         return None
 
-    @classmethod
-    def post_init(cls, values: dict) -> dict:
-        """Enforce taker orientation: unit(0)=ask (in), unit(1)=offer (out).
-
-        Rebuild the assets dict in a fixed order — ask first, offer second, then
-        any residual tokens (e.g. the UTxO's min-ADA when it is neither the offer
-        nor the ask). ``Assets`` is insertion-ordered (its sort only floats
-        ``lovelace`` to the front on construction), so reassigning ``root`` in
-        this order makes ``unit(0)`` the ask and ``unit(1)`` the offer.
-        """
-        datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
-
-        ask_unit = datum.ask_unit()
-        offer_unit = datum.offer_unit()
-
-        assets = values["assets"]
-        root = assets.root
-
-        # Both legs must be present so unit(0)/unit(1) are well defined, even if a
-        # side is absent from the balance (a normal one-way swap holds only the
-        # offer asset; the taker brings the ask asset).
-        ordered: dict[str, int] = {
-            ask_unit: root.pop(ask_unit, 0),
-            offer_unit: root.pop(offer_unit, 0),
-        }
-        # Preserve any residual tokens (e.g. min-ADA) after the traded pair.
-        ordered.update(root)
-
-        assets.root = ordered
-
-        # A one-way swap whose expiration is in the past is no longer fillable on
-        # chain (the validator requires the tx validity interval to end at or
-        # before the expiration), so mark it inactive — mirroring the sibling
-        # order-book classes. ``expiration`` is POSIX milliseconds; ``PlutusNone``
-        # means the swap never expires.
-        expiration = datum.expiration
-        values["inactive"] = isinstance(expiration, CardanoSwapsSomeInt) and (
-            int(time.time() * 1000) >= expiration.value
-        )
-
-        return values
-
     # --- transaction builders --------------------------------------------
 
     @classmethod
     def _swap_script(cls) -> PlutusV2Script | PlutusV3Script:
-        """The (inline) one-way swap spending validator."""
+        """The (inline) swap spending validator."""
         return cls.CONTRACT.swap_script()
 
     @classmethod
@@ -1119,8 +1099,8 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         )
 
     @staticmethod
-    def _beacon_mint_assets(datum: CardanoSwapsSwapDatum, quantity: int) -> Assets:
-        """The three beacons (pair/offer/ask) at +1 (CREATE) or -1 (CLOSE)."""
+    def _beacon_mint_assets(datum: OrderDatum, quantity: int) -> Assets:
+        """The datum's beacons at +1 (CREATE) or -1 (CLOSE)."""
         return datum.beacon_assets(quantity)
 
     @staticmethod
@@ -1131,6 +1111,357 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
             tx_builder.mint = multi_asset
         else:
             tx_builder.mint += multi_asset
+
+    @staticmethod
+    def _split_unit(unit: str) -> tuple[bytes, bytes]:
+        """Split a dendrite unit into on-chain (policy, name) bytes (ADA -> empty)."""
+        if unit == "lovelace":
+            return b"", b""
+        return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
+
+    def _input_utxo(self, owner_address: Address) -> UTxO:
+        """The synthetic resting swap UTxO (held balance + beacons), inline datum.
+
+        Its address payment part is the swap validator hash (so the inline script
+        resolves) and its staking part is the owner's.
+        """
+        beacons = self.dex_nft if self.dex_nft is not None else Assets(root={})
+        amount = self.assets + Assets(root=dict(beacons.root))
+        return UTxO(
+            TransactionInput(
+                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                index=self.tx_index,
+            ),
+            output=TransactionOutput(
+                address=self.beacon_address(owner_address),
+                amount=asset_to_value(amount),
+                datum=self.order_datum,
+            ),
+        )
+
+    def swap_utxo(
+        self,
+        address_source: Address,
+        in_assets: Assets,
+        out_assets: Assets,
+        tx_builder: TransactionBuilder,
+        extra_assets: Assets | None = None,
+        address_target: Address | None = None,
+        datum_target: PlutusData | None = None,
+        owner_address: Address | None = None,
+        *,
+        swap_ref_utxo: UTxO | None = None,
+    ) -> tuple[TransactionOutput | None, PlutusData]:
+        """Build a FILL: spend the resting swap UTxO and fill at price or better.
+
+        Spends the resting UTxO with this contract's take redeemer
+        (:meth:`_take_redeemer`; the swap validator is inlined by default, or
+        referenced via a reference input when the caller supplies
+        ``swap_ref_utxo``) and emits the contract-mandated continuing output back
+        to the same swap address: the beacons are preserved, the offer balance is
+        decremented by the amount taken, and the ask paid in (at price or better)
+        accumulates into this same output. Its datum is
+        :meth:`_continuation_datum`: the input's, with ``prev_input`` pointing at
+        the consumed UTxO. No beacons are minted or burned, and there is no
+        separate maker payment — the maker collects the accumulated ask on CLOSE.
+
+        ``out_assets`` is the offer asset the taker receives; ``in_assets`` is the
+        ask asset they pay. Purity (only offer leaves, only ask is added) and the
+        ``offer_taken * price_num <= ask_given * price_den`` price check are
+        enforced by the validator; this builder constructs a balanced fill. The
+        ask deposited is :meth:`required_ask` of the offer taken; ``in_assets``
+        only selects the ask asset.
+
+        A token offer's continuation is topped up to its min-UTxO when needed (the
+        validator lets a taker deposit ADA). An ADA offer's cannot be: the lovelace
+        left behind is what sets ``offer_taken``, so a fill that would leave the
+        continuation below its min-UTxO is rejected; :meth:`claimable_offer` is the
+        most a fill can take.
+
+        Returns:
+            ``(continuing_output, continuing_datum)`` — the validator always
+            requires a continuing beacon output (a full fill simply leaves the
+            offer balance at ~0); only CLOSE removes the beacons.
+
+        Raises:
+            ValueError: this contract fills no swaps, the assets are not the offer
+                and ask, or the fill takes more of the offer than the UTxO can
+                release.
+            InvalidPoolError: the datum's price is not a positive rational.
+        """
+        if not self._fill_allowed():
+            raise ValueError(
+                "This Cardano-Swaps contract is read-and-close only: "
+                "its swaps are not filled.",
+            )
+        owner = owner_address if owner_address is not None else address_source
+
+        # in/out orientation: out = offer (taker receives), in = ask (taker pays).
+        if out_assets.unit() != self.out_unit:
+            raise ValueError("out_assets must be the offer asset.")
+        if in_assets.unit() != self.in_unit:
+            raise ValueError("in_assets must be the ask asset.")
+
+        offer_unit = self.out_unit
+        ask_unit = self.in_unit
+
+        offer_taken = out_assets.quantity()
+        held_offer = self.assets[offer_unit]
+        if offer_taken <= 0 or offer_taken > held_offer:
+            raise ValueError(
+                f"out_assets must take between 1 and {held_offer} of the offer, "
+                f"got {offer_taken}.",
+            )
+        ask_given = self.required_ask(offer_taken)
+
+        input_utxo = self._input_utxo(owner)
+
+        tx_builder.add_script_input(
+            utxo=input_utxo,
+            script=self._swap_script_arg(swap_ref_utxo),
+            redeemer=Redeemer(self._take_redeemer()),
+        )
+        # An expiring swap is fillable only by a transaction whose validity ends at
+        # or before the expiration (the validator reads it as the upper bound).
+        # The bound is also kept within _FILL_VALIDITY_SLOTS of the tip: a node
+        # cannot convert a slot past its forecast horizon to time, so a far
+        # expiration as the upper bound fails evaluation and submission.
+        expiration = self.order_datum.expiration
+        if isinstance(expiration, CardanoSwapsSomeInt):
+            deadline = min(
+                posix_ms_to_slot(expiration.value),
+                tx_builder.context.last_block_slot + _FILL_VALIDITY_SLOTS,
+            )
+            if tx_builder.ttl is None or tx_builder.ttl > deadline:
+                tx_builder.ttl = deadline
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
+
+        # The swap is a single accumulating UTxO: the taker removes the offer
+        # they take and deposits the ask (at price or better) back into the SAME
+        # continuing output. The validator reads ``ask_given = ask_out - ask_in``
+        # and ``offer_taken = offer_in - offer_out`` from this output — there is
+        # no separate maker payment; the maker collects the accumulated ask on
+        # CLOSE. The datum is identical to the input EXCEPT prev_input = consumed
+        # TxOutRef, in the output-reference shape this contract's validator reads.
+        cont_datum = self._continuation_datum()
+
+        # Continuing value = consumed value, less the offer taken, plus the ask
+        # paid in. Beacons and any min-ADA carrier are preserved verbatim.
+        cont_balance: dict[str, int] = {"lovelace": input_utxo.output.amount.coin}
+        multi_asset = input_utxo.output.amount.multi_asset
+        if multi_asset is not None:
+            for policy, names in multi_asset.data.items():
+                for name, qty in names.items():
+                    cont_balance[bytes(policy).hex() + bytes(name).hex()] = qty
+        cont_balance[offer_unit] = cont_balance.get(offer_unit, 0) - offer_taken
+        cont_balance[ask_unit] = cont_balance.get(ask_unit, 0) + ask_given
+        cont_assets = Assets(
+            root={
+                unit: qty
+                for unit, qty in cont_balance.items()
+                if qty != 0 or unit == "lovelace"
+            },
+        )
+
+        cont_txo = TransactionOutput(
+            address=input_utxo.output.address,
+            amount=asset_to_value(cont_assets),
+            datum=cont_datum,
+        )
+        coin = cont_txo.amount.coin
+        needed = min_lovelace(tx_builder.context, output=cont_txo)
+        if offer_unit == "lovelace" and coin < needed:
+            raise ValueError(
+                f"Taking {offer_taken} lovelace leaves the continuing output "
+                f"{coin} lovelace, below its min-UTxO of {needed}; "
+                "claimable_offer() is the most a fill can take.",
+            )
+        cont_txo.amount.coin = max(coin, needed)
+        tx_builder.add_output(cont_txo)
+
+        return cont_txo, cont_datum
+
+    def build_close(
+        self,
+        tx_builder: TransactionBuilder,
+        owner_address: Address | None = None,
+        *,
+        swap_ref_utxo: UTxO | None = None,
+        beacon_ref_utxo: UTxO | None = None,
+    ) -> PlutusData:
+        """Build a CLOSE: spend the swap UTxO and burn the three beacons.
+
+        Spends the resting UTxO with ``SpendWithMint`` and burns -1 of each
+        beacon under the beacon policy with ``CreateOrCloseSwaps``. The owner's
+        stake credential must authorize the spend (sign with the stake key for a
+        vkey stake credential, or run the stake script); reclaim of the offer
+        asset to the owner is handled by change. The swap validator and beacon
+        policy are inlined by default, or referenced via a reference input when
+        the caller supplies ``swap_ref_utxo`` / ``beacon_ref_utxo``.
+
+        Returns:
+            The spent (resting) ``SwapDatum``.
+        """
+        if owner_address is None:
+            raise ValueError("build_close requires the owner address.")
+
+        input_utxo = self._input_utxo(owner_address)
+        tx_builder.add_script_input(
+            utxo=input_utxo,
+            script=self._swap_script_arg(swap_ref_utxo),
+            redeemer=Redeemer(SpendWithMint()),
+        )
+        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
+        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
+        # the validator reads it from the input directly. Adding the same datum to the
+        # witness set makes it an extraneous datum the ledger rejects on submit.
+
+        # Burn the three beacons.
+        tx_builder.add_minting_script(
+            script=self._beacon_script_arg(beacon_ref_utxo),
+            redeemer=Redeemer(CreateOrCloseSwaps()),
+        )
+        self._accumulate_mint(
+            tx_builder,
+            self._beacon_mint_assets(self.order_datum, -1),
+        )
+
+        # NOTE: the validator gates the close on the swap address' STAKING
+        # credential, not its payment credential. For a vkey stake credential the
+        # owner's stake key must be among the signatories — the caller supplies it
+        # via ``build_and_sign(signing_keys=[...])`` and/or
+        # ``tx_builder.required_signers``; for a script stake credential the stake
+        # script must be executed (a withdrawal). This builder only assembles the
+        # spend + burn; signing/withdrawal is the caller's responsibility.
+        return self.order_datum
+
+
+class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
+    """A resting Cardano-Swaps one-way swap UTxO, for the contract in ``CONTRACT``.
+
+    From the taker's view: ``in`` is the ask asset (taker gives) and ``out`` is
+    the offer asset (taker receives). ``available`` is the offer asset held in
+    the UTxO. The datum's ``swap_price`` is ask-per-offer, so the price tuple is
+    returned as ``[numerator, denominator]`` and assets are oriented so that
+    ``unit(0)`` is the ask (in) and ``unit(1)`` is the offer (out); then
+    ``out = in * denominator / numerator`` falls out of the base class.
+    """
+
+    CONTRACT: ClassVar[CardanoSwapsContract]
+
+    @classmethod
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Returns data class used for handling order datums."""
+        return CardanoSwapsSwapDatum
+
+    @property
+    def price(self) -> tuple[int, int]:
+        """Ask-per-offer price as ``(numerator, denominator)``.
+
+        A UTxO whose datum has a non-positive ``swap_price`` still parses, so a
+        caller can skip it on this error instead of failing a whole book.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.price()
+
+    def required_ask(self, offer_taken: int) -> int:
+        """The ask a fill taking ``offer_taken`` of the offer pays into the swap.
+
+        This is exactly what :meth:`swap_utxo` deposits into the continuing output.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.required_ask(offer_taken)
+
+    def claimable_offer(self, coins_per_utxo_byte: int) -> int:
+        """The most of the offer one fill of this UTxO can take.
+
+        :meth:`CardanoSwapsSwapDatum.claimable_offer` over this UTxO's offer
+        balance and accumulated ask, sized at its own output index (which the
+        continuation's ``prev_input`` records, in this contract's shape) and at
+        its address when known. A :meth:`swap_utxo` fill of this amount always
+        leaves the continuing output funded.
+
+        Args:
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+
+        Raises:
+            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
+        """
+        return self.order_datum.claimable_offer(
+            self.assets[self.out_unit],
+            coins_per_utxo_byte,
+            held_ask=self.assets[self.in_unit],
+            prev_output_index=self.tx_index,
+            address=Address.decode(self.address) if self.address is not None else None,
+            contract=self.CONTRACT,
+        )
+
+    @classmethod
+    def post_init(cls, values: dict) -> dict:
+        """Enforce taker orientation: unit(0)=ask (in), unit(1)=offer (out).
+
+        Rebuild the assets dict in a fixed order — ask first, offer second, then
+        any residual tokens (e.g. the UTxO's min-ADA when it is neither the offer
+        nor the ask). ``Assets`` is insertion-ordered (its sort only floats
+        ``lovelace`` to the front on construction), so reassigning ``root`` in
+        this order makes ``unit(0)`` the ask and ``unit(1)`` the offer.
+        """
+        datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
+
+        ask_unit = datum.ask_unit()
+        offer_unit = datum.offer_unit()
+
+        assets = values["assets"]
+        root = assets.root
+
+        # Both legs must be present so unit(0)/unit(1) are well defined, even if a
+        # side is absent from the balance (a normal one-way swap holds only the
+        # offer asset; the taker brings the ask asset).
+        ordered: dict[str, int] = {
+            ask_unit: root.pop(ask_unit, 0),
+            offer_unit: root.pop(offer_unit, 0),
+        }
+        # Preserve any residual tokens (e.g. min-ADA) after the traded pair.
+        ordered.update(root)
+
+        assets.root = ordered
+
+        # A one-way swap whose expiration is in the past is no longer fillable on
+        # chain (the validator requires the tx validity interval to end at or
+        # before the expiration), so mark it inactive — mirroring the sibling
+        # order-book classes. ``expiration`` is POSIX milliseconds; ``PlutusNone``
+        # means the swap never expires.
+        expiration = datum.expiration
+        values["inactive"] = isinstance(expiration, CardanoSwapsSomeInt) and (
+            int(time.time() * 1000) >= expiration.value
+        )
+
+        return values
+
+    def _fill_allowed(self) -> bool:
+        """Only a contract that allows fills lets its swaps be taken."""
+        return self.CONTRACT.allows_fill
+
+    def _take_redeemer(self) -> PlutusData:
+        """The one-way ``Swap`` spending redeemer."""
+        return Swap()
+
+    def _continuation_datum(self) -> PlutusData:
+        """The resting datum with ``prev_input`` = this UTxO (contract's shape)."""
+        return self.order_datum.continuation_datum(
+            bytes.fromhex(self.tx_hash),
+            self.tx_index,
+            contract=self.CONTRACT,
+        )
+
+    # --- transaction builders --------------------------------------------
 
     @classmethod
     def build_create(
@@ -1264,235 +1595,6 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
             tx_builder.required_signers = signers
 
         return txo, datum
-
-    @staticmethod
-    def _split_unit(unit: str) -> tuple[bytes, bytes]:
-        """Split a dendrite unit into on-chain (policy, name) bytes (ADA -> empty)."""
-        if unit == "lovelace":
-            return b"", b""
-        return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
-
-    def _input_utxo(self, owner_address: Address) -> UTxO:
-        """The synthetic resting swap UTxO (offer + 3 beacons), inline datum.
-
-        Its address payment part is the swap validator hash (so the inline script
-        resolves) and its staking part is the owner's.
-        """
-        beacons = self.dex_nft if self.dex_nft is not None else Assets(root={})
-        amount = self.assets + Assets(root=dict(beacons.root))
-        return UTxO(
-            TransactionInput(
-                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
-                index=self.tx_index,
-            ),
-            output=TransactionOutput(
-                address=self.beacon_address(owner_address),
-                amount=asset_to_value(amount),
-                datum=self.order_datum,
-            ),
-        )
-
-    def swap_utxo(
-        self,
-        address_source: Address,
-        in_assets: Assets,
-        out_assets: Assets,
-        tx_builder: TransactionBuilder,
-        extra_assets: Assets | None = None,
-        address_target: Address | None = None,
-        datum_target: PlutusData | None = None,
-        owner_address: Address | None = None,
-        *,
-        swap_ref_utxo: UTxO | None = None,
-    ) -> tuple[TransactionOutput | None, PlutusData]:
-        """Build a FILL: spend the resting swap UTxO and fill at price or better.
-
-        Spends the resting UTxO with the ``Swap`` spending redeemer (the swap
-        validator is inlined by default, or referenced via a reference input when
-        the caller supplies ``swap_ref_utxo``) and emits the contract-mandated
-        continuing output back to the same swap address: the three beacons are
-        preserved, the offer balance is decremented by the amount taken, and the
-        ask paid in (at price or better) accumulates into this same output. The
-        datum is otherwise identical to the input, with ``prev_input`` pointing
-        at the consumed UTxO. No beacons are minted or burned, and there is no
-        separate maker payment — the maker collects the accumulated ask on CLOSE.
-
-        ``out_assets`` is the offer asset the taker receives; ``in_assets`` is the
-        ask asset they pay. Purity (only offer leaves, only ask is added) and the
-        ``offer_taken * price_num <= ask_given * price_den`` price check are
-        enforced by the validator; this builder constructs a balanced fill. The
-        ask deposited is :meth:`required_ask` of the offer taken; ``in_assets``
-        only selects the ask asset.
-
-        A token offer's continuation is topped up to its min-UTxO when needed (the
-        validator lets a taker deposit ADA). An ADA offer's cannot be: the lovelace
-        left behind is what sets ``offer_taken``, so a fill that would leave the
-        continuation below its min-UTxO is rejected; :meth:`claimable_offer` is the
-        most a fill can take.
-
-        Returns:
-            ``(continuing_output, continuing_datum)`` — the validator always
-            requires a continuing beacon output (a full fill simply leaves the
-            offer balance at ~0); only CLOSE removes the beacons.
-
-        Raises:
-            ValueError: this contract fills no swaps, the assets are not the offer
-                and ask, or the fill takes more of the offer than the UTxO can
-                release.
-            InvalidPoolError: the datum's ``swap_price`` is not a positive rational.
-        """
-        if not self.CONTRACT.allows_fill:
-            raise ValueError(
-                "This Cardano-Swaps contract is read-and-close only: "
-                "its swaps are not filled.",
-            )
-        owner = owner_address if owner_address is not None else address_source
-
-        # in/out orientation: out = offer (taker receives), in = ask (taker pays).
-        if out_assets.unit() != self.out_unit:
-            raise ValueError("out_assets must be the offer asset.")
-        if in_assets.unit() != self.in_unit:
-            raise ValueError("in_assets must be the ask asset.")
-
-        offer_unit = self.out_unit
-        ask_unit = self.in_unit
-
-        offer_taken = out_assets.quantity()
-        held_offer = self.assets[offer_unit]
-        if offer_taken <= 0 or offer_taken > held_offer:
-            raise ValueError(
-                f"out_assets must take between 1 and {held_offer} of the offer, "
-                f"got {offer_taken}.",
-            )
-        ask_given = self.required_ask(offer_taken)
-
-        input_utxo = self._input_utxo(owner)
-
-        tx_builder.add_script_input(
-            utxo=input_utxo,
-            script=self._swap_script_arg(swap_ref_utxo),
-            redeemer=Redeemer(Swap()),
-        )
-        # An expiring swap is fillable only by a transaction whose validity ends at
-        # or before the expiration (the validator reads it as the upper bound).
-        # The bound is also kept within _FILL_VALIDITY_SLOTS of the tip: a node
-        # cannot convert a slot past its forecast horizon to time, so a far
-        # expiration as the upper bound fails evaluation and submission.
-        expiration = self.order_datum.expiration
-        if isinstance(expiration, CardanoSwapsSomeInt):
-            deadline = min(
-                posix_ms_to_slot(expiration.value),
-                tx_builder.context.last_block_slot + _FILL_VALIDITY_SLOTS,
-            )
-            if tx_builder.ttl is None or tx_builder.ttl > deadline:
-                tx_builder.ttl = deadline
-        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
-        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
-        # the validator reads it from the input directly. Adding the same datum to the
-        # witness set makes it an extraneous datum the ledger rejects on submit.
-
-        # The swap is a single accumulating UTxO: the taker removes the offer
-        # they take and deposits the ask (at price or better) back into the SAME
-        # continuing output. The validator reads ``ask_given = ask_out - ask_in``
-        # and ``offer_taken = offer_in - offer_out`` from this output — there is
-        # no separate maker payment; the maker collects the accumulated ask on
-        # CLOSE. The datum is identical to the input EXCEPT prev_input = consumed
-        # TxOutRef, in the output-reference shape this contract's validator reads.
-        cont_datum = self.order_datum.continuation_datum(
-            bytes.fromhex(self.tx_hash),
-            self.tx_index,
-            contract=self.CONTRACT,
-        )
-
-        # Continuing value = consumed value, less the offer taken, plus the ask
-        # paid in. Beacons and any min-ADA carrier are preserved verbatim.
-        cont_balance: dict[str, int] = {"lovelace": input_utxo.output.amount.coin}
-        multi_asset = input_utxo.output.amount.multi_asset
-        if multi_asset is not None:
-            for policy, names in multi_asset.data.items():
-                for name, qty in names.items():
-                    cont_balance[bytes(policy).hex() + bytes(name).hex()] = qty
-        cont_balance[offer_unit] = cont_balance.get(offer_unit, 0) - offer_taken
-        cont_balance[ask_unit] = cont_balance.get(ask_unit, 0) + ask_given
-        cont_assets = Assets(
-            root={
-                unit: qty
-                for unit, qty in cont_balance.items()
-                if qty != 0 or unit == "lovelace"
-            },
-        )
-
-        cont_txo = TransactionOutput(
-            address=input_utxo.output.address,
-            amount=asset_to_value(cont_assets),
-            datum=cont_datum,
-        )
-        coin = cont_txo.amount.coin
-        needed = min_lovelace(tx_builder.context, output=cont_txo)
-        if offer_unit == "lovelace" and coin < needed:
-            raise ValueError(
-                f"Taking {offer_taken} lovelace leaves the continuing output "
-                f"{coin} lovelace, below its min-UTxO of {needed}; "
-                "claimable_offer() is the most a fill can take.",
-            )
-        cont_txo.amount.coin = max(coin, needed)
-        tx_builder.add_output(cont_txo)
-
-        return cont_txo, cont_datum
-
-    def build_close(
-        self,
-        tx_builder: TransactionBuilder,
-        owner_address: Address | None = None,
-        *,
-        swap_ref_utxo: UTxO | None = None,
-        beacon_ref_utxo: UTxO | None = None,
-    ) -> CardanoSwapsSwapDatum:
-        """Build a CLOSE: spend the swap UTxO and burn the three beacons.
-
-        Spends the resting UTxO with ``SpendWithMint`` and burns -1 of each
-        beacon under the beacon policy with ``CreateOrCloseSwaps``. The owner's
-        stake credential must authorize the spend (sign with the stake key for a
-        vkey stake credential, or run the stake script); reclaim of the offer
-        asset to the owner is handled by change. The swap validator and beacon
-        policy are inlined by default, or referenced via a reference input when
-        the caller supplies ``swap_ref_utxo`` / ``beacon_ref_utxo``.
-
-        Returns:
-            The spent (resting) ``SwapDatum``.
-        """
-        if owner_address is None:
-            raise ValueError("build_close requires the owner address.")
-
-        input_utxo = self._input_utxo(owner_address)
-        tx_builder.add_script_input(
-            utxo=input_utxo,
-            script=self._swap_script_arg(swap_ref_utxo),
-            redeemer=Redeemer(SpendWithMint()),
-        )
-        # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
-        # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
-        # the validator reads it from the input directly. Adding the same datum to the
-        # witness set makes it an extraneous datum the ledger rejects on submit.
-
-        # Burn the three beacons.
-        tx_builder.add_minting_script(
-            script=self._beacon_script_arg(beacon_ref_utxo),
-            redeemer=Redeemer(CreateOrCloseSwaps()),
-        )
-        self._accumulate_mint(
-            tx_builder,
-            self._beacon_mint_assets(self.order_datum, -1),
-        )
-
-        # NOTE: the validator gates the close on the swap address' STAKING
-        # credential, not its payment credential. For a vkey stake credential the
-        # owner's stake key must be among the signatories — the caller supplies it
-        # via ``build_and_sign(signing_keys=[...])`` and/or
-        # ``tx_builder.required_signers``; for a script stake credential the stake
-        # script must be executed (a withdrawal). This builder only assembles the
-        # spend + burn; signing/withdrawal is the caller's responsibility.
-        return self.order_datum
 
 
 class CardanoSwapsOrderState(_CardanoSwapsOneWayOrderState):
