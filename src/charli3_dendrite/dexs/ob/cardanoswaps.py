@@ -1548,6 +1548,11 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         continuation below its min-UTxO is rejected; :meth:`claimable_offer` is the
         most a fill can take.
 
+        The swap address's staking credential is the owner's. Without
+        ``owner_address``, the owner is the record's own swap address, or
+        ``address_source`` when the record carried none; a given
+        ``owner_address`` must carry the swap address's staking credential.
+
         Returns:
             ``(continuing_output, continuing_datum)`` — the validator always
             requires a continuing beacon output (a full fill simply leaves the
@@ -1556,7 +1561,8 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         Raises:
             ValueError: this contract fills no swaps, the assets are not the offer
                 and ask, the fill takes more of the offer than the UTxO can
-                release, or the swap's expiration is at or before the chain tip.
+                release, the swap's expiration is at or before the chain tip, or
+                ``owner_address``'s staking credential is not the swap address's.
             InvalidPoolError: the datum's price is not a positive rational.
         """
         if not self._fill_allowed():
@@ -1564,7 +1570,13 @@ class _CardanoSwapsOrderState(AbstractOrderState):
                 "This Cardano-Swaps contract is read-and-close only: "
                 "its swaps are not filled.",
             )
-        owner = owner_address if owner_address is not None else address_source
+        owner: Address
+        if owner_address is not None:
+            self._check_owner(owner_address)
+            owner = owner_address
+        else:
+            swap_address = self._swap_address()
+            owner = swap_address if swap_address is not None else address_source
 
         # in/out orientation: out = offer (taker receives), in = ask (taker pays).
         if out_assets.unit() != self.out_unit:
@@ -2127,10 +2139,9 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
 
         Iterates the appropriate side (sell or buy) best-price-first, filling each
         resting order via its own ``swap_utxo`` until the input is exhausted. Each
-        fill is threaded the maker's real owner — the resting UTxO's staking
-        credential, carried on the order's ``address`` — so the continuing output
-        lands back at the correct beacon-tagged swap address (defaulting the owner
-        to the taker would reconstruct the wrong input and fail validation). Each
+        order must carry its ``address``: the order's ``swap_utxo`` takes the
+        maker's owner from it, so the continuing output lands back at the
+        correct beacon-tagged swap address. Each
         fill is capped at the order's claimable offer, so an ADA offer's
         continuation keeps its min-UTxO; an order with nothing claimable is
         skipped.
@@ -2174,7 +2185,6 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
                 in_assets=order_in,
                 out_assets=order_out,
                 tx_builder=tx_builder,
-                owner_address=Address.decode(state.address),
             )
 
             in_remaining -= order_in

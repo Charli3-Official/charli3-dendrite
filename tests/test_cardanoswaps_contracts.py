@@ -970,3 +970,47 @@ def test_reference_utxo_caches_are_independent(ref_backend):
     CardanoSwapsOrderState.clear_reference_utxo_cache()
     CardanoSwapsLegacyOrderState.reference_utxo()
     assert len(backend.calls) == 2
+
+
+def _take_official(state: CardanoSwapsOrderState, tb: TransactionBuilder, **kwargs):
+    """Take 4 ADA of the official ADA-for-TOKEN swap, with another key as taker."""
+    return state.swap_utxo(
+        address_source=OTHER_STAKE_OWNER,
+        in_assets=Assets(root={TOKEN: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        **kwargs,
+    )
+
+
+OTHER_STAKE_OWNER = Address(
+    payment_part=OWNER.payment_part,
+    staking_part=VerificationKeyHash(bytes.fromhex("44" * 28)),
+    network=Network.MAINNET,
+)
+
+
+def test_take_without_an_owner_uses_the_swap_address() -> None:
+    state = _official_state()
+    swap_address = CardanoSwapsOrderState.beacon_address(OWNER)
+    state.address = str(swap_address)
+    tb = TransactionBuilder(_OfflineContext())
+    txo, _ = _take_official(state, tb)
+    assert txo.address == swap_address
+    assert tb.inputs[0].output.address == swap_address
+
+    unknown = _official_state()
+    txo, _ = _take_official(unknown, TransactionBuilder(_OfflineContext()))
+    assert txo.address.staking_part == OTHER_STAKE_OWNER.staking_part
+
+
+def test_take_rejects_an_owner_other_than_the_swap_address() -> None:
+    state = _official_state()
+    state.address = str(CardanoSwapsOrderState.beacon_address(OWNER))
+    tb = TransactionBuilder(_OfflineContext())
+    with pytest.raises(ValueError, match="staking credential"):
+        _take_official(state, tb, owner_address=OTHER_STAKE_OWNER)
+    assert tb.inputs == [] and tb.outputs == []
+
+    txo, _ = _take_official(state, tb, owner_address=OWNER)
+    assert txo.address.staking_part == OWNER.staking_part

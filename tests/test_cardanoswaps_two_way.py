@@ -469,6 +469,32 @@ def test_close_rejects_an_owner_other_than_the_swap_address(tx_builder) -> None:
     assert len(tx_builder.inputs) == 1
 
 
+def test_take_without_an_owner_uses_the_swap_address(tx_builder) -> None:
+    state = _at_owner(_ada_pair())
+    cont_txo, _ = state.swap_utxo(
+        address_source=OTHER_OWNER,
+        in_assets=Assets(root={state.in_unit: state.required_ask(1_000_000)}),
+        out_assets=Assets(root={state.out_unit: 1_000_000}),
+        tx_builder=tx_builder,
+    )
+    assert cont_txo.address == CardanoSwapsTwoWayOrderState.beacon_address(OWNER)
+
+
+def test_take_rejects_an_owner_other_than_the_swap_address(tx_builder) -> None:
+    state = _at_owner(_ada_pair())
+    with pytest.raises(ValueError, match="staking credential"):
+        state.swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={state.in_unit: state.required_ask(1_000_000)}),
+            out_assets=Assets(root={state.out_unit: 1_000_000}),
+            tx_builder=tx_builder,
+            owner_address=OTHER_OWNER,
+        )
+    assert tx_builder.inputs == [] and tx_builder.outputs == []
+    _take(state, 1_000_000, tx_builder)
+    assert len(tx_builder.inputs) == 1
+
+
 # --- create -------------------------------------------------------------------
 
 ADA_DEPOSIT = 10_000_000
