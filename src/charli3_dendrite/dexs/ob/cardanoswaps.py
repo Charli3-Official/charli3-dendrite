@@ -838,12 +838,14 @@ class _CardanoSwapsOrderState(AbstractOrderState):
     Everything a Cardano-Swaps swap UTxO does whatever its contract: discovery
     by beacon policy, reference-script lookup, the beacon-tagged swap address,
     taking with a continuing output, and closing. A subclass supplies the datum,
-    its price and orientation, and the take hooks (:meth:`_fill_allowed`,
-    :meth:`_take_redeemer`, :meth:`required_ask`, :meth:`_continuation_datum`).
+    its price, the units it trades (:meth:`_taker_units`) and the take hooks
+    (:meth:`_fill_allowed`, :meth:`_take_redeemer`, :meth:`required_ask`,
+    :meth:`_continuation_datum`).
 
     From the taker's view: ``in`` is the ask asset (taker gives) and ``out`` is
-    the offer asset (taker receives); a subclass's ``post_init`` orients the
-    assets so that ``unit(0)`` is the ask and ``unit(1)`` is the offer.
+    the offer asset (taker receives); ``post_init`` orients the assets so that
+    ``unit(0)`` is the ask and ``unit(1)`` is the offer, and marks an expired
+    swap inactive.
     """
 
     CONTRACT: ClassVar[CardanoSwapsDeployment]
@@ -968,6 +970,54 @@ class _CardanoSwapsOrderState(AbstractOrderState):
 
         return dex_nft
 
+    @classmethod
+    @abstractmethod
+    def _taker_units(cls, datum: PlutusData, values: dict) -> tuple[str, str]:
+        """The ``(ask, offer)`` units of the direction ``values`` describes."""
+        raise NotImplementedError
+
+    @classmethod
+    def post_init(cls, values: dict) -> dict:
+        """Enforce taker orientation: unit(0)=ask (in), unit(1)=offer (out).
+
+        Rebuild the assets dict in a fixed order — ask first, offer second, then
+        any residual tokens (e.g. the UTxO's min-ADA when it is neither the offer
+        nor the ask). ``Assets`` is insertion-ordered (its sort only floats
+        ``lovelace`` to the front on construction), so reassigning ``root`` in
+        this order makes ``unit(0)`` the ask and ``unit(1)`` the offer. The ask
+        and offer are :meth:`_taker_units` of the parsed datum.
+        """
+        datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
+
+        ask_unit, offer_unit = cls._taker_units(datum, values)
+
+        assets = values["assets"]
+        root = assets.root
+
+        # Both legs must be present so unit(0)/unit(1) are well defined, even if a
+        # side is absent from the balance (a swap may hold none of the asset the
+        # taker pays, or have one side drawn down to zero).
+        ordered: dict[str, int] = {
+            ask_unit: root.pop(ask_unit, 0),
+            offer_unit: root.pop(offer_unit, 0),
+        }
+        # Preserve any residual tokens (e.g. min-ADA) after the traded pair.
+        ordered.update(root)
+
+        assets.root = ordered
+
+        # A swap whose expiration is in the past is no longer fillable on chain
+        # (the validator requires the tx validity interval to end at or before
+        # the expiration), so mark it inactive — mirroring the sibling order-book
+        # classes. ``expiration`` is POSIX milliseconds; ``PlutusNone`` means the
+        # swap never expires.
+        expiration = datum.expiration
+        values["inactive"] = isinstance(expiration, CardanoSwapsSomeInt) and (
+            int(time.time() * 1000) >= expiration.value
+        )
+
+        return values
+
     @property
     def volume_fee(self) -> int:
         """Batcher-less and fee-less: no volume fee."""
@@ -994,6 +1044,10 @@ class _CardanoSwapsOrderState(AbstractOrderState):
     def claimable_offer(self, coins_per_utxo_byte: int) -> int:
         """The most of the offer one fill of this UTxO can take."""
         raise NotImplementedError
+
+    def _swap_address(self) -> Address | None:
+        """The resting UTxO's decoded address, when the record carried one."""
+        return Address.decode(self.address) if self.address is not None else None
 
     @abstractmethod
     def _fill_allowed(self) -> bool:
@@ -1425,51 +1479,14 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             coins_per_utxo_byte,
             held_ask=self.assets[self.in_unit],
             prev_output_index=self.tx_index,
-            address=Address.decode(self.address) if self.address is not None else None,
+            address=self._swap_address(),
             contract=self.CONTRACT,
         )
 
     @classmethod
-    def post_init(cls, values: dict) -> dict:
-        """Enforce taker orientation: unit(0)=ask (in), unit(1)=offer (out).
-
-        Rebuild the assets dict in a fixed order — ask first, offer second, then
-        any residual tokens (e.g. the UTxO's min-ADA when it is neither the offer
-        nor the ask). ``Assets`` is insertion-ordered (its sort only floats
-        ``lovelace`` to the front on construction), so reassigning ``root`` in
-        this order makes ``unit(0)`` the ask and ``unit(1)`` the offer.
-        """
-        datum = cls.order_datum_class().from_cbor(values["datum_cbor"])
-
-        ask_unit = datum.ask_unit()
-        offer_unit = datum.offer_unit()
-
-        assets = values["assets"]
-        root = assets.root
-
-        # Both legs must be present so unit(0)/unit(1) are well defined, even if a
-        # side is absent from the balance (a normal one-way swap holds only the
-        # offer asset; the taker brings the ask asset).
-        ordered: dict[str, int] = {
-            ask_unit: root.pop(ask_unit, 0),
-            offer_unit: root.pop(offer_unit, 0),
-        }
-        # Preserve any residual tokens (e.g. min-ADA) after the traded pair.
-        ordered.update(root)
-
-        assets.root = ordered
-
-        # A one-way swap whose expiration is in the past is no longer fillable on
-        # chain (the validator requires the tx validity interval to end at or
-        # before the expiration), so mark it inactive — mirroring the sibling
-        # order-book classes. ``expiration`` is POSIX milliseconds; ``PlutusNone``
-        # means the swap never expires.
-        expiration = datum.expiration
-        values["inactive"] = isinstance(expiration, CardanoSwapsSomeInt) and (
-            int(time.time() * 1000) >= expiration.value
-        )
-
-        return values
+    def _taker_units(cls, datum: PlutusData, _values: dict) -> tuple[str, str]:
+        """The one direction a one-way swap trades: its ask and offer units."""
+        return datum.ask_unit(), datum.offer_unit()
 
     def _fill_allowed(self) -> bool:
         """Only a contract that allows fills lets its swaps be taken."""

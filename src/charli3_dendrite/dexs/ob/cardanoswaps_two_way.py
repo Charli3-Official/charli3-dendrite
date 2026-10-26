@@ -14,13 +14,16 @@ one asset beacon per asset (``asset1_beacon``/``asset2_beacon``), all minted
 under one beacon policy parameterised by the swap validator hash.
 
 This module holds the contract description (scripts, hashes, beacon-name rules
-and the spending redeemers that differ from the one-way contract) and the swap
-datum with its per-direction pricing and min-UTxO sizing.
+and the spending redeemers that differ from the one-way contract), the swap
+datum with its per-direction pricing and min-UTxO sizing, and the order state:
+one view of a swap UTxO per direction, taken and closed through the shared
+Cardano-Swaps order-state base.
 """
 
 import dataclasses
 import functools
 from dataclasses import dataclass
+from typing import ClassVar
 from typing import Union
 
 from pycardano import Address
@@ -39,6 +42,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
+from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
@@ -470,3 +474,112 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
             },
         )
         return min_lovelace(held_tokens)
+
+
+class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
+    """One direction of a resting Cardano-Swaps two-way swap UTxO (Plutus V3).
+
+    A two-way swap UTxO trades both ways, so it parses as one view per
+    direction: ``take_asset2`` picks the asset a taker draws (``False``: asset1,
+    redeemer ``TakeAsset1``; ``True``: asset2, redeemer ``TakeAsset2``). Each view
+    is oriented for the taker like a one-way swap: ``unit(0)`` is the asset paid
+    (``in``) and ``unit(1)`` the asset drawn (``out``), with any residual
+    lovelace after them. :meth:`opposite` and :meth:`directions` give the other
+    view of the same UTxO.
+
+    A side drawn down to zero still parses: that view's ``available`` is 0 while
+    the opposite view stays fillable.
+    """
+
+    CONTRACT: ClassVar[CardanoSwapsTwoWayContract] = TWO_WAY_CONTRACT
+
+    take_asset2: bool = False
+
+    @classmethod
+    def dex(cls) -> str:
+        """Official dex name: the same dex as the one-way swaps."""
+        return "CardanoSwaps"
+
+    @classmethod
+    def order_datum_class(cls) -> type[PlutusData]:
+        """Returns data class used for handling order datums."""
+        return CardanoSwapsTwoWaySwapDatum
+
+    @classmethod
+    def _taker_units(cls, datum: PlutusData, values: dict) -> tuple[str, str]:
+        """The ask and offer units of the direction ``values["take_asset2"]`` names.
+
+        The direction is also accepted under its camel-case alias; it is written
+        back under the field name so the parsed view and its orientation agree.
+        """
+        take_asset2 = bool(
+            values.pop("takeAsset2", values.get("take_asset2", False)),
+        )
+        values["take_asset2"] = take_asset2
+        return datum.ask_unit(take_asset2), datum.offer_unit(take_asset2)
+
+    @property
+    def price(self) -> tuple[int, int]:
+        """This direction's ask-per-offer price as ``(numerator, denominator)``.
+
+        Raises:
+            InvalidPoolError: this direction's price is not a positive rational.
+        """
+        return self.order_datum.price(take_asset2=self.take_asset2)
+
+    def required_ask(self, offer_taken: int) -> int:
+        """The payment a take of ``offer_taken`` deposits into the swap.
+
+        Raises:
+            InvalidPoolError: this direction's price is not a positive rational.
+        """
+        return self.order_datum.required_ask(
+            offer_taken,
+            take_asset2=self.take_asset2,
+        )
+
+    def claimable_offer(self, coins_per_utxo_byte: int) -> int:
+        """The most of this direction's offer one take of this UTxO can draw.
+
+        :meth:`CardanoSwapsTwoWaySwapDatum.claimable_offer` over this UTxO's
+        balance of the drawn asset and of the paid asset, sized at its own output
+        index and at its address when known. A :meth:`swap_utxo` take of this
+        amount always leaves the continuing output funded.
+
+        Raises:
+            InvalidPoolError: this direction's price is not a positive rational.
+        """
+        return self.order_datum.claimable_offer(
+            self.assets[self.out_unit],
+            coins_per_utxo_byte,
+            take_asset2=self.take_asset2,
+            held_ask=self.assets[self.in_unit],
+            prev_output_index=self.tx_index,
+            address=self._swap_address(),
+        )
+
+    def _fill_allowed(self) -> bool:
+        """Every two-way swap may be taken."""
+        return True
+
+    def _take_redeemer(self) -> PlutusData:
+        """``TakeAsset2`` or ``TakeAsset1``, for this view's direction."""
+        return TakeAsset2() if self.take_asset2 else TakeAsset1()
+
+    def _continuation_datum(self) -> PlutusData:
+        """The resting datum with ``prev_input`` = this UTxO."""
+        return self.order_datum.continuation_datum(
+            bytes.fromhex(self.tx_hash),
+            self.tx_index,
+        )
+
+    def opposite(self) -> "CardanoSwapsTwoWayOrderState":
+        """The other direction's view of this same UTxO."""
+        values = self.model_dump()
+        values["take_asset2"] = not self.take_asset2
+        return type(self).model_validate(values)
+
+    def directions(self) -> tuple["CardanoSwapsTwoWayOrderState", ...]:
+        """Both views of this UTxO: the ``TakeAsset1`` one, then ``TakeAsset2``."""
+        other = self.opposite()
+        return (other, self) if self.take_asset2 else (self, other)
