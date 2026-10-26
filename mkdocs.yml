@@ -62,6 +62,7 @@ nav:
           - Wingriders: wingriders.md
       - Order Book:
           - Axo (DEPRECATED): axo.md
+          - Cardano-Swaps: cardanoswaps.md
           - Genius Yield: geniusyield.md
       - Core:
           - core_base.md
