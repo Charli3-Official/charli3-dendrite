@@ -1683,15 +1683,35 @@ def test_orderbook_swap_utxo_caps_ada_offer_at_claimable(tx_builder) -> None:
     assert _cont_quantity(cont_txo, TOKEN_A_UNIT) == order.required_ask(claimable)
 
 
+def test_orderbook_get_book_skips_ada_offer_down_to_its_carrier() -> None:
+    # An ADA offer already down to its min-UTxO has nothing a fill can take.
+    drained = _ada_offer_order(1, 1, 1_000_000)
+    assert drained.claimable_offer(CPUB) == 0
+    live = _ada_offer_order(2, 1, 10_000_000)
+    live.tx_index = 1  # each resting swap is its own UTxO
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[live, drained])
+
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is live
+    assert book.buy_book_full[0].quantity == live.claimable_offer(CPUB)
+
+
 def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
-    # An ADA offer already down to its min-UTxO is passed over for the next level.
+    # A book sized at a lower coins_per_utxo_byte than the transaction's lists an
+    # ADA offer the transaction's min-UTxO leaves nothing to take; the fill passes
+    # it over for the next level.
     drained = _ada_offer_order(1, 1, 1_000_000)
     drained.address = _resting_beacon_addr(_MAKER)
+    assert drained.claimable_offer(1) > 0
     assert drained.claimable_offer(CPUB) == 0
     live = _ada_offer_order(2, 1, 10_000_000)
     live.tx_index = 1  # each resting swap is its own UTxO
     live.address = _resting_beacon_addr(_TAKER)
-    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[live, drained])
+    book = CardanoSwapsOrderBook.get_book(
+        _PAIR,
+        orders=[live, drained],
+        coins_per_utxo_byte=1,
+    )
     assert book.buy_book_full[0].state is drained
 
     cont_txo, _ = book.swap_utxo(

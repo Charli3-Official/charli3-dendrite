@@ -24,6 +24,7 @@ from tests.test_cardanoswaps import _TAKER
 from tests.test_cardanoswaps import _OfflineContext
 from tests.test_cardanoswaps import _redeemers
 from tests.test_cardanoswaps import _resting_state
+from tests.test_cardanoswaps_two_way import CPUB
 from tests.test_cardanoswaps_two_way import _ada_pair
 from tests.test_cardanoswaps_two_way import _state
 from tests.test_cardanoswaps_two_way_contracts import USDM_ID
@@ -62,7 +63,8 @@ def _levels(book_side) -> list[tuple[float, object]]:
 
 
 def test_book_lists_both_directions_of_a_two_way_swap() -> None:
-    book = CardanoSwapsOrderBook.get_book(PAIR, orders=[_ada_pair()])
+    state = _ada_pair()
+    book = CardanoSwapsOrderBook.get_book(PAIR, orders=[state])
 
     assert len(book.sell_book_full) == 1
     assert len(book.buy_book_full) == 1
@@ -75,7 +77,9 @@ def test_book_lists_both_directions_of_a_two_way_swap() -> None:
     assert buy.state.take_asset2 is False
     assert (buy.state.in_unit, buy.state.out_unit) == (USDM_UNIT, "lovelace")
     assert buy.price == 3 / 2_000_000
-    assert buy.quantity == 10_000_000
+    # The ADA side lists what a take can release: its balance less the carrier.
+    assert buy.quantity == state.claimable_offer(CPUB)
+    assert 0 < buy.quantity < 10_000_000
 
 
 def test_book_merges_one_way_and_two_way_swaps() -> None:
@@ -124,7 +128,37 @@ def test_book_skips_a_drained_direction() -> None:
     assert len(book.sell_book_full) == 0
     assert len(book.buy_book_full) == 1
     assert book.buy_book_full[0].state.take_asset2 is False
-    assert book.buy_book_full[0].quantity == 10_000_000
+    assert book.buy_book_full[0].quantity == drained.claimable_offer(CPUB)
+
+
+def test_book_skips_an_ada_side_holding_only_its_carrier() -> None:
+    # Created token-only: the ADA side holds just the min-UTxO carrier, which no
+    # take can draw, so the book neither lists nor quotes it.
+    datum = vector_datum()
+    carrier = datum.carrier_lovelace(0, 30, CPUB)
+    token_only = _state(datum, {"lovelace": carrier, USDM_UNIT: 30})
+    assert token_only.claimable_offer(CPUB) == 0
+
+    book = CardanoSwapsOrderBook.get_book(PAIR, orders=[token_only])
+
+    assert len(book.buy_book_full) == 0
+    assert len(book.sell_book_full) == 1
+    assert book.sell_book_full[0].quantity == 30
+    out, _ = book.get_amount_out(Assets(root={USDM_UNIT: 3}))
+    assert out.quantity() == 0
+
+
+def test_book_sizes_levels_at_the_given_coins_per_utxo_byte() -> None:
+    state = _ada_pair()
+
+    book = CardanoSwapsOrderBook.get_book(
+        PAIR,
+        orders=[state],
+        coins_per_utxo_byte=CPUB * 2,
+    )
+
+    assert book.buy_book_full[0].quantity == state.claimable_offer(CPUB * 2)
+    assert book.buy_book_full[0].quantity < state.claimable_offer(CPUB)
 
 
 def test_book_skips_an_expired_two_way_swap() -> None:

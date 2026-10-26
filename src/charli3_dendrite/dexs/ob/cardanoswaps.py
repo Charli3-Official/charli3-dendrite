@@ -19,6 +19,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from typing import Callable
 from typing import ClassVar
 from typing import Protocol
@@ -59,6 +60,16 @@ from charli3_dendrite.dexs.ob.ob_base import SellOrderBook
 from charli3_dendrite.dexs.ob.ob_base import fill_within_budget
 from charli3_dendrite.utility import asset_to_value
 from charli3_dendrite.utility import posix_ms_to_slot
+
+if TYPE_CHECKING:
+    from charli3_dendrite.dexs.ob.cardanoswaps_two_way import (
+        CardanoSwapsTwoWayOrderState,
+    )
+
+# The current mainnet ``coins_per_utxo_byte`` protocol parameter. The order book
+# sizes each level at it by default: the min-UTxO an ADA side keeps depends on it,
+# so it sets how much ADA a take can release.
+MAINNET_COINS_PER_UTXO_BYTE = 4310
 
 # The pre-release v2 one-way build (Plutus V2), compiled from the protocol source
 # before its Plutus V3 release. Kept so swaps resting on it can be read and
@@ -1890,22 +1901,30 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
     def get_book(
         cls,
         assets: Assets,
-        orders: list[_CardanoSwapsOrderState] | None = None,
+        orders: (
+            "list[CardanoSwapsOrderState | CardanoSwapsTwoWayOrderState] | None"
+        ) = None,
+        *,
+        coins_per_utxo_byte: int = MAINNET_COINS_PER_UTXO_BYTE,
     ) -> "CardanoSwapsOrderBook":
         """Build an order book from Cardano-Swaps swaps for the given pair.
 
         Every swap is listed through its :meth:`~_CardanoSwapsOrderState.directions`:
         a one-way swap gives its one direction, a two-way swap one direction per
         side. A direction is listed once per ``(tx_hash, tx_index, in_unit)``, so
-        passing several views of one UTxO lists it once. Inactive swaps, swaps
-        whose price is malformed and directions with nothing available are left
-        out.
+        passing several views of one UTxO lists it once. Each level's quantity is
+        the direction's ``claimable_offer``: what one take can release. An ADA
+        side keeps its min-UTxO, so it lists its balance less that carrier.
+        Inactive swaps, swaps whose price is malformed and directions with
+        nothing claimable are left out.
 
         Args:
             assets: The token pair to build the book for (unit(0) + unit(1)).
             orders: Pre-fetched one-way and two-way swaps, or None to discover
-                both from the backend by beacon policy (``pool_selector`` is
-                beacon-based, not address-based).
+                both from the backend by beacon policy (each kind by its own
+                state class's ``pool_selector``).
+            coins_per_utxo_byte: The protocol parameter the levels are sized at.
+                Defaults to :data:`MAINNET_COINS_PER_UTXO_BYTE`.
         """
         if orders is None:
             orders = cls._discover_orders()
@@ -1921,7 +1940,7 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
                 if key in seen:
                     continue
                 seen.add(key)
-                level = cls._book_level(direction)
+                level = cls._book_level(direction, coins_per_utxo_byte)
                 if level is None:
                     continue
                 in_unit, out_unit = direction.in_unit, direction.out_unit
@@ -1962,17 +1981,20 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         return orders
 
     @staticmethod
-    def _book_level(direction: _CardanoSwapsOrderState) -> OrderBookOrder | None:
+    def _book_level(
+        direction: _CardanoSwapsOrderState,
+        coins_per_utxo_byte: int,
+    ) -> OrderBookOrder | None:
         """The book level of one direction, or None when it cannot be listed.
 
         A direction whose price is malformed cannot be priced or filled, and one
-        with nothing available has nothing to give.
+        with nothing claimable has nothing a take can release.
         """
         try:
             num, denom = direction.price
         except InvalidPoolError:
             return None
-        quantity = int(direction.available.quantity())
+        quantity = direction.claimable_offer(coins_per_utxo_byte)
         if quantity <= 0:
             return None
         return OrderBookOrder(price=num / denom, quantity=quantity, state=direction)
@@ -1984,12 +2006,22 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
 
     @classmethod
     def order_selector(cls) -> list[str]:
-        """Order selection: discovery is by beacon policy, not address."""
+        """Order selection of one-way swaps: by beacon policy, not address.
+
+        It selects one-way swaps only; two-way swaps carry their own beacon
+        policy (``CardanoSwapsTwoWayOrderState.pool_selector()``).
+        ``get_book(orders=None)`` discovers both kinds.
+        """
         return CardanoSwapsOrderState.order_selector()
 
     @classmethod
     def pool_selector(cls) -> PoolSelector:
-        """Pool/order selection: by beacon policy id."""
+        """Pool/order selection of one-way swaps: by beacon policy id.
+
+        It selects one-way swaps only; two-way swaps are selected by
+        ``CardanoSwapsTwoWayOrderState.pool_selector()``.
+        ``get_book(orders=None)`` discovers both kinds.
+        """
         return CardanoSwapsOrderState.pool_selector()
 
     @classmethod
