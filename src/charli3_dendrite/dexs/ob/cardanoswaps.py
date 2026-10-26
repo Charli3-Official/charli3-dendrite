@@ -657,6 +657,25 @@ def _check_expiration(expiration: int | None) -> None:
         )
 
 
+def _check_unexpired(expiration: int | None, tx_builder: TransactionBuilder) -> None:
+    """Reject an expiration the chain tip has already reached.
+
+    A transaction touching an expiring swap must end its validity at or before
+    the expiration, which it cannot do once the tip is at or past it.
+
+    Raises:
+        ValueError: ``expiration`` is set and its slot is at or before
+            ``tx_builder``'s last block slot.
+    """
+    if (
+        expiration is not None
+        and posix_ms_to_slot(expiration) <= tx_builder.context.last_block_slot
+    ):
+        raise ValueError(
+            f"The swap expiration {expiration} has already been reached.",
+        )
+
+
 @dataclass
 class CardanoSwapsSwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
     """The v2 one-way swap datum (single constructor, 11 fields).
@@ -1536,8 +1555,8 @@ class _CardanoSwapsOrderState(AbstractOrderState):
 
         Raises:
             ValueError: this contract fills no swaps, the assets are not the offer
-                and ask, or the fill takes more of the offer than the UTxO can
-                release.
+                and ask, the fill takes more of the offer than the UTxO can
+                release, or the swap's expiration is at or before the chain tip.
             InvalidPoolError: the datum's price is not a positive rational.
         """
         if not self._fill_allowed():
@@ -1564,6 +1583,9 @@ class _CardanoSwapsOrderState(AbstractOrderState):
                 f"got {offer_taken}.",
             )
         ask_given = self.required_ask(offer_taken)
+        expiration = self.order_datum.expiration
+        if isinstance(expiration, CardanoSwapsSomeInt):
+            _check_unexpired(expiration.value, tx_builder)
 
         input_utxo = self._input_utxo(owner)
 
@@ -1574,7 +1596,6 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         )
         # An expiring swap is fillable only by a transaction whose validity ends at
         # or before the expiration (the validator reads it as the upper bound).
-        expiration = self.order_datum.expiration
         if isinstance(expiration, CardanoSwapsSomeInt):
             self._bound_validity(tx_builder, expiration.value)
         # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
@@ -1812,7 +1833,8 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
         Raises:
             ValueError: this contract creates no swaps, ``price`` is not a
                 positive rational, or the expiration is not a multiple of
-                60 000. Nothing is added to ``tx_builder``.
+                60 000 or is at or before the chain tip. Nothing is added to
+                ``tx_builder``.
         """
         if not cls.CONTRACT.allows_create:
             raise ValueError(
@@ -1825,6 +1847,7 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             else None
         )
         _check_expiration(expiration)
+        _check_unexpired(expiration, tx_builder)
         offer_id, offer_name = _split_unit(offer.unit())
         ask_id, ask_name = _split_unit(ask.unit())
         swap_price = CardanoSwapsRational.from_price(price)

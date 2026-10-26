@@ -376,6 +376,19 @@ def test_take_of_an_expiring_swap_sets_its_deadline() -> None:
     assert tb.ttl == deadline
 
 
+@pytest.mark.parametrize(
+    "tip",
+    [posix_ms_to_slot(EXPIRATION), posix_ms_to_slot(EXPIRATION) + 60],
+    ids=["at-tip", "past"],
+)
+def test_take_rejects_a_swap_whose_expiration_is_reached(tip) -> None:
+    state = _ada_pair(expiration=CardanoSwapsSomeInt(EXPIRATION))
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        _take(state, 1_000_000, tb)
+    assert tb.inputs == [] and tb.outputs == [] and tb.ttl is None
+
+
 def test_take_references_the_swap_script_when_supplied(tx_builder) -> None:
     swap_ref = _ref_utxo(CardanoSwapsTwoWayOrderState._swap_script())
     _take(_ada_pair(), 1_000_000, tx_builder, swap_ref_utxo=swap_ref)
@@ -599,6 +612,19 @@ def test_create_with_expiration_sets_the_deadline() -> None:
     earlier.ttl = deadline - 100
     _create(earlier, expiration=EXPIRATION)
     assert earlier.ttl == deadline - 100
+
+
+@pytest.mark.parametrize(
+    "tip",
+    [posix_ms_to_slot(EXPIRATION), posix_ms_to_slot(EXPIRATION) + 60],
+    ids=["at-tip", "past"],
+)
+def test_create_rejects_an_expiration_already_reached(tip) -> None:
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        _create(tb, expiration=EXPIRATION)
+    assert tb.outputs == [] and tb.mint is None
+    assert tb.required_signers is None and tb.ttl is None
 
 
 def test_create_without_expiration_leaves_the_validity_open(tx_builder) -> None:

@@ -397,6 +397,21 @@ def _fill(
     ttl: int | None = None,
 ) -> TransactionBuilder:
     """Fill an ADA-for-TOKEN swap with the chain tip at ``tip``; return the builder."""
+    state = _expiring_state(expiration)
+    tb = TransactionBuilder(_ContextAt(tip))
+    tb.ttl = ttl
+    state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        owner_address=OWNER,
+    )
+    return tb
+
+
+def _expiring_state(expiration: int | None) -> CardanoSwapsOrderState:
+    """A resting ADA-for-TOKEN swap expiring at ``expiration``."""
     state = _resting_state(
         b"",
         b"",
@@ -410,16 +425,7 @@ def _fill(
         datum = state.order_datum
         datum.expiration = CardanoSwapsSomeInt(value=expiration)
         state.datum_cbor = datum.to_cbor_hex()
-    tb = TransactionBuilder(_ContextAt(tip))
-    tb.ttl = ttl
-    state.swap_utxo(
-        address_source=OWNER,
-        in_assets=Assets(root={TOKEN: 8_000_000}),
-        out_assets=Assets(root={"lovelace": 4_000_000}),
-        tx_builder=tb,
-        owner_address=OWNER,
-    )
-    return tb
+    return state
 
 
 def test_fill_of_an_expiring_swap_sets_its_deadline() -> None:
@@ -482,6 +488,43 @@ def test_create_rejects_an_expiration_off_the_minute() -> None:
             price=(2, 1),
             tx_builder=tb,
             expiration=EXPIRATION + 1,
+        )
+    assert tb.mint is None and not tb.outputs
+    assert tb.required_signers is None and tb.ttl is None
+
+
+REACHED_TIPS = pytest.mark.parametrize(
+    "tip",
+    [EXPIRATION_SLOT, EXPIRATION_SLOT + 60],
+    ids=["at-tip", "past"],
+)
+
+
+@REACHED_TIPS
+def test_fill_rejects_a_swap_whose_expiration_is_reached(tip: int) -> None:
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        _expiring_state(EXPIRATION).swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={TOKEN: 8_000_000}),
+            out_assets=Assets(root={"lovelace": 4_000_000}),
+            tx_builder=tb,
+            owner_address=OWNER,
+        )
+    assert tb.inputs == [] and tb.outputs == [] and tb.ttl is None
+
+
+@REACHED_TIPS
+def test_create_rejects_an_expiration_already_reached(tip: int) -> None:
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root={"lovelace": 10_000_000}),
+            ask=Assets(root={TOKEN: 0}),
+            price=(2, 1),
+            tx_builder=tb,
+            expiration=EXPIRATION,
         )
     assert tb.mint is None and not tb.outputs
     assert tb.required_signers is None and tb.ttl is None

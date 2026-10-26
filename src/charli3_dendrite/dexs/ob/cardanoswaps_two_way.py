@@ -55,13 +55,13 @@ from charli3_dendrite.dexs.ob.cardanoswaps import _beacon_assets
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsDatumMixin
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import _check_expiration
+from charli3_dendrite.dexs.ob.cardanoswaps import _check_unexpired
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
 from charli3_dendrite.dexs.ob.cardanoswaps import _expiration_field
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
 from charli3_dendrite.dexs.ob.cardanoswaps import _split_unit
 from charli3_dendrite.dexs.ob.cardanoswaps import _unit
-from charli3_dendrite.utility import posix_ms_to_slot
 
 # The official Cardano-Swaps v2 two-way contracts (Plutus V3, release v2.0.0).
 # The beacon policy is parameterised by ``dapp_hash`` (= the swap validator
@@ -655,8 +655,8 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
             ValueError: the owner has no key-hash staking credential, an asset bag
                 is not one unit with a non-negative deposit, the assets are equal
                 or unsorted, a price is not a positive rational, both deposits are
-                0, or the expiration is not a multiple of 60 000. Nothing is added
-                to ``tx_builder``.
+                0, or the expiration is not a multiple of 60 000 or is at or
+                before the chain tip. Nothing is added to ``tx_builder``.
         """
         stake_key = cls._owner_stake_key(owner_address)
         asset1_unit, deposit1 = _deposit(asset1, "asset1")
@@ -664,6 +664,7 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         if deposit1 == 0 and deposit2 == 0:
             raise ValueError("A two-way swap needs a deposit of asset1 or asset2.")
         _check_expiration(expiration)
+        _check_unexpired(expiration, tx_builder)
         asset1_id, asset1_name = _split_unit(asset1_unit)
         asset2_id, asset2_name = _split_unit(asset2_unit)
         datum = CardanoSwapsTwoWaySwapDatum(
@@ -806,14 +807,7 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         else:
             new_expiration = expiration
         _check_expiration(new_expiration)
-        if (
-            new_expiration is not None
-            and posix_ms_to_slot(new_expiration) <= tx_builder.context.last_block_slot
-        ):
-            raise ValueError(
-                f"The swap expiration {new_expiration} has already been reached; "
-                "pass a later expiration, or None to clear it.",
-            )
+        _check_unexpired(new_expiration, tx_builder)
         prices = {
             label: CardanoSwapsRational.from_price(
                 (kept.numerator, kept.denominator) if price is None else price,
