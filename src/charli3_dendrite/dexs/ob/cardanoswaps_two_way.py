@@ -43,8 +43,6 @@ from pycardano.utils import min_lovelace
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
-from charli3_dendrite.dataclasses.models import OrderType
-from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsDeployment
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
@@ -52,6 +50,8 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithStake
 from charli3_dendrite.dexs.ob.cardanoswaps import UpdateSwaps
 from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
+from charli3_dendrite.dexs.ob.cardanoswaps import _beacon_assets
+from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsDatumMixin
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
@@ -232,7 +232,7 @@ TWO_WAY_CONTRACT = CardanoSwapsTwoWayContract(
 
 
 @dataclass
-class CardanoSwapsTwoWaySwapDatum(OrderDatum):
+class CardanoSwapsTwoWaySwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
     """The v2 two-way swap datum (single constructor, 12 fields).
 
     Asset policy/name pairs are separate flat bytestrings, as in the one-way
@@ -273,17 +273,6 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
     prev_input: Union[CardanoSwapsSomeOutRefV3, PlutusNone]
     expiration: Union[CardanoSwapsSomeInt, PlutusNone]
 
-    def prev_input_ref(self) -> tuple[bytes, int] | None:
-        """The consumed output this datum's ``prev_input`` records.
-
-        Returns:
-            ``(tx_hash, output_index)``, or ``None`` when ``prev_input`` is
-            ``None``.
-        """
-        if isinstance(self.prev_input, PlutusNone):
-            return None
-        return self.prev_input.ref()
-
     def asset1_unit(self) -> str:
         """The dendrite unit of asset1."""
         return _unit(self.asset1_id, self.asset1_name)
@@ -304,17 +293,15 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
         """The traded pair (asset1 + asset2), both at zero quantity."""
         return Assets(root={self.asset1_unit(): 0, self.asset2_unit(): 0})
 
-    def address_source(self) -> None:
-        """The owner is the UTxO address staking credential, not the datum."""
-        return
-
     def requested_amount(self) -> Assets:
         """Both assets at zero: a two-way swap accepts either as payment."""
         return self.pool_pair()
 
-    def order_type(self) -> OrderType:
-        """A resting swap order."""
-        return OrderType.swap
+    def _named_price(self, take_asset2: bool) -> tuple[CardanoSwapsRational, str]:
+        """The named direction's price and its field label for error messages."""
+        if take_asset2:
+            return self.asset2_price, "two-way asset2_price"
+        return self.asset1_price, "two-way asset1_price"
 
     def price(self, take_asset2: bool) -> tuple[int, int]:
         """The named direction's ask-per-offer price as ``(numerator, denominator)``.
@@ -327,14 +314,8 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
             InvalidPoolError: The named direction's price is not a positive
                 rational.
         """
-        rational = self.asset2_price if take_asset2 else self.asset1_price
-        num, den = rational.numerator, rational.denominator
-        if num <= 0 or den <= 0:
-            side = "asset2_price" if take_asset2 else "asset1_price"
-            raise InvalidPoolError(
-                f"Cardano-Swaps two-way {side} must be positive, got {num}/{den}.",
-            )
-        return num, den
+        rational, label = self._named_price(take_asset2)
+        return rational.checked(label)
 
     def required_ask(self, offer_taken: int, *, take_asset2: bool) -> int:
         """The least payment the validator accepts for taking ``offer_taken``.
@@ -347,18 +328,15 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
             InvalidPoolError: The named direction's price is not a positive
                 rational.
         """
-        num, den = self.price(take_asset2)
-        return -(-offer_taken * num // den)
+        rational, label = self._named_price(take_asset2)
+        return rational.required_payment(offer_taken, label)
 
     def beacon_assets(self, quantity: int = 1) -> Assets:
         """The pair, asset1 and asset2 beacons, each at ``quantity``."""
-        policy = self.beacon_id.hex()
-        return Assets(
-            root={
-                f"{policy}{self.pair_beacon.hex()}": quantity,
-                f"{policy}{self.asset1_beacon.hex()}": quantity,
-                f"{policy}{self.asset2_beacon.hex()}": quantity,
-            },
+        return _beacon_assets(
+            self.beacon_id,
+            (self.pair_beacon, self.asset1_beacon, self.asset2_beacon),
+            quantity,
         )
 
     def continuation_datum(

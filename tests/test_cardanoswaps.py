@@ -50,6 +50,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsTxId
 from charli3_dendrite.dexs.ob.cardanoswaps import CreateOrCloseSwaps
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithMint
 from charli3_dendrite.dexs.ob.cardanoswaps import Swap
+from charli3_dendrite.dexs.ob.cardanoswaps import _beacon_assets
 from charli3_dendrite.dexs.ob.cardanoswaps import ask_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import offer_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import pair_beacon_name
@@ -1704,3 +1705,40 @@ def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> N
     assert cont_txo.address.staking_part == _TAKER.staking_part
     assert cont_txo.amount.coin == 8_000_000
     assert len(tx_builder.outputs) == 1
+
+
+def test_rational_checked_returns_positive_components() -> None:
+    assert CardanoSwapsRational(3, 2).checked("swap_price") == (3, 2)
+
+
+@pytest.mark.parametrize(("num", "den"), [(0, 1), (1, 0), (-1, 2), (2, -1)])
+def test_rational_checked_rejects_non_positive(num: int, den: int) -> None:
+    with pytest.raises(
+        InvalidPoolError,
+        match=f"Cardano-Swaps some_price must be positive, got {num}/{den}.",
+    ):
+        CardanoSwapsRational(num, den).checked("some_price")
+
+
+def test_rational_required_payment_rounds_up() -> None:
+    rational = CardanoSwapsRational(10, 3)
+    assert rational.required_payment(3, "swap_price") == 10
+    assert rational.required_payment(4, "swap_price") == 14
+    assert rational.required_payment(0, "swap_price") == 0
+
+
+def test_rational_required_payment_rejects_non_positive() -> None:
+    with pytest.raises(InvalidPoolError, match="swap_price must be positive"):
+        CardanoSwapsRational(0, 1).required_payment(5, "swap_price")
+
+
+def test_beacon_assets_helper_holds_each_name_at_quantity() -> None:
+    policy = bytes.fromhex("ab" * 28)
+    assets = _beacon_assets(policy, (b"\x01", b"\x02", b"\x03"), 2)
+    assert assets == Assets(
+        root={
+            f"{'ab' * 28}01": 2,
+            f"{'ab' * 28}02": 2,
+            f"{'ab' * 28}03": 2,
+        },
+    )

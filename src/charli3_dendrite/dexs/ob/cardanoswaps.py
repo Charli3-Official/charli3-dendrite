@@ -22,6 +22,7 @@ from types import SimpleNamespace
 from typing import Callable
 from typing import ClassVar
 from typing import Protocol
+from typing import Sequence
 from typing import Union
 from typing import cast
 
@@ -532,6 +533,73 @@ class CardanoSwapsRational(PlutusData):
             raise ValueError(f"{label} must be a positive rational, got {num}/{den}.")
         return cls(numerator=num, denominator=den)
 
+    def checked(self, label: str) -> tuple[int, int]:
+        """This price as ``(numerator, denominator)``, both strictly positive.
+
+        The beacon policy only mints for a strictly positive price, but any datum
+        can sit in a UTxO, so a zero or negative component is rejected here rather
+        than surfacing as a division error in the pricing and fill math.
+
+        Args:
+            label: The datum field named in the error message.
+
+        Raises:
+            InvalidPoolError: either component is not strictly positive.
+        """
+        num, den = self.numerator, self.denominator
+        if num <= 0 or den <= 0:
+            raise InvalidPoolError(
+                f"Cardano-Swaps {label} must be positive, got {num}/{den}.",
+            )
+        return num, den
+
+    def required_payment(self, offer_taken: int, label: str) -> int:
+        """The least payment the validator accepts for taking ``offer_taken``.
+
+        The validator checks ``offer_taken * numerator <= payment * denominator``,
+        so the minimum is ``ceil(offer_taken * numerator / denominator)``.
+
+        Raises:
+            InvalidPoolError: this price is not a positive rational.
+        """
+        num, den = self.checked(label)
+        return -(-offer_taken * num // den)
+
+
+def _beacon_assets(beacon_id: bytes, names: Sequence[bytes], quantity: int) -> Assets:
+    """The ``beacon_id`` beacons named ``names``, each at ``quantity``."""
+    policy = beacon_id.hex()
+    return Assets(root={f"{policy}{name.hex()}": quantity for name in names})
+
+
+class _CardanoSwapsDatumMixin:
+    """Accessors shared by the one-way and two-way swap datums.
+
+    A host datum carries a ``prev_input`` field in either contract's
+    output-reference shape, or ``None``.
+    """
+
+    prev_input: Union[CardanoSwapsSomeOutRefV3, CardanoSwapsSomeOutRef, PlutusNone]
+
+    def prev_input_ref(self) -> tuple[bytes, int] | None:
+        """The consumed output this datum's ``prev_input`` records.
+
+        Returns:
+            ``(tx_hash, output_index)`` in either shape, or ``None`` when
+            ``prev_input`` is ``None`` (a swap that has not been filled).
+        """
+        if isinstance(self.prev_input, PlutusNone):
+            return None
+        return self.prev_input.ref()
+
+    def address_source(self) -> str | None:
+        """The owner is the UTxO address staking credential, not the datum."""
+        return None
+
+    def order_type(self) -> OrderType:
+        """A resting swap order."""
+        return OrderType.swap
+
 
 @dataclass
 class CardanoSwapsSomeInt(PlutusData):
@@ -547,7 +615,7 @@ def _expiration_field(expiration: int | None) -> CardanoSwapsSomeInt | PlutusNon
 
 
 @dataclass
-class CardanoSwapsSwapDatum(OrderDatum):
+class CardanoSwapsSwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
     """The v2 one-way swap datum (single constructor, 11 fields).
 
     Asset policy/name pairs are kept as separate flat bytestrings (not an
@@ -573,17 +641,6 @@ class CardanoSwapsSwapDatum(OrderDatum):
     prev_input: Union[CardanoSwapsSomeOutRefV3, CardanoSwapsSomeOutRef, PlutusNone]
     expiration: Union[CardanoSwapsSomeInt, PlutusNone]
 
-    def prev_input_ref(self) -> tuple[bytes, int] | None:
-        """The consumed output this datum's ``prev_input`` records.
-
-        Returns:
-            ``(tx_hash, output_index)`` in either shape, or ``None`` when
-            ``prev_input`` is ``None`` (a swap that has not been filled).
-        """
-        if isinstance(self.prev_input, PlutusNone):
-            return None
-        return self.prev_input.ref()
-
     def offer_unit(self) -> str:
         """The dendrite unit of the offered (output) asset."""
         return _unit(self.offer_id, self.offer_name)
@@ -604,17 +661,9 @@ class CardanoSwapsSwapDatum(OrderDatum):
         """The traded pair (offer + ask), both at zero quantity."""
         return self.offer_assets() + self.ask_assets()
 
-    def address_source(self) -> str | None:
-        """The owner is the UTxO address staking credential, not the datum."""
-        return None
-
     def requested_amount(self) -> Assets:
         """The asset the order is asking for."""
         return self.ask_assets()
-
-    def order_type(self) -> OrderType:
-        """A resting swap order."""
-        return OrderType.swap
 
     def price(self) -> tuple[int, int]:
         """The ask-per-offer ``swap_price`` as ``(numerator, denominator)``.
@@ -626,13 +675,7 @@ class CardanoSwapsSwapDatum(OrderDatum):
         Raises:
             InvalidPoolError: ``swap_price`` is not a positive rational.
         """
-        num = self.swap_price.numerator
-        den = self.swap_price.denominator
-        if num <= 0 or den <= 0:
-            raise InvalidPoolError(
-                f"Cardano-Swaps swap_price must be positive, got {num}/{den}.",
-            )
-        return num, den
+        return self.swap_price.checked("swap_price")
 
     def required_ask(self, offer_taken: int) -> int:
         """The least ask the validator accepts for taking ``offer_taken`` of the offer.
@@ -643,18 +686,14 @@ class CardanoSwapsSwapDatum(OrderDatum):
         Raises:
             InvalidPoolError: ``swap_price`` is not a positive rational.
         """
-        num, den = self.price()
-        return -(-offer_taken * num // den)
+        return self.swap_price.required_payment(offer_taken, "swap_price")
 
     def beacon_assets(self, quantity: int = 1) -> Assets:
         """The pair, offer and ask beacons, each at ``quantity``."""
-        policy = self.beacon_id.hex()
-        return Assets(
-            root={
-                f"{policy}{self.pair_beacon.hex()}": quantity,
-                f"{policy}{self.offer_beacon.hex()}": quantity,
-                f"{policy}{self.ask_beacon.hex()}": quantity,
-            },
+        return _beacon_assets(
+            self.beacon_id,
+            (self.pair_beacon, self.offer_beacon, self.ask_beacon),
+            quantity,
         )
 
     def continuation_datum(
