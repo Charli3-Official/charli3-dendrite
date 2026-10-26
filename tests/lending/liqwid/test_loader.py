@@ -17,12 +17,15 @@ from charli3_dendrite.lending.liqwid.loader import fetch_records
 from charli3_dendrite.lending.liqwid.loader import snapshot
 from charli3_dendrite.lending.markets import ParseContext
 from tests.lending.liqwid.records import API
+from tests.lending.liqwid.records import UTXO_KINDS
 from tests.lending.liqwid.records import live_context
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 
 NOW_MS = 1_790_000_000_000
 PARAM_KINDS = {LiqwidKind.MARKET_PARAMS, LiqwidKind.COLLATERAL_PARAMS}
+# The kinds the read-side routes select; the action kind sits outside them.
+ROUTED_KINDS = [LiqwidKind(kind) for kind in UTXO_KINDS]
 
 
 def _credential(address):
@@ -38,9 +41,7 @@ class FakeBackend:
 
     def __init__(self, records=None):
         if records is None:
-            records = {
-                kind.value: records_of(kind.value, live=True) for kind in LiqwidKind
-            }
+            records = {kind: records_of(kind, live=True) for kind in UTXO_KINDS}
         self.by_credential = {}
         for recs in records.values():
             for rec in recs:
@@ -182,7 +183,7 @@ def test_snapshot_builds_every_market_and_live_loan():
 
 def test_snapshot_context_is_the_live_context():
     snap = snapshot(FakeBackend(), NOW_MS)
-    context_kinds = set(LiqwidKind) - {LiqwidKind.LOAN}
+    context_kinds = set(ROUTED_KINDS) - {LiqwidKind.LOAN}
     expected = _genuine_out_refs(live_context().utxos, context_kinds)
     got = [_out_ref(info) for info in snap.context.utxos]
     assert got == sorted(expected)

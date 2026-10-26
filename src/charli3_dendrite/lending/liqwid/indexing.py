@@ -7,7 +7,11 @@ which views depend on). :func:`parse_utxo` turns one UTxO record into its typed
 record, or None. Neither function touches a backend.
 
 Action, Batch and BatchFinal validators belong to the deployment but hold nothing a
-view reads, so they are not selectors.
+view reads, so they are not among those selectors. A transaction builder spends one
+of a market's action UTxOs: :func:`action_selector` finds them at the market's live
+action validator and :func:`parse_action` decodes one. :func:`param_selector` and
+:func:`state_selectors` give one market's routed parameter and MarketState
+selectors.
 """
 
 from __future__ import annotations
@@ -24,11 +28,13 @@ from typing import Union
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import PoolStateInfo
 from charli3_dendrite.lending.liqwid.datums import LIQWID_DECODE_ERRORS
+from charli3_dendrite.lending.liqwid.datums import ActionDatum
 from charli3_dendrite.lending.liqwid.datums import CollateralParamsDatum
 from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.datums import OracleFeedDatum
+from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.datums import decode_collateral_params
 from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.datums import decode_market_params
@@ -40,6 +46,7 @@ from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import MarketComponents
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
+from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.markets import CONTEXT_ROLE
 from charli3_dendrite.lending.markets import VIEW_ROLE
 from charli3_dendrite.lending.markets import WatchSpec
@@ -54,17 +61,24 @@ LiqwidDatum = Union[
     CollateralParamsDatum,
     LoanDatum,
     OracleFeedDatum,
+    ActionDatum,
 ]
 
 
 class LiqwidKind(str, Enum):
-    """The kinds of Liqwid V2 record a reader decodes."""
+    """The kinds of Liqwid V2 record a reader decodes.
+
+    Every kind but ``ACTION`` is routed by :func:`liqwid_selectors` and
+    :func:`parse_utxo`; action UTxOs are read per market with
+    :func:`action_selector` and :func:`parse_action`.
+    """
 
     MARKET_STATE = "market_state"
     LOAN = "loan"
     MARKET_PARAMS = "market_params"
     COLLATERAL_PARAMS = "collateral_params"
     ORACLE = "oracle"
+    ACTION = "action"
 
 
 # Each decoder owns its kind's shape: a parked ``C0[]``, an emptied or foreign-shaped
@@ -75,7 +89,10 @@ _DECODERS: dict[LiqwidKind, Callable[[str], LiqwidDatum]] = {
     LiqwidKind.MARKET_PARAMS: decode_market_params,
     LiqwidKind.COLLATERAL_PARAMS: decode_collateral_params,
     LiqwidKind.ORACLE: decode_oracle_feed,
+    LiqwidKind.ACTION: decode_action,
 }
+
+_PARAM_KINDS = frozenset({LiqwidKind.MARKET_PARAMS, LiqwidKind.COLLATERAL_PARAMS})
 
 # Loan tokens carry a state marker as their name (it flips on every modification);
 # the market NFTs and the oracle token have an empty name.
@@ -87,7 +104,8 @@ class LiqwidSelector:
     """Where one Liqwid record kind lives, and the token every genuine one holds.
 
     ``role`` is ``VIEW_ROLE`` for records that become views (market states, loans)
-    and ``CONTEXT_ROLE`` for records views depend on (parameters, oracle feeds).
+    and ``CONTEXT_ROLE`` for records views or transactions depend on (parameters,
+    oracle feeds, action UTxOs).
     ``market_id`` is the market's MarketState NFT policy; it is None for oracle
     feeds, which belong to no market.
     """
@@ -117,8 +135,9 @@ class LiqwidRecord:
     """One genuine Liqwid record, decoded.
 
     ``generation`` is ``"legacy"`` or ``"new"`` for a loan (the generation of the
-    validator it sits at) and None for every other kind. ``info`` is the UTxO the
-    record was read from; it takes no part in equality or hashing.
+    validator it sits at), ``"new"`` for an action UTxO and None for every other
+    kind. ``info`` is the UTxO the record was read from; it takes no part in
+    equality or hashing.
     """
 
     kind: LiqwidKind
@@ -159,7 +178,7 @@ def newest_record(
     return None
 
 
-def _param_selector(
+def param_selector(
     deployment: LiqwidDeployment,
     kind: LiqwidKind,
     market: MarketComponents,
@@ -167,8 +186,12 @@ def _param_selector(
     """The parameter-address selector of one market's MarketParams or CollateralParams.
 
     Both kinds share the parameter credential; the market's NFT policy for the kind
-    tells them, and the markets, apart.
+    tells them, and the markets, apart. ``kind`` is ``MARKET_PARAMS`` or
+    ``COLLATERAL_PARAMS``; ``ValueError`` on any other kind.
     """
+    if kind not in _PARAM_KINDS:
+        msg = f"liqwid parameter selector: {kind.value} is not a parameter kind"
+        raise ValueError(msg)
     policy = (
         market.market_params_policy
         if kind is LiqwidKind.MARKET_PARAMS
@@ -183,23 +206,73 @@ def _param_selector(
     )
 
 
+def state_selectors(
+    deployment: LiqwidDeployment,
+    market: MarketComponents,
+) -> list[LiqwidSelector]:
+    """One market's MarketState selectors, one per state validator, in snapshot order.
+
+    These are the market's MarketState selectors of :func:`liqwid_selectors` for
+    ``deployment``; every one carries the market's MarketState NFT policy. The
+    market carries its validators, so ``deployment`` only keeps the signature
+    parallel to :func:`param_selector`.
+    """
+    del deployment
+    return [
+        LiqwidSelector(
+            kind=LiqwidKind.MARKET_STATE,
+            payment_credential=validator,
+            identity_policy=market.market_state_policy,
+            role=VIEW_ROLE,
+            market_id=market.market_id,
+        )
+        for validator in market.market_state_validators
+    ]
+
+
+def action_selector(
+    market: MarketComponents,
+    params: MarketParamsDatum,
+) -> LiqwidSelector:
+    """Where ``market``'s live action UTxOs sit, and the token each one holds.
+
+    The credential is the action validator ``params`` (the market's MarketParams)
+    names; the identity is the market's action-token policy. Action UTxOs carry a
+    stake part, so a caller re-creating one copies the UTxO's own address rather
+    than :attr:`LiqwidSelector.address`. The selector is not one of
+    :func:`liqwid_selectors`: read-side watchers never see action UTxOs.
+
+    Raises:
+        UnsupportedMarketError: ``params`` names no action validator, or the
+            deployment records no action-token policy for ``market``.
+    """
+    if params.action_validator is None:
+        raise UnsupportedMarketError(
+            market.name,
+            "its parameters name no action validator",
+        )
+    if market.action_token_policy is None:
+        raise UnsupportedMarketError(
+            market.name,
+            "no action-token policy in the deployment",
+        )
+    return LiqwidSelector(
+        kind=LiqwidKind.ACTION,
+        payment_credential=params.action_validator,
+        identity_policy=market.action_token_policy,
+        role=CONTEXT_ROLE,
+        market_id=market.market_id,
+    )
+
+
 def _routes(
     deployment: LiqwidDeployment,
 ) -> tuple[tuple[LiqwidSelector, str | None], ...]:
     """Every selector with its loan generation (None outside loans), views first."""
     states: list[tuple[LiqwidSelector, str | None]] = [
-        (
-            LiqwidSelector(
-                kind=LiqwidKind.MARKET_STATE,
-                payment_credential=validator,
-                identity_policy=market.market_state_policy,
-                role=VIEW_ROLE,
-                market_id=market.market_id,
-            ),
-            None,
-        )
+        (selector, None)
         for market in deployment.markets
-        for validator in market.market_state_validators
+        for selector in state_selectors(deployment, market)
     ]
     loans: list[tuple[LiqwidSelector, str | None]] = []
     for market in deployment.markets:
@@ -224,11 +297,11 @@ def _routes(
                 for validator in validators
             )
     params = [
-        (_param_selector(deployment, LiqwidKind.MARKET_PARAMS, market), None)
+        (param_selector(deployment, LiqwidKind.MARKET_PARAMS, market), None)
         for market in deployment.markets
     ]
     collateral = [
-        (_param_selector(deployment, LiqwidKind.COLLATERAL_PARAMS, market), None)
+        (param_selector(deployment, LiqwidKind.COLLATERAL_PARAMS, market), None)
         for market in deployment.markets
     ]
     oracles = [
@@ -358,6 +431,38 @@ def parse_utxo(
         out_ref=out_ref(info),
         market_id=selector.market_id,
         generation=generation,
+        datum=datum,
+        info=info,
+    )
+
+
+def parse_action(
+    info: PoolStateInfo,
+    market: MarketComponents,
+) -> LiqwidRecord | None:
+    """Decode one of ``market``'s action UTxOs, or None when ``info`` is not one.
+
+    Genuine means: exactly one token under the market's action-token policy, with
+    quantity 1 and an empty name, and an inline datum that decodes as an action
+    record. The token makes it genuine, not the address; the caller selects the
+    address with :func:`action_selector`. Returns None, never raising, for anything
+    else, including a market with no action-token policy. The record's
+    ``generation`` is ``"new"``: action UTxOs exist only under the current
+    validator generation.
+    """
+    policy = market.action_token_policy
+    if policy is None or not info.datum_cbor:
+        return None
+    if not _holds_identity_token(info.assets, policy, named=False):
+        return None
+    datum = _decode(LiqwidKind.ACTION, info.datum_cbor)
+    if datum is None:
+        return None
+    return LiqwidRecord(
+        kind=LiqwidKind.ACTION,
+        out_ref=out_ref(info),
+        market_id=market.market_id,
+        generation=NEW_GENERATION,
         datum=datum,
         info=info,
     )

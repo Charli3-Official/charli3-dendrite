@@ -42,6 +42,7 @@ from charli3_dendrite.lending.liqwid.market import LiqwidV2MarketSource
 from charli3_dendrite.lending.liqwid.rates import PROTOCOL_NAME
 from charli3_dendrite.lending.normalized import LendingMarket
 from charli3_dendrite.lending.normalized import LendingPosition
+from charli3_dendrite.lending.units import POLICY_HEX_LEN
 from charli3_dendrite.lending.units import plutus_fields
 
 pytestmark = pytest.mark.skipif(
@@ -51,7 +52,6 @@ pytestmark = pytest.mark.skipif(
 
 LIVE_MARKETS = 35
 LOAN_FIELDS = 5
-POLICY_HEX_LEN = 56
 SWEEP_CHUNK = 500
 
 # Outputs shaped by PoolSelector.select(), as the dbsync backend builds them.

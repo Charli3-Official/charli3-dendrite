@@ -12,6 +12,10 @@ Liqwid records are positional field lists, written both as definite and as
 indefinite CBOR arrays; the record decoders read either encoding identically. A
 record of the wrong length, a field of the wrong type, or bytes that are not CBOR
 raise ``ValueError``.
+
+The ``encode_*`` functions write a loan, an action and a market state back to CBOR
+in either style; :func:`datum_style` tells which style a datum was written in, so a
+decoded record re-encodes to its exact bytes.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Callable
 from typing import Final
+from typing import Literal
 from typing import TypeVar
 
 import cbor2  # type: ignore[import-not-found]
@@ -178,6 +183,17 @@ _POLICY_WIDE = 0
 _EXACT_ASSET = 1
 _SCRIPT_CREDENTIAL = 1
 _ORACLE_CAPS_FIELD = 5
+# MarketParams integer positions read by name: the minimum action value, the maximum
+# time between batches and the number of action UTxOs.
+_P_MIN_VALUE = 1
+_P_MAX_BATCH_TIME = 3
+_P_ACTION_COUNT = 7
+# CBOR heads: an indefinite-length array opens with 0x9f and closes with 0xff.
+_INDEFINITE_ARRAY = 0x9F
+_BREAK = b"\xff"
+
+DatumStyle = Literal["definite", "indefinite"]
+"""The array style a Liqwid record was written in."""
 
 _T = TypeVar("_T")
 
@@ -234,6 +250,32 @@ class MarketParamsDatum:
     withdraw_zero: tuple[str, str] | None
     loan_validator: str | None
     raw: tuple[object, ...] = field(hash=False, compare=False)
+
+    def _raw_int(self, index: int, name: str) -> int:
+        """``raw[index]`` as an integer; ``ValueError`` when absent or not an int."""
+        if len(self.raw) <= index:
+            msg = f"liqwid market params: no field {index} ({name})"
+            raise ValueError(msg)
+        value = self.raw[index]
+        if isinstance(value, bool) or not isinstance(value, int):
+            msg = f"liqwid market params: field {index} ({name}) is not an integer"
+            raise ValueError(msg)
+        return value
+
+    @property
+    def min_value(self) -> int:
+        """Field 1: the minimum value of one action, in underlying base units."""
+        return self._raw_int(_P_MIN_VALUE, "min_value")
+
+    @property
+    def max_batch_time_ms(self) -> int:
+        """Field 3: the longest time between two batches, in milliseconds."""
+        return self._raw_int(_P_MAX_BATCH_TIME, "max_batch_time_ms")
+
+    @property
+    def action_count(self) -> int:
+        """Field 7: the number of action UTxOs the market runs."""
+        return self._raw_int(_P_ACTION_COUNT, "action_count")
 
 
 @dataclass(frozen=True)
@@ -655,3 +697,104 @@ def decode_oracle_feed(datum: str | bytes) -> OracleFeedDatum:
 def decode_action(datum: str | bytes) -> ActionDatum:
     """Decode an action record ``[[five signed deltas], nonce]``."""
     return _decode(datum, ACTION_LENGTHS, "action", _action)
+
+
+# --- Encoders ----------------------------------------------------------------------
+
+
+def datum_style(datum: str | bytes) -> DatumStyle:
+    """``"indefinite"`` when ``datum`` (CBOR hex or raw bytes) opens with ``0x9f``.
+
+    Any other first byte is ``"definite"``.
+
+    Raises:
+        ValueError: On an empty datum.
+    """
+    head = bytes.fromhex(datum[:2]) if isinstance(datum, str) else bytes(datum[:1])
+    if not head:
+        msg = "liqwid record: no datum"
+        raise ValueError(msg)
+    return "indefinite" if head[0] == _INDEFINITE_ARRAY else "definite"
+
+
+def _indefinite_bytes(obj: object) -> bytes:
+    """``obj`` as CBOR with every array, nested and inside tags, indefinite-length."""
+    if isinstance(obj, list):
+        return (
+            bytes([_INDEFINITE_ARRAY])
+            + b"".join(_indefinite_bytes(item) for item in obj)
+            + _BREAK
+        )
+    if isinstance(obj, cbor2.CBORTag):
+        # The tag head alone: encode the tag around ``None`` (0xf6) and drop it.
+        head = cbor2.dumps(cbor2.CBORTag(obj.tag, None))[:-1]
+        return head + _indefinite_bytes(obj.value)
+    return cbor2.dumps(obj)
+
+
+def _encode(fields: list, *, indefinite: bool) -> bytes:
+    """A record's field list as CBOR, every array in the chosen style."""
+    return _indefinite_bytes(fields) if indefinite else cbor2.dumps(fields)
+
+
+def _pair(rational: Rational) -> list[int]:
+    """A rational as the ``[num, den]`` list the datum carries."""
+    return [rational[0], rational[1]]
+
+
+def encode_loan_datum(loan: LoanDatum, *, indefinite: bool = False) -> bytes:
+    """A loan record ``[owner, principal, interest, min_interest, index]`` as CBOR.
+
+    The inverse of :func:`decode_loan`; ``indefinite`` picks the array style.
+    """
+    fields: list = [
+        bytes.fromhex(loan.owner),
+        loan.principal,
+        loan.interest,
+        loan.min_interest,
+        loan.index,
+    ]
+    return _encode(fields, indefinite=indefinite)
+
+
+def encode_action_datum(action: ActionDatum, *, indefinite: bool = False) -> bytes:
+    """An action record ``[[supply, qTokens, principal, interest, min], nonce]``.
+
+    The inverse of :func:`decode_action`: the nonce is written back as decoded.
+    ``indefinite`` picks the array style, nested arrays included.
+    """
+    deltas = [
+        action.supply_delta,
+        action.qtoken_delta,
+        action.principal_delta,
+        action.interest_delta,
+        action.min_interest_paid,
+    ]
+    return _encode([deltas, action.nonce], indefinite=indefinite)
+
+
+def encode_market_state(
+    state: MarketStateDatum,
+    *,
+    indefinite: bool = False,
+) -> bytes:
+    """A MarketState record (list11) as CBOR; the inverse of ``decode_market_state``.
+
+    Rationals are written as ``[num, den]`` lists and integers as cbor2 writes them
+    (a bignum tag past 64 bits). ``indefinite`` picks the array style, the rational
+    pairs included.
+    """
+    fields: list = [
+        state.cash,
+        state.reserve,
+        state.qtokens,
+        state.principal,
+        state.interest,
+        state.index,
+        _pair(state.rate),
+        state.last_interest_ms,
+        state.last_batch_ms,
+        _pair(state.qtoken_rate),
+        state.min_ada,
+    ]
+    return _encode(fields, indefinite=indefinite)

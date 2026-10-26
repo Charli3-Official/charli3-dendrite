@@ -1,4 +1,19 @@
+import cbor2
 import pytest
+from pycardano import Address
+from pycardano import Network
+from pycardano import PlutusV2Script
+from pycardano import RawPlutusData
+from pycardano import Redeemer
+from pycardano import Transaction
+from pycardano import TransactionBuilder
+from pycardano import TransactionId
+from pycardano import TransactionInput
+from pycardano import TransactionOutput
+from pycardano import UTxO
+from pycardano import VerificationKeyHash
+from pycardano import Withdrawals
+from pycardano import plutus_script_hash
 
 from charli3_dendrite.lending.danogo.transactions import builder as builder_module
 from charli3_dendrite.lending.danogo.transactions.builder import DanogoTxBuilder
@@ -12,6 +27,11 @@ from charli3_dendrite.lending.transactions.base import (
     ActionParams,
     LendingAction,
 )
+from charli3_dendrite.lending.transactions.common import plutus_int
+from charli3_dendrite.lending.transactions.common import reward_address
+from charli3_dendrite.lending.transactions.infra import EvalContext
+from charli3_dendrite.lending.transactions.infra import assemble_unsigned
+from charli3_dendrite.lending.transactions.snapshot import PoolActionSnapshot
 
 # A well-formed mainnet payment address; only its bech32 decoding is exercised here.
 _ACTOR = (
@@ -323,3 +343,81 @@ def test_modify_collateral_requires_collateral(monkeypatch):
                 loan_utxo="loan#0",
             ),
         )
+
+
+def test_plutus_int_encodes_bare_integers():
+    # An integer redeemer is the bare CBOR integer, not a constructor.
+    zero = plutus_int(0)
+    assert isinstance(zero, RawPlutusData)
+    assert zero.to_cbor_hex() == "00"
+    assert plutus_int(1).to_cbor_hex() == "01"
+    assert plutus_int(24).to_cbor_hex() == "1818"
+
+
+def test_plutus_int_withdrawal_redeemer_assembles():
+    # A zero withdrawal whose redeemer is `plutus_int(0)` assembles without changes to
+    # `assemble_unsigned`, and the witness carries the redeemer (reward, 0, 0) in the
+    # map form the assembler writes.
+    script = PlutusV2Script(bytes.fromhex("4e4d01000033222220051200120011"))
+    script_hash = plutus_script_hash(script).payload.hex()
+    tx_builder = TransactionBuilder(EvalContext(last_block_slot=0))
+    tx_builder.add_input(
+        UTxO(
+            TransactionInput(TransactionId(bytes(32)), 0),
+            TransactionOutput(
+                Address(VerificationKeyHash(bytes(28)), network=Network.MAINNET),
+                5_000_000,
+            ),
+        ),
+    )
+    tx_builder.withdrawals = Withdrawals({reward_address(script_hash): 0})
+    tx_builder.add_withdrawal_script(script, Redeemer(plutus_int(0)))
+
+    tx_cbor = assemble_unsigned(tx_builder)
+
+    witness = cbor2.loads(bytes.fromhex(tx_cbor))[1]
+    assert cbor2.dumps(witness[5]).hex() == "a18203008200820000"
+    redeemers = Transaction.from_cbor(tx_cbor).transaction_witness_set.redeemer
+    assert [
+        (key.tag.name, key.index, cbor2.dumps(value.data).hex())
+        for key, value in redeemers.items()
+    ] == [("WITHDRAWAL", 0, "00")]
+
+
+class _Snapshot(PoolActionSnapshot):
+    pass
+
+
+def _stash_entry(tx_id: str, index: int, address: str = "addr") -> dict:
+    return {
+        "transaction": {"id": tx_id},
+        "index": index,
+        "address": address,
+        "value": {"ada": {"lovelace": 2_000_000}},
+    }
+
+
+def test_stash_keeps_one_entry_per_out_ref():
+    # A funding UTxO stashed twice (say by two legs of one transaction) is sent to
+    # Ogmios once; the first entry stashed wins.
+    snapshot = _Snapshot()
+    first = _stash_entry("aa" * 32, 0)
+    snapshot.add_actor_additional_utxo(first)
+    snapshot.add_actor_additional_utxo(_stash_entry("aa" * 32, 0, "other"))
+    snapshot.add_actor_additional_utxo(_stash_entry("aa" * 32, 1))
+    snapshot.add_actor_additional_utxo(_stash_entry("bb" * 32, 0))
+    stashed = snapshot.additional_utxo()
+    assert [(e["transaction"]["id"], e["index"]) for e in stashed] == [
+        ("aa" * 32, 0),
+        ("aa" * 32, 1),
+        ("bb" * 32, 0),
+    ]
+    assert stashed[0] is first
+
+
+def test_stash_appends_entries_without_an_out_ref():
+    # Only entries that name an out-ref are de-duplicated.
+    snapshot = _Snapshot()
+    snapshot.add_actor_additional_utxo({"funding": True})
+    snapshot.add_actor_additional_utxo({"funding": True})
+    assert snapshot.additional_utxo() == [{"funding": True}, {"funding": True}]

@@ -28,6 +28,7 @@ from charli3_dendrite.lending.liqwid.datums import LoanDatum
 from charli3_dendrite.lending.liqwid.datums import MarketParamsDatum
 from charli3_dendrite.lending.liqwid.datums import MarketStateDatum
 from charli3_dendrite.lending.liqwid.datums import OracleFeedDatum
+from charli3_dendrite.lending.liqwid.datums import _indefinite_bytes
 from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.datums import decode_collateral_params
 from charli3_dendrite.lending.liqwid.datums import decode_loan
@@ -195,17 +196,6 @@ def _non_records(kind: str) -> list[dict]:
 def _definite(datum: str) -> str:
     """The same value re-encoded with definite-length arrays only."""
     return cbor2.dumps(cbor2.loads(bytes.fromhex(datum))).hex()
-
-
-def _indefinite_bytes(obj: object) -> bytes:
-    if isinstance(obj, list):
-        return b"\x9f" + b"".join(_indefinite_bytes(x) for x in obj) + b"\xff"
-    if isinstance(obj, cbor2.CBORTag):
-        # The tag head alone: encode the tag around ``None`` (0xf6) and drop it.
-        return cbor2.dumps(cbor2.CBORTag(obj.tag, None))[:-1] + _indefinite_bytes(
-            obj.value,
-        )
-    return cbor2.dumps(obj)
 
 
 def _indefinite(datum: str) -> str:

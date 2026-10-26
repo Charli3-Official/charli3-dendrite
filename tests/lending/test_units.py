@@ -191,6 +191,8 @@ def test_liqwid_readers_catch_the_one_liqwid_decode_error_set(module):
         ("charli3_dendrite.lending.normalized", "_POLICY_HEX_LEN"),
         ("charli3_dendrite.lending.fluidtokens_v4.state", "_POLICY_HEX_LEN"),
         ("charli3_dendrite.lending.liqwid.deployment", "_POLICY_HEX_LEN"),
+        ("charli3_dendrite.lending.liqwid.transactions.legs", "_POLICY_HEX_LEN"),
+        ("charli3_dendrite.lending.transactions.utxos", "_POLICY_HEX_LEN"),
         ("charli3_dendrite.lending.liqwid.lifecycle", "_POLICY_HEX"),
         ("charli3_dendrite.lending.liqwid.market", "_unit_order"),
         ("charli3_dendrite.lending.liqwid.oracles", "_out_ref_key"),
