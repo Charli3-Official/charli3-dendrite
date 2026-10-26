@@ -9,7 +9,12 @@ asset paid, ``out`` = the asset taken).
 from __future__ import annotations
 
 import pytest
+from pycardano import Address
+from pycardano import Network
+from pycardano import ScriptHash
 from pycardano import TransactionBuilder
+from pycardano import TransactionOutput
+from pycardano import VerificationKeyHash
 from pycardano.utils import min_lovelace
 
 from charli3_dendrite.dataclasses.datums import PlutusNone
@@ -412,3 +417,213 @@ def test_close_references_both_scripts_when_supplied(tx_builder) -> None:
     assert swap_ref in tx_builder.reference_inputs
     assert beacon_ref in tx_builder.reference_inputs
     assert len(_mint_dict(tx_builder)) == 3
+
+
+# --- create -------------------------------------------------------------------
+
+ADA_DEPOSIT = 10_000_000
+USDM_DEPOSIT = 30
+
+SCRIPT_STAKED_OWNER = Address(
+    payment_part=VerificationKeyHash(bytes.fromhex("11" * 28)),
+    staking_part=ScriptHash(bytes.fromhex("33" * 28)),
+    network=Network.MAINNET,
+)
+
+
+def _create(
+    tx_builder: TransactionBuilder,
+    asset1: Assets | None = None,
+    asset2: Assets | None = None,
+    *,
+    asset1_price: tuple[int, int] = (3, 2_000_000),
+    asset2_price: tuple[int, int] = (1_900_000, 3),
+    owner: Address = OWNER,
+    **kwargs,
+):
+    """Create the ADA/USDM vector swap (10 ADA and 30 USDM) unless overridden."""
+    return CardanoSwapsTwoWayOrderState.build_create(
+        owner_address=owner,
+        asset1=Assets(root={"lovelace": ADA_DEPOSIT}) if asset1 is None else asset1,
+        asset2=Assets(root={USDM_UNIT: USDM_DEPOSIT}) if asset2 is None else asset2,
+        asset1_price=asset1_price,
+        asset2_price=asset2_price,
+        tx_builder=tx_builder,
+        **kwargs,
+    )
+
+
+def test_create_mints_three_beacons_and_writes_the_datum(tx_builder) -> None:
+    txo, datum = _create(tx_builder)
+    assert datum == vector_datum()
+    assert txo.datum == datum
+    assert tx_builder.outputs == [txo]
+    assert _mint_dict(tx_builder) == {unit: 1 for unit in datum.beacon_assets(1).root}
+    assert _output_units(txo) == {*datum.beacon_assets(1).root, USDM_UNIT}
+    assert _held(txo, USDM_UNIT) == USDM_DEPOSIT
+    assert txo.address.payment_part == ScriptHash(
+        bytes.fromhex(TWO_WAY_SWAP_VALIDATOR_HASH),
+    )
+    assert txo.address.staking_part == OWNER.staking_part
+    assert txo.script is None
+    assert _redeemers(tx_builder) == []
+    (mint_redeemer,) = list(tx_builder._minting_script_to_redeemers)
+    assert isinstance(mint_redeemer[1].data, CreateOrCloseSwaps)
+
+
+def test_create_ada_pair_funds_a_drawable_carrier(tx_builder) -> None:
+    txo, datum = _create(tx_builder)
+    carrier = datum.carrier_lovelace(
+        ADA_DEPOSIT,
+        USDM_DEPOSIT,
+        CPUB,
+        prev_output_index=0,
+        address=txo.address,
+    )
+    assert txo.amount.coin == ADA_DEPOSIT + carrier
+    take_asset1 = _state(datum, {"lovelace": txo.amount.coin, USDM_UNIT: USDM_DEPOSIT})
+    assert take_asset1.claimable_offer(CPUB) == ADA_DEPOSIT
+    assert take_asset1.opposite().claimable_offer(CPUB) == USDM_DEPOSIT
+
+
+def test_create_token_pair_carries_its_min_utxo(tx_builder) -> None:
+    expected = _token_pair_datum()
+    txo, datum = _create(
+        tx_builder,
+        Assets(root={TEST_UNIT: 1_000}),
+        Assets(root={USDM_UNIT: 1_000}),
+        asset1_price=(3, 2),
+        asset2_price=(5, 7),
+    )
+    assert datum == expected
+    carrier = datum.carrier_lovelace(
+        1_000,
+        1_000,
+        CPUB,
+        prev_output_index=0,
+        address=txo.address,
+    )
+    assert txo.amount.coin == max(carrier, min_lovelace(tx_builder.context, output=txo))
+    assert txo.amount.coin >= min_lovelace(tx_builder.context, output=txo)
+    assert _held(txo, TEST_UNIT) == 1_000
+    assert _held(txo, USDM_UNIT) == 1_000
+
+
+def test_create_with_one_side_empty_holds_only_the_other(tx_builder) -> None:
+    txo, datum = _create(tx_builder, asset2=Assets(root={USDM_UNIT: 0}))
+    assert _output_units(txo) == set(datum.beacon_assets(1).root)
+    carrier = datum.carrier_lovelace(
+        ADA_DEPOSIT,
+        0,
+        CPUB,
+        prev_output_index=0,
+        address=txo.address,
+    )
+    assert txo.amount.coin == ADA_DEPOSIT + carrier
+
+
+def test_create_carrier_is_sized_at_the_created_output_index(tx_builder) -> None:
+    for _ in range(24):
+        tx_builder.add_output(TransactionOutput(OWNER, 2_000_000))
+    txo, datum = _create(tx_builder)
+    assert tx_builder.outputs[24] is txo
+    carrier = datum.carrier_lovelace(
+        ADA_DEPOSIT,
+        USDM_DEPOSIT,
+        CPUB,
+        prev_output_index=24,
+        address=txo.address,
+    )
+    assert txo.amount.coin == ADA_DEPOSIT + carrier
+
+
+def test_create_adds_the_owner_stake_signer_once(tx_builder) -> None:
+    tx_builder.required_signers = [OWNER.staking_part]
+    _create(tx_builder)
+    assert tx_builder.required_signers == [OWNER.staking_part]
+
+    fresh = TransactionBuilder(_OfflineContext())
+    _create(fresh)
+    assert fresh.required_signers == [OWNER.staking_part]
+
+
+def test_create_with_expiration_sets_the_deadline() -> None:
+    deadline = posix_ms_to_slot(EXPIRATION)
+    tb = TransactionBuilder(_ContextAt(deadline - 600))
+    _, datum = _create(tb, expiration=EXPIRATION)
+    assert datum == vector_datum(expiration=CardanoSwapsSomeInt(EXPIRATION))
+    assert tb.ttl == deadline
+
+    far = TransactionBuilder(_ContextAt(1_000))
+    _create(far, expiration=EXPIRATION)
+    assert far.ttl == 1_000 + 3_600
+
+    earlier = TransactionBuilder(_ContextAt(deadline - 600))
+    earlier.ttl = deadline - 100
+    _create(earlier, expiration=EXPIRATION)
+    assert earlier.ttl == deadline - 100
+
+
+def test_create_without_expiration_leaves_the_validity_open(tx_builder) -> None:
+    _create(tx_builder)
+    assert tx_builder.ttl is None
+
+
+def test_create_references_the_beacon_script_when_supplied(tx_builder) -> None:
+    beacon_ref = _ref_utxo(CardanoSwapsTwoWayOrderState._beacon_script())
+    _create(tx_builder, beacon_ref_utxo=beacon_ref)
+    assert beacon_ref in tx_builder.reference_inputs
+    assert tx_builder.scripts == []
+    assert all(qty == 1 for qty in _mint_dict(tx_builder).values())
+
+    inline = TransactionBuilder(_OfflineContext())
+    _create(inline)
+    assert inline.reference_inputs == set()
+    assert inline.scripts == [CardanoSwapsTwoWayOrderState._beacon_script()]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param(
+            {
+                "asset1": Assets(root={USDM_UNIT: 30}),
+                "asset2": Assets(root={"lovelace": 10_000_000}),
+            },
+            id="unsorted",
+        ),
+        pytest.param(
+            {
+                "asset1": Assets(root={USDM_UNIT: 30}),
+                "asset2": Assets(root={USDM_UNIT: 30}),
+            },
+            id="equal",
+        ),
+        pytest.param({"asset1_price": (0, 1)}, id="zero-asset1-numerator"),
+        pytest.param({"asset1_price": (3, 0)}, id="zero-asset1-denominator"),
+        pytest.param({"asset2_price": (-1, 3)}, id="negative-asset2-numerator"),
+        pytest.param({"asset2_price": (1, -3)}, id="negative-asset2-denominator"),
+        pytest.param(
+            {
+                "asset1": Assets(root={"lovelace": 0}),
+                "asset2": Assets(root={USDM_UNIT: 0}),
+            },
+            id="both-deposits-zero",
+        ),
+        pytest.param({"asset2": Assets(root={USDM_UNIT: -1})}, id="negative-deposit"),
+        pytest.param(
+            {"asset1": Assets(root={"lovelace": 10_000_000, TEST_UNIT: 5})},
+            id="two-unit-bag",
+        ),
+        pytest.param({"expiration": EXPIRATION + 1}, id="expiration-not-a-minute"),
+        pytest.param({"owner": SCRIPT_STAKED_OWNER}, id="script-staked-owner"),
+    ],
+)
+def test_create_rejects_bad_input(tx_builder, overrides) -> None:
+    with pytest.raises(ValueError):
+        _create(tx_builder, **overrides)
+    assert tx_builder.outputs == []
+    assert tx_builder.mint is None
+    assert tx_builder.required_signers is None
+    assert tx_builder.ttl is None
+    assert list(tx_builder._minting_script_to_redeemers) == []

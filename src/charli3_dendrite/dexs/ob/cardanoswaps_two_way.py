@@ -16,8 +16,8 @@ under one beacon policy parameterised by the swap validator hash.
 This module holds the contract description (scripts, hashes, beacon-name rules
 and the spending redeemers that differ from the one-way contract), the swap
 datum with its per-direction pricing and min-UTxO sizing, and the order state:
-one view of a swap UTxO per direction, taken and closed through the shared
-Cardano-Swaps order-state base.
+one view of a swap UTxO per direction, created, taken and closed through the
+shared Cardano-Swaps order-state base.
 """
 
 import dataclasses
@@ -31,6 +31,9 @@ from pycardano import Network
 from pycardano import PlutusData
 from pycardano import PlutusV3Script
 from pycardano import ScriptHash
+from pycardano import TransactionBuilder
+from pycardano import TransactionOutput
+from pycardano import UTxO
 
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
@@ -45,6 +48,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
+from charli3_dendrite.dexs.ob.cardanoswaps import _expiration_field
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
 from charli3_dendrite.dexs.ob.cardanoswaps import _split_unit
 from charli3_dendrite.dexs.ob.cardanoswaps import _unit
@@ -127,6 +131,27 @@ def two_way_pair_beacon_name(
     return _sha256(
         _SortedPair(asset1_id, asset1_name, asset2_id, asset2_name).to_cbor(),
     )
+
+
+# The beacon policy only mints for an expiration on a whole minute.
+_EXPIRATION_INTERVAL_MS = 60_000
+
+
+def _deposit(bag: Assets, label: str) -> tuple[str, int]:
+    """The single unit of ``bag`` and its deposited quantity.
+
+    Raises:
+        ValueError: ``bag`` does not hold exactly one unit, or its quantity is
+            negative.
+    """
+    if len(bag.root) != 1:
+        raise ValueError(
+            f"{label} must hold exactly one asset, got {sorted(bag.root)}.",
+        )
+    unit, quantity = next(iter(bag.root.items()))
+    if quantity < 0:
+        raise ValueError(f"{label} deposit must be non-negative, got {quantity}.")
+    return unit, quantity
 
 
 def sort_pair(unit_a: str, unit_b: str) -> tuple[str, str]:
@@ -583,3 +608,108 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         """Both views of this UTxO: the ``TakeAsset1`` one, then ``TakeAsset2``."""
         other = self.opposite()
         return (other, self) if self.take_asset2 else (self, other)
+
+    # --- transaction builders --------------------------------------------
+
+    @classmethod
+    def build_create(
+        cls,
+        owner_address: Address,
+        asset1: Assets,
+        asset2: Assets,
+        asset1_price: tuple[int, int],
+        asset2_price: tuple[int, int],
+        tx_builder: TransactionBuilder,
+        expiration: int | None = None,
+        *,
+        beacon_ref_utxo: UTxO | None = None,
+    ) -> tuple[TransactionOutput, CardanoSwapsTwoWaySwapDatum]:
+        """Build a CREATE: mint the three beacons and emit the two-way swap UTxO.
+
+        Mints +1 of the pair, asset1 and asset2 beacons under the beacon policy
+        with ``CreateOrCloseSwaps`` and produces one output at the owner's
+        beacon-tagged swap address holding both deposits, the beacons and an
+        inline datum (``prev_input`` ``None``). No swap UTxO is spent.
+
+        The output's lovelace funds the largest continuation the swap reaches
+        (see :meth:`CardanoSwapsTwoWaySwapDatum.carrier_lovelace`), sized at the
+        output index this output is added at, so every deposit stays claimable
+        without a taker topping the output up. The owner's staking key is added
+        to the required signers; an expiration also bounds the transaction's
+        validity at or before it.
+
+        Args:
+            owner_address: The owner's address; its key-hash staking credential
+                identifies the owner and is carried onto the swap address.
+            asset1: The first asset of the pair and its deposit (one unit).
+            asset2: The second asset of the pair and its deposit (one unit). The
+                pair must already be in contract order (see :func:`sort_pair`);
+                one deposit may be 0.
+            asset1_price: ``(numerator, denominator)``: asset2 given per asset1.
+            asset2_price: ``(numerator, denominator)``: asset1 given per asset2.
+            tx_builder: The builder to mutate.
+            expiration: Optional POSIX-millis expiration, a whole minute.
+            beacon_ref_utxo: Optional reference-script UTxO for the beacon policy;
+                when given, the policy is referenced via a reference input instead
+                of inlined into the witness set.
+
+        Returns:
+            The swap output and its inline datum.
+
+        Raises:
+            ValueError: the owner has no key-hash staking credential, an asset bag
+                is not one unit with a non-negative deposit, the assets are equal
+                or unsorted, a price is not a positive rational, both deposits are
+                0, or the expiration is not a multiple of 60 000. Nothing is added
+                to ``tx_builder``.
+        """
+        stake_key = cls._owner_stake_key(owner_address)
+        asset1_unit, deposit1 = _deposit(asset1, "asset1")
+        asset2_unit, deposit2 = _deposit(asset2, "asset2")
+        if deposit1 == 0 and deposit2 == 0:
+            raise ValueError("A two-way swap needs a deposit of asset1 or asset2.")
+        if expiration is not None and expiration % _EXPIRATION_INTERVAL_MS != 0:
+            raise ValueError(
+                "A two-way swap expiration must be a whole minute "
+                f"(a multiple of {_EXPIRATION_INTERVAL_MS} ms), got {expiration}.",
+            )
+        asset1_id, asset1_name = _split_unit(asset1_unit)
+        asset2_id, asset2_name = _split_unit(asset2_unit)
+        datum = CardanoSwapsTwoWaySwapDatum(
+            beacon_id=bytes.fromhex(cls.CONTRACT.beacon_policy_id),
+            pair_beacon=two_way_pair_beacon_name(
+                asset1_id,
+                asset1_name,
+                asset2_id,
+                asset2_name,
+            ),
+            asset1_id=asset1_id,
+            asset1_name=asset1_name,
+            asset1_beacon=two_way_asset_beacon_name(asset1_id, asset1_name),
+            asset2_id=asset2_id,
+            asset2_name=asset2_name,
+            asset2_beacon=two_way_asset_beacon_name(asset2_id, asset2_name),
+            asset1_price=CardanoSwapsRational.from_price(asset1_price, "asset1_price"),
+            asset2_price=CardanoSwapsRational.from_price(asset2_price, "asset2_price"),
+            prev_input=PlutusNone(),
+            expiration=_expiration_field(expiration),
+        )
+
+        cls._mint_beacons(tx_builder, datum, 1, beacon_ref_utxo)
+        txo = cls._add_swap_output(
+            tx_builder,
+            owner_address,
+            Assets(root={asset1_unit: deposit1, asset2_unit: deposit2}),
+            datum,
+            lambda index, address: datum.carrier_lovelace(
+                deposit1,
+                deposit2,
+                tx_builder.context.protocol_param.coins_per_utxo_byte,
+                prev_output_index=index,
+                address=address,
+            ),
+        )
+        cls._add_required_signer(tx_builder, stake_key)
+        if expiration is not None:
+            cls._bound_validity(tx_builder, expiration)
+        return txo, datum

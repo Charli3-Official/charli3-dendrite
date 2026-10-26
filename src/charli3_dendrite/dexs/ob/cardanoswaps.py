@@ -516,6 +516,22 @@ class CardanoSwapsRational(PlutusData):
     numerator: int
     denominator: int
 
+    @classmethod
+    def from_price(
+        cls,
+        price: tuple[int, int],
+        label: str = "price",
+    ) -> "CardanoSwapsRational":
+        """A ``(numerator, denominator)`` price the beacon policy mints for.
+
+        Raises:
+            ValueError: either component is not strictly positive.
+        """
+        num, den = price
+        if num <= 0 or den <= 0:
+            raise ValueError(f"{label} must be a positive rational, got {num}/{den}.")
+        return cls(numerator=num, denominator=den)
+
 
 @dataclass
 class CardanoSwapsSomeInt(PlutusData):
@@ -523,6 +539,11 @@ class CardanoSwapsSomeInt(PlutusData):
 
     CONSTR_ID = 0
     value: int
+
+
+def _expiration_field(expiration: int | None) -> CardanoSwapsSomeInt | PlutusNone:
+    """A datum's optional POSIX-millis expiration: ``Some(expiration)`` or ``None``."""
+    return PlutusNone() if expiration is None else CardanoSwapsSomeInt(expiration)
 
 
 @dataclass
@@ -1199,6 +1220,124 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         else:
             tx_builder.mint += multi_asset
 
+    @classmethod
+    def _mint_beacons(
+        cls,
+        tx_builder: TransactionBuilder,
+        datum: _BeaconedDatum,
+        quantity: int,
+        beacon_ref_utxo: UTxO | None,
+    ) -> None:
+        """Mint (+1, CREATE) or burn (-1, CLOSE) the datum's beacons.
+
+        Runs the beacon policy with ``CreateOrCloseSwaps``, inlined or through
+        ``beacon_ref_utxo`` (see :meth:`_beacon_script_arg`).
+        """
+        tx_builder.add_minting_script(
+            script=cls._beacon_script_arg(beacon_ref_utxo),
+            redeemer=Redeemer(CreateOrCloseSwaps()),
+        )
+        cls._accumulate_mint(tx_builder, cls._beacon_mint_assets(datum, quantity))
+
+    @staticmethod
+    def _owner_stake_key(owner_address: Address) -> VerificationKeyHash:
+        """The owner's staking key hash, which must approve a v2 create.
+
+        Raises:
+            ValueError: the owner address has no key-hash staking credential.
+        """
+        stake = owner_address.staking_part
+        if not isinstance(stake, VerificationKeyHash):
+            raise ValueError(
+                "Creating a Cardano-Swaps v2 swap must be approved by the "
+                "owner's staking key; the owner address has no key-hash "
+                "staking credential.",
+            )
+        return stake
+
+    @staticmethod
+    def _add_required_signer(
+        tx_builder: TransactionBuilder,
+        signer: VerificationKeyHash,
+    ) -> None:
+        """Add ``signer`` to the builder's required signers unless already there."""
+        signers = list(tx_builder.required_signers or [])
+        if signer not in signers:
+            signers.append(signer)
+        tx_builder.required_signers = signers
+
+    @staticmethod
+    def _bound_validity(tx_builder: TransactionBuilder, expiration: int) -> None:
+        """End the transaction's validity at or before ``expiration`` (POSIX ms).
+
+        The contracts read the validity upper bound as the transaction's time, so
+        a transaction touching an expiring swap must set one at or before the
+        expiration. The bound is also kept within ``_FILL_VALIDITY_SLOTS`` of the
+        tip: a node cannot convert a slot past its forecast horizon to time, so a
+        far expiration as the upper bound fails evaluation and submission. An
+        earlier bound already on the builder is kept.
+        """
+        deadline = min(
+            posix_ms_to_slot(expiration),
+            tx_builder.context.last_block_slot + _FILL_VALIDITY_SLOTS,
+        )
+        if tx_builder.ttl is None or tx_builder.ttl > deadline:
+            tx_builder.ttl = deadline
+
+    @classmethod
+    def _add_swap_output(
+        cls,
+        tx_builder: TransactionBuilder,
+        owner_address: Address,
+        deposits: Assets,
+        datum: _BeaconedDatum,
+        carrier_lovelace: Callable[[int, Address], int],
+    ) -> TransactionOutput:
+        """Emit a new resting swap UTxO: the deposits, the beacons, inline datum.
+
+        The output goes to the owner's :meth:`beacon_address`. A take derives an
+        ADA offer as ``lovelace_in - lovelace_out``, so it can never draw the UTxO
+        below the min-UTxO of its continuation, whose ``prev_input`` records the
+        spent UTxO. The output therefore funds a carrier for that continuation:
+        on top of an ADA deposit (``deposits`` has a lovelace entry), or as the
+        lovelace of a token-only swap, raised to the output's own min-UTxO when
+        that is larger. The owner reclaims the carrier on CLOSE.
+
+        Args:
+            tx_builder: The builder to add the output to.
+            owner_address: The owner, whose staking credential the swap carries.
+            deposits: The deposited assets; zero quantities are left out.
+            datum: The inline swap datum.
+            carrier_lovelace: The carrier for an output created at the given
+                output index and swap address (its first take spends it there).
+
+        Returns:
+            The added output.
+        """
+        swap_address = cls.beacon_address(owner_address)
+        tokens = Assets(
+            root={
+                unit: qty
+                for unit, qty in deposits.root.items()
+                if unit != "lovelace" and qty != 0
+            },
+        )
+        txo = TransactionOutput(
+            address=swap_address,
+            amount=asset_to_value(tokens + cls._beacon_mint_assets(datum, 1)),
+            datum=datum,
+        )
+        carrier = carrier_lovelace(len(tx_builder.outputs), swap_address)
+        if "lovelace" in deposits.root:
+            txo.amount.coin = deposits["lovelace"] + carrier
+        else:
+            txo.amount.coin = max(
+                carrier,
+                min_lovelace(tx_builder.context, output=txo),
+            )
+        tx_builder.add_output(txo)
+        return txo
+
     def _input_utxo(self, owner_address: Address) -> UTxO:
         """The synthetic resting swap UTxO (held balance + beacons), inline datum.
 
@@ -1303,17 +1442,9 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         )
         # An expiring swap is fillable only by a transaction whose validity ends at
         # or before the expiration (the validator reads it as the upper bound).
-        # The bound is also kept within _FILL_VALIDITY_SLOTS of the tip: a node
-        # cannot convert a slot past its forecast horizon to time, so a far
-        # expiration as the upper bound fails evaluation and submission.
         expiration = self.order_datum.expiration
         if isinstance(expiration, CardanoSwapsSomeInt):
-            deadline = min(
-                posix_ms_to_slot(expiration.value),
-                tx_builder.context.last_block_slot + _FILL_VALIDITY_SLOTS,
-            )
-            if tx_builder.ttl is None or tx_builder.ttl > deadline:
-                tx_builder.ttl = deadline
+            self._bound_validity(tx_builder, expiration.value)
         # No witness datum: the order UTxO carries its SwapDatum inline (CS requires
         # inline datums, and ``_input_utxo`` attaches it to the spent input above), so
         # the validator reads it from the input directly. Adding the same datum to the
@@ -1400,14 +1531,7 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         # witness set makes it an extraneous datum the ledger rejects on submit.
 
         # Burn the three beacons.
-        tx_builder.add_minting_script(
-            script=self._beacon_script_arg(beacon_ref_utxo),
-            redeemer=Redeemer(CreateOrCloseSwaps()),
-        )
-        self._accumulate_mint(
-            tx_builder,
-            self._beacon_mint_assets(self.order_datum, -1),
-        )
+        self._mint_beacons(tx_builder, self.order_datum, -1, beacon_ref_utxo)
 
         # NOTE: the validator gates the close on the swap address' STAKING
         # credential, not its payment credential. For a vkey stake credential the
@@ -1554,27 +1678,14 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
                 "This Cardano-Swaps contract is read-and-close only: "
                 "no new swaps are created on it.",
             )
-        if cls.CONTRACT.create_needs_stake_signature:
-            stake = owner_address.staking_part
-            if not isinstance(stake, VerificationKeyHash):
-                raise ValueError(
-                    "Creating a Cardano-Swaps v2 swap must be approved by the "
-                    "owner's staking key; the owner address has no key-hash "
-                    "staking credential.",
-                )
-        offer_unit = offer.unit()
-        ask_unit = ask.unit()
-        offer_id, offer_name = _split_unit(offer_unit)
-        ask_id, ask_name = _split_unit(ask_unit)
-
-        num, den = price
-        if num <= 0 or den <= 0:
-            raise ValueError(f"price must be a positive rational, got {num}/{den}.")
-        exp = (
-            CardanoSwapsSomeInt(value=expiration)
-            if expiration is not None
-            else (PlutusNone())
+        stake_key = (
+            cls._owner_stake_key(owner_address)
+            if cls.CONTRACT.create_needs_stake_signature
+            else None
         )
+        offer_id, offer_name = _split_unit(offer.unit())
+        ask_id, ask_name = _split_unit(ask.unit())
+        swap_price = CardanoSwapsRational.from_price(price)
         datum = CardanoSwapsSwapDatum(
             beacon_id=bytes.fromhex(cls.CONTRACT.beacon_policy_id),
             pair_beacon=cls.CONTRACT.pair_beacon_name(
@@ -1589,53 +1700,28 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             ask_id=ask_id,
             ask_name=ask_name,
             ask_beacon=cls.CONTRACT.ask_beacon_name(ask_id, ask_name),
-            swap_price=CardanoSwapsRational(numerator=num, denominator=den),
+            swap_price=swap_price,
             prev_input=PlutusNone(),
-            expiration=exp,
+            expiration=_expiration_field(expiration),
         )
 
-        # Mint the three beacons.
-        tx_builder.add_minting_script(
-            script=cls._beacon_script_arg(beacon_ref_utxo),
-            redeemer=Redeemer(CreateOrCloseSwaps()),
+        cls._mint_beacons(tx_builder, datum, 1, beacon_ref_utxo)
+        # The resting swap output: offer + 3 beacons + carrier, inline datum.
+        txo = cls._add_swap_output(
+            tx_builder,
+            owner_address,
+            offer,
+            datum,
+            lambda index, address: datum.carrier_lovelace(
+                offer.quantity(),
+                tx_builder.context.protocol_param.coins_per_utxo_byte,
+                prev_output_index=index,
+                address=address,
+                contract=cls.CONTRACT,
+            ),
         )
-        cls._accumulate_mint(tx_builder, cls._beacon_mint_assets(datum, 1))
-
-        # Emit the resting swap output: offer + 3 beacons + min-ADA, inline datum.
-        swap_address = cls.beacon_address(owner_address)
-        output_assets = offer + cls._beacon_mint_assets(datum, 1)
-        txo = TransactionOutput(
-            address=swap_address,
-            amount=asset_to_value(output_assets),
-            datum=datum,
-        )
-        # The validator derives an ADA offer's ``offer_taken`` as
-        # ``lovelace_in - lovelace_out``, so a fill can never draw the UTxO below
-        # the min-UTxO of its continuation, whose ``prev_input`` records the spent
-        # UTxO. Fund a carrier for that continuation: on top of an ADA offer, or
-        # as the lovelace of a token offer. Its first fill spends this output at
-        # the index it is added at. The maker reclaims the carrier on CLOSE.
-        carrier = datum.carrier_lovelace(
-            offer.quantity(),
-            tx_builder.context.protocol_param.coins_per_utxo_byte,
-            prev_output_index=len(tx_builder.outputs),
-            address=swap_address,
-            contract=cls.CONTRACT,
-        )
-        if offer_unit == "lovelace":
-            txo.amount.coin = offer.quantity() + carrier
-        else:
-            txo.amount.coin = max(
-                carrier,
-                min_lovelace(tx_builder.context, output=txo),
-            )
-        tx_builder.add_output(txo)
-
-        if cls.CONTRACT.create_needs_stake_signature:
-            signers = list(tx_builder.required_signers or [])
-            if owner_address.staking_part not in signers:
-                signers.append(owner_address.staking_part)
-            tx_builder.required_signers = signers
+        if stake_key is not None:
+            cls._add_required_signer(tx_builder, stake_key)
 
         return txo, datum
 
