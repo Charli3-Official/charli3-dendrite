@@ -104,5 +104,33 @@ def show_directions(two_way_swap: CardanoSwapsTwoWayOrderState) -> None:
 - [Genius Yield](geniusyield.md) - Another order book implementation
 
 ::: charli3_dendrite.dexs.ob.cardanoswaps
+    options:
+      inherited_members:
+        - available
+        - beacon_address
+        - beacon_reference_utxo
+        - build_close
+        - build_create
+        - claimable_offer
+        - clear_reference_utxo_cache
+        - directions
+        - price
+        - reference_utxo
+        - required_ask
+        - swap_utxo
 
 ::: charli3_dendrite.dexs.ob.cardanoswaps_two_way
+    options:
+      inherited_members:
+        - available
+        - beacon_address
+        - beacon_reference_utxo
+        - build_close
+        - build_create
+        - claimable_offer
+        - clear_reference_utxo_cache
+        - directions
+        - price
+        - reference_utxo
+        - required_ask
+        - swap_utxo
