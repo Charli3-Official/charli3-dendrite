@@ -7,6 +7,7 @@ view on the other. One-way and two-way levels merge into one book per side.
 
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 
 import pytest
@@ -159,6 +160,26 @@ def test_book_sizes_levels_at_the_given_coins_per_utxo_byte() -> None:
 
     assert book.buy_book_full[0].quantity == state.claimable_offer(CPUB * 2)
     assert book.buy_book_full[0].quantity < state.claimable_offer(CPUB)
+
+
+def test_book_skips_a_swap_whose_asset_only_joins_to_a_real_unit() -> None:
+    # A 29-byte asset2 policy id whose unit reads as USDM: no take can pay or
+    # deliver it, since the validator counts the datum's own policy id.
+    spoof = dataclasses.replace(
+        vector_datum(),
+        asset2_id=USDM_ID + USDM_NAME[:1],
+        asset2_name=USDM_NAME[1:],
+    )
+    bad = _state(spoof, {"lovelace": 10_000_000, USDM_UNIT: 30})
+    assert bad.in_unit == USDM_UNIT
+    good = _state(vector_datum(), {"lovelace": 10_000_000, USDM_UNIT: 30}, tx_index=1)
+
+    book = CardanoSwapsOrderBook.get_book(PAIR, orders=[bad, good])
+
+    sell = [(s.tx_index, s.take_asset2) for _, s in _levels(book.sell_book_full)]
+    buy = [(s.tx_index, s.take_asset2) for _, s in _levels(book.buy_book_full)]
+    assert sell == [(1, True)]
+    assert buy == [(1, False)]
 
 
 def test_book_skips_an_expired_two_way_swap() -> None:

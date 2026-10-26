@@ -251,6 +251,10 @@ class CardanoSwapsTwoWaySwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
         """The dendrite unit of asset2."""
         return _unit(self.asset2_id, self.asset2_name)
 
+    def asset_fields(self) -> tuple[tuple[bytes, bytes], tuple[bytes, bytes]]:
+        """Asset1 and asset2 as raw ``(policy id, asset name)`` fields."""
+        return (self.asset1_id, self.asset1_name), (self.asset2_id, self.asset2_name)
+
     def offer_unit(self, take_asset2: bool) -> str:
         """The unit a taker draws in the named direction."""
         return self.asset2_unit() if take_asset2 else self.asset1_unit()

@@ -421,14 +421,15 @@ def _split_unit(unit: str) -> tuple[bytes, bytes]:
     return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
 
 
-def _is_well_formed_unit(unit: str) -> bool:
-    """Whether a unit is lovelace or a native asset a ledger value can hold.
+def _is_ledger_asset(policy: bytes, name: bytes) -> bool:
+    """Whether a datum's (policy id, asset name) is an asset a ledger value holds.
 
     The beacon policies check only that an empty policy id goes with an empty
     name, so a datum can name a policy id that is not 28 bytes or an asset name
-    longer than 32 bytes. No output can carry such a unit.
+    longer than 32 bytes. No output can carry such an asset. The check runs on
+    the separate fields: a joined unit is always split at 28 bytes, so a 27- or
+    29-byte policy id can read as a real token's unit.
     """
-    policy, name = _split_unit(unit)
     if policy == b"":
         return name == b""
     return len(policy) == ScriptHash.MAX_SIZE and len(name) <= AssetName.MAX_SIZE
@@ -651,6 +652,14 @@ class _CardanoSwapsDatumMixin:
             return None
         return self.prev_input.ref()
 
+    def asset_fields(self) -> tuple[tuple[bytes, bytes], tuple[bytes, bytes]]:
+        """The datum's two assets as raw ``(policy id, asset name)`` fields."""
+        raise NotImplementedError
+
+    def names_ledger_assets(self) -> bool:
+        """Whether both of the datum's assets are ones a ledger value can hold."""
+        return all(_is_ledger_asset(*asset) for asset in self.asset_fields())
+
     def address_source(self) -> str | None:
         """The owner is the UTxO address staking credential, not the datum."""
         return None
@@ -744,6 +753,10 @@ class CardanoSwapsSwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
     def ask_unit(self) -> str:
         """The dendrite unit of the asked (input) asset."""
         return _unit(self.ask_id, self.ask_name)
+
+    def asset_fields(self) -> tuple[tuple[bytes, bytes], tuple[bytes, bytes]]:
+        """The offer and ask assets as raw ``(policy id, asset name)`` fields."""
+        return (self.offer_id, self.offer_name), (self.ask_id, self.ask_name)
 
     def offer_assets(self) -> Assets:
         """The offered asset as a zero-quantity Assets bag."""
@@ -2086,13 +2099,10 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         """The book level of one direction, or None when it cannot be listed.
 
         A direction whose price is malformed cannot be priced or filled, one
-        whose in or out unit no output can carry can never be paid or delivered,
-        and one with nothing claimable has nothing a take can release.
+        whose datum names an asset no output can carry can never be paid or
+        delivered, and one with nothing claimable has nothing a take can release.
         """
-        if not (
-            _is_well_formed_unit(direction.in_unit)
-            and _is_well_formed_unit(direction.out_unit)
-        ):
+        if not direction.order_datum.names_ledger_assets():
             return None
         try:
             num, denom = direction.price

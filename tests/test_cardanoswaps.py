@@ -1761,6 +1761,28 @@ def test_orderbook_get_book_skips_malformed_unit_on_its_own_pair(ask) -> None:
     assert not book.buy_book_full
 
 
+# Datum asset fields whose policy id is not 28 bytes but whose joined unit reads
+# as TOKEN_A_UNIT: the validator counts the ask by the datum's own policy id, so
+# no take can pay it.
+_COLLIDING_ASKS = {
+    "policy_29_bytes": (bytes.fromhex(TOKEN_A_POLICY) + b"A", b"AA"),
+    "policy_27_bytes": (bytes.fromhex(TOKEN_A_POLICY)[:27], b"\xaaAAA"),
+}
+
+
+@pytest.mark.parametrize("ask", _COLLIDING_ASKS.values(), ids=_COLLIDING_ASKS.keys())
+def test_orderbook_get_book_skips_ask_colliding_with_a_real_unit(ask) -> None:
+    good = _ada_offer_order(2, 1, 10_000_000)
+    bad = _resting_state(b"", b"", *ask, 1, 1000, 9_000_000)
+    bad.tx_index = 1  # each resting swap is its own UTxO
+    assert bad.in_unit == TOKEN_A_UNIT
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
+
+    assert not book.sell_book_full
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is good
+
+
 def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
     # A book sized at a lower coins_per_utxo_byte than the transaction's lists an
     # ADA offer the transaction's min-UTxO leaves nothing to take; the fill passes
