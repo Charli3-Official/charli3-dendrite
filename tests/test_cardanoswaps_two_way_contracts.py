@@ -10,8 +10,13 @@ from pycardano import Network
 from pycardano import PlutusV3Script
 from pycardano import ScriptHash
 from pycardano import plutus_script_hash
+from pycardano.exception import DeserializeException
 
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSwapDatum
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithMint
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithStake
 from charli3_dendrite.dexs.ob.cardanoswaps import offer_beacon_name
@@ -20,6 +25,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps_two_way import (
     TWO_WAY_BEACON_POLICY_SCRIPT_HEX,
 )
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import TWO_WAY_CONTRACT
+from charli3_dendrite.dexs.ob.cardanoswaps_two_way import CardanoSwapsTwoWaySwapDatum
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import TWO_WAY_SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import (
     TWO_WAY_SWAP_VALIDATOR_SCRIPT_HEX,
@@ -186,3 +192,78 @@ def test_beacon_reward_address_is_the_beacon_script_credential() -> None:
         address.encode()
         == "stake17xhpnn6k5a33q692w4pj0cz89pqtwmjgtp52xfysfj9n08s92lu9k"
     )
+
+
+# An ADA/USDM two-way swap datum serialised by the contract's own Aiken code,
+# with ``asset1_price = 3/2000000`` and ``asset2_price = 1900000/3``.
+DATUM_NONE_HEX = (
+    "d8799f581cae19cf56a7631068aa754327e0472840b76e485868a324904c8b379e"
+    "58203bd868e153a76d170be2f6356551d19c1349308d04e0a24be653b98f1efa4fe7"
+    "4040582007d5f63e85046b83e1fc4102a7c19c3f1711c51984725e3b6cf195900947cebe"
+    "581cc48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad480014df105553444d"
+    "5820a01febd063c6919f19ecafd3114e1203139ba7e8d310672e692b75712ddbdb98"
+    "d8799f031a001e8480ffd8799f1a001cfde003ffd87a80d87a80ff"
+)
+# prev_input = Some(ab*32 #5), expiration = Some(1_790_000_040_000)
+DATUM_SOME_HEX = DATUM_NONE_HEX[: -len("d87a80d87a80ff")] + (
+    "d8799fd8799f5820" + "ab" * 32 + "05ffffd8799f1b000001a0c4510840ffff"
+)
+VECTOR_EXPIRATION = 1_790_000_040_000
+
+
+def vector_datum(
+    prev_input: CardanoSwapsSomeOutRefV3 | PlutusNone | None = None,
+    expiration: CardanoSwapsSomeInt | PlutusNone | None = None,
+    asset1_price: tuple[int, int] = (3, 2_000_000),
+    asset2_price: tuple[int, int] = (1_900_000, 3),
+) -> CardanoSwapsTwoWaySwapDatum:
+    """The ADA/USDM vector datum, built field by field."""
+    return CardanoSwapsTwoWaySwapDatum(
+        beacon_id=bytes.fromhex(TWO_WAY_BEACON_POLICY_ID),
+        pair_beacon=two_way_pair_beacon_name(b"", b"", USDM_ID, USDM_NAME),
+        asset1_id=b"",
+        asset1_name=b"",
+        asset1_beacon=two_way_asset_beacon_name(b"", b""),
+        asset2_id=USDM_ID,
+        asset2_name=USDM_NAME,
+        asset2_beacon=two_way_asset_beacon_name(USDM_ID, USDM_NAME),
+        asset1_price=CardanoSwapsRational(*asset1_price),
+        asset2_price=CardanoSwapsRational(*asset2_price),
+        prev_input=PlutusNone() if prev_input is None else prev_input,
+        expiration=PlutusNone() if expiration is None else expiration,
+    )
+
+
+def test_datum_builds_the_contract_bytes_with_no_optionals() -> None:
+    assert vector_datum().to_cbor_hex() == DATUM_NONE_HEX
+
+
+def test_datum_builds_the_contract_bytes_with_both_optionals() -> None:
+    datum = vector_datum(
+        prev_input=CardanoSwapsSomeOutRefV3.from_ref(bytes.fromhex("ab" * 32), 5),
+        expiration=CardanoSwapsSomeInt(VECTOR_EXPIRATION),
+    )
+    assert datum.to_cbor_hex() == DATUM_SOME_HEX
+
+
+@pytest.mark.parametrize("hex_", [DATUM_NONE_HEX, DATUM_SOME_HEX])
+def test_datum_round_trips_byte_exactly(hex_: str) -> None:
+    assert CardanoSwapsTwoWaySwapDatum.from_cbor(hex_).to_cbor_hex() == hex_
+
+
+def test_one_way_datum_does_not_parse_as_two_way() -> None:
+    one_way = CardanoSwapsSwapDatum(
+        beacon_id=bytes.fromhex(TWO_WAY_BEACON_POLICY_ID),
+        pair_beacon=bytes(32),
+        offer_id=b"",
+        offer_name=b"",
+        offer_beacon=bytes(32),
+        ask_id=USDM_ID,
+        ask_name=USDM_NAME,
+        ask_beacon=bytes(32),
+        swap_price=CardanoSwapsRational(3, 2_000_000),
+        prev_input=PlutusNone(),
+        expiration=PlutusNone(),
+    ).to_cbor_hex()
+    with pytest.raises(DeserializeException):
+        CardanoSwapsTwoWaySwapDatum.from_cbor(one_way)

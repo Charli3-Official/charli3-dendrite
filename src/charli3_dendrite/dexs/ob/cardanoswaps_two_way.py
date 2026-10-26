@@ -14,10 +14,13 @@ one asset beacon per asset (``asset1_beacon``/``asset2_beacon``), all minted
 under one beacon policy parameterised by the swap validator hash.
 
 This module holds the contract description (scripts, hashes, beacon-name rules
-and the spending redeemers that differ from the one-way contract).
+and the spending redeemers that differ from the one-way contract) and the swap
+datum with its per-direction pricing and min-UTxO sizing.
 """
 
+import dataclasses
 from dataclasses import dataclass
+from typing import Union
 
 from pycardano import Address
 from pycardano import Network
@@ -25,10 +28,22 @@ from pycardano import PlutusData
 from pycardano import PlutusV2Script
 from pycardano import PlutusV3Script
 from pycardano import ScriptHash
+from pycardano import TransactionOutput
 
+from charli3_dendrite.dataclasses.datums import OrderDatum
+from charli3_dendrite.dataclasses.datums import PlutusNone
+from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import OrderType
+from charli3_dendrite.dexs.core.errors import InvalidPoolError
+from charli3_dendrite.dexs.ob.cardanoswaps import _SIZING_ADDRESS
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRef
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
+from charli3_dendrite.dexs.ob.cardanoswaps import _self_funded_min_lovelace
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
+from charli3_dendrite.dexs.ob.cardanoswaps import _unit
+from charli3_dendrite.utility import asset_to_value
 
 # The official Cardano-Swaps v2 two-way contracts (Plutus V3, release v2.0.0).
 # The beacon policy is parameterised by ``dapp_hash`` (= the swap validator
@@ -179,3 +194,309 @@ TWO_WAY_CONTRACT = CardanoSwapsTwoWayContract(
     script_class=PlutusV3Script,
     prev_input_class=CardanoSwapsSomeOutRefV3,
 )
+
+
+@dataclass
+class CardanoSwapsTwoWaySwapDatum(OrderDatum):
+    """The v2 two-way swap datum (single constructor, 12 fields).
+
+    Asset policy/name pairs are separate flat bytestrings, as in the one-way
+    datum; ADA is the empty bytestring in the ``*_id`` / ``*_name`` fields. The
+    pair is sorted (``asset1 < asset2``), so ADA, when present, is asset1.
+
+    A direction is named by the asset it takes: ``take_asset2=False`` takes
+    asset1 (paying asset2, redeemer ``TakeAsset1``) and ``take_asset2=True``
+    takes asset2 (paying asset1, redeemer ``TakeAsset2``).
+
+    Fields:
+        beacon_id: The two-way beacon policy id.
+        pair_beacon: The beacon name for this trading pair.
+        asset1_id, asset1_name: The first asset of the sorted pair.
+        asset1_beacon: The beacon name for asset1 (its offer beacon).
+        asset2_id, asset2_name: The second asset of the sorted pair.
+        asset2_beacon: The beacon name for asset2 (its offer beacon).
+        asset1_price: The price to take asset1, as asset2 given per asset1.
+        asset2_price: The price to take asset2, as asset1 given per asset2.
+        prev_input: The spent output a continuation came from (``None`` on a
+            swap that has not been taken from or updated).
+        expiration: Optional POSIX milliseconds after which the swap cannot be
+            taken from.
+    """
+
+    CONSTR_ID = 0
+
+    beacon_id: bytes
+    pair_beacon: bytes
+    asset1_id: bytes
+    asset1_name: bytes
+    asset1_beacon: bytes
+    asset2_id: bytes
+    asset2_name: bytes
+    asset2_beacon: bytes
+    asset1_price: CardanoSwapsRational
+    asset2_price: CardanoSwapsRational
+    prev_input: Union[CardanoSwapsSomeOutRefV3, PlutusNone]
+    expiration: Union[CardanoSwapsSomeInt, PlutusNone]
+
+    def prev_input_ref(self) -> tuple[bytes, int] | None:
+        """The consumed output this datum's ``prev_input`` records.
+
+        Returns:
+            ``(tx_hash, output_index)``, or ``None`` when ``prev_input`` is
+            ``None``.
+        """
+        if isinstance(self.prev_input, PlutusNone):
+            return None
+        return self.prev_input.ref()
+
+    def asset1_unit(self) -> str:
+        """The dendrite unit of asset1."""
+        return _unit(self.asset1_id, self.asset1_name)
+
+    def asset2_unit(self) -> str:
+        """The dendrite unit of asset2."""
+        return _unit(self.asset2_id, self.asset2_name)
+
+    def offer_unit(self, take_asset2: bool) -> str:
+        """The unit a taker draws in the named direction."""
+        return self.asset2_unit() if take_asset2 else self.asset1_unit()
+
+    def ask_unit(self, take_asset2: bool) -> str:
+        """The unit a taker pays in the named direction."""
+        return self.asset1_unit() if take_asset2 else self.asset2_unit()
+
+    def pool_pair(self) -> Assets:
+        """The traded pair (asset1 + asset2), both at zero quantity."""
+        return Assets(root={self.asset1_unit(): 0, self.asset2_unit(): 0})
+
+    def address_source(self) -> None:
+        """The owner is the UTxO address staking credential, not the datum."""
+        return
+
+    def requested_amount(self) -> Assets:
+        """Both assets at zero: a two-way swap accepts either as payment."""
+        return self.pool_pair()
+
+    def order_type(self) -> OrderType:
+        """A resting swap order."""
+        return OrderType.swap
+
+    def price(self, take_asset2: bool) -> tuple[int, int]:
+        """The named direction's ask-per-offer price as ``(numerator, denominator)``.
+
+        The beacon policy only mints for strictly positive prices, but any datum
+        can sit in a UTxO, so a zero or negative component is rejected here rather
+        than surfacing as a division error in the pricing and fill math.
+
+        Raises:
+            InvalidPoolError: The named direction's price is not a positive
+                rational.
+        """
+        rational = self.asset2_price if take_asset2 else self.asset1_price
+        num, den = rational.numerator, rational.denominator
+        if num <= 0 or den <= 0:
+            side = "asset2_price" if take_asset2 else "asset1_price"
+            raise InvalidPoolError(
+                f"Cardano-Swaps two-way {side} must be positive, got {num}/{den}.",
+            )
+        return num, den
+
+    def required_ask(self, offer_taken: int, *, take_asset2: bool) -> int:
+        """The least payment the validator accepts for taking ``offer_taken``.
+
+        The validator checks ``offer_taken * numerator <= ask_given *
+        denominator`` against the named direction's price, so the minimum is
+        ``ceil(offer_taken * numerator / denominator)``.
+
+        Raises:
+            InvalidPoolError: The named direction's price is not a positive
+                rational.
+        """
+        num, den = self.price(take_asset2)
+        return -(-offer_taken * num // den)
+
+    def beacon_assets(self, quantity: int = 1) -> Assets:
+        """The pair, asset1 and asset2 beacons, each at ``quantity``."""
+        policy = self.beacon_id.hex()
+        return Assets(
+            root={
+                f"{policy}{self.pair_beacon.hex()}": quantity,
+                f"{policy}{self.asset1_beacon.hex()}": quantity,
+                f"{policy}{self.asset2_beacon.hex()}": quantity,
+            },
+        )
+
+    def continuation_datum(
+        self,
+        tx_hash: bytes,
+        output_index: int,
+    ) -> "CardanoSwapsTwoWaySwapDatum":
+        """This datum with ``prev_input`` pointing at the consumed ``tx_hash#index``.
+
+        A take's continuing output must carry the spent datum unchanged except
+        for ``prev_input``, which must reference the spent UTxO.
+        """
+        return dataclasses.replace(
+            self,
+            prev_input=CardanoSwapsSomeOutRefV3.from_ref(tx_hash, output_index),
+        )
+
+    def continuation_min_lovelace(
+        self,
+        held: Assets,
+        coins_per_utxo_byte: int,
+        *,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The min-UTxO of a continuing output of this swap that holds ``held``.
+
+        The output carries the three beacons, the native tokens in ``held`` (its
+        lovelace entry is ignored) and :meth:`continuation_datum` for a spent
+        output at ``prev_output_index``. The lovelace balance is sized as the
+        minimum itself: the balance a continuation is left with once an ADA side
+        is fully drawn.
+
+        Args:
+            held: The asset1 and/or asset2 quantities the continuation holds.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            prev_output_index: The output index of the spent UTxO, which the
+                continuation's ``prev_input`` records.
+            address: The swap address; defaults to a staked address of the same
+                size as every base address.
+
+        Returns:
+            The lovelace the continuing output must hold.
+        """
+        tokens = Assets(
+            root={
+                unit: quantity
+                for unit, quantity in held.items()
+                if unit != "lovelace" and quantity > 0
+            },
+        )
+        output = TransactionOutput(
+            address=address if address is not None else _SIZING_ADDRESS,
+            amount=asset_to_value(self.beacon_assets(1) + tokens),
+            datum=self.continuation_datum(bytes(32), prev_output_index),
+        )
+        return _self_funded_min_lovelace(output, coins_per_utxo_byte)
+
+    def claimable_offer(
+        self,
+        gross: int,
+        coins_per_utxo_byte: int,
+        *,
+        take_asset2: bool,
+        held_ask: int = 0,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The amount a taker can draw from a swap UTxO holding ``gross`` of it.
+
+        A token side's min-ADA is a separate lovelace balance, so all of
+        ``gross`` is claimable. The ADA side's lovelace also funds the UTxO's
+        min-UTxO: a take must leave the continuing output its minimum, which is
+        largest when the output holds the most of the token. That is sized as
+        the token already held (``held_ask``) plus the payment for drawing all of
+        ``gross``, an upper bound on any single take, so a take of the returned
+        amount always leaves the continuation funded.
+
+        Args:
+            gross: The balance of the taken asset held in the swap UTxO.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            take_asset2: The direction: ``True`` takes asset2, ``False`` asset1.
+            held_ask: The paid asset already held in the swap UTxO.
+            prev_output_index: The swap UTxO's own output index, which the
+                continuation's ``prev_input`` records.
+            address: The swap address, when known.
+
+        Returns:
+            The claimable quantity, floored at 0.
+
+        Raises:
+            InvalidPoolError: The named direction's price is not a positive
+                rational.
+        """
+        self.price(take_asset2)
+        if self.offer_unit(take_asset2) != "lovelace":
+            return gross
+        full_ask = held_ask + self.required_ask(gross, take_asset2=take_asset2)
+        floor = self.continuation_min_lovelace(
+            Assets(root={self.ask_unit(take_asset2): full_ask}),
+            coins_per_utxo_byte,
+            prev_output_index=prev_output_index,
+            address=address,
+        )
+        return max(0, gross - floor)
+
+    def carrier_lovelace(
+        self,
+        asset1_quantity: int,
+        asset2_quantity: int,
+        coins_per_utxo_byte: int,
+        *,
+        prev_output_index: int = 0,
+        address: Address | None = None,
+    ) -> int:
+        """The lovelace a swap holding these deposits funds for its min-UTxO.
+
+        It is sized for the largest continuation the swap can reach, so no take
+        has to top the output up and every deposit stays claimable:
+
+        * ADA pair: funded on top of the ADA deposit. Drawing all the ADA leaves
+          the output holding only this carrier, the beacons and the asset2
+          deposit plus the payment for all of it, and :meth:`claimable_offer`
+          sizes that payment on the whole balance, so the carrier is the fixed
+          point ``c = min_utxo(asset2 + required_ask(asset1 + c))``. Then
+          ``claimable_offer(asset1 + c, held_ask=asset2) == asset1``.
+        * Token pair: funded as the output's whole lovelace balance, sized with
+          each side holding its deposit plus the payment for the other side.
+
+        Args:
+            asset1_quantity: The asset1 deposit (lovelace on an ADA pair).
+            asset2_quantity: The asset2 deposit.
+            coins_per_utxo_byte: The ``coins_per_utxo_byte`` protocol parameter.
+            prev_output_index: The output index the swap UTxO is created at.
+            address: The swap address, when known.
+
+        Returns:
+            The carrier lovelace.
+
+        Raises:
+            InvalidPoolError: Either price is not a positive rational.
+        """
+        self.price(take_asset2=False)
+        self.price(take_asset2=True)
+        asset1_unit, asset2_unit = self.asset1_unit(), self.asset2_unit()
+        if asset1_unit == "lovelace":
+            # The minimum grows with the token's CBOR width, which grows with the
+            # carrier, so iterate from zero; the sequence never decreases and the
+            # width takes only a few values, so it settles within a few steps.
+            carrier = 0
+            while True:
+                taken = asset1_quantity + carrier
+                held = asset2_quantity + self.required_ask(taken, take_asset2=False)
+                needed = self.continuation_min_lovelace(
+                    Assets(root={asset2_unit: held}),
+                    coins_per_utxo_byte,
+                    prev_output_index=prev_output_index,
+                    address=address,
+                )
+                if needed <= carrier:
+                    return carrier
+                carrier = needed
+        held_tokens = Assets(
+            root={
+                asset1_unit: asset1_quantity
+                + self.required_ask(asset2_quantity, take_asset2=True),
+                asset2_unit: asset2_quantity
+                + self.required_ask(asset1_quantity, take_asset2=False),
+            },
+        )
+        return self.continuation_min_lovelace(
+            held_tokens,
+            coins_per_utxo_byte,
+            prev_output_index=prev_output_index,
+            address=address,
+        )
