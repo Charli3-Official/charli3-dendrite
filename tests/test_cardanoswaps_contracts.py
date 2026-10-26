@@ -307,6 +307,16 @@ def test_one_way_state_inherits_the_shared_base() -> None:
         _CardanoSwapsOrderState.dex()
     state = _legacy_state()
     assert state.directions() == (state,)
+    official = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex("a" * 56),
+        bytes.fromhex("414141"),
+        2,
+        1,
+        10_000_000,
+    )
+    assert official.directions() == (official,)
 
 
 from pycardano import ScriptHash

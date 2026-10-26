@@ -19,31 +19,31 @@ datum with its per-direction pricing and min-UTxO sizing.
 """
 
 import dataclasses
+import functools
 from dataclasses import dataclass
 from typing import Union
 
 from pycardano import Address
 from pycardano import Network
 from pycardano import PlutusData
-from pycardano import PlutusV2Script
 from pycardano import PlutusV3Script
 from pycardano import ScriptHash
-from pycardano import TransactionOutput
 
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
 from charli3_dendrite.dataclasses.models import OrderType
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
-from charli3_dendrite.dexs.ob.cardanoswaps import _SIZING_ADDRESS
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsDeployment
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
-from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRef
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
-from charli3_dendrite.dexs.ob.cardanoswaps import _self_funded_min_lovelace
+from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
+from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
+from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
+from charli3_dendrite.dexs.ob.cardanoswaps import _split_unit
 from charli3_dendrite.dexs.ob.cardanoswaps import _unit
-from charli3_dendrite.utility import asset_to_value
 
 # The official Cardano-Swaps v2 two-way contracts (Plutus V3, release v2.0.0).
 # The beacon policy is parameterised by ``dapp_hash`` (= the swap validator
@@ -125,15 +125,6 @@ def two_way_pair_beacon_name(
     )
 
 
-def _unit_key(unit: str) -> bytes:
-    """A dendrite unit as ``policy_id ++ asset_name`` bytes (ADA -> empty).
-
-    Policy ids have a fixed width, so ordering these bytes orders by policy id
-    first, then asset name — the contract's asset order.
-    """
-    return b"" if unit == "lovelace" else bytes.fromhex(unit)
-
-
 def sort_pair(unit_a: str, unit_b: str) -> tuple[str, str]:
     """The two dendrite units as ``(asset1, asset2)`` in contract order.
 
@@ -142,36 +133,20 @@ def sort_pair(unit_a: str, unit_b: str) -> tuple[str, str]:
     Raises:
         ValueError: the two units are equal.
     """
-    key_a, key_b = _unit_key(unit_a), _unit_key(unit_b)
+    key_a, key_b = _split_unit(unit_a), _split_unit(unit_b)
     if key_a == key_b:
         raise ValueError(f"A two-way pair needs two distinct assets, got {unit_a}.")
     return (unit_a, unit_b) if key_a < key_b else (unit_b, unit_a)
 
 
 @dataclass(frozen=True)
-class CardanoSwapsTwoWayContract:
+class CardanoSwapsTwoWayContract(CardanoSwapsDeployment):
     """One deployment of the Cardano-Swaps two-way contracts.
 
-    Script hashes and bytes, the Plutus version and the shape a continuation's
-    ``prev_input`` is written in. Same attribute names and script accessors as
-    the one-way ``CardanoSwapsContract``, so code that only needs those works
-    with either.
+    The shared deployment fields (script hashes and bytes, the Plutus version and
+    the shape a continuation's ``prev_input`` is written in), plus the beacon
+    policy's reward address.
     """
-
-    swap_validator_hash: str
-    beacon_policy_id: str
-    swap_script_hex: str
-    beacon_script_hex: str
-    script_class: type[PlutusV2Script] | type[PlutusV3Script]
-    prev_input_class: type[CardanoSwapsSomeOutRef] | type[CardanoSwapsSomeOutRefV3]
-
-    def swap_script(self) -> PlutusV2Script | PlutusV3Script:
-        """The swap spending validator."""
-        return self.script_class(bytes.fromhex(self.swap_script_hex))
-
-    def beacon_script(self) -> PlutusV2Script | PlutusV3Script:
-        """The beacon minting/staking policy (``dapp_hash`` applied)."""
-        return self.script_class(bytes.fromhex(self.beacon_script_hex))
 
     def beacon_reward_address(self, network: Network) -> Address:
         """The beacon policy's reward address (staking execution).
@@ -368,19 +343,13 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
         Returns:
             The lovelace the continuing output must hold.
         """
-        tokens = Assets(
-            root={
-                unit: quantity
-                for unit, quantity in held.items()
-                if unit != "lovelace" and quantity > 0
-            },
+        return _continuation_min_lovelace(
+            self.beacon_assets(1),
+            held,
+            self.continuation_datum(bytes(32), prev_output_index),
+            coins_per_utxo_byte,
+            address,
         )
-        output = TransactionOutput(
-            address=address if address is not None else _SIZING_ADDRESS,
-            amount=asset_to_value(self.beacon_assets(1) + tokens),
-            datum=self.continuation_datum(bytes(32), prev_output_index),
-        )
-        return _self_funded_min_lovelace(output, coins_per_utxo_byte)
 
     def claimable_offer(
         self,
@@ -421,14 +390,17 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
         self.price(take_asset2)
         if self.offer_unit(take_asset2) != "lovelace":
             return gross
-        full_ask = held_ask + self.required_ask(gross, take_asset2=take_asset2)
-        floor = self.continuation_min_lovelace(
-            Assets(root={self.ask_unit(take_asset2): full_ask}),
-            coins_per_utxo_byte,
-            prev_output_index=prev_output_index,
-            address=address,
+        return _claimable_ada_offer(
+            gross,
+            self.ask_unit(take_asset2),
+            held_ask + self.required_ask(gross, take_asset2=take_asset2),
+            functools.partial(
+                self.continuation_min_lovelace,
+                coins_per_utxo_byte=coins_per_utxo_byte,
+                prev_output_index=prev_output_index,
+                address=address,
+            ),
         )
-        return max(0, gross - floor)
 
     def carrier_lovelace(
         self,
@@ -469,23 +441,26 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
         self.price(take_asset2=False)
         self.price(take_asset2=True)
         asset1_unit, asset2_unit = self.asset1_unit(), self.asset2_unit()
+        min_lovelace = functools.partial(
+            self.continuation_min_lovelace,
+            coins_per_utxo_byte=coins_per_utxo_byte,
+            prev_output_index=prev_output_index,
+            address=address,
+        )
         if asset1_unit == "lovelace":
-            # The minimum grows with the token's CBOR width, which grows with the
-            # carrier, so iterate from zero; the sequence never decreases and the
-            # width takes only a few values, so it settles within a few steps.
-            carrier = 0
-            while True:
-                taken = asset1_quantity + carrier
-                held = asset2_quantity + self.required_ask(taken, take_asset2=False)
-                needed = self.continuation_min_lovelace(
-                    Assets(root={asset2_unit: held}),
-                    coins_per_utxo_byte,
-                    prev_output_index=prev_output_index,
-                    address=address,
-                )
-                if needed <= carrier:
-                    return carrier
-                carrier = needed
+            return _ada_carrier(
+                lambda carrier: min_lovelace(
+                    Assets(
+                        root={
+                            asset2_unit: asset2_quantity
+                            + self.required_ask(
+                                asset1_quantity + carrier,
+                                take_asset2=False,
+                            ),
+                        },
+                    ),
+                ),
+            )
         held_tokens = Assets(
             root={
                 asset1_unit: asset1_quantity
@@ -494,9 +469,4 @@ class CardanoSwapsTwoWaySwapDatum(OrderDatum):
                 + self.required_ask(asset1_quantity, take_asset2=False),
             },
         )
-        return self.continuation_min_lovelace(
-            held_tokens,
-            coins_per_utxo_byte,
-            prev_output_index=prev_output_index,
-            address=address,
-        )
+        return min_lovelace(held_tokens)

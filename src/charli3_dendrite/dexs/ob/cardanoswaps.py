@@ -12,6 +12,7 @@ are implemented separately.
 """
 
 import dataclasses
+import functools
 import hashlib
 import time
 from abc import abstractmethod
@@ -291,53 +292,12 @@ class CardanoSwapsSomeOutRefV3(PlutusData):
         return self.value.transaction_id, self.value.output_index
 
 
-class CardanoSwapsDeployment(Protocol):
-    """What the shared Cardano-Swaps order state needs from a deployment.
+@dataclass(frozen=True)
+class CardanoSwapsDeployment:
+    """What every Cardano-Swaps deployment has, one-way or two-way.
 
     The swap validator and beacon policy (hashes and scripts), their Plutus
-    version, and the shape a continuation's ``prev_input`` is written in. The
-    attributes are read-only, so a frozen dataclass satisfies it.
-    """
-
-    @property
-    def swap_validator_hash(self) -> str:
-        """The swap spending validator's script hash (hex)."""
-        ...
-
-    @property
-    def beacon_policy_id(self) -> str:
-        """The beacon minting policy id (hex)."""
-        ...
-
-    @property
-    def script_class(self) -> type[PlutusV2Script] | type[PlutusV3Script]:
-        """The Plutus version both scripts are written in."""
-        ...
-
-    @property
-    def prev_input_class(
-        self,
-    ) -> type[CardanoSwapsSomeOutRef] | type[CardanoSwapsSomeOutRefV3]:
-        """The shape a continuation's ``prev_input`` is written in."""
-        ...
-
-    def swap_script(self) -> PlutusV2Script | PlutusV3Script:
-        """The swap spending validator."""
-        ...
-
-    def beacon_script(self) -> PlutusV2Script | PlutusV3Script:
-        """The beacon minting/staking policy."""
-        ...
-
-
-@dataclass(frozen=True)
-class CardanoSwapsContract:
-    """One deployment of the Cardano-Swaps one-way contracts.
-
-    Everything that differs between deployments: script hashes and bytes, the
-    Plutus version, the shape a continuation's ``prev_input`` is written in, the
-    beacon-name rule, whether a new swap's staking key must sign its creation,
-    and which builders are allowed.
+    version, and the shape a continuation's ``prev_input`` is written in.
     """
 
     swap_validator_hash: str
@@ -346,12 +306,6 @@ class CardanoSwapsContract:
     beacon_script_hex: str
     script_class: type[PlutusV2Script] | type[PlutusV3Script]
     prev_input_class: type[CardanoSwapsSomeOutRef] | type[CardanoSwapsSomeOutRefV3]
-    pair_beacon_name: Callable[[bytes, bytes, bytes, bytes], bytes]
-    offer_beacon_name: Callable[[bytes, bytes], bytes]
-    ask_beacon_name: Callable[[bytes, bytes], bytes]
-    create_needs_stake_signature: bool
-    allows_create: bool
-    allows_fill: bool
 
     def swap_script(self) -> PlutusV2Script | PlutusV3Script:
         """The swap spending validator."""
@@ -360,6 +314,22 @@ class CardanoSwapsContract:
     def beacon_script(self) -> PlutusV2Script | PlutusV3Script:
         """The beacon minting/staking policy (``dapp_hash`` applied)."""
         return self.script_class(bytes.fromhex(self.beacon_script_hex))
+
+
+@dataclass(frozen=True)
+class CardanoSwapsContract(CardanoSwapsDeployment):
+    """One deployment of the Cardano-Swaps one-way contracts.
+
+    Beyond the shared deployment fields: the beacon-name rule, whether a new
+    swap's staking key must sign its creation, and which builders are allowed.
+    """
+
+    pair_beacon_name: Callable[[bytes, bytes, bytes, bytes], bytes]
+    offer_beacon_name: Callable[[bytes, bytes], bytes]
+    ask_beacon_name: Callable[[bytes, bytes], bytes]
+    create_needs_stake_signature: bool
+    allows_create: bool
+    allows_fill: bool
 
 
 OFFICIAL_CONTRACT = CardanoSwapsContract(
@@ -417,6 +387,17 @@ def _unit(policy: bytes, name: bytes) -> str:
     return policy.hex() + name.hex()
 
 
+def _split_unit(unit: str) -> tuple[bytes, bytes]:
+    """Split a dendrite unit into on-chain (policy, name) bytes (ADA -> empty).
+
+    The inverse of :func:`_unit`. Ordering these tuples orders by policy id,
+    then asset name, with ADA first: the contracts' asset order.
+    """
+    if unit == "lovelace":
+        return b"", b""
+    return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
+
+
 # A staked swap address used only for its size when sizing an output whose owner
 # is not known: every base address (payment + staking credential) serializes to
 # the same 57 bytes, so the credentials themselves never affect the result.
@@ -465,6 +446,66 @@ def _self_funded_min_lovelace(
         return needed
     output.amount.coin = needed
     return max(needed, _min_lovelace_at(output, coins_per_utxo_byte))
+
+
+def _continuation_min_lovelace(
+    beacons: Assets,
+    held: Assets,
+    datum: PlutusData,
+    coins_per_utxo_byte: int,
+    address: Address | None,
+) -> int:
+    """The self-funded min-UTxO of a swap continuation.
+
+    The output carries ``beacons``, the positive native-token entries of ``held``
+    (its lovelace entry is ignored) and ``datum``, at ``address`` or, when that
+    is ``None``, at a staked address of the same size as every base address.
+    """
+    tokens = Assets(
+        root={
+            unit: quantity
+            for unit, quantity in held.items()
+            if unit != "lovelace" and quantity > 0
+        },
+    )
+    output = TransactionOutput(
+        address=address if address is not None else _SIZING_ADDRESS,
+        amount=asset_to_value(beacons + tokens),
+        datum=datum,
+    )
+    return _self_funded_min_lovelace(output, coins_per_utxo_byte)
+
+
+def _claimable_ada_offer(
+    gross: int,
+    ask_unit: str,
+    full_ask: int,
+    min_lovelace: Callable[[Assets], int],
+) -> int:
+    """The part of an ADA offer balance ``gross`` a taker can draw.
+
+    ``min_lovelace`` sizes a continuation holding the given ask; it is applied
+    to ``full_ask``, the most ask the continuation can hold, and that minimum
+    stays behind. Floored at 0.
+    """
+    return max(0, gross - min_lovelace(Assets(root={ask_unit: full_ask})))
+
+
+def _ada_carrier(min_lovelace_for: Callable[[int], int]) -> int:
+    """The least carrier ``c`` with ``min_lovelace_for(c) <= c``.
+
+    ``min_lovelace_for(c)`` is the min-UTxO of the largest continuation reachable
+    when ``c`` lovelace funds the output on top of an ADA deposit. It grows with
+    the CBOR width of the ask, which grows with ``c``, so iterate from zero; the
+    sequence never decreases and the width takes only a few values, so it
+    settles within a few steps.
+    """
+    carrier = 0
+    while True:
+        needed = min_lovelace_for(carrier)
+        if needed <= carrier:
+            return carrier
+        carrier = needed
 
 
 @dataclass
@@ -657,23 +698,13 @@ class CardanoSwapsSwapDatum(OrderDatum):
             ValueError: ``contract`` is not given and ``beacon_id`` is neither
                 contract's beacon policy.
         """
-        tokens = Assets(
-            root={
-                unit: quantity
-                for unit, quantity in held.items()
-                if unit != "lovelace" and quantity > 0
-            },
+        return _continuation_min_lovelace(
+            self.beacon_assets(1),
+            held,
+            self.continuation_datum(bytes(32), prev_output_index, contract=contract),
+            coins_per_utxo_byte,
+            address,
         )
-        output = TransactionOutput(
-            address=address if address is not None else _SIZING_ADDRESS,
-            amount=asset_to_value(self.beacon_assets(1) + tokens),
-            datum=self.continuation_datum(
-                bytes(32),
-                prev_output_index,
-                contract=contract,
-            ),
-        )
-        return _self_funded_min_lovelace(output, coins_per_utxo_byte)
 
     def claimable_offer(
         self,
@@ -718,15 +749,18 @@ class CardanoSwapsSwapDatum(OrderDatum):
             contract = contract_for_beacon(self.beacon_id)
         if self.offer_unit() != "lovelace":
             return gross
-        full_ask = held_ask + self.required_ask(gross)
-        floor = self.continuation_min_lovelace(
-            Assets(root={self.ask_unit(): full_ask}),
-            coins_per_utxo_byte,
-            prev_output_index=prev_output_index,
-            address=address,
-            contract=contract,
+        return _claimable_ada_offer(
+            gross,
+            self.ask_unit(),
+            held_ask + self.required_ask(gross),
+            functools.partial(
+                self.continuation_min_lovelace,
+                coins_per_utxo_byte=coins_per_utxo_byte,
+                prev_output_index=prev_output_index,
+                address=address,
+                contract=contract,
+            ),
         )
-        return max(0, gross - floor)
 
     def carrier_lovelace(
         self,
@@ -769,34 +803,33 @@ class CardanoSwapsSwapDatum(OrderDatum):
         """
         self.price()
         ask_unit = self.ask_unit()
-        if self.offer_unit() == "lovelace":
-            # The minimum grows with the ask's CBOR width, which grows with the
-            # carrier, so iterate from zero; the sequence never decreases and the
-            # width takes only a few values, so it settles within a few steps.
-            carrier = 0
-            while True:
-                needed = self.continuation_min_lovelace(
-                    Assets(
-                        root={ask_unit: self.required_ask(offer_quantity + carrier)},
-                    ),
-                    coins_per_utxo_byte,
-                    prev_output_index=prev_output_index,
-                    address=address,
-                    contract=contract,
-                )
-                if needed <= carrier:
-                    return carrier
-                carrier = needed
-        held = {self.offer_unit(): offer_quantity}
-        if ask_unit != "lovelace":
-            held[ask_unit] = self.required_ask(offer_quantity)
-        return self.continuation_min_lovelace(
-            Assets(root=held),
-            coins_per_utxo_byte,
+        min_lovelace = functools.partial(
+            self.continuation_min_lovelace,
+            coins_per_utxo_byte=coins_per_utxo_byte,
             prev_output_index=prev_output_index,
             address=address,
             contract=contract,
         )
+        if self.offer_unit() == "lovelace":
+            return _ada_carrier(
+                lambda carrier: min_lovelace(
+                    Assets(
+                        root={ask_unit: self.required_ask(offer_quantity + carrier)},
+                    ),
+                ),
+            )
+        held = {self.offer_unit(): offer_quantity}
+        if ask_unit != "lovelace":
+            held[ask_unit] = self.required_ask(offer_quantity)
+        return min_lovelace(Assets(root=held))
+
+
+class _BeaconedDatum(Protocol):
+    """A swap datum that names the beacons tagging its UTxO."""
+
+    def beacon_assets(self, quantity: int = 1) -> Assets:
+        """The datum's beacons, each at ``quantity``."""
+        ...
 
 
 class _CardanoSwapsOrderState(AbstractOrderState):
@@ -1099,7 +1132,7 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         )
 
     @staticmethod
-    def _beacon_mint_assets(datum: OrderDatum, quantity: int) -> Assets:
+    def _beacon_mint_assets(datum: _BeaconedDatum, quantity: int) -> Assets:
         """The datum's beacons at +1 (CREATE) or -1 (CLOSE)."""
         return datum.beacon_assets(quantity)
 
@@ -1111,13 +1144,6 @@ class _CardanoSwapsOrderState(AbstractOrderState):
             tx_builder.mint = multi_asset
         else:
             tx_builder.mint += multi_asset
-
-    @staticmethod
-    def _split_unit(unit: str) -> tuple[bytes, bytes]:
-        """Split a dendrite unit into on-chain (policy, name) bytes (ADA -> empty)."""
-        if unit == "lovelace":
-            return b"", b""
-        return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
 
     def _input_utxo(self, owner_address: Address) -> UTxO:
         """The synthetic resting swap UTxO (held balance + beacons), inline datum.
@@ -1297,13 +1323,13 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         Spends the resting UTxO with ``SpendWithMint`` and burns -1 of each
         beacon under the beacon policy with ``CreateOrCloseSwaps``. The owner's
         stake credential must authorize the spend (sign with the stake key for a
-        vkey stake credential, or run the stake script); reclaim of the offer
-        asset to the owner is handled by change. The swap validator and beacon
-        policy are inlined by default, or referenced via a reference input when
-        the caller supplies ``swap_ref_utxo`` / ``beacon_ref_utxo``.
+        vkey stake credential, or run the stake script); the held balance is
+        reclaimed through change. The swap validator and beacon policy are
+        inlined by default, or referenced via a reference input when the caller
+        supplies ``swap_ref_utxo`` / ``beacon_ref_utxo``.
 
         Returns:
-            The spent (resting) ``SwapDatum``.
+            The spent (resting) swap datum.
         """
         if owner_address is None:
             raise ValueError("build_close requires the owner address.")
@@ -1521,8 +1547,8 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
                 )
         offer_unit = offer.unit()
         ask_unit = ask.unit()
-        offer_id, offer_name = cls._split_unit(offer_unit)
-        ask_id, ask_name = cls._split_unit(ask_unit)
+        offer_id, offer_name = _split_unit(offer_unit)
+        ask_id, ask_name = _split_unit(ask_unit)
 
         num, den = price
         if num <= 0 or den <= 0:
