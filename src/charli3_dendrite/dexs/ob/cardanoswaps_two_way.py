@@ -38,6 +38,7 @@ from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Withdrawals
+from pycardano import script_hash
 from pycardano.utils import min_lovelace
 
 from charli3_dendrite.dataclasses.datums import OrderDatum
@@ -53,12 +54,14 @@ from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
 from charli3_dendrite.dexs.ob.cardanoswaps import _beacon_assets
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsDatumMixin
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
+from charli3_dendrite.dexs.ob.cardanoswaps import _check_expiration
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
 from charli3_dendrite.dexs.ob.cardanoswaps import _expiration_field
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
 from charli3_dendrite.dexs.ob.cardanoswaps import _split_unit
 from charli3_dendrite.dexs.ob.cardanoswaps import _unit
+from charli3_dendrite.utility import posix_ms_to_slot
 
 # The official Cardano-Swaps v2 two-way contracts (Plutus V3, release v2.0.0).
 # The beacon policy is parameterised by ``dapp_hash`` (= the swap validator
@@ -140,10 +143,6 @@ def two_way_pair_beacon_name(
     )
 
 
-# The beacon policy only mints for an expiration on a whole minute.
-_EXPIRATION_INTERVAL_MS = 60_000
-
-
 class _KeepExpiration:
     """The type of :data:`KEEP_EXPIRATION`."""
 
@@ -153,19 +152,6 @@ class _KeepExpiration:
 
 # ``build_update``'s default expiration: keep the swap's current expiration.
 KEEP_EXPIRATION = _KeepExpiration()
-
-
-def _check_expiration(expiration: int | None) -> None:
-    """Reject an expiration that is not a whole minute.
-
-    Raises:
-        ValueError: ``expiration`` is set and not a multiple of 60 000.
-    """
-    if expiration is not None and expiration % _EXPIRATION_INTERVAL_MS != 0:
-        raise ValueError(
-            "A two-way swap expiration must be a whole minute "
-            f"(a multiple of {_EXPIRATION_INTERVAL_MS} ms), got {expiration}.",
-        )
 
 
 def _deposit(bag: Assets, label: str) -> tuple[str, int]:
@@ -728,18 +714,23 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
     ) -> None:
         """Run the beacon policy as a staking script: withdraw 0 with ``UpdateSwaps``.
 
-        The withdrawal is merged into the builder's existing withdrawals. A
-        transaction that already withdraws from the beacon reward address (an
-        earlier update in the same transaction) runs the policy once, which
-        checks every swap output of the transaction.
+        The withdrawal is merged into the builder's existing withdrawals. The
+        policy runs once per transaction and checks every swap output, so a
+        withdrawal or beacon withdrawal script already on the builder (an earlier
+        update in the same transaction) is kept and only what is missing is
+        added.
         """
         reward = bytes(cls.CONTRACT.beacon_reward_address(network))
         withdrawals = tx_builder.withdrawals or Withdrawals()
-        if reward in withdrawals:
-            return
-        withdrawals[reward] = 0
-        tx_builder.withdrawals = withdrawals
-        tx_builder.add_withdrawal_script(beacon_script, Redeemer(UpdateSwaps()))
+        if reward not in withdrawals:
+            withdrawals[reward] = 0
+            tx_builder.withdrawals = withdrawals
+        beacon_hash = ScriptHash(bytes.fromhex(cls.CONTRACT.beacon_policy_id))
+        if not any(
+            redeemer is not None and script_hash(script) == beacon_hash
+            for script, redeemer in tx_builder._withdrawal_script_to_redeemers
+        ):
+            tx_builder.add_withdrawal_script(beacon_script, Redeemer(UpdateSwaps()))
 
     def build_update(
         self,
@@ -793,13 +784,17 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
             The swap output and its inline datum.
 
         Raises:
-            ValueError: the owner has no key-hash staking credential, a price is
-                not a positive rational, a balance is negative, both balances
-                are 0, the expiration is not a multiple of 60 000, a kept ADA
-                balance is below the new output's min-UTxO, or a reference UTxO
-                carries the wrong script. Nothing is added to ``tx_builder``.
+            ValueError: the owner has no key-hash staking credential or is not
+                the swap address's owner (when the record carried the address),
+                a price is not a positive rational, a balance is negative, both
+                balances are 0 (a kept ADA balance counts only what exceeds the
+                continuation's min-UTxO), the expiration is not a multiple of
+                60 000 or is at or before the chain tip, a kept ADA balance is
+                below the new output's min-UTxO, or a reference UTxO carries the
+                wrong script. Nothing is added to ``tx_builder``.
         """
         stake_key = self._owner_stake_key(owner_address)
+        self._check_owner(owner_address)
         current = self.order_datum
         new_expiration: int | None
         if isinstance(expiration, _KeepExpiration):
@@ -811,6 +806,14 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         else:
             new_expiration = expiration
         _check_expiration(new_expiration)
+        if (
+            new_expiration is not None
+            and posix_ms_to_slot(new_expiration) <= tx_builder.context.last_block_slot
+        ):
+            raise ValueError(
+                f"The swap expiration {new_expiration} has already been reached; "
+                "pass a later expiration, or None to clear it.",
+            )
         prices = {
             label: CardanoSwapsRational.from_price(
                 (kept.numerator, kept.denominator) if price is None else price,
@@ -840,14 +843,26 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
                 "A two-way swap balance must be non-negative, got "
                 f"asset1 {balance1} and asset2 {balance2}.",
             )
-        if balance1 == 0 and balance2 == 0:
-            raise ValueError("A two-way swap needs a balance of asset1 or asset2.")
-        swap_script = self._swap_script_arg(swap_ref_utxo)
-        beacon_script = self._beacon_script_arg(beacon_ref_utxo)
-
         keeps_held_ada = asset1_unit == "lovelace" and asset1_quantity is None
         held_lovelace = self.assets["lovelace"]
         coins_per_utxo_byte = tx_builder.context.protocol_param.coins_per_utxo_byte
+        # A kept ADA balance includes the carrier; only what exceeds the
+        # continuation's min-UTxO is tradeable.
+        tradeable1 = (
+            balance1
+            - datum.continuation_min_lovelace(
+                Assets(root={asset2_unit: balance2}),
+                coins_per_utxo_byte,
+                prev_output_index=len(tx_builder.outputs),
+                address=self.beacon_address(owner_address),
+            )
+            if keeps_held_ada
+            else balance1
+        )
+        if tradeable1 <= 0 and balance2 == 0:
+            raise ValueError("A two-way swap needs a balance of asset1 or asset2.")
+        swap_script = self._swap_script_arg(swap_ref_utxo)
+        beacon_script = self._beacon_script_arg(beacon_ref_utxo)
 
         def carrier(index: int, address: Address) -> int:
             if keeps_held_ada:

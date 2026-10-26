@@ -457,6 +457,88 @@ def test_fill_of_a_non_expiring_swap_sets_no_deadline() -> None:
     assert tb.ttl is None
 
 
+def test_create_with_expiration_sets_its_deadline() -> None:
+    # The beacon policy requires an upper validity bound at or before the
+    # expiration, as on a fill.
+    tb = TransactionBuilder(_ContextAt(EXPIRATION_SLOT - 600))
+    CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={"lovelace": 10_000_000}),
+        ask=Assets(root={TOKEN: 0}),
+        price=(2, 1),
+        tx_builder=tb,
+        expiration=EXPIRATION,
+    )
+    assert tb.ttl == EXPIRATION_SLOT
+
+
+def test_create_rejects_an_expiration_off_the_minute() -> None:
+    tb = TransactionBuilder(_ContextAt(EXPIRATION_SLOT - 600))
+    with pytest.raises(ValueError, match="whole minute"):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root={"lovelace": 10_000_000}),
+            ask=Assets(root={TOKEN: 0}),
+            price=(2, 1),
+            tx_builder=tb,
+            expiration=EXPIRATION + 1,
+        )
+    assert tb.mint is None and not tb.outputs
+    assert tb.required_signers is None and tb.ttl is None
+
+
+def _official_state() -> CardanoSwapsOrderState:
+    return _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN[:56]),
+        bytes.fromhex(TOKEN[56:]),
+        2,
+        1,
+        10_000_000,
+    )
+
+
+def test_close_adds_the_owner_stake_signer_once() -> None:
+    tb = TransactionBuilder(_OfflineContext())
+    tb.required_signers = [OWNER.staking_part]
+    _official_state().build_close(tx_builder=tb, owner_address=OWNER)
+    assert tb.required_signers == [OWNER.staking_part]
+
+    fresh = TransactionBuilder(_OfflineContext())
+    _legacy_state().build_close(tx_builder=fresh, owner_address=OWNER)
+    assert fresh.required_signers == [OWNER.staking_part]
+
+
+def test_close_leaves_a_script_stake_to_the_caller() -> None:
+    owner = Address(
+        payment_part=OWNER.payment_part,
+        staking_part=ScriptHash(bytes.fromhex("33" * 28)),
+        network=Network.MAINNET,
+    )
+    tb = TransactionBuilder(_OfflineContext())
+    _official_state().build_close(tx_builder=tb, owner_address=owner)
+    assert tb.required_signers is None
+    assert len(_mint_dict(tb)) == 3
+
+
+def test_close_rejects_an_owner_other_than_the_swap_address() -> None:
+    state = _official_state()
+    state.address = str(CardanoSwapsOrderState.beacon_address(OWNER))
+    other = Address(
+        payment_part=OWNER.payment_part,
+        staking_part=VerificationKeyHash(bytes.fromhex("44" * 28)),
+        network=Network.MAINNET,
+    )
+    tb = TransactionBuilder(_OfflineContext())
+    with pytest.raises(ValueError, match="staking credential"):
+        state.build_close(tx_builder=tb, owner_address=other)
+    assert tb.inputs == [] and tb.mint is None and tb.required_signers is None
+
+    state.build_close(tx_builder=tb, owner_address=OWNER)
+    assert len(tb.inputs) == 1
+
+
 # --- prev_input: the two output-reference shapes ----------------------------
 
 PREV_HASH = bytes.fromhex("ab" * 32)

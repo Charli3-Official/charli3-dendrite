@@ -614,6 +614,24 @@ def _expiration_field(expiration: int | None) -> CardanoSwapsSomeInt | PlutusNon
     return PlutusNone() if expiration is None else CardanoSwapsSomeInt(expiration)
 
 
+# The beacon policy accepts only a whole-minute expiration, whether it runs as a
+# minting policy (create) or as a staking script (update).
+_EXPIRATION_INTERVAL_MS = 60_000
+
+
+def _check_expiration(expiration: int | None) -> None:
+    """Reject an expiration that is not a whole minute.
+
+    Raises:
+        ValueError: ``expiration`` is set and not a multiple of 60 000.
+    """
+    if expiration is not None and expiration % _EXPIRATION_INTERVAL_MS != 0:
+        raise ValueError(
+            "A Cardano-Swaps swap expiration must be a whole minute "
+            f"(a multiple of {_EXPIRATION_INTERVAL_MS} ms), got {expiration}.",
+        )
+
+
 @dataclass
 class CardanoSwapsSwapDatum(_CardanoSwapsDatumMixin, OrderDatum):
     """The v2 one-way swap datum (single constructor, 11 fields).
@@ -1033,7 +1051,12 @@ class _CardanoSwapsOrderState(AbstractOrderState):
     @classmethod
     @abstractmethod
     def _taker_units(cls, datum: PlutusData, values: dict) -> tuple[str, str]:
-        """The ``(ask, offer)`` units of the direction ``values`` describes."""
+        """The ``(ask, offer)`` units of the direction ``values`` describes.
+
+        An override may normalize the direction keys in ``values`` (for example,
+        rewrite an alias to the field name) so the parsed fields agree with the
+        returned orientation.
+        """
         raise NotImplementedError
 
     @classmethod
@@ -1280,7 +1303,7 @@ class _CardanoSwapsOrderState(AbstractOrderState):
 
     @staticmethod
     def _owner_stake_key(owner_address: Address) -> VerificationKeyHash:
-        """The owner's staking key hash, which must approve a v2 create.
+        """The owner's staking key hash, which must approve a v2 create or update.
 
         Raises:
             ValueError: the owner address has no key-hash staking credential.
@@ -1288,11 +1311,30 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         stake = owner_address.staking_part
         if not isinstance(stake, VerificationKeyHash):
             raise ValueError(
-                "Creating a Cardano-Swaps v2 swap must be approved by the "
-                "owner's staking key; the owner address has no key-hash "
-                "staking credential.",
+                "A Cardano-Swaps v2 swap must be approved by the owner's "
+                "staking key; the owner address has no key-hash staking "
+                "credential.",
             )
         return stake
+
+    def _check_owner(self, owner_address: Address) -> None:
+        """Reject an owner whose staking credential is not this swap address's.
+
+        Checked only when the record carried the swap address.
+
+        Raises:
+            ValueError: the swap address's staking credential differs from
+                ``owner_address``'s.
+        """
+        swap_address = self._swap_address()
+        if (
+            swap_address is not None
+            and swap_address.staking_part != owner_address.staking_part
+        ):
+            raise ValueError(
+                "The owner address's staking credential is not the swap "
+                "address's; pass the address of the swap's owner.",
+            )
 
     @staticmethod
     def _add_required_signer(
@@ -1572,17 +1614,24 @@ class _CardanoSwapsOrderState(AbstractOrderState):
 
         Spends the resting UTxO with ``SpendWithMint`` and burns -1 of each
         beacon under the beacon policy with ``CreateOrCloseSwaps``. The owner's
-        stake credential must authorize the spend (sign with the stake key for a
-        vkey stake credential, or run the stake script); the held balance is
-        reclaimed through change. The swap validator and beacon policy are
-        inlined by default, or referenced via a reference input when the caller
-        supplies ``swap_ref_utxo`` / ``beacon_ref_utxo``.
+        stake credential must authorize the spend: a key-hash stake credential is
+        added to the required signers, while a script stake credential's script
+        must be run (a withdrawal) by the caller. The held balance is reclaimed
+        through change. The swap validator and beacon policy are inlined by
+        default, or referenced via a reference input when the caller supplies
+        ``swap_ref_utxo`` / ``beacon_ref_utxo``.
 
         Returns:
             The spent (resting) swap datum.
+
+        Raises:
+            ValueError: no owner address is given, or its staking credential is
+                not the swap address's (when the record carried the address).
+                Nothing is added to ``tx_builder``.
         """
         if owner_address is None:
             raise ValueError("build_close requires the owner address.")
+        self._check_owner(owner_address)
 
         input_utxo = self._input_utxo(owner_address)
         tx_builder.add_script_input(
@@ -1598,13 +1647,13 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         # Burn the three beacons.
         self._mint_beacons(tx_builder, self.order_datum, -1, beacon_ref_utxo)
 
-        # NOTE: the validator gates the close on the swap address' STAKING
-        # credential, not its payment credential. For a vkey stake credential the
-        # owner's stake key must be among the signatories — the caller supplies it
-        # via ``build_and_sign(signing_keys=[...])`` and/or
-        # ``tx_builder.required_signers``; for a script stake credential the stake
-        # script must be executed (a withdrawal). This builder only assembles the
-        # spend + burn; signing/withdrawal is the caller's responsibility.
+        # The validator gates the close on the swap address's staking credential,
+        # not its payment credential. A key-hash stake credential must sign (the
+        # caller still supplies the signing key); a script stake credential's
+        # script must run, which is left to the caller.
+        stake = owner_address.staking_part
+        if isinstance(stake, VerificationKeyHash):
+            self._add_required_signer(tx_builder, stake)
         return self.order_datum
 
 
@@ -1726,7 +1775,8 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             ask: The asked (input) asset, quantity ignored (one token).
             price: ``(numerator, denominator)`` ask-per-offer rational.
             tx_builder: The builder to mutate.
-            expiration: Optional POSIX-millis expiration (must be a 60000-multiple).
+            expiration: Optional POSIX-millis expiration, a whole minute; it also
+                bounds the transaction's validity at or before it.
             beacon_ref_utxo: Optional reference-script UTxO for the beacon policy;
                 when given, the policy is referenced via a reference input instead
                 of inlined into the witness set.
@@ -1735,8 +1785,9 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             The swap output and its inline ``SwapDatum``.
 
         Raises:
-            ValueError: this contract creates no swaps, or ``price`` is not a
-                positive rational.
+            ValueError: this contract creates no swaps, ``price`` is not a
+                positive rational, or the expiration is not a multiple of
+                60 000. Nothing is added to ``tx_builder``.
         """
         if not cls.CONTRACT.allows_create:
             raise ValueError(
@@ -1748,6 +1799,7 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             if cls.CONTRACT.create_needs_stake_signature
             else None
         )
+        _check_expiration(expiration)
         offer_id, offer_name = _split_unit(offer.unit())
         ask_id, ask_name = _split_unit(ask.unit())
         swap_price = CardanoSwapsRational.from_price(price)
@@ -1787,6 +1839,8 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
         )
         if stake_key is not None:
             cls._add_required_signer(tx_builder, stake_key)
+        if expiration is not None:
+            cls._bound_validity(tx_builder, expiration)
 
         return txo, datum
 

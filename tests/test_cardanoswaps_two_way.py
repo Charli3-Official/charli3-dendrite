@@ -13,10 +13,12 @@ import dataclasses
 import pytest
 from pycardano import Address
 from pycardano import Network
+from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pycardano import VerificationKeyHash
+from pycardano import Withdrawals
 from pycardano.utils import min_lovelace
 
 from charli3_dendrite.dataclasses.datums import PlutusNone
@@ -208,8 +210,10 @@ def test_drained_side_parses_with_zero_available() -> None:
     assert take2.available == Assets(root={USDM_UNIT: 0})
     assert take1.available == Assets(root={"lovelace": 10_000_000})
     assert take1.claimable_offer(CPUB) > 0
+    assert take2.claimable_offer(CPUB) == 0
     token_drained = _state(_token_pair_datum(), {"lovelace": 3_000_000, USDM_UNIT: 5})
     assert token_drained.available == Assets(root={TEST_UNIT: 0})
+    assert token_drained.claimable_offer(CPUB) == 0
     assert token_drained.opposite().available == Assets(root={USDM_UNIT: 5})
 
 
@@ -423,6 +427,33 @@ def test_close_references_both_scripts_when_supplied(tx_builder) -> None:
     assert swap_ref in tx_builder.reference_inputs
     assert beacon_ref in tx_builder.reference_inputs
     assert len(_mint_dict(tx_builder)) == 3
+
+
+def test_close_adds_the_owner_stake_signer(tx_builder) -> None:
+    _ada_pair().build_close(tx_builder=tx_builder, owner_address=OWNER)
+    assert tx_builder.required_signers == [OWNER.staking_part]
+
+
+def _at_owner(state: CardanoSwapsTwoWayOrderState) -> CardanoSwapsTwoWayOrderState:
+    """``state`` parsed with its address: :data:`OWNER`'s swap address."""
+    state.address = str(CardanoSwapsTwoWayOrderState.beacon_address(OWNER))
+    return state
+
+
+OTHER_OWNER = Address(
+    payment_part=VerificationKeyHash(bytes.fromhex("11" * 28)),
+    staking_part=VerificationKeyHash(bytes.fromhex("44" * 28)),
+    network=Network.MAINNET,
+)
+
+
+def test_close_rejects_an_owner_other_than_the_swap_address(tx_builder) -> None:
+    state = _at_owner(_ada_pair())
+    with pytest.raises(ValueError, match="staking credential"):
+        state.build_close(tx_builder=tx_builder, owner_address=OTHER_OWNER)
+    assert tx_builder.inputs == [] and tx_builder.mint is None
+    state.build_close(tx_builder=tx_builder, owner_address=OWNER)
+    assert len(tx_builder.inputs) == 1
 
 
 # --- create -------------------------------------------------------------------
@@ -829,3 +860,64 @@ def test_update_two_swaps_in_one_transaction_withdraws_once(tx_builder) -> None:
     assert len(_withdrawal_redeemers(tx_builder)) == 1
     assert len(tx_builder.inputs) == 2
     assert len(tx_builder.outputs) == 2
+
+
+@pytest.mark.parametrize(
+    ("expiration", "tip"),
+    [
+        pytest.param(KEEP_EXPIRATION, posix_ms_to_slot(EXPIRATION), id="kept-at-tip"),
+        pytest.param(
+            KEEP_EXPIRATION, posix_ms_to_slot(EXPIRATION) + 60, id="kept-past"
+        ),
+        pytest.param(EXPIRATION, posix_ms_to_slot(EXPIRATION) + 60, id="new-past"),
+    ],
+)
+def test_update_rejects_an_expiration_already_reached(expiration, tip) -> None:
+    state = _ada_pair(expiration=CardanoSwapsSomeInt(EXPIRATION))
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="expiration"):
+        _update(state, tb, expiration=expiration)
+    _assert_untouched(tb)
+
+    _, datum = _update(state, tb, expiration=None)
+    assert datum.expiration == PlutusNone()
+
+
+def test_update_rejects_a_carrier_only_ada_side_with_no_token(tx_builder) -> None:
+    datum = vector_datum()
+    carrier = datum.continuation_min_lovelace(Assets(root={}), CPUB)
+    state = _state(datum, {"lovelace": carrier, USDM_UNIT: 30})
+    with pytest.raises(ValueError, match="needs a balance"):
+        _update(state, tx_builder, asset2_quantity=0)
+    _assert_untouched(tx_builder)
+
+    funded = _state(datum, {"lovelace": carrier + 1, USDM_UNIT: 30})
+    txo, _ = _update(funded, tx_builder, asset2_quantity=0)
+    assert _output_units(txo) == set(datum.beacon_assets(1).root)
+
+
+def test_update_rejects_an_owner_other_than_the_swap_address(tx_builder) -> None:
+    state = _at_owner(_ada_pair())
+    with pytest.raises(ValueError, match="staking credential"):
+        state.build_update(tx_builder, OTHER_OWNER, asset1_price=(4, 2_000_000))
+    _assert_untouched(tx_builder)
+    _update(state, tx_builder, asset1_price=(4, 2_000_000))
+    assert len(tx_builder.inputs) == 1
+
+
+def test_update_completes_a_beacon_withdrawal_set_by_the_caller() -> None:
+    reward = bytes(TWO_WAY_CONTRACT.beacon_reward_address(OWNER.network))
+    preset = TransactionBuilder(_OfflineContext())
+    preset.withdrawals = Withdrawals({reward: 0})
+    _update(_ada_pair(), preset, asset2_quantity=10)
+    assert _withdrawals(preset) == {reward: 0}
+    assert [type(r.data) for r in _withdrawal_redeemers(preset)] == [UpdateSwaps]
+
+    scripted = TransactionBuilder(_OfflineContext())
+    scripted.add_withdrawal_script(
+        CardanoSwapsTwoWayOrderState._beacon_script(),
+        Redeemer(UpdateSwaps()),
+    )
+    _update(_ada_pair(), scripted, asset2_quantity=10)
+    assert _withdrawals(scripted) == {reward: 0}
+    assert len(_withdrawal_redeemers(scripted)) == 1
