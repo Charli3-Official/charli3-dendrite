@@ -8,6 +8,8 @@ asset paid, ``out`` = the asset taken).
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 from pycardano import Address
 from pycardano import Network
@@ -24,7 +26,11 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
 from charli3_dendrite.dexs.ob.cardanoswaps import CreateOrCloseSwaps
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithMint
+from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithStake
+from charli3_dendrite.dexs.ob.cardanoswaps import UpdateSwaps
+from charli3_dendrite.dexs.ob.cardanoswaps_two_way import KEEP_EXPIRATION
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import TWO_WAY_BEACON_POLICY_ID
+from charli3_dendrite.dexs.ob.cardanoswaps_two_way import TWO_WAY_CONTRACT
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import TWO_WAY_SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import CardanoSwapsTwoWayOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps_two_way import CardanoSwapsTwoWaySwapDatum
@@ -627,3 +633,199 @@ def test_create_rejects_bad_input(tx_builder, overrides) -> None:
     assert tx_builder.required_signers is None
     assert tx_builder.ttl is None
     assert list(tx_builder._minting_script_to_redeemers) == []
+
+
+# --- update -------------------------------------------------------------------
+
+PREV_INPUT = CardanoSwapsSomeOutRefV3.from_ref(bytes.fromhex("ab" * 32), 5)
+
+
+def _update(state: CardanoSwapsTwoWayOrderState, tx_builder, **kwargs):
+    """Update ``state`` in place for :data:`OWNER`."""
+    return state.build_update(tx_builder, OWNER, **kwargs)
+
+
+def _withdrawals(tx_builder: TransactionBuilder) -> dict[bytes, int]:
+    return dict(tx_builder.withdrawals or {})
+
+
+def _withdrawal_redeemers(tx_builder: TransactionBuilder) -> list:
+    return [r for _, r in tx_builder._withdrawal_script_to_redeemers]
+
+
+def test_update_reprices_in_place(tx_builder) -> None:
+    state = _ada_pair(prev_input=PREV_INPUT)
+    txo, datum = _update(state, tx_builder, asset1_price=(4, 2_000_000))
+
+    old = state.order_datum
+    assert datum == dataclasses.replace(
+        old,
+        asset1_price=CardanoSwapsRational(4, 2_000_000),
+        prev_input=PlutusNone(),
+    )
+    assert datum.asset2_price == old.asset2_price
+    assert txo.datum == datum
+    assert tx_builder.outputs == [txo]
+
+    spent = state._input_utxo(OWNER)
+    assert tx_builder.inputs == [spent]
+    assert [type(r.data) for r in _redeemers(tx_builder)] == [SpendWithStake]
+    assert SpendWithStake.CONSTR_ID == 1
+    assert tx_builder.mint is None
+    assert list(tx_builder._minting_script_to_redeemers) == []
+
+    reward = TWO_WAY_CONTRACT.beacon_reward_address(OWNER.network)
+    assert _withdrawals(tx_builder) == {bytes(reward): 0}
+    assert [type(r.data) for r in _withdrawal_redeemers(tx_builder)] == [UpdateSwaps]
+
+    assert txo.address == spent.output.address
+    assert txo.amount == spent.output.amount
+    assert tx_builder.ttl is None
+
+
+def test_update_refunds_the_ada_side(tx_builder) -> None:
+    txo, datum = _update(_ada_pair(), tx_builder, asset1_quantity=5_000_000)
+    carrier = datum.carrier_lovelace(
+        5_000_000,
+        30,
+        CPUB,
+        prev_output_index=0,
+        address=txo.address,
+    )
+    assert txo.amount.coin == 5_000_000 + carrier
+    assert _held(txo, USDM_UNIT) == 30
+    assert _output_units(txo) == {*datum.beacon_assets(1).root, USDM_UNIT}
+
+
+def test_update_refunds_the_token_side(tx_builder) -> None:
+    txo, datum = _update(_ada_pair(), tx_builder, asset2_quantity=0)
+    assert _output_units(txo) == set(datum.beacon_assets(1).root)
+    assert txo.amount.coin == 10_000_000
+
+
+def test_update_sizes_a_token_pair_lovelace(tx_builder) -> None:
+    state = _token_pair()
+    txo, datum = _update(state, tx_builder, asset2_quantity=50_000)
+    carrier = datum.carrier_lovelace(
+        1_000,
+        50_000,
+        CPUB,
+        prev_output_index=0,
+        address=txo.address,
+    )
+    assert txo.amount.coin == max(
+        4_000_000,
+        carrier,
+        min_lovelace(tx_builder.context, output=txo),
+    )
+    assert _held(txo, TEST_UNIT) == 1_000
+    assert _held(txo, USDM_UNIT) == 50_000
+
+    kept = TransactionBuilder(_OfflineContext())
+    txo, _ = _update(_token_pair(), kept, asset1_price=(1, 1))
+    assert txo.amount.coin == 4_000_000
+
+
+@pytest.mark.parametrize(
+    ("expiration", "expected"),
+    [
+        pytest.param(KEEP_EXPIRATION, EXPIRATION, id="keep"),
+        pytest.param(None, None, id="clear"),
+        pytest.param(EXPIRATION + 60_000, EXPIRATION + 60_000, id="replace"),
+    ],
+)
+def test_update_keeps_or_clears_the_expiration(expiration, expected) -> None:
+    state = _ada_pair(expiration=CardanoSwapsSomeInt(EXPIRATION))
+    tb = TransactionBuilder(_ContextAt(posix_ms_to_slot(EXPIRATION) - 600))
+    _, datum = _update(state, tb, expiration=expiration)
+    if expected is None:
+        assert datum.expiration == PlutusNone()
+        assert tb.ttl is None
+    else:
+        assert datum.expiration == CardanoSwapsSomeInt(expected)
+        assert tb.ttl == posix_ms_to_slot(expected)
+
+
+def _assert_untouched(tx_builder: TransactionBuilder) -> None:
+    assert tx_builder.inputs == []
+    assert tx_builder.outputs == []
+    assert tx_builder.withdrawals is None
+    assert tx_builder._withdrawal_script_to_redeemers == []
+    assert tx_builder.required_signers is None
+    assert tx_builder.ttl is None
+
+
+def test_update_rejects_a_held_balance_below_the_new_min_utxo(tx_builder) -> None:
+    state = _state(vector_datum(), {"lovelace": 1_000_000, USDM_UNIT: 30})
+    with pytest.raises(ValueError, match="min-UTxO"):
+        _update(state, tx_builder, asset2_price=(2_000_000, 3))
+    _assert_untouched(tx_builder)
+
+    txo, _ = _update(state, tx_builder, asset1_quantity=1_000_000)
+    assert txo.amount.coin > 1_000_000
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param({"asset1_price": (0, 1)}, id="zero-asset1-numerator"),
+        pytest.param({"asset2_price": (1, -3)}, id="negative-asset2-denominator"),
+        pytest.param(
+            {"asset1_quantity": 0, "asset2_quantity": 0},
+            id="both-balances-zero",
+        ),
+        pytest.param({"asset2_quantity": -1}, id="negative-balance"),
+        pytest.param({"expiration": EXPIRATION + 1}, id="expiration-not-a-minute"),
+        pytest.param({"owner": SCRIPT_STAKED_OWNER}, id="script-staked-owner"),
+    ],
+)
+def test_update_rejects_bad_input(tx_builder, overrides) -> None:
+    owner = overrides.pop("owner", OWNER)
+    with pytest.raises(ValueError):
+        _ada_pair().build_update(tx_builder, owner, **overrides)
+    _assert_untouched(tx_builder)
+
+
+def test_update_adds_the_owner_stake_signer(tx_builder) -> None:
+    _update(_ada_pair(), tx_builder, asset1_price=(4, 2_000_000))
+    assert tx_builder.required_signers == [OWNER.staking_part]
+
+
+def test_update_references_both_scripts_when_supplied(tx_builder) -> None:
+    swap_ref = _ref_utxo(CardanoSwapsTwoWayOrderState._swap_script(), index=0)
+    beacon_ref = _ref_utxo(CardanoSwapsTwoWayOrderState._beacon_script(), index=1)
+    _update(
+        _ada_pair(),
+        tx_builder,
+        asset2_quantity=10,
+        swap_ref_utxo=swap_ref,
+        beacon_ref_utxo=beacon_ref,
+    )
+    assert swap_ref in tx_builder.reference_inputs
+    assert beacon_ref in tx_builder.reference_inputs
+    assert tx_builder.scripts == []
+
+    inline = TransactionBuilder(_OfflineContext())
+    _update(_ada_pair(), inline, asset2_quantity=10)
+    assert inline.reference_inputs == set()
+    assert len(inline.scripts) == 2
+    assert set(inline.scripts) == {
+        CardanoSwapsTwoWayOrderState._swap_script(),
+        CardanoSwapsTwoWayOrderState._beacon_script(),
+    }
+
+
+def test_update_two_swaps_in_one_transaction_withdraws_once(tx_builder) -> None:
+    first = _ada_pair()
+    second = _state(
+        vector_datum(),
+        {"lovelace": 10_000_000, USDM_UNIT: 30},
+        tx_index=1,
+    )
+    _update(first, tx_builder, asset2_quantity=10)
+    _update(second, tx_builder, asset2_quantity=20)
+    reward = TWO_WAY_CONTRACT.beacon_reward_address(OWNER.network)
+    assert _withdrawals(tx_builder) == {bytes(reward): 0}
+    assert len(_withdrawal_redeemers(tx_builder)) == 1
+    assert len(tx_builder.inputs) == 2
+    assert len(tx_builder.outputs) == 2

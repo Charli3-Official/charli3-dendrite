@@ -17,7 +17,8 @@ This module holds the contract description (scripts, hashes, beacon-name rules
 and the spending redeemers that differ from the one-way contract), the swap
 datum with its per-direction pricing and min-UTxO sizing, and the order state:
 one view of a swap UTxO per direction, created, taken and closed through the
-shared Cardano-Swaps order-state base.
+shared Cardano-Swaps order-state base, and updated in place (new prices,
+balances or expiration) with the beacon policy run as a staking script.
 """
 
 import dataclasses
@@ -29,11 +30,15 @@ from typing import Union
 from pycardano import Address
 from pycardano import Network
 from pycardano import PlutusData
+from pycardano import PlutusV2Script
 from pycardano import PlutusV3Script
+from pycardano import Redeemer
 from pycardano import ScriptHash
 from pycardano import TransactionBuilder
 from pycardano import TransactionOutput
 from pycardano import UTxO
+from pycardano import Withdrawals
+from pycardano.utils import min_lovelace
 
 from charli3_dendrite.dataclasses.datums import OrderDatum
 from charli3_dendrite.dataclasses.datums import PlutusNone
@@ -44,6 +49,8 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsDeployment
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsRational
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeInt
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsSomeOutRefV3
+from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithStake
+from charli3_dendrite.dexs.ob.cardanoswaps import UpdateSwaps
 from charli3_dendrite.dexs.ob.cardanoswaps import _ada_carrier
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
@@ -135,6 +142,30 @@ def two_way_pair_beacon_name(
 
 # The beacon policy only mints for an expiration on a whole minute.
 _EXPIRATION_INTERVAL_MS = 60_000
+
+
+class _KeepExpiration:
+    """The type of :data:`KEEP_EXPIRATION`."""
+
+    def __repr__(self) -> str:
+        return "KEEP_EXPIRATION"
+
+
+# ``build_update``'s default expiration: keep the swap's current expiration.
+KEEP_EXPIRATION = _KeepExpiration()
+
+
+def _check_expiration(expiration: int | None) -> None:
+    """Reject an expiration that is not a whole minute.
+
+    Raises:
+        ValueError: ``expiration`` is set and not a multiple of 60 000.
+    """
+    if expiration is not None and expiration % _EXPIRATION_INTERVAL_MS != 0:
+        raise ValueError(
+            "A two-way swap expiration must be a whole minute "
+            f"(a multiple of {_EXPIRATION_INTERVAL_MS} ms), got {expiration}.",
+        )
 
 
 def _deposit(bag: Assets, label: str) -> tuple[str, int]:
@@ -668,11 +699,7 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         asset2_unit, deposit2 = _deposit(asset2, "asset2")
         if deposit1 == 0 and deposit2 == 0:
             raise ValueError("A two-way swap needs a deposit of asset1 or asset2.")
-        if expiration is not None and expiration % _EXPIRATION_INTERVAL_MS != 0:
-            raise ValueError(
-                "A two-way swap expiration must be a whole minute "
-                f"(a multiple of {_EXPIRATION_INTERVAL_MS} ms), got {expiration}.",
-            )
+        _check_expiration(expiration)
         asset1_id, asset1_name = _split_unit(asset1_unit)
         asset2_id, asset2_name = _split_unit(asset2_unit)
         datum = CardanoSwapsTwoWaySwapDatum(
@@ -712,4 +739,174 @@ class CardanoSwapsTwoWayOrderState(_CardanoSwapsOrderState):
         cls._add_required_signer(tx_builder, stake_key)
         if expiration is not None:
             cls._bound_validity(tx_builder, expiration)
+        return txo, datum
+
+    @classmethod
+    def _withdraw_from_beacon(
+        cls,
+        tx_builder: TransactionBuilder,
+        network: Network,
+        beacon_script: UTxO | PlutusV2Script | PlutusV3Script,
+    ) -> None:
+        """Run the beacon policy as a staking script: withdraw 0 with ``UpdateSwaps``.
+
+        The withdrawal is merged into the builder's existing withdrawals. A
+        transaction that already withdraws from the beacon reward address (an
+        earlier update in the same transaction) runs the policy once, which
+        checks every swap output of the transaction.
+        """
+        reward = bytes(cls.CONTRACT.beacon_reward_address(network))
+        withdrawals = tx_builder.withdrawals or Withdrawals()
+        if reward in withdrawals:
+            return
+        withdrawals[reward] = 0
+        tx_builder.withdrawals = withdrawals
+        tx_builder.add_withdrawal_script(beacon_script, Redeemer(UpdateSwaps()))
+
+    def build_update(
+        self,
+        tx_builder: TransactionBuilder,
+        owner_address: Address,
+        *,
+        asset1_price: tuple[int, int] | None = None,
+        asset2_price: tuple[int, int] | None = None,
+        asset1_quantity: int | None = None,
+        asset2_quantity: int | None = None,
+        expiration: int | _KeepExpiration | None = KEEP_EXPIRATION,
+        swap_ref_utxo: UTxO | None = None,
+        beacon_ref_utxo: UTxO | None = None,
+    ) -> tuple[TransactionOutput, CardanoSwapsTwoWaySwapDatum]:
+        """Build an UPDATE: re-price or re-fund this swap UTxO in place.
+
+        Spends this UTxO with ``SpendWithStake``, runs the beacon policy as a
+        staking script (a 0-lovelace withdrawal from
+        :meth:`CardanoSwapsTwoWayContract.beacon_reward_address` with
+        ``UpdateSwaps``) and produces one output at the same swap address with
+        the same pair and beacons. No beacon is minted or burned. The new datum
+        carries the new prices and expiration and ``prev_input`` ``None``: an
+        updated swap is a fresh swap, not a continuation.
+
+        A ``None`` price or quantity keeps the current one. The output lovelace:
+
+        * ADA pair, ``asset1_quantity`` given: that quantity plus the carrier
+          (see :meth:`CardanoSwapsTwoWaySwapDatum.carrier_lovelace`), as on
+          create.
+        * ADA pair, ``asset1_quantity`` ``None``: the held lovelace, unchanged.
+        * Token pair: the held lovelace, raised to the carrier or the output's
+          min-UTxO when either is larger.
+
+        The owner's staking key is added to the required signers; an expiration
+        also bounds the transaction's validity at or before it.
+
+        Args:
+            tx_builder: The builder to mutate.
+            owner_address: The owner's address; its key-hash staking credential
+                must be the swap address's.
+            asset1_price: ``(numerator, denominator)``: asset2 given per asset1.
+            asset2_price: ``(numerator, denominator)``: asset1 given per asset2.
+            asset1_quantity: The new asset1 balance (lovelace on an ADA pair).
+            asset2_quantity: The new asset2 balance.
+            expiration: POSIX-millis expiration, a whole minute; ``None`` clears
+                it and :data:`KEEP_EXPIRATION` keeps the current one.
+            swap_ref_utxo: Optional reference-script UTxO for the swap validator.
+            beacon_ref_utxo: Optional reference-script UTxO for the beacon policy.
+
+        Returns:
+            The swap output and its inline datum.
+
+        Raises:
+            ValueError: the owner has no key-hash staking credential, a price is
+                not a positive rational, a balance is negative, both balances
+                are 0, the expiration is not a multiple of 60 000, a kept ADA
+                balance is below the new output's min-UTxO, or a reference UTxO
+                carries the wrong script. Nothing is added to ``tx_builder``.
+        """
+        stake_key = self._owner_stake_key(owner_address)
+        current = self.order_datum
+        new_expiration: int | None
+        if isinstance(expiration, _KeepExpiration):
+            new_expiration = (
+                current.expiration.value
+                if isinstance(current.expiration, CardanoSwapsSomeInt)
+                else None
+            )
+        else:
+            new_expiration = expiration
+        _check_expiration(new_expiration)
+        prices = {
+            label: CardanoSwapsRational.from_price(
+                (kept.numerator, kept.denominator) if price is None else price,
+                label,
+            )
+            for label, price, kept in (
+                ("asset1_price", asset1_price, current.asset1_price),
+                ("asset2_price", asset2_price, current.asset2_price),
+            )
+        }
+        datum = dataclasses.replace(
+            current,
+            **prices,
+            prev_input=PlutusNone(),
+            expiration=_expiration_field(new_expiration),
+        )
+
+        asset1_unit, asset2_unit = datum.asset1_unit(), datum.asset2_unit()
+        balance1 = (
+            self.assets[asset1_unit] if asset1_quantity is None else asset1_quantity
+        )
+        balance2 = (
+            self.assets[asset2_unit] if asset2_quantity is None else asset2_quantity
+        )
+        if balance1 < 0 or balance2 < 0:
+            raise ValueError(
+                "A two-way swap balance must be non-negative, got "
+                f"asset1 {balance1} and asset2 {balance2}.",
+            )
+        if balance1 == 0 and balance2 == 0:
+            raise ValueError("A two-way swap needs a balance of asset1 or asset2.")
+        swap_script = self._swap_script_arg(swap_ref_utxo)
+        beacon_script = self._beacon_script_arg(beacon_ref_utxo)
+
+        keeps_held_ada = asset1_unit == "lovelace" and asset1_quantity is None
+        held_lovelace = self.assets["lovelace"]
+        coins_per_utxo_byte = tx_builder.context.protocol_param.coins_per_utxo_byte
+
+        def carrier(index: int, address: Address) -> int:
+            if keeps_held_ada:
+                return 0
+            sized = datum.carrier_lovelace(
+                balance1,
+                balance2,
+                coins_per_utxo_byte,
+                prev_output_index=index,
+                address=address,
+            )
+            return sized if asset1_unit == "lovelace" else max(held_lovelace, sized)
+
+        txo = self._swap_output(
+            tx_builder,
+            owner_address,
+            Assets(root={asset1_unit: balance1, asset2_unit: balance2}),
+            datum,
+            carrier,
+        )
+        if keeps_held_ada:
+            required = min_lovelace(tx_builder.context, output=txo)
+            if txo.amount.coin < required:
+                raise ValueError(
+                    f"The held {txo.amount.coin} lovelace is below the updated "
+                    f"swap output's min-UTxO of {required}; pass asset1_quantity "
+                    "to re-fund it.",
+                )
+
+        tx_builder.add_script_input(
+            utxo=self._input_utxo(owner_address),
+            script=swap_script,
+            redeemer=Redeemer(SpendWithStake()),
+        )
+        self._withdraw_from_beacon(tx_builder, owner_address.network, beacon_script)
+        tx_builder.add_output(txo)
+        self._add_required_signer(tx_builder, stake_key)
+        if new_expiration is not None:
+            self._bound_validity(tx_builder, new_expiration)
         return txo, datum

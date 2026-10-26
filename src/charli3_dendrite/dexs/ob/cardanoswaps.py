@@ -1293,7 +1293,34 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         datum: _BeaconedDatum,
         carrier_lovelace: Callable[[int, Address], int],
     ) -> TransactionOutput:
-        """Emit a new resting swap UTxO: the deposits, the beacons, inline datum.
+        """Emit a new resting swap UTxO (see :meth:`_swap_output`).
+
+        Returns:
+            The added output.
+        """
+        txo = cls._swap_output(
+            tx_builder,
+            owner_address,
+            deposits,
+            datum,
+            carrier_lovelace,
+        )
+        tx_builder.add_output(txo)
+        return txo
+
+    @classmethod
+    def _swap_output(
+        cls,
+        tx_builder: TransactionBuilder,
+        owner_address: Address,
+        deposits: Assets,
+        datum: _BeaconedDatum,
+        carrier_lovelace: Callable[[int, Address], int],
+    ) -> TransactionOutput:
+        """A new resting swap UTxO: the deposits, the beacons, inline datum.
+
+        The output is sized for the next output index of ``tx_builder`` but not
+        added to it.
 
         The output goes to the owner's :meth:`beacon_address`. A take derives an
         ADA offer as ``lovelace_in - lovelace_out``, so it can never draw the UTxO
@@ -1312,7 +1339,7 @@ class _CardanoSwapsOrderState(AbstractOrderState):
                 output index and swap address (its first take spends it there).
 
         Returns:
-            The added output.
+            The output, not yet added to ``tx_builder``.
         """
         swap_address = cls.beacon_address(owner_address)
         tokens = Assets(
@@ -1335,7 +1362,6 @@ class _CardanoSwapsOrderState(AbstractOrderState):
                 carrier,
                 min_lovelace(tx_builder.context, output=txo),
             )
-        tx_builder.add_output(txo)
         return txo
 
     def _input_utxo(self, owner_address: Address) -> UTxO:
