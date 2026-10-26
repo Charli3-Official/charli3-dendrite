@@ -45,6 +45,7 @@ Charli3 Dendrite currently supports the following Cardano DEXs:
 - GeniusYield
 - Splash
 - CSwap
+- CardanoSwaps (one-way and two-way swaps)
 
 ### Deprecated DEXs
 
@@ -52,7 +53,6 @@ Charli3 Dendrite currently supports the following Cardano DEXs:
 
 ### Not Yet Implemented
 
-- CardanoSwaps
 - Cerra
 - SaturnSwap
 

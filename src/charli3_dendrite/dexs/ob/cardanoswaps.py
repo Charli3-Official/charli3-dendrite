@@ -1779,11 +1779,12 @@ class CardanoSwapsLegacyOrderState(_CardanoSwapsOneWayOrderState):
 
 
 class CardanoSwapsOrderBook(AbstractOrderBookState):
-    """Aggregate order book over resting Cardano-Swaps one-way swap UTxOs.
+    """Aggregate order book over resting Cardano-Swaps one-way and two-way swaps.
 
     The batcher-less, fee-less sibling of the other order-book aggregates: it
-    holds many individual :class:`CardanoSwapsOrderState` orders for a token pair
-    and prices/fills across them. Because a Cardano-Swaps order carries no
+    holds many individual swap directions for a token pair (each one-way
+    :class:`CardanoSwapsOrderState`, and each side of a two-way swap) and
+    prices/fills across them. Because a Cardano-Swaps order carries no
     protocol fee (``fee = 0``), the base level-walk ``get_amount_out`` /
     ``get_amount_in`` are inherited unchanged; only ``price`` (and construction)
     diverge, and ``swap_utxo`` folds a fill across the individual orders.
@@ -1796,45 +1797,45 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
     def get_book(
         cls,
         assets: Assets,
-        orders: list[CardanoSwapsOrderState] | None = None,
+        orders: list[_CardanoSwapsOrderState] | None = None,
     ) -> "CardanoSwapsOrderBook":
-        """Build an order book from Cardano-Swaps orders for the given pair.
+        """Build an order book from Cardano-Swaps swaps for the given pair.
+
+        Every swap is listed through its :meth:`~_CardanoSwapsOrderState.directions`:
+        a one-way swap gives its one direction, a two-way swap one direction per
+        side. A direction is listed once per ``(tx_hash, tx_index, in_unit)``, so
+        passing several views of one UTxO lists it once. Inactive swaps, swaps
+        whose price is malformed and directions with nothing available are left
+        out.
 
         Args:
             assets: The token pair to build the book for (unit(0) + unit(1)).
-            orders: Pre-fetched orders, or None to discover from the backend by
-                beacon policy (``pool_selector`` is beacon-based, not address-based).
+            orders: Pre-fetched one-way and two-way swaps, or None to discover
+                both from the backend by beacon policy (``pool_selector`` is
+                beacon-based, not address-based).
         """
         if orders is None:
-            selector = CardanoSwapsOrderState.pool_selector()
-            result = get_backend().get_pool_utxos(
-                limit=10000,
-                historical=False,
-                **selector.model_dump(),
-            )
-            orders = [
-                CardanoSwapsOrderState.model_validate(r.model_dump()) for r in result
-            ]
+            orders = cls._discover_orders()
 
         buy_orders = []
         sell_orders = []
+        seen: set[tuple[str, int, str]] = set()
         for order in orders:
             if order.inactive:
                 continue
-            try:
-                num, denom = order.price
-            except InvalidPoolError:
-                # A malformed swap_price cannot be priced or filled.
-                continue
-            o = OrderBookOrder(
-                price=num / denom,
-                quantity=int(order.available.quantity()),
-                state=order,
-            )
-            if order.in_unit == assets.unit() and order.out_unit == assets.unit(1):
-                sell_orders.append(o)
-            elif order.in_unit == assets.unit(1) and order.out_unit == assets.unit(0):
-                buy_orders.append(o)
+            for direction in order.directions():
+                key = (direction.tx_hash, direction.tx_index, direction.in_unit)
+                if key in seen:
+                    continue
+                seen.add(key)
+                level = cls._book_level(direction)
+                if level is None:
+                    continue
+                in_unit, out_unit = direction.in_unit, direction.out_unit
+                if in_unit == assets.unit() and out_unit == assets.unit(1):
+                    sell_orders.append(level)
+                elif in_unit == assets.unit(1) and out_unit == assets.unit(0):
+                    buy_orders.append(level)
 
         return CardanoSwapsOrderBook(
             assets=assets,
@@ -1844,6 +1845,44 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
             sell_book_full=SellOrderBook(sell_orders),
             buy_book_full=BuyOrderBook(buy_orders),
         )
+
+    @staticmethod
+    def _discover_orders() -> list[_CardanoSwapsOrderState]:
+        """Every resting one-way and two-way swap, found by beacon policy."""
+        # Imported here: the two-way module imports this one.
+        from charli3_dendrite.dexs.ob.cardanoswaps_two_way import (
+            CardanoSwapsTwoWayOrderState,
+        )
+
+        state_classes: tuple[type[_CardanoSwapsOrderState], ...] = (
+            CardanoSwapsOrderState,
+            CardanoSwapsTwoWayOrderState,
+        )
+        orders: list[_CardanoSwapsOrderState] = []
+        for state_class in state_classes:
+            result = get_backend().get_pool_utxos(
+                limit=10000,
+                historical=False,
+                **state_class.pool_selector().model_dump(),
+            )
+            orders.extend(state_class.model_validate(r.model_dump()) for r in result)
+        return orders
+
+    @staticmethod
+    def _book_level(direction: _CardanoSwapsOrderState) -> OrderBookOrder | None:
+        """The book level of one direction, or None when it cannot be listed.
+
+        A direction whose price is malformed cannot be priced or filled, and one
+        with nothing available has nothing to give.
+        """
+        try:
+            num, denom = direction.price
+        except InvalidPoolError:
+            return None
+        quantity = int(direction.available.quantity())
+        if quantity <= 0:
+            return None
+        return OrderBookOrder(price=num / denom, quantity=quantity, state=direction)
 
     @classmethod
     def dex(cls) -> str:

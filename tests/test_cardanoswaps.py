@@ -1583,6 +1583,7 @@ def test_orderbook_get_amount_out_walks_multiple_levels() -> None:
     # cheaper (ask-per-offer) one first. Prices are raw base-unit rationals.
     cheap = _sell_order(2, 1, 100)  # 100 AAA at 2 lovelace/AAA -> 200 lovelace cap
     dear = _sell_order(4, 1, 100)  # 100 AAA at 4 lovelace/AAA -> 400 lovelace cap
+    dear.tx_index = 1  # each resting swap is its own UTxO
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[dear, cheap])  # unordered in
 
     out, _ = book.get_amount_out(Assets(root={"lovelace": 240}))
@@ -1653,6 +1654,7 @@ def test_orderbook_get_book_skips_malformed_price() -> None:
     # One order with a zero-denominator swap_price must not break the whole book.
     good = _sell_order(2, 1, 100)
     bad = _sell_order(1, 0, 100)
+    bad.tx_index = 1  # each resting swap is its own UTxO
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
     assert len(book.sell_book_full) == 1
     assert book.sell_book_full[0].state is good
@@ -1686,6 +1688,7 @@ def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> N
     drained.address = _resting_beacon_addr(_MAKER)
     assert drained.claimable_offer(CPUB) == 0
     live = _ada_offer_order(2, 1, 10_000_000)
+    live.tx_index = 1  # each resting swap is its own UTxO
     live.address = _resting_beacon_addr(_TAKER)
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[live, drained])
     assert book.buy_book_full[0].state is drained
