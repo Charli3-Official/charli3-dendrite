@@ -831,28 +831,7 @@ class _CardanoSwapsOneWayOrderState(AbstractOrderState):
         if ref is None or ref.tx_hash is None or ref.script is None:
             return None  # not cached, so a later publication is picked up
 
-        script = cls.CONTRACT.script_class(bytes.fromhex(ref.script))
-        if plutus_script_hash(script).payload.hex() != script_hash:
-            msg = (
-                f"reference script at {ref.tx_hash}#{ref.tx_index} does not hash "
-                f"to the expected {script_hash}"
-            )
-            raise ValueError(msg)
-
-        address = ref.address
-        utxo = UTxO(
-            input=TransactionInput(
-                TransactionId(bytes.fromhex(ref.tx_hash)),
-                cast(int, ref.tx_index),
-            ),
-            output=TransactionOutput(
-                address=Address.decode(address)
-                if isinstance(address, str)
-                else address,
-                amount=asset_to_value(ref.assets or Assets(lovelace=0)),
-                script=script,
-            ),
-        )
+        utxo = ref.to_utxo(cls.CONTRACT.script_class, expected_hash=script_hash)
         cls._REFERENCE_UTXO_CACHE[key] = utxo
         return utxo
 

@@ -20,6 +20,7 @@ from pycardano import plutus_script_hash
 
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_ID
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import LEGACY_BEACON_POLICY_ID
@@ -689,17 +690,21 @@ class _FakeRefBackend:
         self.calls = []
 
     def get_script_from_address(self, address):
-        from types import SimpleNamespace
-
         payload = address.payment_part.payload.hex()
         self.calls.append(payload)
         if payload not in self.scripts_hex:
             if self.none_as == "index_error":
                 raise IndexError
-            return SimpleNamespace(
-                tx_hash=None, tx_index=None, address=None, assets=None, script=None
+            return ScriptReference(
+                tx_hash=None,
+                tx_index=None,
+                address=None,
+                assets=None,
+                datum_hash=None,
+                datum_cbor=None,
+                script=None,
             )
-        return SimpleNamespace(
+        return ScriptReference(
             tx_hash=REF_TX,
             tx_index=REF_INDEX,
             address=str(
@@ -709,6 +714,8 @@ class _FakeRefBackend:
                 )
             ),
             assets=Assets(lovelace=20_000_000),
+            datum_hash=None,
+            datum_cbor=None,
             script=self.scripts_hex[payload],
         )
 
