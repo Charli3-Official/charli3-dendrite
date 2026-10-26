@@ -1,14 +1,24 @@
-"""Cardano-Swaps v2 one-way order book module.
+"""Cardano-Swaps v2: shared contract support, one-way swaps and the order book.
 
 Cardano-Swaps is a fully on-chain, batcher-less peer-to-peer order book. A
 resting *one-way* swap UTxO offers one asset and asks for another at a fixed
 ``Rational`` price (ask-per-offer). Any counterparty may fill it directly by
 spending the UTxO; there is no batcher and no protocol fee.
 
-This module provides *parse* support for v2 one-way swaps: it decodes the
-on-chain ``SwapDatum`` and exposes it through the standard order-book interface
-(price/available/get_amount_out). The create/fill/close transaction builders
-are implemented separately.
+This module holds:
+
+- the types and helpers shared by the one-way and two-way contracts: the
+  deployment and contract descriptions, redeemers, beacon names, output
+  references, the ``Rational`` price, expiration checks, and min-UTxO and
+  claimable-offer sizing;
+- the shared order-state base: beacon discovery, reference-script lookup, and
+  the take (``swap_utxo``) and close (``build_close``) builders;
+- the one-way ``SwapDatum``, its order states for the official and pre-release
+  contracts, and the one-way ``build_create``;
+- ``CardanoSwapsOrderBook``, the order book over one-way and two-way swaps.
+
+Two-way swaps (datum, order state, create and update builders) are in
+:mod:`charli3_dendrite.dexs.ob.cardanoswaps_two_way`.
 """
 
 import dataclasses
@@ -583,6 +593,13 @@ class CardanoSwapsRational(PlutusData):
 
         The validator checks ``offer_taken * numerator <= payment * denominator``,
         so the minimum is ``ceil(offer_taken * numerator / denominator)``.
+
+        Args:
+            offer_taken: The quantity of the offer asset taken.
+            label: The price's name, used in the error message.
+
+        Returns:
+            The least ask payment for ``offer_taken``.
 
         Raises:
             InvalidPoolError: this price is not a positive rational.
@@ -1976,7 +1993,8 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         cls,
         assets: Assets,
         orders: (
-            "list[CardanoSwapsOrderState | CardanoSwapsTwoWayOrderState] | None"
+            "list[CardanoSwapsOrderState | CardanoSwapsLegacyOrderState"
+            " | CardanoSwapsTwoWayOrderState] | None"
         ) = None,
         *,
         coins_per_utxo_byte: int = MAINNET_COINS_PER_UTXO_BYTE,
@@ -1997,7 +2015,10 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
             assets: The token pair to build the book for (unit(0) + unit(1)).
             orders: Pre-fetched one-way and two-way swaps, or None to discover
                 both from the backend by beacon policy (each kind by its own
-                state class's ``pool_selector``).
+                state class's ``pool_selector``). Discovery finds official
+                one-way swaps only; a pre-release one-way swap passed here is
+                listed like any other, but its contract allows no fills, so
+                :meth:`swap_utxo` refuses to take it.
             coins_per_utxo_byte: The protocol parameter the levels are sized at.
                 Defaults to :data:`MAINNET_COINS_PER_UTXO_BYTE`.
         """
