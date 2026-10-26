@@ -597,6 +597,23 @@ def _beacon_assets(beacon_id: bytes, names: Sequence[bytes], quantity: int) -> A
     return Assets(root={f"{policy}{name.hex()}": quantity for name in names})
 
 
+def _deposit(bag: Assets, label: str) -> tuple[str, int]:
+    """The single unit of ``bag`` and its deposited quantity.
+
+    Raises:
+        ValueError: ``bag`` does not hold exactly one unit, or its quantity is
+            negative.
+    """
+    if len(bag.root) != 1:
+        raise ValueError(
+            f"{label} must hold exactly one asset, got {sorted(bag.root)}.",
+        )
+    unit, quantity = next(iter(bag.root.items()))
+    if quantity < 0:
+        raise ValueError(f"{label} deposit must be non-negative, got {quantity}.")
+    return unit, quantity
+
+
 class _CardanoSwapsDatumMixin:
     """Accessors shared by the one-way and two-way swap datums.
 
@@ -1843,8 +1860,10 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             The swap output and its inline ``SwapDatum``.
 
         Raises:
-            ValueError: this contract creates no swaps, ``price`` is not a
-                positive rational, or the expiration is not a multiple of
+            ValueError: this contract creates no swaps, ``offer`` or ``ask`` is
+                not one unit, the offer deposit is not positive, the offer and
+                ask are the same asset, ``price`` is not a positive rational, or
+                the expiration is not a multiple of
                 60 000 or is at or before the chain tip. Nothing is added to
                 ``tx_builder``.
         """
@@ -1858,10 +1877,16 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             if cls.CONTRACT.create_needs_stake_signature
             else None
         )
+        offer_unit, offer_quantity = _deposit(offer, "offer")
+        ask_unit, _ = _deposit(ask, "ask")
+        if offer_quantity == 0:
+            raise ValueError("A Cardano-Swaps swap needs a positive offer deposit.")
+        if offer_unit == ask_unit:
+            raise ValueError("A Cardano-Swaps swap's offer and ask must differ.")
         _check_expiration(expiration)
         _check_unexpired(expiration, tx_builder)
-        offer_id, offer_name = _split_unit(offer.unit())
-        ask_id, ask_name = _split_unit(ask.unit())
+        offer_id, offer_name = _split_unit(offer_unit)
+        ask_id, ask_name = _split_unit(ask_unit)
         swap_price = CardanoSwapsRational.from_price(price)
         datum = CardanoSwapsSwapDatum(
             beacon_id=bytes.fromhex(cls.CONTRACT.beacon_policy_id),
@@ -1890,7 +1915,7 @@ class _CardanoSwapsOneWayOrderState(_CardanoSwapsOrderState):
             offer,
             datum,
             lambda index, address: datum.carrier_lovelace(
-                offer.quantity(),
+                offer_quantity,
                 tx_builder.context.protocol_param.coins_per_utxo_byte,
                 prev_output_index=index,
                 address=address,

@@ -58,6 +58,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import _check_expiration
 from charli3_dendrite.dexs.ob.cardanoswaps import _check_unexpired
 from charli3_dendrite.dexs.ob.cardanoswaps import _claimable_ada_offer
 from charli3_dendrite.dexs.ob.cardanoswaps import _continuation_min_lovelace
+from charli3_dendrite.dexs.ob.cardanoswaps import _deposit
 from charli3_dendrite.dexs.ob.cardanoswaps import _expiration_field
 from charli3_dendrite.dexs.ob.cardanoswaps import _sha256
 from charli3_dendrite.dexs.ob.cardanoswaps import _split_unit
@@ -152,23 +153,6 @@ class _KeepExpiration:
 
 # ``build_update``'s default expiration: keep the swap's current expiration.
 KEEP_EXPIRATION = _KeepExpiration()
-
-
-def _deposit(bag: Assets, label: str) -> tuple[str, int]:
-    """The single unit of ``bag`` and its deposited quantity.
-
-    Raises:
-        ValueError: ``bag`` does not hold exactly one unit, or its quantity is
-            negative.
-    """
-    if len(bag.root) != 1:
-        raise ValueError(
-            f"{label} must hold exactly one asset, got {sorted(bag.root)}.",
-        )
-    unit, quantity = next(iter(bag.root.items()))
-    if quantity < 0:
-        raise ValueError(f"{label} deposit must be non-negative, got {quantity}.")
-    return unit, quantity
 
 
 def sort_pair(unit_a: str, unit_b: str) -> tuple[str, str]:

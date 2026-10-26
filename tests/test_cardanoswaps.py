@@ -725,6 +725,41 @@ def test_build_create_rejects_non_positive_price(tx_builder, price) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("offer", "ask"),
+    [
+        pytest.param({TOKEN_A_UNIT: -5}, {"lovelace": 0}, id="negative-offer"),
+        pytest.param({TOKEN_A_UNIT: 0}, {"lovelace": 0}, id="zero-offer"),
+        pytest.param(
+            {"lovelace": 5_000_000, TOKEN_A_UNIT: 3},
+            {TOKEN_B_UNIT: 0},
+            id="two-unit-offer",
+        ),
+        pytest.param({}, {TOKEN_B_UNIT: 0}, id="empty-offer"),
+        pytest.param(
+            {TOKEN_A_UNIT: 5},
+            {"lovelace": 0, TOKEN_B_UNIT: 0},
+            id="two-unit-ask",
+        ),
+        pytest.param({TOKEN_A_UNIT: 5}, {TOKEN_A_UNIT: 0}, id="offer-is-ask"),
+    ],
+)
+def test_build_create_rejects_bad_assets(tx_builder, offer, ask) -> None:
+    """CREATE refuses a malformed offer or ask before touching the builder."""
+    with pytest.raises(ValueError):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root=offer),
+            ask=Assets(root=ask),
+            price=(3, 2),
+            tx_builder=tx_builder,
+        )
+    assert tx_builder.outputs == []
+    assert tx_builder.mint is None
+    assert tx_builder.required_signers is None
+    assert list(tx_builder._minting_script_to_redeemers) == []
+
+
 # --- carrier sizing and claimable offer -------------------------------------
 
 
