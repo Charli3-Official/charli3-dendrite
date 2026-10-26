@@ -1696,6 +1696,36 @@ def test_orderbook_get_book_skips_ada_offer_down_to_its_carrier() -> None:
     assert book.buy_book_full[0].quantity == live.claimable_offer(CPUB)
 
 
+# An ask unit no take can ever pay: the one-way beacon policy checks only that an
+# empty policy id goes with an empty name, so such swaps can rest on chain.
+_MALFORMED_ASKS = {
+    "name_33_bytes": (bytes.fromhex("bb" * 28), b"X" * 33),
+    "policy_3_bytes": (b"\x01\x02\x03", b"Z"),
+}
+
+
+@pytest.mark.parametrize("ask", _MALFORMED_ASKS.values(), ids=_MALFORMED_ASKS.keys())
+def test_orderbook_get_book_ignores_malformed_unit_on_another_pair(ask) -> None:
+    good = _ada_offer_order(2, 1, 10_000_000)
+    bad = _resting_state(b"", b"", *ask, 1, 1, 9_000_000)
+    bad.tx_index = 1  # each resting swap is its own UTxO
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
+
+    assert not book.sell_book_full
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is good
+
+
+@pytest.mark.parametrize("ask", _MALFORMED_ASKS.values(), ids=_MALFORMED_ASKS.keys())
+def test_orderbook_get_book_skips_malformed_unit_on_its_own_pair(ask) -> None:
+    bad = _resting_state(b"", b"", *ask, 1, 1, 9_000_000)
+    pair = Assets(root={"lovelace": 0, bad.in_unit: 0})
+    book = CardanoSwapsOrderBook.get_book(pair, orders=[bad])
+
+    assert not book.sell_book_full
+    assert not book.buy_book_full
+
+
 def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
     # A book sized at a lower coins_per_utxo_byte than the transaction's lists an
     # ADA offer the transaction's min-UTxO leaves nothing to take; the fill passes

@@ -28,6 +28,7 @@ from typing import Union
 from typing import cast
 
 from pycardano import Address
+from pycardano import AssetName
 from pycardano import ChainContext
 from pycardano import Network
 from pycardano import PlutusData
@@ -408,6 +409,19 @@ def _split_unit(unit: str) -> tuple[bytes, bytes]:
     if unit == "lovelace":
         return b"", b""
     return bytes.fromhex(unit[:56]), bytes.fromhex(unit[56:])
+
+
+def _is_well_formed_unit(unit: str) -> bool:
+    """Whether a unit is lovelace or a native asset a ledger value can hold.
+
+    The beacon policies check only that an empty policy id goes with an empty
+    name, so a datum can name a policy id that is not 28 bytes or an asset name
+    longer than 32 bytes. No output can carry such a unit.
+    """
+    policy, name = _split_unit(unit)
+    if policy == b"":
+        return name == b""
+    return len(policy) == ScriptHash.MAX_SIZE and len(name) <= AssetName.MAX_SIZE
 
 
 # A staked swap address used only for its size when sizing an output whose owner
@@ -1915,8 +1929,9 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         passing several views of one UTxO lists it once. Each level's quantity is
         the direction's ``claimable_offer``: what one take can release. An ADA
         side keeps its min-UTxO, so it lists its balance less that carrier.
-        Inactive swaps, swaps whose price is malformed and directions with
-        nothing claimable are left out.
+        Directions on other pairs are skipped before they are sized. Inactive
+        swaps, swaps whose price is malformed, directions whose in or out unit
+        no output can carry and directions with nothing claimable are left out.
 
         Args:
             assets: The token pair to build the book for (unit(0) + unit(1)).
@@ -1929,8 +1944,8 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         if orders is None:
             orders = cls._discover_orders()
 
-        buy_orders = []
-        sell_orders = []
+        buy_orders: list[OrderBookOrder] = []
+        sell_orders: list[OrderBookOrder] = []
         seen: set[tuple[str, int, str]] = set()
         for order in orders:
             if order.inactive:
@@ -1940,14 +1955,16 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
                 if key in seen:
                     continue
                 seen.add(key)
-                level = cls._book_level(direction, coins_per_utxo_byte)
-                if level is None:
-                    continue
                 in_unit, out_unit = direction.in_unit, direction.out_unit
                 if in_unit == assets.unit() and out_unit == assets.unit(1):
-                    sell_orders.append(level)
+                    side = sell_orders
                 elif in_unit == assets.unit(1) and out_unit == assets.unit(0):
-                    buy_orders.append(level)
+                    side = buy_orders
+                else:
+                    continue
+                level = cls._book_level(direction, coins_per_utxo_byte)
+                if level is not None:
+                    side.append(level)
 
         return CardanoSwapsOrderBook(
             assets=assets,
@@ -1987,9 +2004,15 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
     ) -> OrderBookOrder | None:
         """The book level of one direction, or None when it cannot be listed.
 
-        A direction whose price is malformed cannot be priced or filled, and one
-        with nothing claimable has nothing a take can release.
+        A direction whose price is malformed cannot be priced or filled, one
+        whose in or out unit no output can carry can never be paid or delivered,
+        and one with nothing claimable has nothing a take can release.
         """
+        if not (
+            _is_well_formed_unit(direction.in_unit)
+            and _is_well_formed_unit(direction.out_unit)
+        ):
+            return None
         try:
             num, denom = direction.price
         except InvalidPoolError:
