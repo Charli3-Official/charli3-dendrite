@@ -2021,8 +2021,9 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         the direction's ``claimable_offer``: what one take can release. An ADA
         side keeps its min-UTxO, so it lists its balance less that carrier.
         Directions on other pairs are skipped before they are sized. Inactive
-        swaps, swaps whose price is malformed, directions whose in or out unit
-        no output can carry and directions with nothing claimable are left out.
+        swaps, swaps whose contract allows no fills, swaps whose price is
+        malformed, directions whose in or out unit no output can carry and
+        directions with nothing claimable are left out.
 
         Args:
             assets: The token pair to build the book for (unit(0) + unit(1)).
@@ -2030,8 +2031,8 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
                 both from the backend by beacon policy (each kind by its own
                 state class's ``pool_selector``). Discovery finds official
                 one-way swaps only; a pre-release one-way swap passed here is
-                listed like any other, but its contract allows no fills, so
-                :meth:`swap_utxo` refuses to take it.
+                left out, since its contract allows no fills (it can still be
+                closed through its own state's ``build_close``).
             coins_per_utxo_byte: The protocol parameter the levels are sized at.
                 Defaults to :data:`MAINNET_COINS_PER_UTXO_BYTE`.
         """
@@ -2042,7 +2043,7 @@ class CardanoSwapsOrderBook(AbstractOrderBookState):
         sell_orders: list[OrderBookOrder] = []
         seen: set[tuple[str, int, str]] = set()
         for order in orders:
-            if order.inactive:
+            if order.inactive or not order._fill_allowed():
                 continue
             for direction in order.directions():
                 key = (direction.tx_hash, direction.tx_index, direction.in_unit)

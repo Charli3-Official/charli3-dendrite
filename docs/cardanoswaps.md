@@ -17,7 +17,7 @@ remaining offer plus the ask paid in.
 | Class | Contract | Supported operations |
 |-------|----------|----------------------|
 | `CardanoSwapsOrderState` | Official v2 one-way build (Plutus V3) | Parse, create, fill, close |
-| `CardanoSwapsLegacyOrderState` | Pre-release v2 one-way build (Plutus V2) | Parse, close |
+| `CardanoSwapsLegacyOrderState` | Pre-release v2 one-way build (Plutus V2) | Parse, close (never listed in the order book) |
 
 ### Two-Way Swaps
 

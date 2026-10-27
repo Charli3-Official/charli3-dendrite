@@ -31,6 +31,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOneWayOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsLegacyOrderState
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderBook
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutputReference
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutRefV3
@@ -266,6 +267,20 @@ def test_legacy_refuses_create_and_fill() -> None:
             owner_address=OWNER,
         )
     assert tb.mint is None and not tb.outputs and not tb.inputs
+
+
+def test_book_leaves_out_legacy_swaps_but_they_still_close() -> None:
+    """A swap whose contract allows no fills is never a book level."""
+    legacy = _legacy_state()
+    book = CardanoSwapsOrderBook.get_book(
+        Assets(root={"lovelace": 0, TOKEN: 0}),
+        orders=[legacy],
+    )
+    assert not book.sell_book_full and not book.buy_book_full
+
+    tb = TransactionBuilder(_OfflineContext())
+    legacy.build_close(tx_builder=tb, owner_address=OWNER)
+    assert all(q == -1 for q in _mint_dict(tb).values())
 
 
 def test_the_shared_base_is_not_a_dex() -> None:
