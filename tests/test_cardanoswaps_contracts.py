@@ -20,6 +20,7 @@ from pycardano import plutus_script_hash
 
 from charli3_dendrite.dataclasses.datums import PlutusNone
 from charli3_dendrite.dataclasses.models import Assets
+from charli3_dendrite.dataclasses.models import ScriptReference
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_ID
 from charli3_dendrite.dexs.ob.cardanoswaps import BEACON_POLICY_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import LEGACY_BEACON_POLICY_ID
@@ -30,6 +31,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_HASH
 from charli3_dendrite.dexs.ob.cardanoswaps import SWAP_VALIDATOR_SCRIPT_HEX
 from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOneWayOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsLegacyOrderState
+from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderBook
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutputReference
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOutRefV3
@@ -267,6 +269,20 @@ def test_legacy_refuses_create_and_fill() -> None:
     assert tb.mint is None and not tb.outputs and not tb.inputs
 
 
+def test_book_leaves_out_legacy_swaps_but_they_still_close() -> None:
+    """A swap whose contract allows no fills is never a book level."""
+    legacy = _legacy_state()
+    book = CardanoSwapsOrderBook.get_book(
+        Assets(root={"lovelace": 0, TOKEN: 0}),
+        orders=[legacy],
+    )
+    assert not book.sell_book_full and not book.buy_book_full
+
+    tb = TransactionBuilder(_OfflineContext())
+    legacy.build_close(tx_builder=tb, owner_address=OWNER)
+    assert all(q == -1 for q in _mint_dict(tb).values())
+
+
 def test_the_shared_base_is_not_a_dex() -> None:
     """Only the concrete classes name the dex.
 
@@ -275,6 +291,47 @@ def test_the_shared_base_is_not_a_dex() -> None:
     """
     with pytest.raises(NotImplementedError):
         _CardanoSwapsOneWayOrderState.dex()
+
+
+def test_one_way_state_inherits_the_shared_base() -> None:
+    """Contract-agnostic members live on the shared base, not the one-way class."""
+    from charli3_dendrite.dexs.ob.cardanoswaps import _CardanoSwapsOrderState
+
+    assert issubclass(CardanoSwapsOrderState, _CardanoSwapsOrderState)
+    assert issubclass(CardanoSwapsLegacyOrderState, _CardanoSwapsOrderState)
+    for name in (
+        "swap_utxo",
+        "build_close",
+        "reference_utxo",
+        "beacon_reference_utxo",
+        "beacon_address",
+        "directions",
+    ):
+        assert name in _CardanoSwapsOrderState.__dict__
+        assert name not in _CardanoSwapsOneWayOrderState.__dict__
+    for hook in (
+        "_fill_allowed",
+        "_take_redeemer",
+        "_continuation_datum",
+        "required_ask",
+        "claimable_offer",
+        "build_create",
+    ):
+        assert hook in _CardanoSwapsOneWayOrderState.__dict__
+    with pytest.raises(NotImplementedError):
+        _CardanoSwapsOrderState.dex()
+    state = _legacy_state()
+    assert state.directions() == (state,)
+    official = _resting_state(
+        b"",
+        b"",
+        bytes.fromhex("a" * 56),
+        bytes.fromhex("414141"),
+        2,
+        1,
+        10_000_000,
+    )
+    assert official.directions() == (official,)
 
 
 from pycardano import ScriptHash
@@ -355,6 +412,21 @@ def _fill(
     ttl: int | None = None,
 ) -> TransactionBuilder:
     """Fill an ADA-for-TOKEN swap with the chain tip at ``tip``; return the builder."""
+    state = _expiring_state(expiration)
+    tb = TransactionBuilder(_ContextAt(tip))
+    tb.ttl = ttl
+    state.swap_utxo(
+        address_source=OWNER,
+        in_assets=Assets(root={TOKEN: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        owner_address=OWNER,
+    )
+    return tb
+
+
+def _expiring_state(expiration: int | None) -> CardanoSwapsOrderState:
+    """A resting ADA-for-TOKEN swap expiring at ``expiration``."""
     state = _resting_state(
         b"",
         b"",
@@ -368,16 +440,7 @@ def _fill(
         datum = state.order_datum
         datum.expiration = CardanoSwapsSomeInt(value=expiration)
         state.datum_cbor = datum.to_cbor_hex()
-    tb = TransactionBuilder(_ContextAt(tip))
-    tb.ttl = ttl
-    state.swap_utxo(
-        address_source=OWNER,
-        in_assets=Assets(root={TOKEN: 8_000_000}),
-        out_assets=Assets(root={"lovelace": 4_000_000}),
-        tx_builder=tb,
-        owner_address=OWNER,
-    )
-    return tb
+    return state
 
 
 def test_fill_of_an_expiring_swap_sets_its_deadline() -> None:
@@ -413,6 +476,125 @@ def test_fill_of_a_non_expiring_swap_sets_no_deadline() -> None:
     # it does not add one.
     tb = _fill(tip=EXPIRATION_SLOT, expiration=None)
     assert tb.ttl is None
+
+
+def test_create_with_expiration_sets_its_deadline() -> None:
+    # The beacon policy requires an upper validity bound at or before the
+    # expiration, as on a fill.
+    tb = TransactionBuilder(_ContextAt(EXPIRATION_SLOT - 600))
+    CardanoSwapsOrderState.build_create(
+        owner_address=OWNER,
+        offer=Assets(root={"lovelace": 10_000_000}),
+        ask=Assets(root={TOKEN: 0}),
+        price=(2, 1),
+        tx_builder=tb,
+        expiration=EXPIRATION,
+    )
+    assert tb.ttl == EXPIRATION_SLOT
+
+
+def test_create_rejects_an_expiration_off_the_minute() -> None:
+    tb = TransactionBuilder(_ContextAt(EXPIRATION_SLOT - 600))
+    with pytest.raises(ValueError, match="whole minute"):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root={"lovelace": 10_000_000}),
+            ask=Assets(root={TOKEN: 0}),
+            price=(2, 1),
+            tx_builder=tb,
+            expiration=EXPIRATION + 1,
+        )
+    assert tb.mint is None and not tb.outputs
+    assert tb.required_signers is None and tb.ttl is None
+
+
+REACHED_TIPS = pytest.mark.parametrize(
+    "tip",
+    [EXPIRATION_SLOT, EXPIRATION_SLOT + 60],
+    ids=["at-tip", "past"],
+)
+
+
+@REACHED_TIPS
+def test_fill_rejects_a_swap_whose_expiration_is_reached(tip: int) -> None:
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        _expiring_state(EXPIRATION).swap_utxo(
+            address_source=OWNER,
+            in_assets=Assets(root={TOKEN: 8_000_000}),
+            out_assets=Assets(root={"lovelace": 4_000_000}),
+            tx_builder=tb,
+            owner_address=OWNER,
+        )
+    assert tb.inputs == [] and tb.outputs == [] and tb.ttl is None
+
+
+@REACHED_TIPS
+def test_create_rejects_an_expiration_already_reached(tip: int) -> None:
+    tb = TransactionBuilder(_ContextAt(tip))
+    with pytest.raises(ValueError, match="already been reached"):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root={"lovelace": 10_000_000}),
+            ask=Assets(root={TOKEN: 0}),
+            price=(2, 1),
+            tx_builder=tb,
+            expiration=EXPIRATION,
+        )
+    assert tb.mint is None and not tb.outputs
+    assert tb.required_signers is None and tb.ttl is None
+
+
+def _official_state() -> CardanoSwapsOrderState:
+    return _resting_state(
+        b"",
+        b"",
+        bytes.fromhex(TOKEN[:56]),
+        bytes.fromhex(TOKEN[56:]),
+        2,
+        1,
+        10_000_000,
+    )
+
+
+def test_close_adds_the_owner_stake_signer_once() -> None:
+    tb = TransactionBuilder(_OfflineContext())
+    tb.required_signers = [OWNER.staking_part]
+    _official_state().build_close(tx_builder=tb, owner_address=OWNER)
+    assert tb.required_signers == [OWNER.staking_part]
+
+    fresh = TransactionBuilder(_OfflineContext())
+    _legacy_state().build_close(tx_builder=fresh, owner_address=OWNER)
+    assert fresh.required_signers == [OWNER.staking_part]
+
+
+def test_close_leaves_a_script_stake_to_the_caller() -> None:
+    owner = Address(
+        payment_part=OWNER.payment_part,
+        staking_part=ScriptHash(bytes.fromhex("33" * 28)),
+        network=Network.MAINNET,
+    )
+    tb = TransactionBuilder(_OfflineContext())
+    _official_state().build_close(tx_builder=tb, owner_address=owner)
+    assert tb.required_signers is None
+    assert len(_mint_dict(tb)) == 3
+
+
+def test_close_rejects_an_owner_other_than_the_swap_address() -> None:
+    state = _official_state()
+    state.address = str(CardanoSwapsOrderState.beacon_address(OWNER))
+    other = Address(
+        payment_part=OWNER.payment_part,
+        staking_part=VerificationKeyHash(bytes.fromhex("44" * 28)),
+        network=Network.MAINNET,
+    )
+    tb = TransactionBuilder(_OfflineContext())
+    with pytest.raises(ValueError, match="staking credential"):
+        state.build_close(tx_builder=tb, owner_address=other)
+    assert tb.inputs == [] and tb.mint is None and tb.required_signers is None
+
+    state.build_close(tx_builder=tb, owner_address=OWNER)
+    assert len(tb.inputs) == 1
 
 
 # --- prev_input: the two output-reference shapes ----------------------------
@@ -689,17 +871,21 @@ class _FakeRefBackend:
         self.calls = []
 
     def get_script_from_address(self, address):
-        from types import SimpleNamespace
-
         payload = address.payment_part.payload.hex()
         self.calls.append(payload)
         if payload not in self.scripts_hex:
             if self.none_as == "index_error":
                 raise IndexError
-            return SimpleNamespace(
-                tx_hash=None, tx_index=None, address=None, assets=None, script=None
+            return ScriptReference(
+                tx_hash=None,
+                tx_index=None,
+                address=None,
+                assets=None,
+                datum_hash=None,
+                datum_cbor=None,
+                script=None,
             )
-        return SimpleNamespace(
+        return ScriptReference(
             tx_hash=REF_TX,
             tx_index=REF_INDEX,
             address=str(
@@ -709,6 +895,8 @@ class _FakeRefBackend:
                 )
             ),
             assets=Assets(lovelace=20_000_000),
+            datum_hash=None,
+            datum_cbor=None,
             script=self.scripts_hex[payload],
         )
 
@@ -797,3 +985,47 @@ def test_reference_utxo_caches_are_independent(ref_backend):
     CardanoSwapsOrderState.clear_reference_utxo_cache()
     CardanoSwapsLegacyOrderState.reference_utxo()
     assert len(backend.calls) == 2
+
+
+def _take_official(state: CardanoSwapsOrderState, tb: TransactionBuilder, **kwargs):
+    """Take 4 ADA of the official ADA-for-TOKEN swap, with another key as taker."""
+    return state.swap_utxo(
+        address_source=OTHER_STAKE_OWNER,
+        in_assets=Assets(root={TOKEN: 8_000_000}),
+        out_assets=Assets(root={"lovelace": 4_000_000}),
+        tx_builder=tb,
+        **kwargs,
+    )
+
+
+OTHER_STAKE_OWNER = Address(
+    payment_part=OWNER.payment_part,
+    staking_part=VerificationKeyHash(bytes.fromhex("44" * 28)),
+    network=Network.MAINNET,
+)
+
+
+def test_take_without_an_owner_uses_the_swap_address() -> None:
+    state = _official_state()
+    swap_address = CardanoSwapsOrderState.beacon_address(OWNER)
+    state.address = str(swap_address)
+    tb = TransactionBuilder(_OfflineContext())
+    txo, _ = _take_official(state, tb)
+    assert txo.address == swap_address
+    assert tb.inputs[0].output.address == swap_address
+
+    unknown = _official_state()
+    txo, _ = _take_official(unknown, TransactionBuilder(_OfflineContext()))
+    assert txo.address.staking_part == OTHER_STAKE_OWNER.staking_part
+
+
+def test_take_rejects_an_owner_other_than_the_swap_address() -> None:
+    state = _official_state()
+    state.address = str(CardanoSwapsOrderState.beacon_address(OWNER))
+    tb = TransactionBuilder(_OfflineContext())
+    with pytest.raises(ValueError, match="staking credential"):
+        _take_official(state, tb, owner_address=OTHER_STAKE_OWNER)
+    assert tb.inputs == [] and tb.outputs == []
+
+    txo, _ = _take_official(state, tb, owner_address=OWNER)
+    assert txo.address.staking_part == OWNER.staking_part
