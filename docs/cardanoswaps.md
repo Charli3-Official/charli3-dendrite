@@ -49,7 +49,10 @@ parameterised by the swap validator hash:
 has their own swap address. `CardanoSwapsOrderBook.get_book` discovers one-way
 and two-way swaps from the backend when no orders are passed, lists every
 direction of every swap once per `(tx_hash, tx_index, in_unit)`, and leaves out
-inactive swaps, malformed prices and directions with nothing available. The
+inactive swaps, malformed prices and directions with nothing claimable. Each
+level's quantity is the direction's `claimable_offer`: an ADA side keeps its
+min-UTxO, so it lists its balance less that carrier, sized at the
+`coins_per_utxo_byte` keyword (default `MAINNET_COINS_PER_UTXO_BYTE`). The
 helpers `pair_beacon_name`, `offer_beacon_name`, `ask_beacon_name`,
 `two_way_pair_beacon_name` and `two_way_asset_beacon_name` compute the beacon
 asset names.
