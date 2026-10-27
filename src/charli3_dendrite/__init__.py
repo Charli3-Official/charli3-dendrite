@@ -30,6 +30,7 @@ from charli3_dendrite.dexs.amm.wingriders import WingRidersV2SSPState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsLegacyOrderState
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderBook
 from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsOrderState
+from charli3_dendrite.dexs.ob.cardanoswaps_two_way import CardanoSwapsTwoWayOrderState
 from charli3_dendrite.dexs.ob.chadswap import ChadSwapOrderBook
 from charli3_dendrite.dexs.ob.chadswap import ChadSwapOrderState
 from charli3_dendrite.dexs.ob.djed import DjedOrderBook

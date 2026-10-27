@@ -50,6 +50,7 @@ from charli3_dendrite.dexs.ob.cardanoswaps import CardanoSwapsTxId
 from charli3_dendrite.dexs.ob.cardanoswaps import CreateOrCloseSwaps
 from charli3_dendrite.dexs.ob.cardanoswaps import SpendWithMint
 from charli3_dendrite.dexs.ob.cardanoswaps import Swap
+from charli3_dendrite.dexs.ob.cardanoswaps import _beacon_assets
 from charli3_dendrite.dexs.ob.cardanoswaps import ask_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import offer_beacon_name
 from charli3_dendrite.dexs.ob.cardanoswaps import pair_beacon_name
@@ -722,6 +723,41 @@ def test_build_create_rejects_non_positive_price(tx_builder, price) -> None:
             price=price,
             tx_builder=tx_builder,
         )
+
+
+@pytest.mark.parametrize(
+    ("offer", "ask"),
+    [
+        pytest.param({TOKEN_A_UNIT: -5}, {"lovelace": 0}, id="negative-offer"),
+        pytest.param({TOKEN_A_UNIT: 0}, {"lovelace": 0}, id="zero-offer"),
+        pytest.param(
+            {"lovelace": 5_000_000, TOKEN_A_UNIT: 3},
+            {TOKEN_B_UNIT: 0},
+            id="two-unit-offer",
+        ),
+        pytest.param({}, {TOKEN_B_UNIT: 0}, id="empty-offer"),
+        pytest.param(
+            {TOKEN_A_UNIT: 5},
+            {"lovelace": 0, TOKEN_B_UNIT: 0},
+            id="two-unit-ask",
+        ),
+        pytest.param({TOKEN_A_UNIT: 5}, {TOKEN_A_UNIT: 0}, id="offer-is-ask"),
+    ],
+)
+def test_build_create_rejects_bad_assets(tx_builder, offer, ask) -> None:
+    """CREATE refuses a malformed offer or ask before touching the builder."""
+    with pytest.raises(ValueError):
+        CardanoSwapsOrderState.build_create(
+            owner_address=OWNER,
+            offer=Assets(root=offer),
+            ask=Assets(root=ask),
+            price=(3, 2),
+            tx_builder=tx_builder,
+        )
+    assert tx_builder.outputs == []
+    assert tx_builder.mint is None
+    assert tx_builder.required_signers is None
+    assert list(tx_builder._minting_script_to_redeemers) == []
 
 
 # --- carrier sizing and claimable offer -------------------------------------
@@ -1583,6 +1619,7 @@ def test_orderbook_get_amount_out_walks_multiple_levels() -> None:
     # cheaper (ask-per-offer) one first. Prices are raw base-unit rationals.
     cheap = _sell_order(2, 1, 100)  # 100 AAA at 2 lovelace/AAA -> 200 lovelace cap
     dear = _sell_order(4, 1, 100)  # 100 AAA at 4 lovelace/AAA -> 400 lovelace cap
+    dear.tx_index = 1  # each resting swap is its own UTxO
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[dear, cheap])  # unordered in
 
     out, _ = book.get_amount_out(Assets(root={"lovelace": 240}))
@@ -1653,6 +1690,7 @@ def test_orderbook_get_book_skips_malformed_price() -> None:
     # One order with a zero-denominator swap_price must not break the whole book.
     good = _sell_order(2, 1, 100)
     bad = _sell_order(1, 0, 100)
+    bad.tx_index = 1  # each resting swap is its own UTxO
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
     assert len(book.sell_book_full) == 1
     assert book.sell_book_full[0].state is good
@@ -1680,14 +1718,87 @@ def test_orderbook_swap_utxo_caps_ada_offer_at_claimable(tx_builder) -> None:
     assert _cont_quantity(cont_txo, TOKEN_A_UNIT) == order.required_ask(claimable)
 
 
-def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
-    # An ADA offer already down to its min-UTxO is passed over for the next level.
+def test_orderbook_get_book_skips_ada_offer_down_to_its_carrier() -> None:
+    # An ADA offer already down to its min-UTxO has nothing a fill can take.
     drained = _ada_offer_order(1, 1, 1_000_000)
-    drained.address = _resting_beacon_addr(_MAKER)
     assert drained.claimable_offer(CPUB) == 0
     live = _ada_offer_order(2, 1, 10_000_000)
-    live.address = _resting_beacon_addr(_TAKER)
+    live.tx_index = 1  # each resting swap is its own UTxO
     book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[live, drained])
+
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is live
+    assert book.buy_book_full[0].quantity == live.claimable_offer(CPUB)
+
+
+# An ask unit no take can ever pay: the one-way beacon policy checks only that an
+# empty policy id goes with an empty name, so such swaps can rest on chain.
+_MALFORMED_ASKS = {
+    "name_33_bytes": (bytes.fromhex("bb" * 28), b"X" * 33),
+    "policy_3_bytes": (b"\x01\x02\x03", b"Z"),
+}
+
+
+@pytest.mark.parametrize("ask", _MALFORMED_ASKS.values(), ids=_MALFORMED_ASKS.keys())
+def test_orderbook_get_book_ignores_malformed_unit_on_another_pair(ask) -> None:
+    good = _ada_offer_order(2, 1, 10_000_000)
+    bad = _resting_state(b"", b"", *ask, 1, 1, 9_000_000)
+    bad.tx_index = 1  # each resting swap is its own UTxO
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
+
+    assert not book.sell_book_full
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is good
+
+
+@pytest.mark.parametrize("ask", _MALFORMED_ASKS.values(), ids=_MALFORMED_ASKS.keys())
+def test_orderbook_get_book_skips_malformed_unit_on_its_own_pair(ask) -> None:
+    bad = _resting_state(b"", b"", *ask, 1, 1, 9_000_000)
+    pair = Assets(root={"lovelace": 0, bad.in_unit: 0})
+    book = CardanoSwapsOrderBook.get_book(pair, orders=[bad])
+
+    assert not book.sell_book_full
+    assert not book.buy_book_full
+
+
+# Datum asset fields whose policy id is not 28 bytes but whose joined unit reads
+# as TOKEN_A_UNIT: the validator counts the ask by the datum's own policy id, so
+# no take can pay it.
+_COLLIDING_ASKS = {
+    "policy_29_bytes": (bytes.fromhex(TOKEN_A_POLICY) + b"A", b"AA"),
+    "policy_27_bytes": (bytes.fromhex(TOKEN_A_POLICY)[:27], b"\xaaAAA"),
+}
+
+
+@pytest.mark.parametrize("ask", _COLLIDING_ASKS.values(), ids=_COLLIDING_ASKS.keys())
+def test_orderbook_get_book_skips_ask_colliding_with_a_real_unit(ask) -> None:
+    good = _ada_offer_order(2, 1, 10_000_000)
+    bad = _resting_state(b"", b"", *ask, 1, 1000, 9_000_000)
+    bad.tx_index = 1  # each resting swap is its own UTxO
+    assert bad.in_unit == TOKEN_A_UNIT
+    book = CardanoSwapsOrderBook.get_book(_PAIR, orders=[bad, good])
+
+    assert not book.sell_book_full
+    assert len(book.buy_book_full) == 1
+    assert book.buy_book_full[0].state is good
+
+
+def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> None:
+    # A book sized at a lower coins_per_utxo_byte than the transaction's lists an
+    # ADA offer the transaction's min-UTxO leaves nothing to take; the fill passes
+    # it over for the next level.
+    drained = _ada_offer_order(1, 1, 1_000_000)
+    drained.address = _resting_beacon_addr(_MAKER)
+    assert drained.claimable_offer(1) > 0
+    assert drained.claimable_offer(CPUB) == 0
+    live = _ada_offer_order(2, 1, 10_000_000)
+    live.tx_index = 1  # each resting swap is its own UTxO
+    live.address = _resting_beacon_addr(_TAKER)
+    book = CardanoSwapsOrderBook.get_book(
+        _PAIR,
+        orders=[live, drained],
+        coins_per_utxo_byte=1,
+    )
     assert book.buy_book_full[0].state is drained
 
     cont_txo, _ = book.swap_utxo(
@@ -1701,3 +1812,40 @@ def test_orderbook_swap_utxo_skips_order_with_nothing_claimable(tx_builder) -> N
     assert cont_txo.address.staking_part == _TAKER.staking_part
     assert cont_txo.amount.coin == 8_000_000
     assert len(tx_builder.outputs) == 1
+
+
+def test_rational_checked_returns_positive_components() -> None:
+    assert CardanoSwapsRational(3, 2).checked("swap_price") == (3, 2)
+
+
+@pytest.mark.parametrize(("num", "den"), [(0, 1), (1, 0), (-1, 2), (2, -1)])
+def test_rational_checked_rejects_non_positive(num: int, den: int) -> None:
+    with pytest.raises(
+        InvalidPoolError,
+        match=f"Cardano-Swaps some_price must be positive, got {num}/{den}.",
+    ):
+        CardanoSwapsRational(num, den).checked("some_price")
+
+
+def test_rational_required_payment_rounds_up() -> None:
+    rational = CardanoSwapsRational(10, 3)
+    assert rational.required_payment(3, "swap_price") == 10
+    assert rational.required_payment(4, "swap_price") == 14
+    assert rational.required_payment(0, "swap_price") == 0
+
+
+def test_rational_required_payment_rejects_non_positive() -> None:
+    with pytest.raises(InvalidPoolError, match="swap_price must be positive"):
+        CardanoSwapsRational(0, 1).required_payment(5, "swap_price")
+
+
+def test_beacon_assets_helper_holds_each_name_at_quantity() -> None:
+    policy = bytes.fromhex("ab" * 28)
+    assets = _beacon_assets(policy, (b"\x01", b"\x02", b"\x03"), 2)
+    assert assets == Assets(
+        root={
+            f"{'ab' * 28}01": 2,
+            f"{'ab' * 28}02": 2,
+            f"{'ab' * 28}03": 2,
+        },
+    )

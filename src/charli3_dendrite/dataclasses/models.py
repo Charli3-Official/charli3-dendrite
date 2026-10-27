@@ -3,13 +3,16 @@ import json
 from enum import Enum
 
 from pycardano import Address
+from pycardano import PlutusV1Script
 from pycardano import PlutusV2Script
+from pycardano import PlutusV3Script
 from pycardano import RawPlutusData
 from pycardano import TransactionId
 from pycardano import TransactionInput
 from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import Value
+from pycardano import plutus_script_hash
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -115,7 +118,8 @@ def _digest_assets(value: object) -> dict[str, int]:
     return {
         k: int(v)
         for k, v in sorted(
-            root.items(), key=lambda x: "" if x[0] == "lovelace" else x[0],
+            root.items(),
+            key=lambda x: "" if x[0] == "lovelace" else x[0],
         )
     }
 
@@ -280,34 +284,64 @@ class ScriptReference(DendriteBaseModel):
     datum_cbor: str | None
     script: str | None
 
-    def to_utxo(self) -> UTxO | None:
-        if self.tx_hash is not None:
-            assert self.tx_index is not None
-            assert self.script is not None or self.datum_cbor is not None
-            assert self.assets is not None
-            assert self.address is not None
-            return UTxO(
-                input=TransactionInput(
-                    transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
-                    index=self.tx_index,
-                ),
-                output=TransactionOutput(
-                    address=Address.decode(self.address),
-                    amount=Value(coin=self.assets["lovelace"]),
-                    script=(
-                        None
-                        if self.script is None
-                        else PlutusV2Script(bytes.fromhex(self.script))
-                    ),
-                    datum=(
-                        None
-                        if self.datum_cbor is None
-                        else RawPlutusData.from_cbor(self.datum_cbor)
-                    ),
-                ),
-            )
-        else:
+    def to_utxo(
+        self,
+        script_class: (
+            type[PlutusV1Script] | type[PlutusV2Script] | type[PlutusV3Script]
+        ) = PlutusV2Script,
+        *,
+        expected_hash: str | None = None,
+    ) -> UTxO | None:
+        """Build the reference UTxO, typing the script by Plutus version.
+
+        Args:
+            script_class: The Plutus script class the reference script is
+                decoded as. Its version determines the script hash.
+            expected_hash: When given, the hex script hash the reference
+                script must have as ``script_class``.
+
+        Returns:
+            The reference UTxO, or ``None`` when no reference was found.
+
+        Raises:
+            ValueError: If ``expected_hash`` is given and the script hashes to
+                something else.
+        """
+        if self.tx_hash is None:
             return None
+        assert self.tx_index is not None
+        assert self.script is not None or self.datum_cbor is not None
+        assert self.assets is not None
+        assert self.address is not None
+        script = (
+            None if self.script is None else script_class(bytes.fromhex(self.script))
+        )
+        if expected_hash is not None:
+            actual_hash = (
+                None if script is None else plutus_script_hash(script).payload.hex()
+            )
+            if actual_hash != expected_hash:
+                msg = (
+                    f"reference script at {self.tx_hash}#{self.tx_index} "
+                    f"hashes to {actual_hash}, expected {expected_hash}"
+                )
+                raise ValueError(msg)
+        return UTxO(
+            input=TransactionInput(
+                transaction_id=TransactionId(bytes.fromhex(self.tx_hash)),
+                index=self.tx_index,
+            ),
+            output=TransactionOutput(
+                address=Address.decode(self.address),
+                amount=Value(coin=self.assets["lovelace"]),
+                script=script,
+                datum=(
+                    None
+                    if self.datum_cbor is None
+                    else RawPlutusData.from_cbor(self.datum_cbor)
+                ),
+            ),
+        )
 
 
 class RedeemerRecord(DendriteBaseModel):
