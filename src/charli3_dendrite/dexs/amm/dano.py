@@ -15,6 +15,7 @@ follows the direct-spend pattern established by `splash.py`:
     reads `platform_fee_rate` and `swap_fee` from its datum.
 """
 
+import logging
 import time
 from dataclasses import dataclass
 from dataclasses import replace
@@ -24,6 +25,7 @@ from typing import Any
 from typing import ClassVar
 
 from pycardano import Address
+from pycardano import AssetName
 from pycardano import IndefiniteList
 from pycardano import PlutusData
 from pycardano import PlutusV3Script
@@ -50,6 +52,8 @@ from charli3_dendrite.dataclasses.models import PoolSelector
 from charli3_dendrite.dexs.amm.amm_types import AbstractConstantLiquidityPoolState
 from charli3_dendrite.dexs.core.errors import InvalidPoolError
 from charli3_dendrite.utility import asset_to_value
+
+_logger = logging.getLogger(__name__)
 
 # Mainnet — see clmm-sdk-init-sdk/src/constants.ts
 DANO_POOL_SCRIPT_HASH_MAINNET = (
@@ -86,10 +90,50 @@ POOL_SCRIPT_OUT_REF_MAINNET = (
     "64d111b957e7d7848ffdde5149aa77fa4090a7fa1ad0ac108067900614848501",
     0,
 )
+# The protocol config UTxO is identified by the NFT it holds, which moves with
+# it; its datum is ``[platform_fee_rate, swap_fee]``.
+PROTOCOL_CONFIG_NFT_POLICY_MAINNET = (
+    "bc2d3b7cf1009c788b1daf2208a38026ab20d7f8209d896ad1a09c14"
+)
+PROTOCOL_CONFIG_NFT_NAME_MAINNET = (
+    "72f9dae79bb2dfa39bd8fadf089ea0c8377b5eaa3caef0549396668aef1f9187"
+)
+PROTOCOL_CONFIG_NFT_UNIT_MAINNET = (
+    PROTOCOL_CONFIG_NFT_POLICY_MAINNET + PROTOCOL_CONFIG_NFT_NAME_MAINNET
+)
+PROTOCOL_CONFIG_ADDRESS_MAINNET = (
+    "addr1z8afjx7zl8zzqmnj6ufmcdy85uh8jqg90j4m35myh6lwlrectd0zw3ydwgtk9hpse3mgyez"
+    "edms0y054fa47vfkt08qsdxsvyq"
+)
+# Last known location and datum of the protocol config. Used until a backend
+# lookup answers; the swap builder locates the config by its NFT instead.
 PROTOCOL_CONFIG_OUT_REF_MAINNET = (
-    "2cafd7c92f7093e5229af274be83dea660b0590b4174bbed79ba662b44fbd1ee",
+    "67380365f2c95ebeb2feaef321c29462550e54b9bd888ae453170e679a8914a0",
     0,
 )
+PROTOCOL_CONFIG_PLATFORM_FEE_RATE_MAINNET = 1000
+PROTOCOL_CONFIG_SWAP_FEE_MAINNET = 500_000
+# How long a protocol config read from the backend is reused.
+PROTOCOL_CONFIG_CACHE_TTL_SECONDS = 300.0
+
+
+@dataclass(frozen=True)
+class DanoProtocolConfig:
+    """The protocol config UTxO's out-ref and its parsed datum."""
+
+    out_ref: tuple[str, int]
+    platform_fee_rate: int
+    swap_fee: int
+
+
+PINNED_PROTOCOL_CONFIG = DanoProtocolConfig(
+    out_ref=PROTOCOL_CONFIG_OUT_REF_MAINNET,
+    platform_fee_rate=PROTOCOL_CONFIG_PLATFORM_FEE_RATE_MAINNET,
+    swap_fee=PROTOCOL_CONFIG_SWAP_FEE_MAINNET,
+)
+
+# Monotonic clock for the protocol-config cache.
+_clock = time.monotonic
 
 # Cardano epoch derivation (spec § Common Temporary Variables > curEpoch)
 EPOCH_BOUNDARY_MS_MAINNET = 1_647_899_091_000
@@ -123,14 +167,13 @@ def _current_slot_mainnet(now_ms: int | None = None) -> int:
 
 
 def _find_protocol_config(tx_builder: TransactionBuilder) -> UTxO | None:
-    """Scan ``tx_builder.reference_inputs`` for the protocol-config UTxO."""
-    wanted_tx, wanted_idx = PROTOCOL_CONFIG_OUT_REF_MAINNET
-    wanted_tx_bytes = bytes.fromhex(wanted_tx)
+    """Return the reference input holding the protocol-config NFT, if any."""
+    policy = ScriptHash(bytes.fromhex(PROTOCOL_CONFIG_NFT_POLICY_MAINNET))
+    name = AssetName(bytes.fromhex(PROTOCOL_CONFIG_NFT_NAME_MAINNET))
     for utxo in tx_builder.reference_inputs:
-        if (
-            bytes(utxo.input.transaction_id) == wanted_tx_bytes
-            and utxo.input.index == wanted_idx
-        ):
+        if not isinstance(utxo, UTxO):
+            continue
+        if utxo.output.amount.multi_asset.get(policy, {}).get(name, 0) > 0:
             return utxo
     return None
 
@@ -434,10 +477,17 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
 
     fee: int = 0  # populated from datum.lp_fee_rate in post_init
 
-    # Dano pools have no batcher and no user-paid deposit:
-    # the swap redeemer mutates the pool UTxO directly.
-    _batcher: ClassVar[Assets] = Assets(lovelace=0)
+    # Dano pools have no batcher and no user-paid deposit: the swap redeemer
+    # mutates the pool UTxO directly. Every swap still pays the protocol
+    # config's ``swap_fee`` into the pool, which ``batcher_fee`` reports;
+    # ``_batcher`` holds the last known value of that fee.
+    _batcher: ClassVar[Assets] = Assets(lovelace=PROTOCOL_CONFIG_SWAP_FEE_MAINNET)
     _deposit: ClassVar[Assets] = Assets(lovelace=0)
+
+    # Protocol config read through the backend, and the ``_clock`` time of the
+    # last read (``None``: never read).
+    _protocol_config: ClassVar[DanoProtocolConfig] = PINNED_PROTOCOL_CONFIG
+    _protocol_config_checked_at: ClassVar[float | None] = None
 
     # Platform fee rate lives in a SEPARATE protocol-config UTxO
     # (constants.ts: PROTOCOL_CONFIG_OUT_REF_*). It is required for
@@ -455,6 +505,65 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
     def dex(cls) -> str:
         """Return the name of the DEX."""
         return "Dano"
+
+    @classmethod
+    def protocol_config(cls) -> DanoProtocolConfig:
+        """The current protocol config, located through the backend by its NFT.
+
+        A read, successful or not, is not repeated for
+        ``PROTOCOL_CONFIG_CACHE_TTL_SECONDS``. Without a backend, or when the
+        backend has no answer, the last known config is kept (initially
+        :data:`PINNED_PROTOCOL_CONFIG`).
+        """
+        checked_at = cls._protocol_config_checked_at
+        now = _clock()
+        if (
+            checked_at is not None
+            and now - checked_at < PROTOCOL_CONFIG_CACHE_TTL_SECONDS
+        ):
+            return cls._protocol_config
+        try:
+            backend = get_backend()
+        except ValueError:
+            return cls._protocol_config
+        cls._protocol_config_checked_at = now
+        try:
+            ref = backend.get_datum_from_address(
+                address=Address.decode(PROTOCOL_CONFIG_ADDRESS_MAINNET),
+                asset=PROTOCOL_CONFIG_NFT_UNIT_MAINNET,
+            )
+            if (
+                ref is None
+                or ref.datum_cbor is None
+                or ref.tx_hash is None
+                or ref.tx_index is None
+            ):
+                return cls._protocol_config
+            platform_fee_rate, swap_fee = _parse_protocol_config_datum(ref.datum_cbor)
+        except Exception:  # noqa: BLE001 - a failed read keeps the last known config
+            _logger.warning("Dano protocol config lookup failed", exc_info=True)
+            return cls._protocol_config
+        cls._protocol_config = DanoProtocolConfig(
+            out_ref=(ref.tx_hash, ref.tx_index),
+            platform_fee_rate=platform_fee_rate,
+            swap_fee=swap_fee,
+        )
+        return cls._protocol_config
+
+    def batcher_fee(
+        self,
+        in_assets: Assets | None = None,
+        out_assets: Assets | None = None,
+        extra_assets: Assets | None = None,
+    ) -> Assets:
+        """The protocol config's per-swap fee, paid into the pool on every swap.
+
+        Args:
+            in_assets: The input assets for the swap (unused).
+            out_assets: The output assets for the swap (unused).
+            extra_assets: Extra assets included in the transaction (unused).
+        """
+        return Assets(lovelace=self.protocol_config().swap_fee)
 
     @classmethod
     def order_selector(cls) -> list[str]:
@@ -840,7 +949,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
           * Add the protocol-config UTxO to
             ``tx_builder.reference_inputs`` FIRST — it's used as a
             reference input AND its datum is parsed here to derive
-            ``platform_fee_rate`` / ``swap_fee``.
+            ``platform_fee_rate`` / ``swap_fee``. It is recognised by the
+            NFT it holds; :meth:`protocol_config` gives its current out-ref.
           * Call this method; add the returned output to the builder.
           * Add the user's receive output + collateral, then build/sign.
 
@@ -862,8 +972,8 @@ class DanoCLMMState(AbstractConstantLiquidityPoolState):
         if pc_utxo is None:
             raise ValueError(
                 "Protocol-config UTxO must be added to tx_builder.reference_inputs "
-                "before calling swap_utxo (out-ref "
-                f"{PROTOCOL_CONFIG_OUT_REF_MAINNET[0]}#{PROTOCOL_CONFIG_OUT_REF_MAINNET[1]})",
+                "before calling swap_utxo (the UTxO holding the NFT "
+                f"{PROTOCOL_CONFIG_NFT_UNIT_MAINNET})",
             )
         pc_datum = pc_utxo.output.datum if pc_utxo.output.datum is not None else None
         if pc_datum is None:
