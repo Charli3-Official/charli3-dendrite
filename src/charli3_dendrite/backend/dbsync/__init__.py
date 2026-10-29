@@ -527,8 +527,6 @@ SELECT (
         query += """
 FROM tx_out
 LEFT JOIN address ON tx_out.address_id = address.id
-LEFT JOIN ma_tx_out mtxo ON mtxo.tx_out_id = tx_out.id
-LEFT JOIN multi_asset ma ON ma.id = mtxo.ident
 LEFT JOIN tx ON tx.id = tx_out.tx_id
 LEFT JOIN datum ON tx_out.inline_datum_id = datum.id
 LEFT JOIN block on block.id = tx.block_id
@@ -536,8 +534,16 @@ LEFT JOIN script s ON s.id = tx_out.reference_script_id
 WHERE address.payment_cred = %(address)b AND tx_out.consumed_by_tx_id IS NULL"""
 
         if asset is not None:
+            # Start from the asset: multi_asset is unique on (policy, name) and
+            # ma_tx_out is indexed on ident, so only the outputs that ever held
+            # the asset are visited, not every output at the address.
             query += """
-AND policy = %(policy)b AND name = %(name)b
+AND tx_out.id IN (
+    SELECT mto.tx_out_id
+    FROM ma_tx_out mto
+    JOIN multi_asset ma ON ma.id = mto.ident
+    WHERE ma.policy = %(policy)b AND ma.name = %(name)b
+)
 """
 
         query += """
@@ -557,6 +563,8 @@ LIMIT 1
         query, kwargs = self._get_datum_from_address(address=address, asset=asset)
 
         r = self.db_query(query, kwargs)
+        if not r:
+            return None
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None
@@ -572,6 +580,8 @@ LIMIT 1
         query, kwargs = self._get_datum_from_address(address=address, asset=asset)
 
         r = await self.db_query_async(query, kwargs)
+        if not r:
+            return None
 
         if r[0]["assets"] is not None and r[0]["assets"][0]["lovelace"] is None:
             r[0]["assets"] = None

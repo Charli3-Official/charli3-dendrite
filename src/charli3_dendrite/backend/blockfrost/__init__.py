@@ -264,10 +264,11 @@ class BlockFrostBackend(AbstractBackend):
         Returns:
             Optional[ScriptReference]: The datum associated with the address, if any.
         """
-        utxos = self.api.address_utxos(address, gather_pages=True)
+        if asset:
+            utxos = self.api.address_utxos_asset(address, asset, gather_pages=True)
+        else:
+            utxos = self.api.address_utxos(address, gather_pages=True)
         for utxo in utxos:
-            if asset and asset not in utxo.amount:
-                continue
             if utxo.data_hash:
                 return ScriptReference(
                     tx_hash=utxo.tx_hash,
