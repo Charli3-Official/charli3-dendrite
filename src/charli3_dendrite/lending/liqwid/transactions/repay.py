@@ -195,6 +195,23 @@ class RepaySnapshot(PoolActionSnapshot):
         """True when the repay reaches the payoff and closes the loan."""
         return self.repay >= self.payoff
 
+    @property
+    def released_collateral(self) -> dict[str, int]:
+        """The qTokens this repay takes out of the loan, by unit.
+
+        A close releases the whole collateral; a partial repay releases what its
+        target collateral drops below the loan's, and nothing when it keeps it.
+        """
+        held = self.loan.collateral
+        if self.closes:
+            return dict(held)
+        target = held if self.collateral is None else self.collateral
+        return {
+            unit: held[unit] - target.get(unit, 0)
+            for unit in held
+            if held[unit] > target.get(unit, 0)
+        }
+
     @classmethod
     def from_capture(cls, fix: Mapping[str, Any]) -> RepaySnapshot:
         """Rebuild the snapshot of a captured repay or close, for byte-exact replay.

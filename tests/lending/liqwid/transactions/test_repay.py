@@ -168,6 +168,40 @@ def test_the_zero_debt_close_capture_spends_no_action_utxo():
     assert snapshot.valid_to_ms is None
 
 
+# --- released collateral -------------------------------------------------------
+
+
+@pytest.mark.parametrize("label", [*CLOSES, ZERO_DEBT_CLOSE])
+def test_a_close_releases_the_whole_collateral(label):
+    snapshot = _snapshot(label)
+    assert snapshot.closes
+    assert snapshot.released_collateral
+    assert snapshot.released_collateral == dict(snapshot.loan.collateral)
+
+
+def test_a_partial_repay_keeping_its_collateral_releases_nothing():
+    snapshot = _snapshot("repay_usdm")
+    assert snapshot.collateral is None
+    assert snapshot.released_collateral == {}
+
+
+def test_a_partial_repay_with_a_lower_target_releases_the_difference():
+    snapshot = _snapshot("repay_usdm")
+    unit, held = next(iter(snapshot.loan.collateral.items()))
+    lowered = dataclasses.replace(snapshot, collateral={unit: held - 7})
+    assert lowered.released_collateral == {unit: 7}
+
+
+def test_a_partial_repay_releases_each_unit_its_target_lowers():
+    # One unit lowered, one left out of the target, one raised above the amount
+    # held: only the first two are released.
+    snapshot = _snapshot("repay_interest_only")
+    (lowered, a), (dropped, b), (raised, c) = snapshot.loan.collateral.items()
+    target = {lowered: a - 7, raised: c + 5}
+    released = dataclasses.replace(snapshot, collateral=target).released_collateral
+    assert released == {lowered: 7, dropped: b}
+
+
 # --- closes --------------------------------------------------------------------
 
 

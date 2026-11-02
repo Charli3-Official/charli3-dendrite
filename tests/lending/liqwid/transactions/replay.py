@@ -209,14 +209,18 @@ def validator_credentials(snapshot: Any) -> set[str]:  # noqa: ANN401
     return {params.action_validator, params.loan_validator}
 
 
-def with_params(snapshot: Any, **changes: Any) -> Any:  # noqa: ANN401
-    """``snapshot`` with its market's MarketParams fields replaced by ``changes``."""
-    records = snapshot.records
+def records_with_params(records: Any, **changes: Any) -> Any:  # noqa: ANN401
+    """``records`` with its MarketParams fields replaced by ``changes``."""
     params = dataclasses.replace(records.params_datum, **changes)
     record = dataclasses.replace(records.params, datum=params)
+    return dataclasses.replace(records, params=record)
+
+
+def with_params(snapshot: Any, **changes: Any) -> Any:  # noqa: ANN401
+    """``snapshot`` with its market's MarketParams fields replaced by ``changes``."""
     return dataclasses.replace(
         snapshot,
-        records=dataclasses.replace(records, params=record),
+        records=records_with_params(snapshot.records, **changes),
     )
 
 
