@@ -54,6 +54,8 @@ BUILDERS = [
     "CollateralSnapshot",
     "SupplyAndBorrowSnapshot",
     "RemoveAndRedeemSnapshot",
+    "RepayAndRedeemSnapshot",
+    "MAX_REDEEMS",
     "build_supply",
     "build_redeem",
     "build_borrow",
@@ -62,6 +64,7 @@ BUILDERS = [
     "build_collateral",
     "build_supply_and_borrow",
     "build_remove_and_redeem",
+    "build_repay_and_redeem",
 ]
 
 # Owner-flow checks: importable from ``terms``, not exported by the package.
@@ -221,7 +224,10 @@ def test_type_checkers_see_every_exported_name_from_its_module() -> None:
 def test_each_name_is_the_owning_module_object() -> None:
     for name in package.__all__:
         value = getattr(package, name)
-        owner = importlib.import_module(value.__module__)
+        # A constant has no ``__module__``: it is owned by the module it is
+        # exported from.
+        exported_from = f"{_PACKAGE}.{package._MODULE_OF[name]}"
+        owner = importlib.import_module(getattr(value, "__module__", exported_from))
         assert getattr(owner, name) is value, name
 
 

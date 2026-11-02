@@ -22,6 +22,9 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndBorrowSnapshot,
 )
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_repay_and_redeem,
+)
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
@@ -42,6 +45,11 @@ from tests.lending.liqwid.transactions.replay import build
 from tests.lending.liqwid.transactions.replay import captured_redeemers
 from tests.lending.liqwid.transactions.replay import fixture
 from tests.lending.liqwid.transactions.replay import redeemers
+from tests.lending.liqwid.transactions.test_combos import _closing_night_loan
+from tests.lending.liqwid.transactions.test_combos import _repay_and_redeem
+from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
+    deployment_hashes,
+)
 
 _WALLET = "addr_test"
 _REF = "aa" * 32
@@ -95,6 +103,40 @@ def test_contribute_builds_the_captured_action(
 
     built = build(contribute, snapshot_cls.from_capture(fix), slot=block_slot(fix))
     assert redeemers(built) == captured_redeemers(fix)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_contribute_takes_a_repay_and_redeem_for_repay() -> None:
+    """A close of a NIGHT loan redeeming its released qAda is contributed as REPAY."""
+    fix, backend, loan = _closing_night_loan()
+
+    def contribute(tx_builder: TransactionBuilder, *, snapshot: object) -> None:
+        LiqwidTxBuilder().contribute(
+            LendingAction.REPAY,
+            tx_builder,
+            snapshot=snapshot,  # type: ignore[arg-type]
+            params=ActionParams(actor_address=_WALLET),
+        )
+
+    built = build(
+        contribute,
+        _repay_and_redeem(fix, backend, loan),
+        slot=block_slot(fix),
+    )
+    direct = build(
+        build_repay_and_redeem,
+        _repay_and_redeem(fix, backend, loan),
+        slot=block_slot(fix),
+    )
+    assert built.cbor == direct.cbor
+    assert sorted(purpose for purpose, *_ in redeemers(built)) == [
+        "mint",
+        "mint",
+        "reward",
+        "spend",
+        "spend",
+        "spend",
+    ]
 
 
 def _empty_builder() -> TransactionBuilder:
@@ -550,3 +592,15 @@ def test_the_chosen_action_utxos_of_each_snapshot(
         for leg in legs
     }
     assert builder_module.chosen_action_utxos(snapshot) == expected
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_chosen_action_utxos_of_a_repay_and_redeem() -> None:
+    """The repay's action UTxO (NIGHT's) and the redeem's (Ada's)."""
+    fix, backend, loan = _closing_night_loan()
+    snapshot = _repay_and_redeem(fix, backend, loan)
+    captured = SupplyAndBorrowSnapshot.from_capture(fix)
+    assert builder_module.chosen_action_utxos(snapshot) == {
+        captured.borrow.action.out_ref,
+        captured.supply.action.out_ref,
+    }

@@ -34,14 +34,21 @@ if TYPE_CHECKING:
         CollateralSnapshot,
     )
     from charli3_dendrite.lending.liqwid.transactions.collateral import build_collateral
+    from charli3_dendrite.lending.liqwid.transactions.combos import MAX_REDEEMS
     from charli3_dendrite.lending.liqwid.transactions.combos import (
         RemoveAndRedeemSnapshot,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
+        RepayAndRedeemSnapshot,
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
         SupplyAndBorrowSnapshot,
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
         build_remove_and_redeem,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
+        build_repay_and_redeem,
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
         build_supply_and_borrow,
@@ -120,9 +127,12 @@ _EXPORTS: dict[str, tuple[str, ...]] = {
     "repay": ("RepaySnapshot", "build_repay"),
     "collateral": ("CollateralSnapshot", "build_collateral"),
     "combos": (
+        "MAX_REDEEMS",
         "RemoveAndRedeemSnapshot",
+        "RepayAndRedeemSnapshot",
         "SupplyAndBorrowSnapshot",
         "build_remove_and_redeem",
+        "build_repay_and_redeem",
         "build_supply_and_borrow",
     ),
     "terms": (
@@ -192,6 +202,7 @@ __all__ = [
     "LiqwidScriptRefs",
     "LiqwidTxBuilder",
     "LoanRecord",
+    "MAX_REDEEMS",
     "MarketAwaitingBatchError",
     "MarketRecords",
     "MinValueError",
@@ -199,6 +210,7 @@ __all__ = [
     "RedeemSnapshot",
     "RemoveAndRedeemSnapshot",
     "RepayAmountError",
+    "RepayAndRedeemSnapshot",
     "RepayResult",
     "RepaySnapshot",
     "Settlement",
@@ -218,6 +230,7 @@ __all__ = [
     "build_redeem",
     "build_remove_and_redeem",
     "build_repay",
+    "build_repay_and_redeem",
     "build_supply",
     "build_supply_and_borrow",
     "check_reference_hygiene",

@@ -40,16 +40,23 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
     RemoveAndRedeemSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    RepayAndRedeemSnapshot,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndBorrowSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_remove_and_redeem,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_repay_and_redeem,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_borrow,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
+from charli3_dendrite.lending.liqwid.transactions.repay import _build_repay
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
 from charli3_dendrite.lending.liqwid.transactions.supply import RedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
@@ -57,6 +64,7 @@ from charli3_dendrite.lending.liqwid.transactions.supply import _build_redeem
 from charli3_dendrite.lending.liqwid.transactions.supply import _build_supply
 from charli3_dendrite.lending.liqwid.transactions.supply import build_redeem
 from charli3_dendrite.lending.liqwid.transactions.supply import build_supply
+from charli3_dendrite.lending.liqwid.transactions.terms import close_payment
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_burn_for
 from charli3_dendrite.lending.liqwid.transactions.terms import redeem_payout
 from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
@@ -92,6 +100,8 @@ from tests.lending.liqwid.transactions.replay import shift_loan_datum
 from tests.lending.liqwid.transactions.replay import shift_value
 from tests.lending.liqwid.transactions.replay import synthetic_utxo
 from tests.lending.liqwid.transactions.replay import with_params
+from tests.lending.liqwid.transactions.test_combos import _closing_night_loan
+from tests.lending.liqwid.transactions.test_combos import _repay_and_redeem
 from tests.lending.liqwid.transactions.test_resolve import _reference_utxos
 from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
     deployment_hashes,
@@ -456,6 +466,80 @@ def test_a_remove_and_redeem_is_bounded_by_its_redeem_market_only():
     assert _purposes("remove_and_redeem_night", set_upper_bound_ms(upper))
     past = set_upper_bound_ms(redeem_cap + 1_000)
     assert _refused("remove_and_redeem_night", past) == ["mint"]
+
+
+# --- repay-and-redeem --------------------------------------------------------------
+
+# No capture holds a repay-and-redeem: it is resolved live from the close of the
+# NIGHT loan ``supply_and_borrow_ada_night`` opened, redeeming its qAda on Ada.
+
+
+def _close_and_redeem() -> tuple[RepayAndRedeemSnapshot, Callable[..., list[str]]]:
+    """The close of that NIGHT loan redeeming its qAda, and its evaluation.
+
+    The evaluation rebuilds the snapshot followed by the given mutations, with the
+    capture's UTxOs, the NIGHT loan validator's reference script and the loan
+    supplied.
+    """
+    fix, backend, loan = _closing_night_loan()
+    snapshot = _repay_and_redeem(fix, backend, loan)
+    scripts = [
+        u for u in fixture_utxos(fixture("remove_and_redeem_night")) if u.ref_script
+    ]
+
+    def purposes(*mutations: Mutation) -> list[str]:
+        built = build(
+            mutated(build_repay_and_redeem, *mutations),
+            snapshot,
+            slot=block_slot(fix),
+        )
+        return evaluate(built, [*fixture_utxos(fix), *scripts, loan.utxo])
+
+    return snapshot, purposes
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_close_and_redeem_of_another_markets_qtoken_evaluates():
+    """A close burning its released qAda straight out of the loan evaluates.
+
+    The Ada redeem runs first and the NIGHT close last on one funding: the qAda
+    policy (the burn) and the loan-token policy (the close), the Ada action, NIGHT
+    action and loan spends, and the borrow staking script all pass.
+    """
+    snapshot, purposes = _close_and_redeem()
+    (redeem,) = snapshot.redeems
+    assert snapshot.repay.closes
+    assert redeem.market.name == "Ada"
+    assert snapshot.returned == {}
+    assert purposes() == ["mint", "mint", "spend", "spend", "spend", "withdraw"]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_close_and_redeem_bound_past_the_loan_markets_deadline_is_refused():
+    """A close-and-redeem's upper bound is checked against the loan's market too.
+
+    Here NIGHT's batch deadline is the earlier one. An upper bound at it evaluates;
+    one second past it, still inside the redeemed Ada market's, the borrow staking
+    script refuses: the close spends a NIGHT action UTxO, so both markets'
+    deadlines bind the transaction.
+    """
+    snapshot, purposes = _close_and_redeem()
+    (redeem,) = snapshot.redeems
+    loan_cap = _cap_ms(snapshot.repay)
+    assert loan_cap + 1_000 < _cap_ms(redeem)
+    assert purposes(set_upper_bound_ms(loan_cap)) == [
+        "mint",
+        "mint",
+        "spend",
+        "spend",
+        "spend",
+        "withdraw",
+    ]
+    with pytest.raises(OgmiosEvaluationError) as info:
+        purposes(set_upper_bound_ms(loan_cap + 1_000))
+    assert info.value.code == SCRIPT_FAILURE, info.value
+    failed = sorted(failure["validator"]["purpose"] for failure in info.value.data)
+    assert failed == ["withdraw"]
 
 
 @pytest.mark.parametrize("label", ["supply_ada", "redeem_ada"])
@@ -867,6 +951,68 @@ def test_a_remove_and_redeem_on_the_loans_market_is_refused_by_the_scripts():
     combined = RemoveAndRedeemSnapshot(collateral=removal, redeem=redeem)
     failed = _script_refused(_redeem_then_remove, combined, (loan,))
     assert failed == ["spend", "withdraw"]
+
+
+def _redeem_then_repay(
+    tx_builder: Any,  # noqa: ANN401
+    *,
+    snapshot: RepayAndRedeemSnapshot,
+) -> None:
+    """The legs of a repay-and-redeem, without the combination's market check."""
+    for redeem in snapshot.redeems:
+        _build_redeem(tx_builder, redeem, stash=snapshot)
+    _build_repay(tx_builder, snapshot.repay, stash=snapshot)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_close_and_redeem_of_the_loan_markets_own_qtoken_is_refused():
+    """A close of an Ada loan next to a redeem of its qAda on Ada is refused.
+
+    The Ada loan holding 100e9 qAda is closed on one Ada action UTxO, which
+    evaluates alone, and its qAda redeemed on the other. Together the qAda policy,
+    both Ada action spends and the borrow staking script fail. This is why
+    `RepayAndRedeemSnapshot` returns the loan market's own qToken to the wallet.
+    """
+    loan = _ada_loan_holding_qada()
+    (captured,) = CapturedTx.of(fixture(BORROW_SIDE)).loan_inputs()
+    records = IncreaseSnapshot.from_capture(fixture(BORROW_SIDE)).records
+    payoff = close_payment(captured.datum, records.state_datum.index)
+    owner = _one_market_wallet()[0].address
+    pay = synthetic_utxo(
+        "one-market-close",
+        address=owner,
+        lovelace=payoff + 50_000_000,
+    )
+    close = RepaySnapshot.from_backend(
+        _one_market_backend(loan),
+        loan_utxo=out_ref_text(loan.out_ref),
+        owner_address=owner,
+        repay=payoff,
+        action_utxo=_ada_action(BORROW_SIDE),
+        funding=[pay],
+    )
+    assert close.closes
+    assert _one_market_evaluated(build_repay, close, (loan, pay)) == [
+        "mint",
+        "spend",
+        "spend",
+        "withdraw",
+    ]
+    redeem = RedeemSnapshot._from_records(
+        _one_market_backend(),
+        close.records,
+        owner_address=owner,
+        qtokens=LOAN_QADA,
+        funding=close.funding,
+        action_utxo=_ada_action(SUPPLY_SIDE),
+        exclude=(),
+        valid_to_ms=close.valid_to_ms,
+        rng=None,
+        deployment=None,
+    )
+    combined = RepayAndRedeemSnapshot(repay=close, redeems=(redeem,))
+    failed = _script_refused(_redeem_then_repay, combined, (loan, pay))
+    assert failed == ["mint", "spend", "spend", "withdraw"]
 
 
 # --- loans named 30 and 31 ----------------------------------------------------------
