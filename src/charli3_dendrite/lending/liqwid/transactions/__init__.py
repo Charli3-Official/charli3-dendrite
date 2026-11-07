@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     )
     from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
     from charli3_dendrite.lending.liqwid.transactions.errors import MissingFeedError
+    from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
     from charli3_dendrite.lending.liqwid.transactions.errors import RepayAmountError
     from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanError
     from charli3_dendrite.lending.liqwid.transactions.errors import (
@@ -177,6 +178,7 @@ _EXPORTS: dict[str, tuple[str, ...]] = {
         "MarketAwaitingBatchError",
         "MinValueError",
         "MissingFeedError",
+        "NoActionUtxoError",
         "RepayAmountError",
         "UnhealthyLoanError",
         "UnsupportedCollateralError",
@@ -207,6 +209,7 @@ __all__ = [
     "MarketRecords",
     "MinValueError",
     "MissingFeedError",
+    "NoActionUtxoError",
     "RedeemSnapshot",
     "RemoveAndRedeemSnapshot",
     "RepayAmountError",

@@ -19,7 +19,11 @@ from charli3_dendrite.lending.liqwid.datums import encode_loan_datum
 from charli3_dendrite.lending.liqwid.deployment import staking_roles
 from charli3_dendrite.lending.liqwid.transactions import resolve
 from charli3_dendrite.lending.liqwid.transactions import terms
+from charli3_dendrite.lending.liqwid.transactions.errors import (
+    InsufficientLiquidityError,
+)
 from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import RepayAmountError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
@@ -29,7 +33,9 @@ from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
 from tests.lending.liqwid.records import records_of
+from tests.lending.liqwid.transactions.backend import GONE
 from tests.lending.liqwid.transactions.backend import capture_backend
+from tests.lending.liqwid.transactions.backend import without_actions
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import block_slot
 from tests.lending.liqwid.transactions.replay import build
@@ -385,6 +391,44 @@ def test_from_backend_rebuilds_the_zero_debt_close_without_an_action_utxo(
     assert_replays(
         _build(snapshot, fix), fix, credentials=validator_credentials(captured)
     )
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_from_backend_with_no_action_utxo_left_is_retryable(monkeypatch, gone):
+    fix = fixture("repay_usdm")
+    captured = _snapshot("repay_usdm")
+    _captured_scripts(monkeypatch, captured)
+    backend, exclude = without_actions(
+        _capture_backend(fix),
+        gone,
+        captured.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        RepaySnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
+            owner_address=_owner_address(captured),
+            repay=captured.repay,
+            exclude=exclude,
+        )
+    assert raised.value.market == captured.market.name
+    assert not isinstance(raised.value, InsufficientLiquidityError)
+
+
+def test_the_zero_debt_close_needs_no_action_utxo(monkeypatch):
+    fix = fixture(ZERO_DEBT_CLOSE)
+    captured = _snapshot(ZERO_DEBT_CLOSE)
+    _captured_scripts(monkeypatch, captured)
+    backend = _capture_backend(fix)
+    params = captured.records.params_datum
+    assert resolve.resolve_action_utxos(backend, captured.market, params) == []
+    snapshot = RepaySnapshot.from_backend(
+        backend,
+        loan_utxo=out_ref_text(captured.loan.utxo.out_ref),
+        owner_address=_owner_address(captured),
+        repay=0,
+    )
+    assert snapshot.action is None
 
 
 def test_from_backend_refuses_a_repay_between_the_settled_debt_and_the_payoff():

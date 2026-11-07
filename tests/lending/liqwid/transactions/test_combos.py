@@ -54,6 +54,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
     MarketAwaitingBatchError,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
 from charli3_dendrite.lending.liqwid.transactions.terms import close_payment
@@ -66,8 +67,10 @@ from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.units import out_ref_text
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
+from tests.lending.liqwid.transactions.backend import GONE
 from tests.lending.liqwid.transactions.backend import FixtureBackend
 from tests.lending.liqwid.transactions.backend import capture_backend
+from tests.lending.liqwid.transactions.backend import without_actions
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import block_slot
 from tests.lending.liqwid.transactions.replay import build
@@ -416,6 +419,56 @@ def test_a_remove_and_redeem_resolved_from_the_backend_builds_the_captured_one()
         captured_protocol_outputs(fix, loan),
         decode_loan,
     )
+
+
+@pytest.mark.parametrize("gone", GONE)
+@pytest.mark.parametrize(("leg", "market"), [("supply", "Ada"), ("borrow", "NIGHT")])
+def test_a_supply_and_borrow_with_no_action_utxo_left_names_the_market(
+    deployment_hashes,
+    leg,
+    market,
+    gone,
+):
+    fix, captured = _supply_and_borrow("supply_and_borrow_ada_night")
+    backend, exclude = without_actions(
+        _stand_in_backend(fix),
+        gone,
+        getattr(captured, leg).action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        SupplyAndBorrowSnapshot.from_backend(
+            backend,
+            supply_market="Ada",
+            borrow_market="NIGHT",
+            owner_address=captured.supply.owner_address,
+            supply_amount=captured.supply.amount,
+            borrow_amount=captured.borrow.amount,
+            funding=captured.supply.funding,
+            exclude=exclude,
+        )
+    assert raised.value.market == market
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_a_remove_and_redeem_with_no_action_utxo_left_is_retryable(gone):
+    fix, captured = _remove_and_redeem("remove_and_redeem_night")
+    backend, exclude = without_actions(
+        capture_backend(fix),
+        gone,
+        captured.redeem.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        RemoveAndRedeemSnapshot.from_backend(
+            backend,
+            loan_utxo=out_ref_text(captured.collateral.loan.utxo.out_ref),
+            owner_address=captured.collateral.owner_address,
+            qtoken_unit=QADA,
+            qtokens=captured.redeem.qtokens,
+            funding=captured.collateral.funding,
+            valid_to_ms=captured.redeem.valid_to_ms,
+            exclude=exclude,
+        )
+    assert raised.value.market == "Ada"
 
 
 @pytest.mark.parametrize("before_loan_deadline_s", [300, -60])
@@ -780,6 +833,33 @@ def test_a_redeem_market_awaiting_its_batch_is_refused_not_returned(
     with pytest.raises(MarketAwaitingBatchError) as raised:
         _repay_and_redeem(fix, backend, loan)
     assert raised.value.market == "Ada"
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_a_redeem_market_with_no_action_utxo_left_is_refused_not_returned(
+    deployment_hashes,
+    gone,
+):
+    fix, backend, loan = _closing_night_loan()
+    ada = SupplyAndBorrowSnapshot.from_capture(fix).supply.action.out_ref
+    backend, exclude = without_actions(backend, gone, ada)
+    for redeem in (None, [QADA]):
+        with pytest.raises(NoActionUtxoError) as raised:
+            _repay_and_redeem(fix, backend, loan, redeem=redeem, exclude=exclude)
+        assert raised.value.market == "Ada"
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_a_loan_market_with_no_action_utxo_left_refuses_the_repay_and_redeem(
+    deployment_hashes,
+    gone,
+):
+    fix, backend, loan = _closing_night_loan()
+    night = SupplyAndBorrowSnapshot.from_capture(fix).borrow.action.out_ref
+    backend, exclude = without_actions(backend, gone, night)
+    with pytest.raises(NoActionUtxoError) as raised:
+        _repay_and_redeem(fix, backend, loan, exclude=exclude)
+    assert raised.value.market == "NIGHT"
 
 
 def test_the_loan_markets_own_qtoken_is_returned_in_auto_mode_and_refused_when_named(
