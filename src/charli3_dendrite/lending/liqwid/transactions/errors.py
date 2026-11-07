@@ -23,6 +23,7 @@ __all__ = [
     "MarketAwaitingBatchError",
     "MinValueError",
     "MissingFeedError",
+    "NoActionUtxoError",
     "RepayAmountError",
     "UnhealthyLoanError",
     "UnsupportedCollateralError",
@@ -75,6 +76,26 @@ class MarketAwaitingBatchError(LiqwidBuildError):
             market,
             deadline_ms,
         )
+
+
+class NoActionUtxoError(LiqwidBuildError):
+    """No action UTxO of the market is left to choose.
+
+    None is live (a batch holds them all until it ends) or every live one is
+    excluded as spent. The condition is transient: resolve again later.
+    """
+
+    _fields = ("market",)
+    market: str | None
+
+    def __init__(self, market: str | None) -> None:
+        """Name the market; None when the chooser was not told it."""
+        message = (
+            "no action UTxO is left to choose"
+            if market is None
+            else f"market {market} has no action UTxO left to choose"
+        )
+        super().__init__(message, market)
 
 
 class ForeignReferenceInputError(LiqwidBuildError):

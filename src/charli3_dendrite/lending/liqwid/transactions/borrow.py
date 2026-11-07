@@ -281,6 +281,8 @@ def resolve_borrow(
         MarketAwaitingBatchError: No upper bound is left before the deadline.
         ActionUtxoSpentError, CapExceededError, InsufficientLiquidityError: No
             action UTxO can serve the borrow.
+        NoActionUtxoError: The market has no action UTxO left to choose (its batch
+            is running, or every one is excluded).
         UnsupportedCollateralError, MissingFeedError, UnhealthyLoanError: The
             collateral cannot be valued or does not cover ``debt``.
     """

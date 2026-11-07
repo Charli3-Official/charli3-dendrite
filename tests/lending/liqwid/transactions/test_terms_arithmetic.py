@@ -82,6 +82,8 @@ ERROR_CASES: list[tuple[type[errors.LiqwidBuildError], dict[str, Any]]] = [
         errors.MarketAwaitingBatchError,
         {"market": "Ada", "deadline_ms": 1_792_611_257_000},
     ),
+    (errors.NoActionUtxoError, {"market": "Ada"}),
+    (errors.NoActionUtxoError, {"market": None}),
     (errors.ForeignReferenceInputError, {"out_ref": "cd" * 32 + "#0"}),
     (
         errors.UnhealthyLoanError,

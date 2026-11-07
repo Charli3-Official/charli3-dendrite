@@ -27,7 +27,8 @@ released units in order and returns to the wallet, as qTokens, each unit that is
 no Liqwid qToken or the loan market's own, whose payout ``floor(Q * s9)`` is below
 its market's minimum, that no single action UTxO of its market can pay out, or
 that comes once the cap of redeems (`MAX_REDEEMS` by default) is resolved. A
-redeemed market awaiting its batch is refused, not returned.
+redeemed market awaiting its batch, or with no action UTxO left to choose, is
+refused, not returned.
 
 The action-only leg is added first and the loan leg last, so the loan flow's end
 (health set and check, owner signer, borrow staking withdrawal, reference hygiene)
@@ -361,6 +362,8 @@ class RemoveAndRedeemSnapshot(PoolActionSnapshot):
             MinValueError: The payout is below the redeemed market's minimum.
             MarketAwaitingBatchError: The redeemed market's batch deadline is too
                 close.
+            NoActionUtxoError: The redeemed market has no action UTxO left to
+                choose.
             LiqwidBuildError: As the legs' ``from_backend``.
         """
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
@@ -465,9 +468,10 @@ class RepayAndRedeemSnapshot(PoolActionSnapshot):
         refused when it cannot be; without it every released unit is tried in
         order and returned to the wallet, as qTokens, when it is no Liqwid qToken
         or the loan market's own, its payout is below its market's minimum, no
-        action UTxO of its market can pay it out (one in ``exclude`` counts as
-        none, so a market whose every action UTxO is excluded returns its
-        qTokens), or ``max_redeems`` redeems are already resolved.
+        action UTxO of its market can pay it out, or ``max_redeems`` redeems are
+        already resolved. A market with no action UTxO left to choose (none live,
+        or every live one in ``exclude``) is refused with ``NoActionUtxoError``,
+        never returned.
         ``action_utxos`` pins action UTxOs by market name (the loan's market's for
         the repay); the others are random choices (by ``rng``) not in ``exclude``.
         Every leg with a bound ends at the earliest of the legs' bounds
@@ -487,6 +491,8 @@ class RepayAndRedeemSnapshot(PoolActionSnapshot):
                 holds its payout.
             MarketAwaitingBatchError: The loan market's or a redeemed market's
                 batch deadline is too close.
+            NoActionUtxoError: The loan market or a redeemed market has no action
+                UTxO left to choose.
             LiqwidBuildError: As the legs' ``from_backend``.
         """
         from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan

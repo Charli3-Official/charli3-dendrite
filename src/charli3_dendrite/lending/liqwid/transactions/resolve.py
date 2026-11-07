@@ -74,11 +74,9 @@ from charli3_dendrite.lending.liqwid.oracles import LiqwidFeed
 from charli3_dendrite.lending.liqwid.oracles import parse_feed
 from charli3_dendrite.lending.liqwid.oracles import select_feeds
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
-from charli3_dendrite.lending.liqwid.transactions.errors import (
-    InsufficientLiquidityError,
-)
 from charli3_dendrite.lending.liqwid.transactions.errors import LiqwidBuildError
 from charli3_dendrite.lending.liqwid.transactions.errors import MissingFeedError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import (
     UnsupportedCollateralError,
 )
@@ -447,6 +445,7 @@ def choose_action_utxo(
     pin: str | None = None,
     exclude: Collection[str] = (),
     rng: random.Random | None = None,
+    market: str | None = None,
 ) -> ActionUtxo:
     """The action UTxO a transaction spends.
 
@@ -454,13 +453,15 @@ def choose_action_utxo(
     ``exclude`` (the out-refs already reported spent), and it must pass ``check``.
     Otherwise the choice is uniform, by ``rng`` (a system random source by
     default), among the UTxOs not excluded that pass ``check``; ``check`` raises a
-    build error for a UTxO that cannot serve the transaction.
+    build error for a UTxO that cannot serve the transaction. ``market`` names the
+    market in the error raised when no UTxO is left to check.
 
     Raises:
         ActionUtxoSpentError: the pin is not among ``utxos`` or is excluded.
-        LiqwidBuildError: the pin fails ``check``, or no UTxO passes it (the last
-            error ``check`` raised); ``InsufficientLiquidityError(0, 0)`` when no
-            UTxO is left to check.
+        NoActionUtxoError: no UTxO is left to check (none given, or every one
+            excluded).
+        LiqwidBuildError: the pin fails ``check``, or no UTxO left to check passes
+            it (the last error ``check`` raised).
     """
     if pin is not None:
         pinned = next((u for u in utxos if u.out_ref == pin), None)
@@ -483,7 +484,7 @@ def choose_action_utxo(
         return (rng or secrets.SystemRandom()).choice(eligible)
     if last_error is not None:
         raise last_error
-    raise InsufficientLiquidityError(0, 0)
+    raise NoActionUtxoError(market)
 
 
 def resolve_flow_action(
@@ -505,6 +506,7 @@ def resolve_flow_action(
 
     Raises:
         ActionUtxoSpentError: The pin is not live or is excluded.
+        NoActionUtxoError: The market has no live action UTxO outside ``exclude``.
         LiqwidBuildError: The pin fails the limits, or no action UTxO passes them.
     """
     market = records.market
@@ -527,6 +529,7 @@ def resolve_flow_action(
         pin=pin,
         exclude=exclude,
         rng=rng,
+        market=market.name,
     )
 
 

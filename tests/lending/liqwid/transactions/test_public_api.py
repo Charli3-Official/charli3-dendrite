@@ -164,6 +164,10 @@ RAISED_BY = {
         "tests.lending.liqwid.transactions.test_resolve::"
         "test_a_missing_feed_is_refused"
     ),
+    "NoActionUtxoError": (
+        "tests.lending.liqwid.transactions.test_resolve::"
+        "test_nothing_left_to_choose_is_no_action_utxo"
+    ),
     "RepayAmountError": (
         "tests.lending.liqwid.transactions.test_repay::"
         "test_repaying_the_settled_debt_leaves_a_minimum_interest_only_loan"

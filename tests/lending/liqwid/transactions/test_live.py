@@ -38,6 +38,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
     InsufficientLiquidityError,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MarketAwaitingBatchError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
@@ -133,7 +134,11 @@ def _market_permitting() -> Iterator[None]:
     """Skip the cell when the market cannot take the flow at the moment."""
     try:
         yield
-    except (MarketAwaitingBatchError, InsufficientLiquidityError) as exc:
+    except (
+        MarketAwaitingBatchError,
+        NoActionUtxoError,
+        InsufficientLiquidityError,
+    ) as exc:
         pytest.skip(f"market state at the tip: {exc!r}")
 
 
