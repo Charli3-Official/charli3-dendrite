@@ -43,6 +43,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
     InsufficientLiquidityError,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MissingFeedError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import (
     UnsupportedCollateralError,
 )
@@ -66,15 +67,19 @@ from charli3_dendrite.lending.liqwid.transactions.resolve import market_records
 from charli3_dendrite.lending.liqwid.transactions.resolve import record_from_utxo
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_action_utxos
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_feeds
+from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_flow_action
 from charli3_dendrite.lending.liqwid.transactions.resolve import (
     resolve_health_inputs,
 )
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
+from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_market
 from charli3_dendrite.lending.liqwid.transactions.resolve import (
     resolve_market_records,
 )
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_now_ms
 from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_script_refs
+from charli3_dendrite.lending.liqwid.transactions.terms import ActionDeltas
+from charli3_dendrite.lending.liqwid.transactions.terms import Flow
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import plutus_script
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
@@ -84,6 +89,7 @@ from tests.lending.liqwid.records import parsed_records
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
 from tests.lending.liqwid.transactions.backend import FixtureBackend
+from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.backend import live_records
 
 TX = "ab" * 32
@@ -297,13 +303,47 @@ def test_no_eligible_utxo_re_raises_the_last_check_error():
         choose_action_utxo(utxos, check=capped)
 
 
-@pytest.mark.parametrize("excluded", [True, False])
-def test_nothing_to_choose_from_is_no_liquidity(excluded):
+@pytest.mark.parametrize("excluded", [True, False], ids=["excluded", "none"])
+def test_nothing_left_to_choose_is_no_action_utxo(excluded):
     utxos = [_action(i) for i in range(2)] if excluded else []
     exclude = {f"{TX}#0", f"{TX}#1"} if excluded else ()
-    with pytest.raises(InsufficientLiquidityError) as info:
+    with pytest.raises(NoActionUtxoError) as info:
+        choose_action_utxo(utxos, check=_passes, exclude=exclude, market="Ada")
+    assert info.value.market == "Ada"
+    assert "Ada" in str(info.value)
+    assert not isinstance(info.value, InsufficientLiquidityError)
+    with pytest.raises(NoActionUtxoError) as info:
         choose_action_utxo(utxos, check=_passes, exclude=exclude)
-    assert (info.value.needed, info.value.available) == (0, 0)
+    assert info.value.market is None
+
+
+def test_utxos_left_that_cannot_pay_are_a_genuine_shortfall():
+    utxos = [_action(i, lovelace=(i + 1) * 10_000_000) for i in range(3)]
+    with pytest.raises(InsufficientLiquidityError) as info:
+        choose_action_utxo(
+            utxos,
+            check=_needs(90_000_000),
+            exclude={f"{TX}#2"},
+            market="Ada",
+        )
+    assert (info.value.needed, info.value.available) == (90_000_000, 20_000_000)
+
+
+def test_a_market_without_live_action_utxos_is_named():
+    from tests.lending.liqwid.transactions.replay import fixture
+
+    backend = capture_backend(fixture("supply_ada"), live_inputs=False)
+    ada = default_deployment().market_by_name("Ada")
+    records = resolve_market(backend, ada)
+    assert resolve_action_utxos(backend, ada, records.params_datum) == []
+    with pytest.raises(NoActionUtxoError) as info:
+        resolve_flow_action(
+            backend,
+            records,
+            flow=Flow.SUPPLY,
+            deltas=ActionDeltas(supply=100_000_000),
+        )
+    assert info.value.market == "Ada"
 
 
 def test_an_action_utxo_names_its_out_ref_and_underlying():

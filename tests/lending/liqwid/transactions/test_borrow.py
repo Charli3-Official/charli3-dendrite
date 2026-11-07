@@ -23,6 +23,7 @@ from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.errors import CapExceededError
 from charli3_dendrite.lending.liqwid.transactions.errors import CollateralCountError
 from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnhealthyLoanError
 from charli3_dendrite.lending.liqwid.transactions.errors import UnsupportedMarketError
 from charli3_dendrite.lending.liqwid.transactions.resolve import LoanRecord
@@ -33,9 +34,11 @@ from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.infra import EvalContext
 from charli3_dendrite.lending.transactions.utxos import script_hash_of
 from charli3_dendrite.utility import posix_ms_to_slot
+from tests.lending.liqwid.transactions.backend import GONE
 from tests.lending.liqwid.transactions.backend import FixtureBackend
 from tests.lending.liqwid.transactions.backend import capture_backend
 from tests.lending.liqwid.transactions.backend import live_records
+from tests.lending.liqwid.transactions.backend import without_actions
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import build
 from tests.lending.liqwid.transactions.replay import captured_mints
@@ -325,6 +328,52 @@ def test_a_borrow_more_resolved_from_the_backend_builds_the_captured_one(
     assert protocol_outputs(built, validator_credentials(snapshot)) == (
         captured_protocol_outputs(fix, validator_credentials(snapshot))
     )
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_an_open_with_no_action_utxo_left_is_retryable(deployment_hashes, gone):
+    fix = fixture("open_single")
+    captured = BorrowSnapshot.from_capture(fix)
+    backend, exclude = without_actions(
+        _capture_backend(fix),
+        gone,
+        captured.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        BorrowSnapshot.from_backend(
+            backend,
+            market="Ada",
+            owner_address=captured.owner_address,
+            amount=captured.amount,
+            collateral=captured.collateral,
+            funding=captured.funding,
+            exclude=exclude,
+        )
+    assert raised.value.market == "Ada"
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_a_borrow_more_with_no_action_utxo_left_is_retryable(
+    deployment_hashes,
+    gone,
+):
+    fix = fixture("increase_ada")
+    captured = IncreaseSnapshot.from_capture(fix)
+    backend, exclude = without_actions(
+        _capture_backend(fix),
+        gone,
+        captured.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        IncreaseSnapshot.from_backend(
+            backend,
+            loan_utxo="{}#{}".format(*captured.loan.utxo.out_ref),
+            owner_address=captured.owner_address,
+            amount=captured.amount,
+            funding=captured.funding,
+            exclude=exclude,
+        )
+    assert raised.value.market == captured.market.name
 
 
 def _live_backend():

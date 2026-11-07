@@ -23,6 +23,7 @@ from charli3_dendrite.lending.liqwid.transactions.errors import (
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import MarketAwaitingBatchError
 from charli3_dendrite.lending.liqwid.transactions.errors import MinValueError
+from charli3_dendrite.lending.liqwid.transactions.errors import NoActionUtxoError
 from charli3_dendrite.lending.liqwid.transactions.supply import RedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import SupplySnapshot
 from charli3_dendrite.lending.liqwid.transactions.supply import _build_supply
@@ -41,7 +42,9 @@ from charli3_dendrite.lending.transactions.utxos import ogmios_entry
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 from charli3_dendrite.utility import posix_ms_to_slot
 from charli3_dendrite.utility import slot_to_posix_ms
+from tests.lending.liqwid.transactions.backend import GONE
 from tests.lending.liqwid.transactions.backend import capture_backend
+from tests.lending.liqwid.transactions.backend import without_actions
 from tests.lending.liqwid.transactions.replay import Built
 from tests.lending.liqwid.transactions.replay import assert_replays
 from tests.lending.liqwid.transactions.replay import block_slot
@@ -373,6 +376,25 @@ def test_a_live_supply_at_the_batch_deadline_waits_for_the_batch():
         )
 
 
+@pytest.mark.parametrize("gone", GONE)
+def test_a_supply_with_no_action_utxo_left_is_retryable(gone):
+    fix, captured = _supply("supply_ada")
+    backend, exclude = without_actions(
+        capture_backend(fix),
+        gone,
+        captured.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        SupplySnapshot.from_backend(
+            backend,
+            market="Ada",
+            owner_address=_wallet(fix),
+            amount=100_000_000,
+            exclude=exclude,
+        )
+    assert raised.value.market == "Ada"
+
+
 def test_a_live_redeem_of_an_amount_burns_the_fewest_qtokens():
     fix = fixture("redeem_ada")
     snapshot = RedeemSnapshot.from_backend(
@@ -546,3 +568,23 @@ def test_a_live_redeem_below_the_minimum_is_refused():
             owner_address=_wallet(fix),
             amount=ADA_MIN_VALUE - 2,
         )
+
+
+@pytest.mark.parametrize("gone", GONE)
+def test_a_redeem_with_no_action_utxo_left_is_retryable(gone):
+    fix, captured = _redeem("redeem_ada")
+    backend, exclude = without_actions(
+        capture_backend(fix),
+        gone,
+        captured.action.out_ref,
+    )
+    with pytest.raises(NoActionUtxoError) as raised:
+        RedeemSnapshot.from_backend(
+            backend,
+            market="Ada",
+            owner_address=_wallet(fix),
+            amount=99_999_998,
+            exclude=exclude,
+        )
+    assert raised.value.market == "Ada"
+    assert not isinstance(raised.value, InsufficientLiquidityError)

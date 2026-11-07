@@ -12,7 +12,8 @@
   a wallet query with an asset filter only those holding the asset);
 - ``last_block``: one block at ``tip_time`` (POSIX seconds).
 
-:func:`capture_backend` seeds one from a captured transaction.
+:func:`capture_backend` seeds one from a captured transaction; :func:`without_live`
+drops live records from one, as a transaction spending them does.
 """
 
 from __future__ import annotations
@@ -25,9 +26,12 @@ from pycardano import Address
 from charli3_dendrite.dataclasses.models import BlockInfo
 from charli3_dendrite.dataclasses.models import BlockList
 from charli3_dendrite.dataclasses.models import PoolStateInfo
+from charli3_dendrite.lending.transactions.common import out_ref_of
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
+from charli3_dendrite.lending.transactions.utxos import utxo_from_info
 from charli3_dendrite.lending.transactions.utxos import utxo_to_info
+from charli3_dendrite.lending.units import out_ref_text
 from tests.lending.liqwid.records import UTXO_KINDS
 from tests.lending.liqwid.records import record_info
 from tests.lending.liqwid.records import records_of
@@ -180,3 +184,41 @@ def capture_backend(
         utxos=[*(u for u in refs if u.ref_script), *inputs, *utxos],
         tip_time=fix["block_time"] if tip_time is None else tip_time,
     )
+
+
+def without_live(backend: FixtureBackend, *out_refs: str) -> FixtureBackend:
+    """``backend`` no longer serving the live records at ``out_refs``.
+
+    ``out_refs`` are ``<tx hash>#<index>``; the records drop out as a transaction
+    spending them (a market batch spending its action UTxOs) leaves the chain.
+    Returns ``backend``.
+    """
+    gone = set(out_refs)
+    backend.records = [
+        info
+        for info in backend.records
+        if out_ref_text(out_ref_of(utxo_from_info(info))) not in gone
+    ]
+    return backend
+
+
+# How an action UTxO is gone: spent by a running batch (no longer live) or kept
+# live but excluded (reported spent by an earlier attempt).
+GONE = ("batched", "excluded")
+
+
+def without_actions(
+    backend: FixtureBackend,
+    gone: str,
+    *out_refs: str,
+) -> tuple[FixtureBackend, frozenset[str]]:
+    """``backend`` and the out-refs to exclude once the UTxOs at ``out_refs`` are gone.
+
+    ``gone`` is one of `GONE`: ``"batched"`` drops them from the live records and
+    excludes nothing; ``"excluded"`` keeps them live and excludes them.
+    """
+    if gone == "batched":
+        return without_live(backend, *out_refs), frozenset()
+    if gone == "excluded":
+        return backend, frozenset(out_refs)
+    raise ValueError(f"unknown way for an action UTxO to be gone: {gone!r}")

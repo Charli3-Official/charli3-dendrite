@@ -153,6 +153,8 @@ class SupplySnapshot(PoolActionSnapshot):
             KeyError: No market is named ``market``.
             MinValueError: ``amount`` is below the market minimum.
             CapExceededError: No eligible action UTxO has room under the cap.
+            NoActionUtxoError: The market has no action UTxO left to choose (its
+                batch is running, or every one is excluded).
             ActionUtxoSpentError: The pinned action UTxO is not live.
             MarketAwaitingBatchError: The market's batch deadline is too close.
         """
@@ -290,6 +292,8 @@ class RedeemSnapshot(PoolActionSnapshot):
             KeyError: No market is named ``market``.
             MinValueError: The payout is below the market minimum.
             InsufficientLiquidityError: No eligible action UTxO holds the payout.
+            NoActionUtxoError: The market has no action UTxO left to choose (its
+                batch is running, or every one is excluded).
             ActionUtxoSpentError: The pinned action UTxO is not live.
             MarketAwaitingBatchError: The market's batch deadline is too close.
         """

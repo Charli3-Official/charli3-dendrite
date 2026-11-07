@@ -192,9 +192,10 @@ class LiqwidTxBuilder(AbstractLendingTxBuilder):
                 ``MinValueError``, ``CapExceededError``,
                 ``InsufficientLiquidityError``, ``CollateralCountError``,
                 ``UnhealthyLoanError``, ``RepayAmountError``,
-                ``MarketAwaitingBatchError``, ``ActionUtxoSpentError``,
-                ``UnsupportedMarketError``, ``UnsupportedLoanError``,
-                ``UnsupportedCollateralError``, ``MissingFeedError``).
+                ``MarketAwaitingBatchError``, ``NoActionUtxoError``,
+                ``ActionUtxoSpentError``, ``UnsupportedMarketError``,
+                ``UnsupportedLoanError``, ``UnsupportedCollateralError``,
+                ``MissingFeedError``).
         """
         if action not in _ACTIONS:
             raise ValueError(

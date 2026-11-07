@@ -300,6 +300,9 @@ class RepaySnapshot(PoolActionSnapshot):
             ValueError: ``repay`` is negative, a close is given a collateral
                 target, or a target quantity is negative (before anything is
                 read).
+            NoActionUtxoError: The market has no action UTxO left to choose for
+                an action-spending repay (its batch is running, or every one is
+                excluded).
             LiqwidBuildError: a limit, an action UTxO, a record or a feed the
                 repay needs is refused or missing.
         """
