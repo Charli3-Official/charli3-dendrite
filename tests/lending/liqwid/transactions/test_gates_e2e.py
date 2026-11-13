@@ -21,6 +21,11 @@ import cbor2
 import pytest
 from pycardano import Address
 from pycardano import Network
+from pycardano import RawCBOR
+from pycardano import ScriptHash
+from pycardano import TransactionBuilder
+from pycardano import TransactionOutput
+from pycardano import Value
 from pycardano import VerificationKeyHash
 
 from charli3_dendrite.lending.liqwid.datums import decode_oracle_feed
@@ -30,6 +35,7 @@ from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow import _build_borrow
 from charli3_dendrite.lending.liqwid.transactions.borrow import build_borrow
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import IncreaseSnapshot
+from charli3_dendrite.lending.liqwid.transactions.borrow_more import _build_increase
 from charli3_dendrite.lending.liqwid.transactions.borrow_more import build_increase
 from charli3_dendrite.lending.liqwid.transactions.builder import LiqwidTxBuilder
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
@@ -46,6 +52,12 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndBorrowSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    SupplyAndCollateralSnapshot,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    SupplyAndIncreaseSnapshot,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_remove_and_redeem,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
@@ -53,6 +65,12 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_borrow,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_collateral,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_increase,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
@@ -71,6 +89,8 @@ from charli3_dendrite.lending.liqwid.transactions.terms import ttl_cap_ms
 from charli3_dendrite.lending.transactions.base import ActionParams
 from charli3_dendrite.lending.transactions.base import LendingAction
 from charli3_dendrite.lending.transactions.errors import OgmiosEvaluationError
+from charli3_dendrite.lending.transactions.infra import EvalContext
+from charli3_dendrite.lending.transactions.infra import evaluate_tx_cbor
 from charli3_dendrite.lending.transactions.utxos import Utxo
 from charli3_dendrite.lending.transactions.utxos import utxo_from_dict
 from charli3_dendrite.lending.transactions.utxos import utxo_from_info
@@ -93,6 +113,7 @@ from tests.lending.liqwid.transactions.replay import labels
 from tests.lending.liqwid.transactions.replay import mints
 from tests.lending.liqwid.transactions.replay import mutated
 from tests.lending.liqwid.transactions.replay import needs_ogmios
+from tests.lending.liqwid.transactions.replay import ogmios_entries
 from tests.lending.liqwid.transactions.replay import replace_reference
 from tests.lending.liqwid.transactions.replay import set_upper_bound_ms
 from tests.lending.liqwid.transactions.replay import shift_action_datum
@@ -102,6 +123,8 @@ from tests.lending.liqwid.transactions.replay import synthetic_utxo
 from tests.lending.liqwid.transactions.replay import with_params
 from tests.lending.liqwid.transactions.test_combos import _closing_night_loan
 from tests.lending.liqwid.transactions.test_combos import _repay_and_redeem
+from tests.lending.liqwid.transactions.test_combos import _supply_and_collateral
+from tests.lending.liqwid.transactions.test_combos import _supply_and_increase
 from tests.lending.liqwid.transactions.test_resolve import _reference_utxos
 from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
     deployment_hashes,
@@ -474,6 +497,13 @@ def test_a_remove_and_redeem_is_bounded_by_its_redeem_market_only():
 # NIGHT loan ``supply_and_borrow_ada_night`` opened, redeeming its qAda on Ada.
 
 
+def _night_loan_scripts() -> list[Utxo]:
+    """The NIGHT loan validator's reference script UTxOs."""
+    return [
+        u for u in fixture_utxos(fixture("remove_and_redeem_night")) if u.ref_script
+    ]
+
+
 def _close_and_redeem() -> tuple[RepayAndRedeemSnapshot, Callable[..., list[str]]]:
     """The close of that NIGHT loan redeeming its qAda, and its evaluation.
 
@@ -483,9 +513,7 @@ def _close_and_redeem() -> tuple[RepayAndRedeemSnapshot, Callable[..., list[str]
     """
     fix, backend, loan = _closing_night_loan()
     snapshot = _repay_and_redeem(fix, backend, loan)
-    scripts = [
-        u for u in fixture_utxos(fixture("remove_and_redeem_night")) if u.ref_script
-    ]
+    scripts = _night_loan_scripts()
 
     def purposes(*mutations: Mutation) -> list[str]:
         built = build(
@@ -540,6 +568,145 @@ def test_a_close_and_redeem_bound_past_the_loan_markets_deadline_is_refused():
     assert info.value.code == SCRIPT_FAILURE, info.value
     failed = sorted(failure["validator"]["purpose"] for failure in info.value.data)
     assert failed == ["withdraw"]
+
+
+# --- supply-and-increase and supply-and-collateral ----------------------------------
+
+# A supply of Ada joined to the NIGHT loan ``supply_and_borrow_ada_night`` opened,
+# resolved live from the backend of ``_closing_night_loan``, as in the close and
+# redeem above. Each transaction carries two more outputs, the ones a caller adds
+# around the combination: a script output with a ~300 byte inline datum and a
+# min-ADA output. The size is that of the unsigned transaction.
+
+# Room left under the protocol's maximum transaction size for the witnesses, the
+# change output and the fee.
+SIZE_MARGIN = 4_000
+# Plutus data byte strings are at most 64 bytes, so the datum is a list of them.
+DATUM_FIELDS = 5
+DATUM_FIELD_BYTES = 58
+EXTRA_SCRIPT_OUTPUT_LOVELACE = 5_000_000
+EXTRA_PLAIN_OUTPUT_LOVELACE = 2_000_000
+
+
+def _extra_outputs(owner: str) -> Mutation:
+    """Add a script output with a ~300 byte inline datum and a min-ADA output."""
+    script = Address(
+        ScriptHash(bytes.fromhex("42" * 28)),
+        network=Network.MAINNET,
+    )
+    fields = [bytes([0x07 + i]) * DATUM_FIELD_BYTES for i in range(DATUM_FIELDS)]
+    datum = cbor2.dumps(cbor2.CBORTag(121, fields))
+    assert 295 <= len(datum) <= 305
+
+    def run(tx_builder: TransactionBuilder) -> None:
+        tx_builder.add_output(
+            TransactionOutput(
+                script,
+                Value(EXTRA_SCRIPT_OUTPUT_LOVELACE),
+                datum=RawCBOR(datum),
+            ),
+        )
+        tx_builder.add_output(
+            TransactionOutput(
+                Address.from_primitive(owner),
+                Value(EXTRA_PLAIN_OUTPUT_LOVELACE),
+            ),
+        )
+
+    return run
+
+
+def _evaluated_with_extra_outputs(
+    contribute: Callable[..., None],
+    snapshot: Any,  # noqa: ANN401
+    fix: dict[str, Any],
+    loan: Utxo,
+    *,
+    owner: str,
+    label: str,
+) -> list[str]:
+    """Evaluate ``snapshot`` plus the extra outputs; print its size and budgets.
+
+    Every purpose Ogmios returns has a positive budget, and the unsigned
+    transaction leaves ``SIZE_MARGIN`` bytes under the maximum transaction size.
+    """
+    built = build(
+        mutated(contribute, _extra_outputs(owner)),
+        snapshot,
+        slot=block_slot(fix),
+    )
+    utxos = [*fixture_utxos(fix), *_night_loan_scripts(), loan]
+    budgets = evaluate_tx_cbor(built.cbor, ogmios_entries(utxos))
+    for each in budgets:
+        assert each["budget"]["memory"] > 0
+        assert each["budget"]["cpu"] > 0
+    size = len(bytes.fromhex(built.cbor))
+    limit = EvalContext(last_block_slot=0).protocol_param.max_tx_size - SIZE_MARGIN
+    units = {
+        f"{b['validator']['purpose']}#{b['validator']['index']}": (
+            b["budget"]["memory"],
+            b["budget"]["cpu"],
+        )
+        for b in budgets
+    }
+    total = (
+        sum(b["budget"]["memory"] for b in budgets),
+        sum(b["budget"]["cpu"] for b in budgets),
+    )
+    print(  # noqa: T201 - the figures are the gate's record
+        f"{label}: {size} bytes (limit {limit}); execution units "
+        f"(memory, cpu) {units}; total {total}",
+    )
+    assert size < limit
+    return sorted(b["validator"]["purpose"] for b in budgets)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_increase_of_another_markets_loan_evaluates():
+    """A supply of Ada and a borrow more on a NIGHT loan evaluates in one transaction.
+
+    The Ada supply runs first and the NIGHT borrow more last on one funding: the
+    qAda policy (the mint), the Ada action UTxO and the loan spends, the loan-token
+    policy and the borrow staking script all pass with the two extra outputs, and
+    the transaction stays under the size limit.
+    """
+    fix, backend, loan = _closing_night_loan()
+    snapshot = _supply_and_increase(fix, backend, loan)
+    assert snapshot.supply.market.name == "Ada"
+    assert snapshot.increase.market.name == "NIGHT"
+    purposes = _evaluated_with_extra_outputs(
+        build_supply_and_increase,
+        snapshot,
+        fix,
+        loan.utxo,
+        owner=snapshot.supply.owner_address,
+        label="supply-and-increase",
+    )
+    assert purposes == ["mint", "mint", "spend", "spend", "spend", "withdraw"]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_of_another_markets_loan_evaluates():
+    """A supply of Ada and its qAda added to a NIGHT loan evaluates in one transaction.
+
+    The collateral change spends no action UTxO: the qAda policy (the mint), the Ada
+    action UTxO and the loan spends, the loan-token policy and the borrow staking
+    script all pass with the two extra outputs, and the transaction stays under the
+    size limit.
+    """
+    fix, backend, loan = _closing_night_loan()
+    snapshot = _supply_and_collateral(fix, backend, loan)
+    assert snapshot.supply.market.name == "Ada"
+    assert snapshot.collateral.market.name == "NIGHT"
+    purposes = _evaluated_with_extra_outputs(
+        build_supply_and_collateral,
+        snapshot,
+        fix,
+        loan.utxo,
+        owner=snapshot.supply.owner_address,
+        label="supply-and-collateral",
+    )
+    assert purposes == ["mint", "mint", "spend", "spend", "withdraw"]
 
 
 @pytest.mark.parametrize("label", ["supply_ada", "redeem_ada"])
@@ -679,6 +846,9 @@ ADA_BORROW = 100_000_000
 WALLET_QADA = 47_000_000_000
 LOAN_QADA = 100_000_000_000
 REMOVED_QADA = 20_000_000_000
+# The scripts that refuse the refused combinations below.
+FAILED_SUPPLY_AND_INCREASE = ["mint", "spend", "spend", "withdraw"]
+FAILED_SUPPLY_AND_COLLATERAL = ["spend", "withdraw"]
 
 
 def _ada() -> Any:  # noqa: ANN401
@@ -1013,6 +1183,78 @@ def test_a_close_and_redeem_of_the_loan_markets_own_qtoken_is_refused():
     combined = RepayAndRedeemSnapshot(repay=close, redeems=(redeem,))
     failed = _script_refused(_redeem_then_repay, combined, (loan, pay))
     assert failed == ["mint", "spend", "spend", "withdraw"]
+
+
+def _supply_then_increase(
+    tx_builder: Any,  # noqa: ANN401
+    *,
+    snapshot: SupplyAndIncreaseSnapshot,
+) -> None:
+    """Both legs of a supply-and-increase, without the combination's market check."""
+    _build_supply(tx_builder, snapshot.supply, stash=snapshot)
+    _build_increase(tx_builder, snapshot.increase, stash=snapshot)
+
+
+def _supply_then_collateral(
+    tx_builder: Any,  # noqa: ANN401
+    *,
+    snapshot: SupplyAndCollateralSnapshot,
+) -> None:
+    """Both legs of a supply-and-collateral, without the combination's market check."""
+    _build_supply(tx_builder, snapshot.supply, stash=snapshot)
+    _build_collateral(tx_builder, snapshot.collateral, stash=snapshot)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_increase_on_one_market_is_refused_by_the_scripts():
+    """A supply on one Ada action UTxO next to a borrow more of an Ada loan.
+
+    The Ada loan holds 100e9 qAda; the borrow more spends the other Ada action UTxO
+    and its collateral target adds the qAda the supply mints. Each leg evaluates
+    alone (above); together the scripts refuse the transaction. This is why
+    `SupplyAndIncreaseSnapshot` refuses one market.
+    """
+    loan = _ada_loan_holding_qada()
+    owner = _one_market_wallet()[0].address
+    supply = _supply(_ada_action(SUPPLY_SIDE))
+    unit = _ada().qtoken_policy
+    increase = IncreaseSnapshot.from_backend(
+        _one_market_backend(loan),
+        loan_utxo=out_ref_text(loan.out_ref),
+        owner_address=owner,
+        amount=ADA_BORROW,
+        collateral={unit: LOAN_QADA + supply.qtokens},
+        action_utxo=_ada_action(BORROW_SIDE),
+        funding=supply.funding,
+    )
+    combined = SupplyAndIncreaseSnapshot(supply=supply, increase=increase)
+    failed = _script_refused(_supply_then_increase, combined, (loan,))
+    assert failed == FAILED_SUPPLY_AND_INCREASE
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_on_the_loans_market_is_refused_by_the_scripts():
+    """A supply on an Ada action UTxO next to a collateral change of an Ada loan.
+
+    The Ada loan holds 100e9 qAda and its collateral target adds the qAda the supply
+    mints. Each leg evaluates alone (above); together the scripts refuse the
+    transaction. This is why `SupplyAndCollateralSnapshot` refuses the loan's own
+    market.
+    """
+    loan = _ada_loan_holding_qada()
+    owner = _one_market_wallet()[0].address
+    supply = _supply(_ada_action(BORROW_SIDE))
+    unit = _ada().qtoken_policy
+    collateral = CollateralSnapshot.from_backend(
+        _one_market_backend(loan),
+        loan_utxo=out_ref_text(loan.out_ref),
+        owner_address=owner,
+        collateral={unit: LOAN_QADA + supply.qtokens},
+        funding=supply.funding,
+    )
+    combined = SupplyAndCollateralSnapshot(supply=supply, collateral=collateral)
+    failed = _script_refused(_supply_then_collateral, combined, (loan,))
+    assert failed == FAILED_SUPPLY_AND_COLLATERAL
 
 
 # --- loans named 30 and 31 ----------------------------------------------------------
