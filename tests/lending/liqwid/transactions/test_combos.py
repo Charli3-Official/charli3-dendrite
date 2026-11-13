@@ -1,14 +1,15 @@
 """Liqwid V2 combinations of an action leg and a loan leg in one transaction.
 
-Supply-and-borrow, supply-and-increase, remove-and-redeem and repay-and-redeem.
-Each combination is the exact union of its legs: a supply then an open, a supply
-then a borrow more, a redeem then a collateral change, or redeems then a repay,
-with one funding stash, one owner signer, one borrow staking withdrawal, the
-references merged by out-ref and the validity window ending by the batch deadline
-of each market whose action UTxO is spent. The replays rebuild the captured
-combinations; the live builds resolve them through an offline backend (a
-repay-and-redeem and a supply-and-increase have no capture: they close, or borrow
-more on, the loan a captured supply-and-borrow opened).
+Supply-and-borrow, supply-and-increase, supply-and-collateral, remove-and-redeem
+and repay-and-redeem. Each combination is the exact union of its legs: a supply
+then an open, a supply then a borrow more, a supply then a collateral change, a
+redeem then a collateral change, or redeems then a repay, with one funding stash,
+one owner signer, one borrow staking withdrawal, the references merged by out-ref
+and the validity window ending by the batch deadline of each market whose action
+UTxO is spent. The replays rebuild the captured combinations; the live builds
+resolve them through an offline backend (a repay-and-redeem, a supply-and-increase
+and a supply-and-collateral have no capture: they close, borrow more on, or add
+collateral to, the loan a captured supply-and-borrow opened).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from charli3_dendrite.lending.liqwid.datums import datum_style
 from charli3_dendrite.lending.liqwid.datums import decode_action
 from charli3_dendrite.lending.liqwid.datums import decode_loan
 from charli3_dendrite.lending.liqwid.deployment import default_deployment
+from charli3_dendrite.lending.liqwid.transactions import capture as capture_module
 from charli3_dendrite.lending.liqwid.transactions import combos
 from charli3_dendrite.lending.liqwid.transactions import resolve
 from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
@@ -40,6 +42,9 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndBorrowSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    SupplyAndCollateralSnapshot,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndIncreaseSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
@@ -52,9 +57,13 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_borrow,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_collateral,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_increase,
 )
 from charli3_dendrite.lending.liqwid.transactions.errors import CapExceededError
+from charli3_dendrite.lending.liqwid.transactions.errors import CollateralCountError
 from charli3_dendrite.lending.liqwid.transactions.errors import (
     InsufficientLiquidityError,
 )
@@ -122,6 +131,8 @@ def _legs(snapshot):
         return snapshot.supply, snapshot.borrow
     if isinstance(snapshot, SupplyAndIncreaseSnapshot):
         return snapshot.supply, snapshot.increase
+    if isinstance(snapshot, SupplyAndCollateralSnapshot):
+        return snapshot.supply, snapshot.collateral
     return snapshot.redeem, snapshot.collateral
 
 
@@ -1300,10 +1311,11 @@ def _as_capture(built, backend, snap):
 
     body = built.tx.transaction_body
     spent = [known[(bytes(i.transaction_id).hex(), i.index)] for i in body.inputs]
+    action, loan_leg = _legs(snap)
     credentials = {
-        snap.supply.records.params_datum.action_validator,
-        snap.increase.records.params_datum.action_validator,
-        snap.increase.records.params_datum.loan_validator,
+        action.records.params_datum.action_validator,
+        loan_leg.records.params_datum.action_validator,
+        loan_leg.records.params_datum.loan_validator,
     }
     outputs = [
         {
@@ -1360,6 +1372,287 @@ def test_a_supply_and_increase_capture_rebuilds_its_snapshot(held):
     # live resolution, so the rebuild takes the resolved references.
     captured.increase.script_refs = snap.increase.script_refs
     rebuilt = _build(build_supply_and_increase, captured, fix)
+    assert redeemers(rebuilt) == redeemers(built)
+    assert mints(rebuilt) == mints(built)
+    assert withdrawals(rebuilt) == withdrawals(built)
+    assert required_signers(rebuilt) == required_signers(built)
+    assert reference_inputs(rebuilt) == reference_inputs(built)
+    assert validity(rebuilt) == validity(built)
+    assert protocol_outputs(rebuilt, _credentials(captured)) == protocol_outputs(
+        built,
+        _credentials(captured),
+    )
+
+
+# --- supply-and-collateral -----------------------------------------------------
+
+# A supply of Ada whose qADA, and any qTokens the wallet posts, join the NIGHT loan
+# ``supply_and_borrow_ada_night`` opened, resolved live from the backend of
+# ``_closing_night_loan``. The collateral change spends no action UTxO, so the
+# transaction spends one action UTxO and the loan.
+
+
+def _supply_and_collateral(fix, backend, loan, **kwargs):
+    """A supply of Ada added to the collateral of ``loan``, from ``backend``."""
+    captured = SupplyAndBorrowSnapshot.from_capture(fix)
+    kwargs.setdefault("supply_amount", captured.supply.amount)
+    kwargs.setdefault("rng", random.Random(0))
+    return SupplyAndCollateralSnapshot.from_backend(
+        backend,
+        loan_utxo=out_ref_text(loan.utxo.out_ref),
+        supply_market=kwargs.pop("supply_market", "Ada"),
+        owner_address=captured.borrow.owner_address,
+        funding=captured.borrow.funding,
+        **kwargs,
+    )
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_resolved_from_the_backend_adds_the_minted_qtokens():
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    assert snap.supply.market.name == "Ada"
+    assert snap.collateral.market.name == "NIGHT"
+    assert snap.collateral.collateral == {
+        **loan.collateral,
+        QADA: loan.collateral.get(QADA, 0) + snap.supply.qtokens,
+    }
+    assert snap.collateral.loan.utxo.out_ref == loan.utxo.out_ref
+    assert snap.collateral.funding == snap.supply.funding
+    assert snap.wallet_collateral == {}
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_with_wallet_collateral_adds_both():
+    fix, backend, loan = _closing_night_loan()
+    held = {QADA: 1_000_000}
+    snap = _supply_and_collateral(fix, backend, loan, wallet_collateral=held)
+    assert snap.wallet_collateral == held
+    assert snap.collateral.collateral == {
+        QADA: loan.collateral[QADA] + snap.supply.qtokens + held[QADA],
+    }
+    built = _build(build_supply_and_collateral, snap, fix)
+    assert len(required_signers(built)) == 1
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_spends_one_action_utxo_and_the_loan():
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    built = _build(build_supply_and_collateral, snap, fix)
+    spent = [r for r in redeemers(built) if r[0] == "spend"]
+    # The supply's action UTxO and the loan; the collateral change spends no other.
+    assert len(spent) == 2
+    assert required_signers(built) == [loan.datum.owner]
+    assert len(withdrawals(built)) == 1
+    # The supply mints the qADA; the loan token is re-minted under its flipped name.
+    assert {m for m in mints(built) if m[0] == QADA} == {(QADA, snap.supply.qtokens)}
+    assert len(mints(built)) == 3
+    assert snap.supply.action.out_ref in {
+        f"{bytes(i.transaction_id).hex()}#{i.index}"
+        for i in built.tx.transaction_body.inputs
+    }
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_on_the_loans_market_is_refused_after_the_loan_read(
+    monkeypatch,
+):
+    fix, backend, loan = _closing_night_loan()
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError
+
+    monkeypatch.setattr(SupplySnapshot, "from_backend", spy)
+    with pytest.raises(UnsupportedMarketError) as raised:
+        _supply_and_collateral(fix, backend, loan, supply_market="NIGHT")
+    assert raised.value.market == "NIGHT"
+    assert "two markets" in raised.value.reason
+    assert calls == []
+
+
+def test_a_negative_wallet_collateral_is_refused_before_any_read_on_a_collateral():
+    backend = FixtureBackend()
+    with pytest.raises(ValueError, match="negative"):
+        SupplyAndCollateralSnapshot.from_backend(
+            backend,
+            loan_utxo="aa" * 32 + "#0",
+            supply_market="Ada",
+            owner_address=SupplySnapshot.from_capture(
+                fixture("supply_ada"),
+            ).owner_address,
+            supply_amount=1_000_000_000,
+            wallet_collateral={QADA: -1},
+        )
+    assert backend.calls == backend.queries == []
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+@pytest.mark.parametrize(
+    "tamper", ["minted-less-one", "minted-plus-one", "drops-a-unit"]
+)
+def test_a_built_supply_and_collateral_not_adding_exactly_the_minted_qtokens_is_refused(
+    tamper,
+):
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    q, minted = loan.collateral[QADA], snap.supply.qtokens
+    if tamper == "drops-a-unit":
+        # The loan holds a unit beside its qADA that the target leaves out.
+        qnight, held = _qtoken("NIGHT"), loan.utxo
+        snap.collateral.loan = dataclasses.replace(
+            loan,
+            utxo=dataclasses.replace(
+                held,
+                assets=sorted([*held.assets, (qnight, "", 77)]),
+            ),
+        )
+        assert snap.collateral.loan.collateral == {QADA: q, qnight: 77}
+        assert snap.collateral.collateral == {QADA: q + minted}
+    else:
+        step = -1 if tamper == "minted-less-one" else 1
+        snap.collateral.collateral = {QADA: q + minted + step}
+    tx_builder = _empty_builder()
+    with pytest.raises(ValueError, match="adds"):
+        build_supply_and_collateral(tx_builder, snapshot=snap)
+    assert not tx_builder.inputs
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_supply_and_collateral_legs_reading_two_states_of_one_market_are_refused():
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    supply = snap.supply
+    state = supply.records.state
+    index = state.info.tx_index + 1
+    other = dataclasses.replace(
+        state,
+        out_ref=f"{state.info.tx_hash}#{index}",
+        info=state.info.model_copy(update={"tx_index": index}),
+    )
+    snap.supply = dataclasses.replace(
+        supply,
+        records=dataclasses.replace(supply.records, state=other),
+    )
+    tx_builder = _empty_builder()
+    with pytest.raises(ValueError, match="MarketState"):
+        build_supply_and_collateral(tx_builder, snapshot=snap)
+    assert not tx_builder.inputs
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_built_supply_and_collateral_on_one_market_is_refused():
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    snap.supply = dataclasses.replace(snap.supply, market=snap.collateral.market)
+    tx_builder = _empty_builder()
+    with pytest.raises(UnsupportedMarketError, match="two markets"):
+        build_supply_and_collateral(tx_builder, snapshot=snap)
+    assert not tx_builder.inputs
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_the_supply_leg_comes_before_the_collateral_leg(monkeypatch):
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    order = []
+    for name, leg in (
+        ("supply", combos._build_supply),
+        ("collateral", combos._build_collateral),
+    ):
+
+        def spy(*args, _name=name, _leg=leg, **kwargs):
+            order.append(_name)
+            return _leg(*args, **kwargs)
+
+        monkeypatch.setattr(combos, f"_build_{name}", spy)
+    _build(build_supply_and_collateral, snap, fix)
+    assert order == ["supply", "collateral"]
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+@pytest.mark.parametrize("loan_market_first", [False, True])
+def test_a_supply_and_collateral_bound_is_the_supply_markets_deadline(
+    monkeypatch,
+    loan_market_first,
+):
+    fix, backend, loan = _closing_night_loan()
+    sab = SupplyAndBorrowSnapshot.from_capture(fix)
+    night, ada = sab.borrow.records, sab.supply.records
+    night_cap = ttl_cap_ms(night.state_datum, night.params_datum)
+    ada_cap = ttl_cap_ms(ada.state_datum, ada.params_datum)
+    if loan_market_first:
+        # The loan market's deadline moved five minutes before Ada's: the collateral
+        # change checks no deadline, so it does not bound the transaction.
+        night_cap = ada_cap - 300_000
+        _serve_params(
+            monkeypatch,
+            "NIGHT",
+            {3: night_cap - night.state_datum.last_batch_ms},
+        )
+    backend.tip_time = min(night_cap, ada_cap) // 1000 - 600
+    snap = _supply_and_collateral(
+        fix,
+        backend,
+        loan,
+        valid_to_ms=max(night_cap, ada_cap) + 60_000,
+    )
+    assert snap.supply.valid_to_ms == ada_cap
+    built = _build(build_supply_and_collateral, snap, fix)
+    assert validity(built)[1] == posix_ms_to_slot(ada_cap)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_a_supply_and_collateral_over_the_collateral_count_is_refused():
+    fix, backend, loan = _closing_night_loan()
+    wallet = {f"{index:02x}" * 28: 1 for index in range(20)}
+    with pytest.raises(CollateralCountError):
+        _supply_and_collateral(fix, backend, loan, wallet_collateral=wallet)
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_only_the_funding_is_stashed_on_the_supply_and_collateral():
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan)
+    _build(build_supply_and_collateral, snap, fix)
+    assert snap.additional_utxo() == [ogmios_entry(u) for u in snap.supply.funding]
+    for leg in (snap.supply, snap.collateral):
+        with pytest.raises(RuntimeError):
+            leg.additional_utxo()
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+@pytest.mark.parametrize("held", [{}, {QADA: 1_000_000}], ids=["minted", "and-held"])
+def test_a_supply_and_collateral_capture_rebuilds_its_snapshot(monkeypatch, held):
+    fix, backend, loan = _closing_night_loan()
+    snap = _supply_and_collateral(fix, backend, loan, wallet_collateral=held)
+    built = _build(build_supply_and_collateral, snap, fix)
+    # The loan scripts are stand-ins that hash to the deployment's only through
+    # live resolution, so the capture takes the resolved references.
+    monkeypatch.setattr(
+        capture_module,
+        "loan_script_refs",
+        lambda *_: snap.collateral.script_refs,
+    )
+    captured = SupplyAndCollateralSnapshot.from_capture(
+        _as_capture(built, backend, snap),
+    )
+    assert captured.wallet_collateral == held
+    supply, collateral = captured.supply, captured.collateral
+    assert (supply.market, supply.amount, supply.qtokens) == (
+        snap.supply.market,
+        snap.supply.amount,
+        snap.supply.qtokens,
+    )
+    assert supply.action.out_ref == snap.supply.action.out_ref
+    assert collateral.loan.utxo.out_ref == loan.utxo.out_ref
+    assert collateral.collateral == snap.collateral.collateral
+    # Both legs share the wallet: every input but the action UTxO and the loan.
+    assert supply.funding == collateral.funding == snap.supply.funding
+    assert supply.owner_address == collateral.owner_address == snap.supply.owner_address
+    rebuilt = _build(build_supply_and_collateral, captured, fix)
     assert redeemers(rebuilt) == redeemers(built)
     assert mints(rebuilt) == mints(built)
     assert withdrawals(rebuilt) == withdrawals(built)

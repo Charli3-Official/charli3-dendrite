@@ -1,13 +1,14 @@
 """Liqwid V2 implementation of the lending transaction seam.
 
 ``resolve_snapshot`` maps :class:`ActionParams` onto one flow's ``from_backend``;
-``contribute`` adds a resolved snapshot by its type. The four combinations have no
+``contribute`` adds a resolved snapshot by its type. The five combinations have no
 ``LendingAction`` of their own: resolve them with
 ``SupplyAndBorrowSnapshot.from_backend`` /
 ``SupplyAndIncreaseSnapshot.from_backend`` /
+``SupplyAndCollateralSnapshot.from_backend`` /
 ``RemoveAndRedeemSnapshot.from_backend`` / ``RepayAndRedeemSnapshot.from_backend``
-and contribute them under ``BORROW`` / ``INCREASE`` / ``WITHDRAW`` / ``REPAY``. A
-redeem of a wallet's whole qToken balance is
+and contribute them under ``BORROW`` / ``INCREASE`` / ``MODIFY_COLLATERAL`` /
+``WITHDRAW`` / ``REPAY``. A redeem of a wallet's whole qToken balance is
 ``RedeemSnapshot.from_backend(..., withdraw_all=True)``.
 """
 
@@ -29,11 +30,17 @@ from charli3_dendrite.lending.liqwid.transactions.combos import RemoveAndRedeemS
 from charli3_dendrite.lending.liqwid.transactions.combos import RepayAndRedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.combos import SupplyAndBorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.combos import (
+    SupplyAndCollateralSnapshot,
+)
+from charli3_dendrite.lending.liqwid.transactions.combos import (
     SupplyAndIncreaseSnapshot,
 )
 from charli3_dendrite.lending.liqwid.transactions.combos import build_remove_and_redeem
 from charli3_dendrite.lending.liqwid.transactions.combos import build_repay_and_redeem
 from charli3_dendrite.lending.liqwid.transactions.combos import build_supply_and_borrow
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_collateral,
+)
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_supply_and_increase,
 )
@@ -86,7 +93,10 @@ _ACTIONS: dict[
         (RepaySnapshot, build_repay),
         (RepayAndRedeemSnapshot, build_repay_and_redeem),
     ),
-    LendingAction.MODIFY_COLLATERAL: ((CollateralSnapshot, build_collateral),),
+    LendingAction.MODIFY_COLLATERAL: (
+        (CollateralSnapshot, build_collateral),
+        (SupplyAndCollateralSnapshot, build_supply_and_collateral),
+    ),
 }
 
 # The actions on an existing loan: the loan names the market.
@@ -108,6 +118,8 @@ def chosen_action_utxos(snapshot: PoolActionSnapshot) -> frozenset[str]:
         legs = (snapshot.supply, snapshot.borrow)
     elif isinstance(snapshot, SupplyAndIncreaseSnapshot):
         legs = (snapshot.supply, snapshot.increase)
+    elif isinstance(snapshot, SupplyAndCollateralSnapshot):
+        legs = (snapshot.supply,)
     elif isinstance(snapshot, RemoveAndRedeemSnapshot):
         legs = (snapshot.redeem,)
     elif isinstance(snapshot, RepayAndRedeemSnapshot):
