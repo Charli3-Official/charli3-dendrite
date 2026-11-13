@@ -45,6 +45,12 @@ if TYPE_CHECKING:
         SupplyAndBorrowSnapshot,
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
+        SupplyAndCollateralSnapshot,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
+        SupplyAndIncreaseSnapshot,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
         build_remove_and_redeem,
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
@@ -52,6 +58,12 @@ if TYPE_CHECKING:
     )
     from charli3_dendrite.lending.liqwid.transactions.combos import (
         build_supply_and_borrow,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
+        build_supply_and_collateral,
+    )
+    from charli3_dendrite.lending.liqwid.transactions.combos import (
+        build_supply_and_increase,
     )
     from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
     from charli3_dendrite.lending.liqwid.transactions.errors import CapExceededError
@@ -132,9 +144,13 @@ _EXPORTS: dict[str, tuple[str, ...]] = {
         "RemoveAndRedeemSnapshot",
         "RepayAndRedeemSnapshot",
         "SupplyAndBorrowSnapshot",
+        "SupplyAndCollateralSnapshot",
+        "SupplyAndIncreaseSnapshot",
         "build_remove_and_redeem",
         "build_repay_and_redeem",
         "build_supply_and_borrow",
+        "build_supply_and_collateral",
+        "build_supply_and_increase",
     ),
     "terms": (
         "ActionDeltas",
@@ -218,6 +234,8 @@ __all__ = [
     "RepaySnapshot",
     "Settlement",
     "SupplyAndBorrowSnapshot",
+    "SupplyAndCollateralSnapshot",
+    "SupplyAndIncreaseSnapshot",
     "SupplySnapshot",
     "UnhealthyLoanError",
     "UnsupportedCollateralError",
@@ -236,6 +254,8 @@ __all__ = [
     "build_repay_and_redeem",
     "build_supply",
     "build_supply_and_borrow",
+    "build_supply_and_collateral",
+    "build_supply_and_increase",
     "check_reference_hygiene",
     "choose_action_utxo",
     "collateral_holdings",
