@@ -300,7 +300,7 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
             market=borrow_market,
             owner_address=owner_address,
             amount=borrow_amount,
-            collateral={supply.market.qtoken_policy: supply.qtokens},
+            collateral=_minted(supply),
             action_utxo=borrow_pin,
             exclude=exclude,
             valid_to_ms=valid_to_ms,
@@ -357,15 +357,16 @@ class SupplyAndIncreaseSnapshot(PoolActionSnapshot):
             *(loan.utxo for loan in capture.loan_outputs()),
         ]
         wallet = _CapturedWallet.of(capture, spent=spent, written=written)
-        added = _sum_units(
-            increase.collateral_out,
-            {unit: -qty for unit, qty in increase.loan.collateral.items()},
-            {supply.market.qtoken_policy: -supply.qtokens},
-        )
         return cls(
             supply=wallet.share(supply),
             increase=wallet.share(increase),
-            wallet_collateral=held_collateral(added),
+            wallet_collateral=held_collateral(
+                _wallet_added(
+                    increase.loan.collateral,
+                    increase.collateral_out,
+                    minted=_minted(supply),
+                ),
+            ),
         )
 
     @classmethod
@@ -408,34 +409,22 @@ class SupplyAndIncreaseSnapshot(PoolActionSnapshot):
                 (refused once the loan is read, before anything else).
             LiqwidBuildError: As the legs' ``from_backend``.
         """
-        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
-
-        wallet = held_collateral(wallet_collateral or {})
-        market = resolve_deployment(deployment).market_by_name(supply_market)
-        loan = resolve_loan(
-            backend,
-            loan_utxo,
-            deployment=deployment,
-            allow_spent=allow_spent,
-        )
-        _refuse_one_market(market, loan.market, _ONE_MARKET_SUPPLY_AND_INCREASE)
         supply_pin, increase_pin = action_utxos
-        supply = SupplySnapshot.from_backend(
+        supply, target, wallet = _supply_toward_loan(
             backend,
-            market=supply_market,
+            loan_utxo=loan_utxo,
+            supply_market=supply_market,
             owner_address=owner_address,
-            amount=supply_amount,
-            action_utxo=supply_pin,
+            supply_amount=supply_amount,
+            wallet_collateral=wallet_collateral,
+            supply_pin=supply_pin,
             exclude=exclude,
             valid_to_ms=valid_to_ms,
             funding=funding,
             rng=rng,
             deployment=deployment,
-        )
-        target = _sum_units(
-            loan.collateral,
-            {supply.market.qtoken_policy: supply.qtokens},
-            wallet,
+            allow_spent=allow_spent,
+            reason=_ONE_MARKET_SUPPLY_AND_INCREASE,
         )
         increase = IncreaseSnapshot.from_backend(
             backend,
@@ -499,15 +488,16 @@ class SupplyAndCollateralSnapshot(PoolActionSnapshot):
             *(loan.utxo for loan in capture.loan_outputs()),
         ]
         wallet = _CapturedWallet.of(capture, spent=spent, written=written)
-        added = _sum_units(
-            collateral.collateral,
-            {unit: -qty for unit, qty in collateral.loan.collateral.items()},
-            {supply.market.qtoken_policy: -supply.qtokens},
-        )
         return cls(
             supply=wallet.share(supply),
             collateral=wallet.share(collateral),
-            wallet_collateral=held_collateral(added),
+            wallet_collateral=held_collateral(
+                _wallet_added(
+                    collateral.loan.collateral,
+                    collateral.collateral,
+                    minted=_minted(supply),
+                ),
+            ),
         )
 
     @classmethod
@@ -552,33 +542,21 @@ class SupplyAndCollateralSnapshot(PoolActionSnapshot):
                 ``p[14]`` units.
             LiqwidBuildError: As the legs' ``from_backend``.
         """
-        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
-
-        wallet = held_collateral(wallet_collateral or {})
-        market = resolve_deployment(deployment).market_by_name(supply_market)
-        loan = resolve_loan(
+        supply, target, wallet = _supply_toward_loan(
             backend,
-            loan_utxo,
-            deployment=deployment,
-            allow_spent=allow_spent,
-        )
-        _refuse_one_market(market, loan.market, _ONE_MARKET_SUPPLY_AND_COLLATERAL)
-        supply = SupplySnapshot.from_backend(
-            backend,
-            market=supply_market,
+            loan_utxo=loan_utxo,
+            supply_market=supply_market,
             owner_address=owner_address,
-            amount=supply_amount,
-            action_utxo=action_utxo,
+            supply_amount=supply_amount,
+            wallet_collateral=wallet_collateral,
+            supply_pin=action_utxo,
             exclude=exclude,
             valid_to_ms=valid_to_ms,
             funding=funding,
             rng=rng,
             deployment=deployment,
-        )
-        target = _sum_units(
-            loan.collateral,
-            {supply.market.qtoken_policy: supply.qtokens},
-            wallet,
+            allow_spent=allow_spent,
+            reason=_ONE_MARKET_SUPPLY_AND_COLLATERAL,
         )
         collateral = CollateralSnapshot.from_backend(
             backend,
@@ -997,7 +975,7 @@ def _build_supply_and_borrow(
     """`build_supply_and_borrow`, stashing the funding on ``stash``."""
     supply, borrow = snapshot.supply, snapshot.borrow
     _refuse_one_market(supply.market, borrow.market, _ONE_MARKET_SUPPLY_AND_BORROW)
-    minted = {supply.market.qtoken_policy: supply.qtokens}
+    minted = _minted(supply)
     if held_collateral(borrow.collateral) != minted:
         msg = (
             f"the loan holds {borrow.collateral}, not exactly the qTokens the "
@@ -1027,7 +1005,7 @@ def _build_supply_and_increase(
     _check_added(
         increase.loan.collateral,
         increase.collateral_out,
-        minted={supply.market.qtoken_policy: supply.qtokens},
+        minted=_minted(supply),
         wallet=snapshot.wallet_collateral,
     )
     if supply.action.out_ref == increase.action.out_ref:
@@ -1057,7 +1035,7 @@ def _build_supply_and_collateral(
     _check_added(
         collateral.loan.collateral,
         collateral.collateral,
-        minted={supply.market.qtoken_policy: supply.qtokens},
+        minted=_minted(supply),
         wallet=snapshot.wallet_collateral,
     )
     _check_shared_state(supply.records, collateral.health)
@@ -1140,6 +1118,74 @@ def _refuse_one_market(
         raise UnsupportedMarketError(action_market.name, reason)
 
 
+def _supply_toward_loan(
+    backend: AbstractBackend,
+    *,
+    loan_utxo: str,
+    supply_market: str,
+    owner_address: str,
+    supply_amount: int,
+    wallet_collateral: Mapping[str, int] | None,
+    supply_pin: str | None,
+    exclude: Collection[str],
+    valid_to_ms: int | None,
+    funding: Sequence[Utxo] | None,
+    rng: random.Random | None,
+    deployment: LiqwidDeployment | None,
+    allow_spent: bool,
+    reason: str,
+) -> tuple[SupplySnapshot, dict[str, int], dict[str, int]]:
+    """The supply leg of a combination that adds its qTokens to an existing loan.
+
+    Checks ``wallet_collateral`` and names ``supply_market`` before anything is
+    read, reads the loan at ``loan_utxo``, refuses a ``supply_market`` that is the
+    loan's market with ``reason``, then resolves the supply as
+    `SupplySnapshot.from_backend` (``supply_pin`` pins its action UTxO).
+
+    Returns:
+        The supply leg; the loan's collateral target, its collateral plus the
+        qTokens the supply mints plus ``wallet_collateral``, summed per unit; and
+        ``wallet_collateral`` without its zero quantities.
+
+    Raises:
+        ValueError: A ``wallet_collateral`` quantity is negative.
+        KeyError: No market is named ``supply_market``.
+        UnsupportedLoanError: The loan is legacy-generation or no loan.
+        UnsupportedMarketError: ``supply_market`` is the loan's market.
+        LiqwidBuildError: As `SupplySnapshot.from_backend`.
+    """
+    from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
+
+    wallet = held_collateral(wallet_collateral or {})
+    market = resolve_deployment(deployment).market_by_name(supply_market)
+    loan = resolve_loan(
+        backend,
+        loan_utxo,
+        deployment=deployment,
+        allow_spent=allow_spent,
+    )
+    _refuse_one_market(market, loan.market, reason)
+    supply = SupplySnapshot.from_backend(
+        backend,
+        market=supply_market,
+        owner_address=owner_address,
+        amount=supply_amount,
+        action_utxo=supply_pin,
+        exclude=exclude,
+        valid_to_ms=valid_to_ms,
+        funding=funding,
+        rng=rng,
+        deployment=deployment,
+    )
+    target = _sum_units(loan.collateral, _minted(supply), wallet)
+    return supply, target, wallet
+
+
+def _minted(supply: SupplySnapshot) -> dict[str, int]:
+    """The qTokens ``supply`` mints, as collateral (unit -> quantity)."""
+    return {supply.market.qtoken_policy: supply.qtokens}
+
+
 def _sum_units(*quantities: Mapping[str, int]) -> dict[str, int]:
     """``quantities`` summed per unit, without the units that sum to zero."""
     total: dict[str, int] = {}
@@ -1162,14 +1208,34 @@ def _check_added(
         ValueError: ``target - loan_collateral`` differs from ``minted + wallet``
             in some unit (a missing unit counts as 0).
     """
-    added = _sum_units(target, {unit: -qty for unit, qty in loan_collateral.items()})
-    expected = _sum_units(minted, wallet)
-    if added != expected:
+    beyond = _wallet_added(loan_collateral, target, minted=minted)
+    posted = _sum_units(wallet)
+    if beyond != posted:
         msg = (
-            f"the target adds {added} to the loan's collateral, not exactly "
-            f"the qTokens the supply mints and the wallet posts {expected}"
+            f"the target adds {beyond} to the loan's collateral beyond the qTokens "
+            f"the supply mints {dict(minted)}, not exactly the wallet's {posted}"
         )
         raise ValueError(msg)
+
+
+def _wallet_added(
+    loan_collateral: Mapping[str, int],
+    target: Mapping[str, int],
+    *,
+    minted: Mapping[str, int],
+) -> dict[str, int]:
+    """What ``target`` adds to ``loan_collateral`` beyond the ``minted`` qTokens.
+
+    The qTokens the wallet posts to the loan beside the minted ones, per unit
+    without the zero quantities (a missing unit counts as 0); a negative quantity
+    is collateral the target drops.
+    """
+    return _sum_units(target, _negated(loan_collateral), _negated(minted))
+
+
+def _negated(quantities: Mapping[str, int]) -> dict[str, int]:
+    """``quantities`` with every quantity negated."""
+    return {unit: -qty for unit, qty in quantities.items()}
 
 
 def _check_shared_state(
