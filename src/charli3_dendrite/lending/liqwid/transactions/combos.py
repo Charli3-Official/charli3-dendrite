@@ -1,10 +1,15 @@
-"""Liqwid V2 combinations: supply-and-borrow, remove-and-redeem, repay-and-redeem.
+"""Liqwid V2 combinations of an action leg and a loan leg in one transaction.
 
+Supply-and-borrow, supply-and-increase, remove-and-redeem and repay-and-redeem.
 Each combination is the exact union of legs built by their own flows:
 
 - **Supply-and-borrow** supplies ``A`` to market X (spending one of X's action
   UTxOs and minting ``Q = floor(A / s9)`` qX) and opens a loan on market Y (spending
   one of Y's action UTxOs) whose collateral is exactly those ``Q`` qX.
+- **Supply-and-increase** supplies ``A`` to market X as a supply-and-borrow does
+  and borrows more on an existing loan on market Y (spending one of Y's action
+  UTxOs). The loan's collateral grows by exactly the ``Q`` qX minted, plus any
+  qTokens the wallet already holds and posts beside them.
 - **Remove-and-redeem** takes ``Q`` qX out of a loan on market Y (a collateral
   change) and redeems them on market X (spending one of X's action UTxOs), burning
   them straight out of the loan: no wallet input or output holds them.
@@ -16,11 +21,11 @@ Each combination is the exact union of legs built by their own flows:
   what its target collateral drops.
 
 X and Y are two different markets. One transaction spends at most one action UTxO
-of a market: the Liqwid scripts refuse a supply-and-borrow whose legs spend two
-action UTxOs of one market, a remove-and-redeem whose redeem spends an action UTxO
-of the loan's own market next to the loan's collateral change, and a repay next to
-a redeem on the loan's market. The combinations refuse one market for X and Y with
-`UnsupportedMarketError`.
+of a market: the Liqwid scripts refuse a supply-and-borrow or a supply-and-increase
+whose legs spend two action UTxOs of one market, a remove-and-redeem whose redeem
+spends an action UTxO of the loan's own market next to the loan's collateral
+change, and a repay next to a redeem on the loan's market. The combinations refuse
+one market for X and Y with `UnsupportedMarketError`.
 
 A repay-and-redeem resolved without named units redeems what it can: it walks the
 released units in order and returns to the wallet, as qTokens, each unit that is
@@ -38,13 +43,14 @@ market both legs read is referenced once. The action leg's market, when it is a
 collateral market of the loan, must be read through one MarketState by both legs.
 
 The validity window ends by the batch deadline ``s8 + p[3]`` of each market whose
-action UTxO the transaction spends: a supply-and-borrow's by both markets' (the
-supply leg refuses a bound past its market's, the open caps its bound at the
-borrow market's), a remove-and-redeem's by the redeemed market's alone, a
-repay-and-redeem's by the loan market's and every redeemed market's (the earliest
-of them binds). The collateral change of a remove-and-redeem and a zero-debt close
-spend no action UTxO and their loan validator checks no deadline, so the loan
-market's deadline does not bound them.
+action UTxO the transaction spends: a supply-and-borrow's and a
+supply-and-increase's by both markets' (the supply leg refuses a bound past its
+market's, the open and the borrow more cap their bound at the loan market's), a
+remove-and-redeem's by the redeemed market's alone, a repay-and-redeem's by the
+loan market's and every redeemed market's (the earliest of them binds). The
+collateral change of a remove-and-redeem and a zero-debt close spend no action
+UTxO and their loan validator checks no deadline, so the loan market's deadline
+does not bound them.
 """
 
 from __future__ import annotations
@@ -54,6 +60,7 @@ from collections.abc import Collection
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import field
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Final
@@ -65,6 +72,8 @@ from charli3_dendrite.lending.liqwid.deployment import LiqwidDeployment
 from charli3_dendrite.lending.liqwid.deployment import resolve_deployment
 from charli3_dendrite.lending.liqwid.transactions.borrow import BorrowSnapshot
 from charli3_dendrite.lending.liqwid.transactions.borrow import _build_borrow
+from charli3_dendrite.lending.liqwid.transactions.borrow_more import IncreaseSnapshot
+from charli3_dendrite.lending.liqwid.transactions.borrow_more import _build_increase
 from charli3_dendrite.lending.liqwid.transactions.capture import CapturedTx
 from charli3_dendrite.lending.liqwid.transactions.collateral import CollateralSnapshot
 from charli3_dendrite.lending.liqwid.transactions.collateral import _build_collateral
@@ -97,9 +106,11 @@ __all__ = [
     "RemoveAndRedeemSnapshot",
     "RepayAndRedeemSnapshot",
     "SupplyAndBorrowSnapshot",
+    "SupplyAndIncreaseSnapshot",
     "build_remove_and_redeem",
     "build_repay_and_redeem",
     "build_supply_and_borrow",
+    "build_supply_and_increase",
 ]
 
 # The most markets a repay-and-redeem redeems on: each redeem adds an action spend,
@@ -113,6 +124,7 @@ _Leg = TypeVar(
     "_Leg",
     SupplySnapshot,
     BorrowSnapshot,
+    IncreaseSnapshot,
     CollateralSnapshot,
     RedeemSnapshot,
 )
@@ -158,6 +170,10 @@ class _CapturedWallet:
 # Why a combination cannot act on one market (`UnsupportedMarketError` reasons).
 _ONE_MARKET_SUPPLY_AND_BORROW = (
     "a supply-and-borrow needs two markets: the scripts refuse two action UTxOs "
+    "of one market in one transaction"
+)
+_ONE_MARKET_SUPPLY_AND_INCREASE = (
+    "a supply-and-increase needs two markets: the scripts refuse two action UTxOs "
     "of one market in one transaction"
 )
 _ONE_MARKET_REMOVE_AND_REDEEM = (
@@ -281,6 +297,149 @@ class SupplyAndBorrowSnapshot(PoolActionSnapshot):
         upper = min(supply.valid_to_ms, borrow.valid_to_ms)
         supply.valid_to_ms = borrow.valid_to_ms = upper
         return cls(supply=supply, borrow=borrow)
+
+
+@dataclass
+class SupplyAndIncreaseSnapshot(PoolActionSnapshot):
+    """A supply to one market and a borrow more on a loan of another market.
+
+    As for `SupplyAndBorrowSnapshot`, the deployment and the datum style are the
+    legs'.
+
+    Attributes:
+        supply: The supply leg; its qTokens join the loan's collateral.
+        increase: The borrow more; its collateral target is the loan's collateral
+            plus ``{qX: supply.qtokens}`` plus ``wallet_collateral``, per unit.
+        wallet_collateral: qTokens the wallet holds and posts to the loan beside
+            the minted ones (unit -> quantity, no zero quantities).
+    """
+
+    supply: SupplySnapshot
+    increase: IncreaseSnapshot
+    wallet_collateral: dict[str, int] = field(default_factory=dict)
+
+    @classmethod
+    def from_capture(cls, fix: dict[str, Any]) -> SupplyAndIncreaseSnapshot:
+        """Rebuild the snapshot of a captured supply-and-increase (byte-exact replay).
+
+        Each leg pins what its own ``from_capture`` pins (the action UTxO, amounts,
+        output collateral, loan lovelace, signers, validity bounds and datum
+        style); both legs share the wallet inputs (every input but the two action
+        UTxOs and the loan) and the wallet address. The wallet collateral is what
+        the loan gains beyond the qTokens the supply mints.
+
+        Raises:
+            ValueError: The capture is not a supply to one market and a borrow
+                more on a loan of another, or the loan loses collateral beyond
+                the minted qTokens.
+        """
+        capture = CapturedTx.of(fix)
+        supply = SupplySnapshot.from_capture(fix)
+        increase = IncreaseSnapshot.from_capture(fix)
+        spent = (supply.action.utxo, increase.action.utxo, increase.loan.utxo)
+        written = [
+            *(a.utxo for a in capture.action_outputs(supply.market)),
+            *(a.utxo for a in capture.action_outputs(increase.market)),
+            *(loan.utxo for loan in capture.loan_outputs()),
+        ]
+        wallet = _CapturedWallet.of(capture, spent=spent, written=written)
+        added = _sum_units(
+            increase.collateral_out,
+            {unit: -qty for unit, qty in increase.loan.collateral.items()},
+            {supply.market.qtoken_policy: -supply.qtokens},
+        )
+        return cls(
+            supply=wallet.share(supply),
+            increase=wallet.share(increase),
+            wallet_collateral=held_collateral(added),
+        )
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: AbstractBackend,
+        *,
+        loan_utxo: str,
+        supply_market: str,
+        owner_address: str,
+        supply_amount: int,
+        borrow_amount: int,
+        wallet_collateral: Mapping[str, int] | None = None,
+        action_utxos: tuple[str | None, str | None] = (None, None),
+        exclude: Collection[str] = (),
+        valid_to_ms: int | None = None,
+        funding: Sequence[Utxo] | None = None,
+        rng: random.Random | None = None,
+        deployment: LiqwidDeployment | None = None,
+        allow_spent: bool = False,
+    ) -> SupplyAndIncreaseSnapshot:
+        """Resolve a supply of ``supply_amount`` and a borrow more of ``borrow_amount``.
+
+        The supply leg is resolved as `SupplySnapshot.from_backend` on
+        ``supply_market``; the borrow more as `IncreaseSnapshot.from_backend` on the
+        loan at ``loan_utxo``, whose collateral target is the loan's collateral
+        plus the qTokens the supply mints plus ``wallet_collateral`` (qTokens the
+        wallet holds and posts too), summed per unit, funded by the same wallet
+        UTxOs. ``action_utxos`` pins the supply's and the borrow more's action
+        UTxOs. Both legs end at the earlier of their bounds. ``allow_spent``
+        resolves an already consumed loan (a captured replay).
+
+        Raises:
+            ValueError: A ``wallet_collateral`` quantity is negative (before
+                anything is read).
+            KeyError: No market is named ``supply_market`` (before anything is
+                read).
+            UnsupportedLoanError: The loan is legacy-generation or no loan.
+            UnsupportedMarketError: ``supply_market`` is the loan's market
+                (refused once the loan is read, before anything else).
+            LiqwidBuildError: As the legs' ``from_backend``.
+        """
+        from charli3_dendrite.lending.liqwid.transactions.resolve import resolve_loan
+
+        wallet = held_collateral(wallet_collateral or {})
+        market = resolve_deployment(deployment).market_by_name(supply_market)
+        loan = resolve_loan(
+            backend,
+            loan_utxo,
+            deployment=deployment,
+            allow_spent=allow_spent,
+        )
+        _refuse_one_market(market, loan.market, _ONE_MARKET_SUPPLY_AND_INCREASE)
+        supply_pin, increase_pin = action_utxos
+        supply = SupplySnapshot.from_backend(
+            backend,
+            market=supply_market,
+            owner_address=owner_address,
+            amount=supply_amount,
+            action_utxo=supply_pin,
+            exclude=exclude,
+            valid_to_ms=valid_to_ms,
+            funding=funding,
+            rng=rng,
+            deployment=deployment,
+        )
+        target = _sum_units(
+            loan.collateral,
+            {supply.market.qtoken_policy: supply.qtokens},
+            wallet,
+        )
+        increase = IncreaseSnapshot.from_backend(
+            backend,
+            loan_utxo=loan_utxo,
+            owner_address=owner_address,
+            amount=borrow_amount,
+            collateral=target,
+            action_utxo=increase_pin,
+            exclude=exclude,
+            valid_to_ms=valid_to_ms,
+            funding=supply.funding,
+            rng=rng,
+            deployment=deployment,
+            allow_spent=allow_spent,
+        )
+        upper = min(supply.valid_to_ms, increase.valid_to_ms)
+        supply.valid_to_ms = increase.valid_to_ms = upper
+        return cls(supply=supply, increase=increase, wallet_collateral=wallet)
 
 
 @dataclass
@@ -591,6 +750,28 @@ def build_supply_and_borrow(
     _build_supply_and_borrow(tx_builder, snapshot, stash=snapshot)
 
 
+def build_supply_and_increase(
+    tx_builder: TransactionBuilder,
+    *,
+    snapshot: SupplyAndIncreaseSnapshot,
+) -> None:
+    """Add the supply-and-increase of ``snapshot`` to ``tx_builder``.
+
+    The funding is stashed on ``snapshot``. The caller balances (the borrowed
+    amount and the change land in its change output), signs and submits.
+
+    Raises:
+        UnsupportedMarketError: Both legs act on one market.
+        ValueError: The loan's collateral does not grow by exactly the qTokens the
+            supply mints plus ``wallet_collateral``, both legs spend one action
+            UTxO, or the legs read different MarketState records of the supply
+            market.
+        LiqwidBuildError, ValidityWindowError: As `build_supply` and
+            `build_increase`.
+    """
+    _build_supply_and_increase(tx_builder, snapshot, stash=snapshot)
+
+
 def build_remove_and_redeem(
     tx_builder: TransactionBuilder,
     *,
@@ -660,6 +841,32 @@ def _build_supply_and_borrow(
     _check_shared_state(supply.records, borrow.health)
     _build_supply(tx_builder, supply, stash=stash)
     _build_borrow(tx_builder, borrow, stash=stash)
+
+
+def _build_supply_and_increase(
+    tx_builder: TransactionBuilder,
+    snapshot: SupplyAndIncreaseSnapshot,
+    *,
+    stash: PoolActionSnapshot,
+) -> None:
+    """`build_supply_and_increase`, stashing the funding on ``stash``."""
+    supply, increase = snapshot.supply, snapshot.increase
+    _refuse_one_market(supply.market, increase.market, _ONE_MARKET_SUPPLY_AND_INCREASE)
+    _check_added(
+        increase.loan.collateral,
+        increase.collateral_out,
+        minted={supply.market.qtoken_policy: supply.qtokens},
+        wallet=snapshot.wallet_collateral,
+    )
+    if supply.action.out_ref == increase.action.out_ref:
+        msg = (
+            f"the two legs spend two different action UTxOs, not "
+            f"{supply.action.out_ref} twice"
+        )
+        raise ValueError(msg)
+    _check_shared_state(supply.records, increase.health)
+    _build_supply(tx_builder, supply, stash=stash)
+    _build_increase(tx_builder, increase, stash=stash)
 
 
 def _build_remove_and_redeem(
@@ -735,6 +942,38 @@ def _refuse_one_market(
     """
     if action_market.market_id == loan_market.market_id:
         raise UnsupportedMarketError(action_market.name, reason)
+
+
+def _sum_units(*quantities: Mapping[str, int]) -> dict[str, int]:
+    """``quantities`` summed per unit, without the units that sum to zero."""
+    total: dict[str, int] = {}
+    for each in quantities:
+        for unit, qty in each.items():
+            total[unit] = total.get(unit, 0) + qty
+    return {unit: qty for unit, qty in total.items() if qty}
+
+
+def _check_added(
+    loan_collateral: Mapping[str, int],
+    target: Mapping[str, int],
+    *,
+    minted: Mapping[str, int],
+    wallet: Mapping[str, int],
+) -> None:
+    """Refuse a target collateral that does not add exactly ``minted + wallet``.
+
+    Raises:
+        ValueError: ``target - loan_collateral`` differs from ``minted + wallet``
+            in some unit (a missing unit counts as 0).
+    """
+    added = _sum_units(target, {unit: -qty for unit, qty in loan_collateral.items()})
+    expected = _sum_units(minted, wallet)
+    if added != expected:
+        msg = (
+            f"the borrow more adds {added} to the loan's collateral, not exactly "
+            f"the qTokens the supply mints and the wallet posts {expected}"
+        )
+        raise ValueError(msg)
 
 
 def _check_shared_state(

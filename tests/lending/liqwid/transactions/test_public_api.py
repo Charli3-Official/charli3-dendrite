@@ -53,6 +53,7 @@ BUILDERS = [
     "RepaySnapshot",
     "CollateralSnapshot",
     "SupplyAndBorrowSnapshot",
+    "SupplyAndIncreaseSnapshot",
     "RemoveAndRedeemSnapshot",
     "RepayAndRedeemSnapshot",
     "MAX_REDEEMS",
@@ -63,6 +64,7 @@ BUILDERS = [
     "build_repay",
     "build_collateral",
     "build_supply_and_borrow",
+    "build_supply_and_increase",
     "build_remove_and_redeem",
     "build_repay_and_redeem",
 ]

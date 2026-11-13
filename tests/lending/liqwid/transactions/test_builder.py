@@ -25,6 +25,9 @@ from charli3_dendrite.lending.liqwid.transactions.combos import (
 from charli3_dendrite.lending.liqwid.transactions.combos import (
     build_repay_and_redeem,
 )
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_increase,
+)
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.resolve import ActionUtxo
@@ -47,6 +50,7 @@ from tests.lending.liqwid.transactions.replay import fixture
 from tests.lending.liqwid.transactions.replay import redeemers
 from tests.lending.liqwid.transactions.test_combos import _closing_night_loan
 from tests.lending.liqwid.transactions.test_combos import _repay_and_redeem
+from tests.lending.liqwid.transactions.test_combos import _supply_and_increase
 from tests.lending.liqwid.transactions.test_resolve import (  # noqa: F401 - fixture
     deployment_hashes,
 )
@@ -139,19 +143,62 @@ def test_contribute_takes_a_repay_and_redeem_for_repay() -> None:
     ]
 
 
+@pytest.mark.usefixtures("deployment_hashes")
+def test_contribute_takes_a_supply_and_increase_for_increase() -> None:
+    """A supply of Ada and a borrow more on a NIGHT loan is contributed as INCREASE."""
+    fix, backend, loan = _closing_night_loan()
+
+    def contribute(tx_builder: TransactionBuilder, *, snapshot: object) -> None:
+        LiqwidTxBuilder().contribute(
+            LendingAction.INCREASE,
+            tx_builder,
+            snapshot=snapshot,  # type: ignore[arg-type]
+            params=ActionParams(actor_address=_WALLET),
+        )
+
+    built = build(
+        contribute,
+        _supply_and_increase(fix, backend, loan),
+        slot=block_slot(fix),
+    )
+    direct = build(
+        build_supply_and_increase,
+        _supply_and_increase(fix, backend, loan),
+        slot=block_slot(fix),
+    )
+    assert built.cbor == direct.cbor
+    assert sorted(purpose for purpose, *_ in redeemers(built)) == [
+        "mint",
+        "mint",
+        "reward",
+        "spend",
+        "spend",
+        "spend",
+    ]
+
+
 def _empty_builder() -> TransactionBuilder:
     return TransactionBuilder(EvalContext(last_block_slot=0))
 
 
-def test_contribute_checks_the_snapshot_type() -> None:
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [
+        (LendingAction.BORROW, "BorrowSnapshot or SupplyAndBorrowSnapshot"),
+        (LendingAction.INCREASE, "IncreaseSnapshot or SupplyAndIncreaseSnapshot"),
+    ],
+)
+def test_contribute_checks_the_snapshot_type(
+    action: LendingAction,
+    expected: str,
+) -> None:
     snapshot = RepaySnapshot.from_capture(fixture("repay_usdm"))
     with pytest.raises(
         TypeError,
-        match="borrow expects BorrowSnapshot or SupplyAndBorrowSnapshot, got "
-        "RepaySnapshot",
+        match=f"{action.value} expects {expected}, got RepaySnapshot",
     ):
         LiqwidTxBuilder().contribute(
-            LendingAction.BORROW,
+            action,
             _empty_builder(),
             snapshot=snapshot,
             params=ActionParams(actor_address=_WALLET),
@@ -603,4 +650,16 @@ def test_chosen_action_utxos_of_a_repay_and_redeem() -> None:
     assert builder_module.chosen_action_utxos(snapshot) == {
         captured.borrow.action.out_ref,
         captured.supply.action.out_ref,
+    }
+
+
+@pytest.mark.usefixtures("deployment_hashes")
+def test_chosen_action_utxos_of_a_supply_and_increase() -> None:
+    """The supply's action UTxO (Ada's) and the borrow more's (NIGHT's)."""
+    fix, backend, loan = _closing_night_loan()
+    snapshot = _supply_and_increase(fix, backend, loan)
+    assert snapshot.supply.action.out_ref != snapshot.increase.action.out_ref
+    assert builder_module.chosen_action_utxos(snapshot) == {
+        snapshot.supply.action.out_ref,
+        snapshot.increase.action.out_ref,
     }

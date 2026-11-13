@@ -1,11 +1,13 @@
 """Liqwid V2 implementation of the lending transaction seam.
 
 ``resolve_snapshot`` maps :class:`ActionParams` onto one flow's ``from_backend``;
-``contribute`` adds a resolved snapshot by its type. The three combinations have no
+``contribute`` adds a resolved snapshot by its type. The four combinations have no
 ``LendingAction`` of their own: resolve them with
-``SupplyAndBorrowSnapshot.from_backend`` / ``RemoveAndRedeemSnapshot.from_backend``
-/ ``RepayAndRedeemSnapshot.from_backend`` and contribute them under ``BORROW`` /
-``WITHDRAW`` / ``REPAY``. A redeem of a wallet's whole qToken balance is
+``SupplyAndBorrowSnapshot.from_backend`` /
+``SupplyAndIncreaseSnapshot.from_backend`` /
+``RemoveAndRedeemSnapshot.from_backend`` / ``RepayAndRedeemSnapshot.from_backend``
+and contribute them under ``BORROW`` / ``INCREASE`` / ``WITHDRAW`` / ``REPAY``. A
+redeem of a wallet's whole qToken balance is
 ``RedeemSnapshot.from_backend(..., withdraw_all=True)``.
 """
 
@@ -26,9 +28,15 @@ from charli3_dendrite.lending.liqwid.transactions.collateral import build_collat
 from charli3_dendrite.lending.liqwid.transactions.combos import RemoveAndRedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.combos import RepayAndRedeemSnapshot
 from charli3_dendrite.lending.liqwid.transactions.combos import SupplyAndBorrowSnapshot
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    SupplyAndIncreaseSnapshot,
+)
 from charli3_dendrite.lending.liqwid.transactions.combos import build_remove_and_redeem
 from charli3_dendrite.lending.liqwid.transactions.combos import build_repay_and_redeem
 from charli3_dendrite.lending.liqwid.transactions.combos import build_supply_and_borrow
+from charli3_dendrite.lending.liqwid.transactions.combos import (
+    build_supply_and_increase,
+)
 from charli3_dendrite.lending.liqwid.transactions.errors import ActionUtxoSpentError
 from charli3_dendrite.lending.liqwid.transactions.repay import RepaySnapshot
 from charli3_dendrite.lending.liqwid.transactions.repay import build_repay
@@ -70,7 +78,10 @@ _ACTIONS: dict[
         (BorrowSnapshot, build_borrow),
         (SupplyAndBorrowSnapshot, build_supply_and_borrow),
     ),
-    LendingAction.INCREASE: ((IncreaseSnapshot, build_increase),),
+    LendingAction.INCREASE: (
+        (IncreaseSnapshot, build_increase),
+        (SupplyAndIncreaseSnapshot, build_supply_and_increase),
+    ),
     LendingAction.REPAY: (
         (RepaySnapshot, build_repay),
         (RepayAndRedeemSnapshot, build_repay_and_redeem),
@@ -95,6 +106,8 @@ def chosen_action_utxos(snapshot: PoolActionSnapshot) -> frozenset[str]:
     legs: tuple[Any, ...]
     if isinstance(snapshot, SupplyAndBorrowSnapshot):
         legs = (snapshot.supply, snapshot.borrow)
+    elif isinstance(snapshot, SupplyAndIncreaseSnapshot):
+        legs = (snapshot.supply, snapshot.increase)
     elif isinstance(snapshot, RemoveAndRedeemSnapshot):
         legs = (snapshot.redeem,)
     elif isinstance(snapshot, RepayAndRedeemSnapshot):
