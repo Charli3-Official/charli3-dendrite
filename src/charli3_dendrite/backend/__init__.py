@@ -91,10 +91,11 @@ def set_default_backend() -> None:
         return
 
     # Check for Blockfrost environment variables
-    if "BLOCKFROST_PROJECT_ID" in os.environ:
+    project_id = os.environ.get("BLOCKFROST_PROJECT_ID") or os.environ.get("PROJECT_ID")
+    if project_id:
         set_backend(
             BlockFrostBackend(
-                project_id=os.environ["BLOCKFROST_PROJECT_ID"],
+                project_id=project_id,
             ),
         )
         return
