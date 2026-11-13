@@ -1107,16 +1107,25 @@ def test_a_supply_and_increase_on_the_loans_market_is_refused_after_the_loan_rea
 ):
     fix, backend, loan = _closing_night_loan()
     calls = []
+    loan_reads = []
 
     def spy(*args, **kwargs):
         calls.append((args, kwargs))
         raise AssertionError
 
+    real_resolve_loan = resolve.resolve_loan
+
+    def loan_spy(*args, **kwargs):
+        loan_reads.append(args)
+        return real_resolve_loan(*args, **kwargs)
+
     monkeypatch.setattr(SupplySnapshot, "from_backend", spy)
+    monkeypatch.setattr(resolve, "resolve_loan", loan_spy)
     with pytest.raises(UnsupportedMarketError) as raised:
         _supply_and_increase(fix, backend, loan, supply_market="NIGHT")
     assert raised.value.market == "NIGHT"
     assert "two markets" in raised.value.reason
+    assert len(loan_reads) == 1
     assert calls == []
 
 
@@ -1239,6 +1248,8 @@ def test_a_supply_and_increase_bound_is_the_earlier_deadline(monkeypatch, bindin
     night, ada = sab.borrow.records, sab.supply.records
     night_cap = ttl_cap_ms(night.state_datum, night.params_datum)
     ada_cap = ttl_cap_ms(ada.state_datum, ada.params_datum)
+    if binding == "loan":
+        assert night_cap < ada_cap
     if binding == "supply":
         # Ada's deadline moved five minutes before NIGHT's.
         ada_cap = night_cap - 300_000
@@ -1460,16 +1471,25 @@ def test_a_supply_and_collateral_on_the_loans_market_is_refused_after_the_loan_r
 ):
     fix, backend, loan = _closing_night_loan()
     calls = []
+    loan_reads = []
 
     def spy(*args, **kwargs):
         calls.append((args, kwargs))
         raise AssertionError
 
+    real_resolve_loan = resolve.resolve_loan
+
+    def loan_spy(*args, **kwargs):
+        loan_reads.append(args)
+        return real_resolve_loan(*args, **kwargs)
+
     monkeypatch.setattr(SupplySnapshot, "from_backend", spy)
+    monkeypatch.setattr(resolve, "resolve_loan", loan_spy)
     with pytest.raises(UnsupportedMarketError) as raised:
         _supply_and_collateral(fix, backend, loan, supply_market="NIGHT")
     assert raised.value.market == "NIGHT"
     assert "two markets" in raised.value.reason
+    assert len(loan_reads) == 1
     assert calls == []
 
 

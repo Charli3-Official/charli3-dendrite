@@ -52,13 +52,11 @@ The validity window ends by the batch deadline ``s8 + p[3]`` of each market whos
 action UTxO the transaction spends: a supply-and-borrow's and a
 supply-and-increase's by both markets' (the supply leg refuses a bound past its
 market's, the open and the borrow more cap their bound at the loan market's), a
-supply-and-collateral's by the supply market's alone (its collateral change spends
-no action UTxO and its loan validator checks no deadline), a remove-and-redeem's
+supply-and-collateral's by the supply market's alone, a remove-and-redeem's
 by the redeemed market's alone, a repay-and-redeem's by the loan market's and every
-redeemed market's (the earliest of them binds). The
-collateral change of a remove-and-redeem and a zero-debt close spend no action
-UTxO and their loan validator checks no deadline, so the loan market's deadline
-does not bound them.
+redeemed market's (the earliest of them binds). A collateral change spends no action
+UTxO and its loan validator checks no deadline, so the loan market's deadline does
+not bound a supply-and-collateral, a remove-and-redeem or a zero-debt close.
 """
 
 from __future__ import annotations
@@ -982,12 +980,7 @@ def _build_supply_and_borrow(
             f"supply mints {minted}"
         )
         raise ValueError(msg)
-    if supply.action.out_ref == borrow.action.out_ref:
-        msg = (
-            f"the two legs spend two different action UTxOs, not "
-            f"{supply.action.out_ref} twice"
-        )
-        raise ValueError(msg)
+    _refuse_one_action_utxo(supply.action.out_ref, borrow.action.out_ref)
     _check_shared_state(supply.records, borrow.health)
     _build_supply(tx_builder, supply, stash=stash)
     _build_borrow(tx_builder, borrow, stash=stash)
@@ -1008,12 +1001,7 @@ def _build_supply_and_increase(
         minted=_minted(supply),
         wallet=snapshot.wallet_collateral,
     )
-    if supply.action.out_ref == increase.action.out_ref:
-        msg = (
-            f"the two legs spend two different action UTxOs, not "
-            f"{supply.action.out_ref} twice"
-        )
-        raise ValueError(msg)
+    _refuse_one_action_utxo(supply.action.out_ref, increase.action.out_ref)
     _check_shared_state(supply.records, increase.health)
     _build_supply(tx_builder, supply, stash=stash)
     _build_increase(tx_builder, increase, stash=stash)
@@ -1085,12 +1073,7 @@ def _build_repay_and_redeem(
             msg = f"two redeems on market {redeem.market.name}"
             raise ValueError(msg)
         markets.add(redeem.market.market_id)
-        if redeem.action.out_ref == repay_action:
-            msg = (
-                f"the repay and a redeem spend two different action UTxOs, not "
-                f"{repay_action} twice"
-            )
-            raise ValueError(msg)
+        _refuse_one_action_utxo(repay_action, redeem.action.out_ref)
         unit = redeem.market.qtoken_policy
         if released.get(unit, 0) != redeem.qtokens:
             msg = (
@@ -1116,6 +1099,20 @@ def _refuse_one_market(
     """
     if action_market.market_id == loan_market.market_id:
         raise UnsupportedMarketError(action_market.name, reason)
+
+
+def _refuse_one_action_utxo(
+    first: str | None,
+    second: str | None,
+) -> None:
+    """Refuse two legs that spend the same action UTxO.
+
+    Raises:
+        ValueError: ``first`` and ``second`` are one out-ref.
+    """
+    if first == second:
+        msg = f"the two legs spend two different action UTxOs, not {first} twice"
+        raise ValueError(msg)
 
 
 def _supply_toward_loan(
