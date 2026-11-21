@@ -53,6 +53,7 @@ from pycardano import TransactionOutput
 from pycardano import UTxO
 from pycardano import VerificationKeyHash
 from pycardano import plutus_script_hash
+from pycardano import script_hash
 from pycardano.utils import min_lovelace
 from pycardano.utils import min_lovelace_post_alonzo
 
@@ -1384,12 +1385,22 @@ class _CardanoSwapsOrderState(AbstractOrderState):
         """Mint (+1, CREATE) or burn (-1, CLOSE) the datum's beacons.
 
         Runs the beacon policy with ``CreateOrCloseSwaps``, inlined or through
-        ``beacon_ref_utxo`` (see :meth:`_beacon_script_arg`).
+        ``beacon_ref_utxo`` (see :meth:`_beacon_script_arg`). The policy runs
+        once per transaction and checks every beacon output, so the minting
+        script and its redeemer are registered only when the builder carries
+        none for this policy yet (an earlier create or close in the same
+        transaction); the beacons are accumulated into the mint on every call.
         """
-        tx_builder.add_minting_script(
-            script=cls._beacon_script_arg(beacon_ref_utxo),
-            redeemer=Redeemer(CreateOrCloseSwaps()),
-        )
+        script = cls._beacon_script_arg(beacon_ref_utxo)
+        beacon_hash = ScriptHash(bytes.fromhex(cls.CONTRACT.beacon_policy_id))
+        if not any(
+            redeemer is not None and script_hash(registered) == beacon_hash
+            for registered, redeemer in tx_builder._minting_script_to_redeemers
+        ):
+            tx_builder.add_minting_script(
+                script=script,
+                redeemer=Redeemer(CreateOrCloseSwaps()),
+            )
         cls._accumulate_mint(tx_builder, cls._beacon_mint_assets(datum, quantity))
 
     @staticmethod
